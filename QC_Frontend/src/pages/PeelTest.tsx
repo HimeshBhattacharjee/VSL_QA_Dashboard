@@ -12,9 +12,9 @@ export default function PeelTest() {
                 <div className="text-center text-white mb-10">
                     <button
                         onClick={handleBackToTests}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-md font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-lg">⇐</span> Back to Quality Tests
+                        <span className="font-bold text-md">⇐</span> Back to Quality Tests
                     </button>
                 </div>
             </div>

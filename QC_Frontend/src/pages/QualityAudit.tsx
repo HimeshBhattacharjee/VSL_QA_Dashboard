@@ -3,7 +3,7 @@ import Header from '../components/Header';
 
 export default function QualityAudit() {
     const navigate = useNavigate();
-    const handleBackToHome = () => { navigate('/'); };
+    const handleBackToHome = () => { navigate('/home'); };
 
     return (
         <div className="min-h-screen">
@@ -12,9 +12,9 @@ export default function QualityAudit() {
                 <div className="text-center text-white mb-10">
                     <button
                         onClick={handleBackToHome}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-md font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-lg">⇐</span> Back to Home
+                        <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
             </div>
