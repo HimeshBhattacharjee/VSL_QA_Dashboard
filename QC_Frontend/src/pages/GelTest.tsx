@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { useEffect, useRef, useState } from 'react';
+import { useAlert } from '../context/AlertContext';
+import { usePreviewModal } from '../context/PreviewModalContext';
+import { useConfirmModal } from '../context/ConfirmModalContext';
 
-// Define types for our report data
 interface GelTestReport {
     name: string;
     timestamp: string;
@@ -17,32 +19,47 @@ export default function GelTest() {
     const [savedReports, setSavedReports] = useState<GelTestReport[]>([]);
     const [reportName, setReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [currentPreviewIndex, setCurrentPreviewIndex] = useState<number | null>(null);
+    const [_, setCurrentPreviewIndex] = useState<number | null>(null);
     const tableRef = useRef<HTMLTableElement>(null);
-    const previewModalRef = useRef<HTMLDivElement>(null);
-    const alertContainerRef = useRef<HTMLDivElement>(null);
+    const { showAlert } = useAlert();
+    const { showPreview } = usePreviewModal();
+    const { showConfirm } = useConfirmModal();
 
     // Storage key for saved reports
     const STORAGE_KEY = 'gelTestReports';
 
     const handleBackToTests = () => {
         if (hasUnsavedChanges) {
-            if (window.confirm('You have unsaved changes. Are you sure you want to leave? Your changes will be lost.')) {
-                clearFormData();
-                navigate('/quality-tests');
-            }
+            showConfirm({
+                title: 'Unsaved Changes',
+                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
+                type: 'warning',
+                confirmText: 'Leave',
+                cancelText: 'Stay',
+                onConfirm: function () {
+                    clearFormData();
+                    navigate('/quality-tests');
+                }
+            });
         } else {
             clearFormData();
             navigate('/quality-tests');
         }
     };
 
-    const handleHomeNavigation = () => {
+    const handleBackToHome = () => {
         if (hasUnsavedChanges) {
-            if (window.confirm('You have unsaved changes. Are you sure you want to leave? Your changes will be lost.')) {
-                clearFormData();
-                navigate('/home');
-            }
+            showConfirm({
+                title: 'Unsaved Changes',
+                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
+                type: 'warning',
+                confirmText: 'Leave',
+                cancelText: 'Stay',
+                onConfirm: function () {
+                    clearFormData();
+                    navigate('/home');
+                }
+            });
         } else {
             clearFormData();
             navigate('/home');
@@ -53,38 +70,18 @@ export default function GelTest() {
     useEffect(() => {
         initializeForm();
         loadSavedReports();
-
-        // Load any previously entered data from session storage
         loadFormData();
     }, []);
 
     // Initialize form functionality
     const initializeForm = () => {
-        // This would be replaced with actual form initialization logic
-        // For now, we'll set up basic event listeners
-        const editableCells = document.querySelectorAll('.editable');
-        editableCells.forEach(cell => {
-            if (!cell.classList.contains('data-cell')) {
-                cell.addEventListener('click', handleEditableCellClick);
-            }
-        });
-
-        const dataCells = document.querySelectorAll('.data-cell');
-        dataCells.forEach(cell => {
-            cell.addEventListener('click', handleDataCellClick);
-        });
-
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', handleCheckboxChange);
-        });
-
         calculateAverages();
     };
 
     const handleEditableCellClick = (e: Event) => {
         const cell = e.target as HTMLElement;
         const currentText = cell.textContent || '';
+        const oldValue = currentText.trim();
 
         const input = document.createElement('input');
         input.type = 'text';
@@ -110,8 +107,10 @@ export default function GelTest() {
                 cell.classList.remove('has-content');
             }
 
-            setHasUnsavedChanges(true);
-            saveFormData();
+            if (detectMeaningfulChange(oldValue, newValue)) {
+                setHasUnsavedChanges(true);
+                saveFormData();
+            }
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -127,6 +126,7 @@ export default function GelTest() {
     const handleDataCellClick = (e: Event) => {
         const cell = e.target as HTMLElement;
         const currentText = cell.textContent || '';
+        const oldValue = currentText.trim();
 
         const input = document.createElement('input');
         input.type = 'text';
@@ -159,8 +159,11 @@ export default function GelTest() {
                 }
 
                 calculateAverages();
-                setHasUnsavedChanges(true);
-                saveFormData();
+
+                if (detectMeaningfulChange(oldValue, value)) {
+                    setHasUnsavedChanges(true);
+                    saveFormData();
+                }
             } else {
                 showAlert('error', 'Please enter a valid number (with or without % sign)');
                 cell.textContent = currentText || '';
@@ -180,13 +183,20 @@ export default function GelTest() {
         input.addEventListener('keydown', handleKeyDown);
     };
 
-    const handleCheckboxChange = () => {
+    const handleCheckboxChange = (e: Event) => {
+        const checkbox = e.target as HTMLInputElement;
         setHasUnsavedChanges(true);
         saveFormData();
     };
 
+    const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
+        if (!oldValue.trim() && !newValue.trim()) {
+            return false;
+        }
+        return oldValue.trim() !== newValue.trim();
+    };
+
     const calculateAverages = () => {
-        // Implementation of average calculation
         const rows = document.querySelectorAll('tr');
         const dataRows: HTMLTableRowElement[] = [];
 
@@ -379,13 +389,19 @@ export default function GelTest() {
     };
 
     const deleteSavedReport = (index: number) => {
-        if (window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-            const savedReports = getSavedReports();
-            savedReports.splice(index, 1);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
-            loadSavedReports();
-            showAlert('info', 'Report deleted successfully');
-        }
+        showConfirm({
+            title: 'Delete Report',
+            message: 'Are you sure you want to delete this report? This action cannot be undone.',
+            type: 'warning',
+            confirmText: 'Delete',
+            onConfirm: function () {
+                const savedReports = getSavedReports();
+                savedReports.splice(index, 1);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
+                loadSavedReports();
+                showAlert('info', 'Report deleted successfully');
+            }
+        });
     };
 
     const previewSavedReport = (index: number) => {
@@ -395,77 +411,263 @@ export default function GelTest() {
             return;
         }
 
+        const report = reports[index];
         setCurrentPreviewIndex(index);
-        // Show preview modal logic would go here
+
+        // Generate preview HTML
+        const previewHTML = generatePreviewHTML(report);
+
+        // Show preview modal
+        showPreview({
+            title: `Preview: ${report.name}`,
+            content: previewHTML,
+            exportExcel: () => exportPreviewToExcel(index),
+            exportPDF: () => exportPreviewToPDF(index)
+        });
     };
 
     const closePreview = () => {
         setCurrentPreviewIndex(null);
     };
 
-    const showAlert = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
-        const alertContainer = alertContainerRef.current;
-        if (!alertContainer) return;
-
-        const alert = document.createElement('div');
-        alert.className = `alert ${type}`;
-
-        const icons = {
-            success: '✅',
-            error: '❌',
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
-
-        alert.innerHTML = `
-        <div class="alert-icon">${icons[type]}</div>
-        <div class="alert-content">
-            <div class="alert-title">${type.charAt(0).toUpperCase() + type.slice(1)}</div>
-            <div class="alert-message">${message}</div>
-        </div>
-        <button class="alert-close">&times;</button>
+    const generatePreviewHTML = (report: GelTestReport): string => {
+        return `
+            <div class="preview-report-content">
+                <table class="preview-table">
+                    <tbody>
+                        <tr>
+                            <td colspan="2" rowspan="3"><img src="../LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" /></td>
+                            <td colspan="8" rowspan="2" class="section-title text-3xl font-bold bg-gray-100 text-center">VIKRAM SOLAR LIMITED</td>
+                            <td colspan="3" rowspan="1" class="section-title font-bold bg-gray-100 text-center">Doc. No.: VSL/QAD/FM/90</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" class="section-title font-bold bg-gray-100 text-center">Issue Date: 11.01.2023</td>
+                        </tr>
+                        <tr>
+                            <td colspan="8" class="section-title text-xl font-bold bg-gray-100 text-center">Gel Content Test Report</td>
+                            <td colspan="3" class="section-title font-bold bg-gray-100 text-center">Rev. No./ Date: 03/ 25.02.2025</td>
+                        </tr>
+                        <tr>
+                            <td colspan="10" rowspan="3">
+                                <div class="allowable-limit p-2.5 bg-gray-50 border-l-4 border-l-blue-500 text-left">
+                                    <strong class="px-2.5">Allowable Limit:</strong>
+                                    <div class="checkbox-container flex">
+                                        <div class="checkbox-item flex items-center mx-2">
+                                            <label>1. Gel Content should be: 75 to 95% for EVA & EPE</label>
+                                            <input type="checkbox" ${report.formData.checkbox_0 ? 'checked' : ''} disabled class="ml-1" />
+                                        </div>
+                                    </div>
+                                    <div class="checkbox-container flex">
+                                        <div class="checkbox-item flex items-center mx-1.5">
+                                            <label>2. Gel Content should be: ≥ 60% for POE</label>
+                                            <input type="checkbox" ${report.formData.checkbox_1 ? 'checked' : ''} disabled class="ml-1" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td colspan="1">Inv. No./ Date:</td>
+                            <td colspan="2">${report.formData.editable_0 || ''}</td>
+                        </tr>
+                        <!-- Continue with the rest of the table structure -->
+                        <tr>
+                            <td colspan="1">P.O. No.:</td>
+                            <td colspan="2">${report.formData.editable_1 || ''}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="1">Type of Test:</td>
+                            <td colspan="2">${report.formData.editable_2 || ''}</td>
+                        </tr>
+                        <!-- Add all other rows following the same pattern -->
+                        <tr>
+                            <td colspan="4" class="section-title font-bold bg-gray-100 text-center">Tested By</td>
+                            <td colspan="5" class="section-title font-bold bg-gray-100 text-center">Reviewed By</td>
+                            <td colspan="5" class="section-title font-bold bg-gray-100 text-center">Approved By</td>
+                        </tr>
+                        <tr>
+                            <td colspan="4">${report.formData.editable_68 || ''}</td>
+                            <td colspan="5">${report.formData.editable_69 || ''}</td>
+                            <td colspan="5">${report.formData.editable_70 || ''}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         `;
+    };
 
-        const closeButton = alert.querySelector('.alert-close') as HTMLButtonElement;
-        closeButton.addEventListener('click', () => {
-            alert.classList.add('fade-out');
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.parentNode.removeChild(alert);
-                }
-            }, 500);
+    // Export functions implementation
+    const exportToExcel = () => {
+        const table = document.querySelector('table');
+        if (!table) {
+            showAlert('error', 'No table found to export');
+            return;
+        }
+
+        // Create a workbook
+        const wb = (window as any).XLSX.utils.book_new();
+
+        // Get table data
+        const ws = (window as any).XLSX.utils.table_to_sheet(table);
+
+        // Add the worksheet to the workbook
+        (window as any).XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
+
+        // Generate Excel file and trigger download
+        const fileName = reportName.trim() || 'Gel_Test_Report';
+        (window as any).XLSX.writeFile(wb, `${fileName}.xlsx`);
+        showAlert('success', 'Excel file exported successfully');
+    };
+
+    const exportToPDF = async () => {
+        const table = tableRef.current;
+        if (!table) {
+            showAlert('error', 'No table found to export');
+            return;
+        }
+
+        try {
+            const { jsPDF } = (window as any).jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+
+            // Add title
+            const fileName = reportName.trim() || 'Gel Test Report';
+            doc.setFontSize(16);
+            doc.text(fileName, 105, 15, { align: 'center' });
+
+            // Add current date
+            const currentDate = new Date().toLocaleDateString();
+            doc.setFontSize(10);
+            doc.text(`Generated on: ${currentDate}`, 105, 22, { align: 'center' });
+
+            // Convert table to canvas using html2canvas
+            const canvas = await (window as any).html2canvas(table);
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 190;
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+
+            // Add image to PDF
+            doc.addImage(imgData, 'PNG', 10, 30, imgWidth, imgHeight);
+
+            // Save the PDF
+            doc.save(`${fileName}.pdf`);
+            showAlert('success', 'PDF file exported successfully');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            showAlert('error', 'Error generating PDF. Please try again.');
+        }
+    };
+
+    const exportPreviewToExcel = (index: number) => {
+        const reports = getSavedReports();
+        if (index < 0 || index >= reports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+
+        const report = reports[index];
+        const previewTable = document.querySelector('.preview-table');
+
+        if (!previewTable) {
+            showAlert('error', 'No preview table found to export');
+            return;
+        }
+
+        // Create a workbook
+        const wb = (window as any).XLSX.utils.book_new();
+
+        // Get table data
+        const ws = (window as any).XLSX.utils.table_to_sheet(previewTable);
+
+        // Add the worksheet to the workbook
+        (window as any).XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
+
+        // Generate Excel file and trigger download
+        (window as any).XLSX.writeFile(wb, `${report.name}.xlsx`);
+        showAlert('success', 'Excel file exported successfully');
+    };
+
+    const exportPreviewToPDF = async (index: number) => {
+        const reports = getSavedReports();
+        if (index < 0 || index >= reports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+
+        const report = reports[index];
+        const previewTable = document.querySelector('.preview-table');
+
+        if (!previewTable) {
+            showAlert('error', 'No preview table found to export');
+            return;
+        }
+
+        try {
+            const { jsPDF } = (window as any).jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+
+            // Add title
+            doc.setFontSize(16);
+            doc.text(report.name, 105, 15, { align: 'center' });
+
+            // Add current date
+            const currentDate = new Date().toLocaleDateString();
+            doc.setFontSize(10);
+            doc.text(`Generated on: ${currentDate}`, 105, 22, { align: 'center' });
+
+            // Convert table to canvas using html2canvas
+            const canvas = await (window as any).html2canvas(previewTable);
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 190;
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+
+            // Add image to PDF
+            doc.addImage(imgData, 'PNG', 10, 30, imgWidth, imgHeight);
+
+            // Save the PDF
+            doc.save(`${report.name}.pdf`);
+            showAlert('success', 'PDF file exported successfully');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            showAlert('error', 'Error generating PDF. Please try again.');
+        }
+    };
+
+    // Set up event listeners when component mounts
+    useEffect(() => {
+        const editableCells = document.querySelectorAll('.editable:not(.data-cell)');
+        editableCells.forEach(cell => {
+            cell.addEventListener('click', handleEditableCellClick);
         });
 
-        alertContainer.appendChild(alert);
+        const dataCells = document.querySelectorAll('.data-cell');
+        dataCells.forEach(cell => {
+            cell.addEventListener('click', handleDataCellClick);
+        });
 
-        setTimeout(() => {
-            if (alert.parentNode) {
-                alert.classList.add('fade-out');
-                setTimeout(() => {
-                    if (alert.parentNode) {
-                        alert.parentNode.removeChild(alert);
-                    }
-                }, 500);
-            }
-        }, 5000);
-    };
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', handleCheckboxChange);
+        });
 
-    // Export functions would be implemented here
-    const exportToExcel = () => {
-        showAlert('info', 'Excel export functionality would be implemented here');
-    };
+        // Cleanup event listeners
+        return () => {
+            editableCells.forEach(cell => {
+                cell.removeEventListener('click', handleEditableCellClick);
+            });
+            dataCells.forEach(cell => {
+                cell.removeEventListener('click', handleDataCellClick);
+            });
+            checkboxes.forEach(checkbox => {
+                checkbox.removeEventListener('change', handleCheckboxChange);
+            });
+        };
+    }, []);
 
-    const exportToPDF = () => {
-        showAlert('info', 'PDF export functionality would be implemented here');
-    };
-
-    const exportPreviewToExcel = () => {
-        showAlert('info', 'Preview Excel export would be implemented here');
-    };
-
-    const exportPreviewToPDF = () => {
-        showAlert('info', 'Preview PDF export would be implemented here');
-    };
+    // Handle report name changes
+    useEffect(() => {
+        if (reportName.trim() && !hasUnsavedChanges) {
+            setHasUnsavedChanges(true);
+        }
+    }, [reportName]);
 
     return (
         <>
@@ -777,13 +979,13 @@ export default function GelTest() {
                                                     </div>
                                                     <div className="flex space-x-2">
                                                         <button
-                                                            className="preview-btn cursor-pointer px-4 py-2 bg-blue-500 text-white rounded-md font-medium transition-colors hover:bg-blue-600"
+                                                            className="preview-btn cursor-pointer px-4 py-2 bg-blue-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-600"
                                                             onClick={() => previewSavedReport(index)}
                                                         >
                                                             Preview
                                                         </button>
                                                         <button
-                                                            className="delete-btn cursor-pointer px-4 py-2 bg-red-500 text-white rounded-md font-medium transition-colors hover:bg-red-600"
+                                                            className="delete-btn cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-600"
                                                             onClick={() => deleteSavedReport(index)}
                                                         >
                                                             Delete
@@ -797,7 +999,6 @@ export default function GelTest() {
                             </div>
                         </div>
                     )}
-                    <div ref={alertContainerRef} className="fixed top-4 right-4 z-50 w-80"></div>
                 </div>
             </div>
         </>

@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
+import { useAlert } from '../context/AlertContext';
 
 export default function Login() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<"admin" | "user">("admin");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
+    const { showAlert } = useAlert();
 
     useEffect(() => {
         sessionStorage.removeItem("isLoggedIn");
@@ -22,8 +23,9 @@ export default function Login() {
         ) {
             sessionStorage.setItem("isLoggedIn", "true");
             sessionStorage.setItem("username", username);
+            showAlert('success', 'Login successful!');
             navigate("/home");
-        } else setError("Invalid username or password.");
+        } else showAlert('error', 'Invalid credentials');
     };
 
     return (
@@ -38,7 +40,6 @@ export default function Login() {
                                 key={tab}
                                 onClick={() => {
                                     setActiveTab(tab as "admin" | "user");
-                                    setError("");
                                     setUsername("");
                                     setPassword("");
                                 }}
@@ -74,7 +75,6 @@ export default function Login() {
                                 required
                             />
                         </div>
-                        {error && (<p className="text-red-400 text-sm text-center font-medium">{error}</p>)}
                         <button
                             type="submit"
                             className="w-full py-2 mt-2 cursor-pointer bg-indigo-700 hover:bg-indigo-600 hover:scale-102 transition-all duration-300 font-semibold rounded-lg shadow-md"
