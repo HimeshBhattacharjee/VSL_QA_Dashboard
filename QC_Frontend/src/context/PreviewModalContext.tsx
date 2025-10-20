@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export interface PreviewModalContent {
     title: string;
-    content: string;
+    content: string | React.ReactNode;
     exportExcel?: () => void;
     exportPDF?: () => void;
 }
@@ -14,36 +14,33 @@ interface PreviewModalContextType {
     previewContent: PreviewModalContent | null;
 }
 
-const PreviewModalContext = createContext<PreviewModalContextType | undefined>(undefined);
+interface PreviewModalProviderProps { children: ReactNode }
 
-interface PreviewModalProviderProps {
-    children: ReactNode;
-}
+const PreviewModalContext = createContext<PreviewModalContextType | undefined>(undefined);
 
 export const PreviewModalProvider: React.FC<PreviewModalProviderProps> = ({ children }) => {
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewContent, setPreviewContent] = useState<PreviewModalContent | null>(null);
-
     const showPreview = (content: PreviewModalContent) => {
         setPreviewContent(content);
         setIsPreviewVisible(true);
     };
-
     const hidePreview = () => {
         setIsPreviewVisible(false);
         setPreviewContent(null);
     };
-
     const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            hidePreview();
-        }
+        if (e.target === e.currentTarget) hidePreview();
+    };
+    const renderContent = () => {
+        if (!previewContent) return null;
+        if (typeof previewContent.content === 'string') return <div className="preview-report p-4" dangerouslySetInnerHTML={{ __html: previewContent.content }} />;
+        else return <div className="preview-report p-4">{previewContent.content}</div>;
     };
 
     return (
         <PreviewModalContext.Provider value={{ showPreview, hidePreview, isPreviewVisible, previewContent }}>
             {children}
-
             {isPreviewVisible && previewContent && (
                 <div
                     className="preview-modal fixed inset-0 bg-[rgba(0,0,0,0.7)] flex items-center justify-center z-50"
@@ -57,7 +54,7 @@ export const PreviewModalProvider: React.FC<PreviewModalProviderProps> = ({ chil
                             <div className="preview-buttons flex gap-2">
                                 {previewContent.exportExcel && (
                                     <button
-                                        className="preview-btn preview-export-excel px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium hover:bg-green-600"
+                                        className="preview-btn preview-export-excel cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium hover:bg-green-600"
                                         onClick={previewContent.exportExcel}
                                     >
                                         Export as Excel
@@ -65,24 +62,21 @@ export const PreviewModalProvider: React.FC<PreviewModalProviderProps> = ({ chil
                                 )}
                                 {previewContent.exportPDF && (
                                     <button
-                                        className="preview-btn preview-export-pdf px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium hover:bg-red-600"
+                                        className="preview-btn preview-export-pdf cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium hover:bg-red-600"
                                         onClick={previewContent.exportPDF}
                                     >
                                         Export as PDF
                                     </button>
                                 )}
                                 <button
-                                    className="close-preview text-2xl font-bold text-gray-500 hover:text-gray-700"
+                                    className="close-preview cursor-pointer text-2xl font-bold text-gray-500 hover:text-gray-700"
                                     onClick={hidePreview}
                                 >
                                     &times;
                                 </button>
                             </div>
                         </div>
-                        <div
-                            className="preview-report p-4"
-                            dangerouslySetInnerHTML={{ __html: previewContent.content }}
-                        />
+                        {renderContent()}
                     </div>
                 </div>
             )}
@@ -92,8 +86,6 @@ export const PreviewModalProvider: React.FC<PreviewModalProviderProps> = ({ chil
 
 export const usePreviewModal = (): PreviewModalContextType => {
     const context = useContext(PreviewModalContext);
-    if (context === undefined) {
-        throw new Error('usePreviewModal must be used within a PreviewModalProvider');
-    }
+    if (context === undefined) throw new Error('usePreviewModal must be used within a PreviewModalProvider');
     return context;
 };

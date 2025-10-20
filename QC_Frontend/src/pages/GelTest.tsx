@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { usePreviewModal } from '../context/PreviewModalContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import { GelTestPreview } from '../components/previews/GelTestPreview';
 
 interface GelTestReport {
     name: string;
@@ -414,13 +416,10 @@ export default function GelTest() {
         const report = reports[index];
         setCurrentPreviewIndex(index);
 
-        // Generate preview HTML
-        const previewHTML = generatePreviewHTML(report);
-
         // Show preview modal
         showPreview({
             title: `Preview: ${report.name}`,
-            content: previewHTML,
+            content: <GelTestPreview report={report} />,
             exportExcel: () => exportPreviewToExcel(index),
             exportPDF: () => exportPreviewToPDF(index)
         });
@@ -430,70 +429,6 @@ export default function GelTest() {
         setCurrentPreviewIndex(null);
     };
 
-    const generatePreviewHTML = (report: GelTestReport): string => {
-        return `
-            <div class="preview-report-content">
-                <table class="preview-table">
-                    <tbody>
-                        <tr>
-                            <td colspan="2" rowspan="3"><img src="../LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" /></td>
-                            <td colspan="8" rowspan="2" class="section-title text-3xl font-bold bg-gray-100 text-center">VIKRAM SOLAR LIMITED</td>
-                            <td colspan="3" rowspan="1" class="section-title font-bold bg-gray-100 text-center">Doc. No.: VSL/QAD/FM/90</td>
-                        </tr>
-                        <tr>
-                            <td colspan="2" class="section-title font-bold bg-gray-100 text-center">Issue Date: 11.01.2023</td>
-                        </tr>
-                        <tr>
-                            <td colspan="8" class="section-title text-xl font-bold bg-gray-100 text-center">Gel Content Test Report</td>
-                            <td colspan="3" class="section-title font-bold bg-gray-100 text-center">Rev. No./ Date: 03/ 25.02.2025</td>
-                        </tr>
-                        <tr>
-                            <td colspan="10" rowspan="3">
-                                <div class="allowable-limit p-2.5 bg-gray-50 border-l-4 border-l-blue-500 text-left">
-                                    <strong class="px-2.5">Allowable Limit:</strong>
-                                    <div class="checkbox-container flex">
-                                        <div class="checkbox-item flex items-center mx-2">
-                                            <label>1. Gel Content should be: 75 to 95% for EVA & EPE</label>
-                                            <input type="checkbox" ${report.formData.checkbox_0 ? 'checked' : ''} disabled class="ml-1" />
-                                        </div>
-                                    </div>
-                                    <div class="checkbox-container flex">
-                                        <div class="checkbox-item flex items-center mx-1.5">
-                                            <label>2. Gel Content should be: ≥ 60% for POE</label>
-                                            <input type="checkbox" ${report.formData.checkbox_1 ? 'checked' : ''} disabled class="ml-1" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td colspan="1">Inv. No./ Date:</td>
-                            <td colspan="2">${report.formData.editable_0 || ''}</td>
-                        </tr>
-                        <!-- Continue with the rest of the table structure -->
-                        <tr>
-                            <td colspan="1">P.O. No.:</td>
-                            <td colspan="2">${report.formData.editable_1 || ''}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="1">Type of Test:</td>
-                            <td colspan="2">${report.formData.editable_2 || ''}</td>
-                        </tr>
-                        <!-- Add all other rows following the same pattern -->
-                        <tr>
-                            <td colspan="4" class="section-title font-bold bg-gray-100 text-center">Tested By</td>
-                            <td colspan="5" class="section-title font-bold bg-gray-100 text-center">Reviewed By</td>
-                            <td colspan="5" class="section-title font-bold bg-gray-100 text-center">Approved By</td>
-                        </tr>
-                        <tr>
-                            <td colspan="4">${report.formData.editable_68 || ''}</td>
-                            <td colspan="5">${report.formData.editable_69 || ''}</td>
-                            <td colspan="5">${report.formData.editable_70 || ''}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-    };
-
     // Export functions implementation
     const exportToExcel = () => {
         const table = document.querySelector('table');
@@ -501,19 +436,11 @@ export default function GelTest() {
             showAlert('error', 'No table found to export');
             return;
         }
-
-        // Create a workbook
-        const wb = (window as any).XLSX.utils.book_new();
-
-        // Get table data
-        const ws = (window as any).XLSX.utils.table_to_sheet(table);
-
-        // Add the worksheet to the workbook
-        (window as any).XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
-
-        // Generate Excel file and trigger download
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.table_to_sheet(table);
+        XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
         const fileName = reportName.trim() || 'Gel_Test_Report';
-        (window as any).XLSX.writeFile(wb, `${fileName}.xlsx`);
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
         showAlert('success', 'Excel file exported successfully');
     };
 
@@ -562,26 +489,16 @@ export default function GelTest() {
             showAlert('error', 'Report not found');
             return;
         }
-
         const report = reports[index];
-        const previewTable = document.querySelector('.preview-table');
-
+        const previewTable = document.querySelector('.preview-report-content');
         if (!previewTable) {
             showAlert('error', 'No preview table found to export');
             return;
         }
-
-        // Create a workbook
-        const wb = (window as any).XLSX.utils.book_new();
-
-        // Get table data
-        const ws = (window as any).XLSX.utils.table_to_sheet(previewTable);
-
-        // Add the worksheet to the workbook
-        (window as any).XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
-
-        // Generate Excel file and trigger download
-        (window as any).XLSX.writeFile(wb, `${report.name}.xlsx`);
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.table_to_sheet(previewTable);
+        XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
+        XLSX.writeFile(wb, `${report.name}.xlsx`);
         showAlert('success', 'Excel file exported successfully');
     };
 
@@ -871,7 +788,6 @@ export default function GelTest() {
                                             <td className="section-title font-bold bg-gray-100 text-center">Average (A/B/C/D/E/F/G)</td>
                                             <td className="section-title font-bold bg-gray-100 text-center">Mean</td>
                                         </tr>
-                                        {/* Data rows for positions A-G */}
                                         <tr>
                                             <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
                                             <td rowSpan={7}>VSL FAB-II</td>
@@ -952,6 +868,9 @@ export default function GelTest() {
                                         </tr>
                                     </tbody>
                                 </table>
+                                <div className="controlled-copy text-center text-lg text-red-500">
+                                    <p>(Controlled Copy)</p>
+                                </div>
                             </div>
                         </div>
                     )}
