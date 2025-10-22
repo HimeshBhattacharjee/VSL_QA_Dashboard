@@ -8,13 +8,16 @@ export default function Header() {
     const [pageTitle, setPageTitle] = useState<string>('Home');
     const [pageSubTitle, setPageSubTitle] = useState<string>('');
     const [username, setUsername] = useState<string | null>(null);
+    const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { showAlert } = useAlert();
 
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
+        const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
         setUsername(storedUsername);
+        setIsLoggedIn(storedIsLoggedIn === "true");
     }, [location.pathname]);
 
     useEffect(() => {
@@ -31,14 +34,6 @@ export default function Header() {
                 setPageTitle("Quality Tests");
                 setPageSubTitle("Access detailed quality test reports and analysis");
                 break;
-            case '/quality-analysis':
-                setPageTitle("Quality Analysis");
-                setPageSubTitle("Real-time Monitoring of Production Line Quality Metrics");
-                break;
-            case '/quality-audit':
-                setPageTitle("Quality Audit");
-                setPageSubTitle("Detailed Audit Checksheet Maintenance");
-                break;
             case '/gel-test':
                 setPageTitle("Gel Test");
                 setPageSubTitle("Detailed Results of Gel Test");
@@ -50,6 +45,34 @@ export default function Header() {
             case '/b-grade-trend':
                 setPageTitle("B-Grade Trend Analysis");
                 setPageSubTitle("Detailed Analysis of B-Grade Trend");
+                break;
+            case '/quality-analysis':
+                setPageTitle("Quality Analysis");
+                setPageSubTitle("Real-time Monitoring of Production Line Quality Metrics");
+                break;
+            case '/prelam':
+                setPageTitle("Pre-Lamination Detailed Analysis");
+                setPageSubTitle("Detailed quality metrics for Pre-Lamination process");
+                break;
+            case '/pre-el':
+                setPageTitle("Pre-EL Detailed Analysis");
+                setPageSubTitle("Detailed quality metrics for Pre-EL process");
+                break;
+            case '/visual':
+                setPageTitle("Visual Detailed Analysis");
+                setPageSubTitle("Detailed quality metrics for Visual Check process");
+                break;
+            case '/lamqc':
+                setPageTitle("Post-Lamination Detailed Analysis");
+                setPageSubTitle("Detailed quality metrics for Post-Lamination process");
+                break;
+            case '/fqc':
+                setPageTitle("FQC Detailed Analysis");
+                setPageSubTitle("Detailed quality metrics for Final QC process");
+                break;
+            case '/quality-audit':
+                setPageTitle("Quality Audit");
+                setPageSubTitle("Detailed Audit Checksheet Maintenance");
                 break;
             default:
                 setPageTitle("VSL Quality Portal");
@@ -68,9 +91,14 @@ export default function Header() {
     const handleLogout = () => {
         sessionStorage.removeItem("isLoggedIn");
         sessionStorage.removeItem("username");
+        setIsLoggedIn(false);
+        setUsername(null);
+        setDropdownOpen(false);
         showAlert('success', 'Logged out successfully!');
         navigate("/");
     };
+
+    const handleUserIconClick = () => { if (isLoggedIn) setDropdownOpen(!dropdownOpen) };
 
     return (
         <div className="w-full mb-5 pt-2">
@@ -86,16 +114,24 @@ export default function Header() {
                     {pageSubTitle && (<p className="text-white text-md opacity-90">{pageSubTitle}</p>)}
                 </div>
                 <div className="flex items-center justify-end flex-1 relative" ref={dropdownRef}>
-                    <div onClick={() => setDropdownOpen(!dropdownOpen)}
-                        className="h-10 w-10 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 bg-indigo-600 text-white font-semibold transition-all duration-300 hover:scale-110 hover:border-white hover:shadow-lg hover:shadow-white/30 select-none"
-                    >
-                        {username ? username.charAt(0).toUpperCase() : <span className="text-gray-300">?</span>}
-                    </div>
-                    {dropdownOpen && (
-                        <div className="absolute right-0 mt-2 w-36 bg-white text-gray-800 rounded-lg shadow-lg py-2 border border-gray-200 animate-fade-in">
-                            <button onClick={handleLogout} className="block w-full text-left px-4 py-2 hover:bg-gray-100 font-medium">
-                                Logout
-                            </button>
+                    {isLoggedIn ? (
+                        <>
+                            <div onClick={handleUserIconClick}
+                                className="h-10 w-10 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 bg-indigo-600 text-white font-semibold transition-all duration-300 hover:scale-110 hover:border-white hover:shadow-lg hover:shadow-white/30 select-none"
+                            >
+                                {username ? username.charAt(0).toUpperCase() : <span className="text-gray-300">?</span>}
+                            </div>
+                            {dropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-36 bg-white text-gray-800 rounded-lg shadow-lg py-2 border border-gray-200 animate-fade-in">
+                                    <button onClick={handleLogout} className="block w-full text-left px-4 py-2 hover:bg-gray-100 font-medium">
+                                        Logout
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="h-10 w-10 flex items-center justify-center rounded-full cursor-none border-2 border-white/80 bg-gray-700 text-white font-semibold select-none">
+                            <span className="text-gray-300">?</span>
                         </div>
                     )}
                 </div>

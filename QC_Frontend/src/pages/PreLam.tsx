@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import SummaryGraph from '../components/SummaryGraph';
 
-export default function QualityAnalysis() {
+export default function PreLam() {
     const navigate = useNavigate();
     const [isLoaded, setIsLoaded] = useState(false);
+
+    const handleBackToDashboard = () => {
+        navigate('/quality-analysis');
+    };
+
     useEffect(() => {
+        // Simulate initial loading and setup
         const timer = setTimeout(() => {
             setIsLoaded(true);
         }, 500);
@@ -14,51 +20,42 @@ export default function QualityAnalysis() {
         return () => clearTimeout(timer);
     }, []);
 
-    const handleBackToHome = () => {
-        navigate('/home');
-    };
-
     const reportSections = [
         {
-            type: 'pre-lam' as const,
-            title: 'Pre-Lam Analysis Report',
-            subtitle: 'Pre-Lamination Quality Control Metrics',
-            dashboardLink: '/prelam'
+            type: 'pre-el' as const,
+            title: 'Pre-EL Inspection Report',
+            subtitle: 'Pre-Electrical Quality Control Metrics',
+            dashboardLink: '/pre-el'
         },
         {
-            type: 'lam-qc' as const,
-            title: 'Lam-QC Analysis Report',
-            subtitle: 'Lamination Quality Control Metrics',
-            dashboardLink: '/lamqc'
-        },
-        {
-            type: 'fqc' as const,
-            title: 'FQC Analysis Report',
-            subtitle: 'Final Quality Control Metrics',
-            dashboardLink: '/fqc'
+            type: 'visual' as const,
+            title: 'Visual Inspection Report',
+            subtitle: 'Visual Quality Control Metrics',
+            dashboardLink: '/visual'
         }
     ];
 
     return (
         <div className="pb-4">
-            <Header />
+            <Header />            
             <div className="max-w-7xl mx-auto">
                 <div className="text-center text-white mb-6">
                     <button
-                        onClick={handleBackToHome}
+                        onClick={handleBackToDashboard}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-md">⇐</span> Back to Home
+                        <span className="font-bold text-md">⇐</span> Back to Quality Analysis
                     </button>
                 </div>
-                <div className="reports-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
+                <div className="reports-container grid grid-cols-1 md:grid-cols-2 gap-6 px-6">
                     {reportSections.map((section, index) => (
                         <div
                             key={section.type}
-                            className={`transition-all duration-500 ${isLoaded
-                                    ? 'opacity-100 translate-y-0'
+                            className={`transition-all duration-500 ${
+                                isLoaded 
+                                    ? 'opacity-100 translate-y-0' 
                                     : 'opacity-0 translate-y-8'
-                                }`}
+                            }`}
                             style={{ transitionDelay: `${index * 100}ms` }}
                         >
                             <SummaryGraph {...section} />

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { saveAs } from 'file-saver';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { usePreviewModal } from '../context/PreviewModalContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { GelTestPreview } from '../components/previews/GelTestPreview';
+import GelTestPDF from '../components/pdfGens/GelTestPDF';
 
 interface GelTestReport {
     name: string;
@@ -26,8 +29,6 @@ export default function GelTest() {
     const { showAlert } = useAlert();
     const { showPreview } = usePreviewModal();
     const { showConfirm } = useConfirmModal();
-
-    // Storage key for saved reports
     const STORAGE_KEY = 'gelTestReports';
 
     const handleBackToTests = () => {
@@ -39,11 +40,15 @@ export default function GelTest() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: function () {
+                    sessionStorage.removeItem('editingReportIndex');
+                    sessionStorage.removeItem('editingReportData');
                     clearFormData();
                     navigate('/quality-tests');
                 }
             });
         } else {
+            sessionStorage.removeItem('editingReportIndex');
+            sessionStorage.removeItem('editingReportData');
             clearFormData();
             navigate('/quality-tests');
         }
@@ -58,33 +63,41 @@ export default function GelTest() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: function () {
+                    sessionStorage.removeItem('editingReportIndex');
+                    sessionStorage.removeItem('editingReportData');
                     clearFormData();
                     navigate('/home');
                 }
             });
         } else {
+            sessionStorage.removeItem('editingReportIndex');
+            sessionStorage.removeItem('editingReportData');
             clearFormData();
             navigate('/home');
         }
     };
 
-    // Initialize the component
     useEffect(() => {
         initializeForm();
         loadSavedReports();
         loadFormData();
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
     }, []);
 
-    // Initialize form functionality
-    const initializeForm = () => {
-        calculateAverages();
-    };
+    const initializeForm = () => { calculateAverages() };
 
     const handleEditableCellClick = (e: Event) => {
         const cell = e.target as HTMLElement;
         const currentText = cell.textContent || '';
         const oldValue = currentText.trim();
-
         const input = document.createElement('input');
         input.type = 'text';
         input.value = currentText;
@@ -94,33 +107,23 @@ export default function GelTest() {
         input.style.background = 'transparent';
         input.style.fontFamily = 'inherit';
         input.style.fontSize = 'inherit';
-
         cell.textContent = '';
         cell.appendChild(input);
         input.focus();
-
         const handleBlur = () => {
             const newValue = input.value.trim();
             cell.textContent = newValue || ' ';
-
-            if (newValue) {
-                cell.classList.add('has-content');
-            } else {
-                cell.classList.remove('has-content');
-            }
-
+            if (newValue) cell.classList.add('has-content');
+            else cell.classList.remove('has-content');
             if (detectMeaningfulChange(oldValue, newValue)) {
                 setHasUnsavedChanges(true);
                 saveFormData();
             }
+            saveFormData();
         };
-
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                input.blur();
-            }
+            if (e.key === 'Enter') input.blur();
         };
-
         input.addEventListener('blur', handleBlur);
         input.addEventListener('keydown', handleKeyDown);
     };
@@ -129,7 +132,6 @@ export default function GelTest() {
         const cell = e.target as HTMLElement;
         const currentText = cell.textContent || '';
         const oldValue = currentText.trim();
-
         const input = document.createElement('input');
         input.type = 'text';
         input.value = currentText;
@@ -140,38 +142,28 @@ export default function GelTest() {
         input.style.fontFamily = 'inherit';
         input.style.fontSize = 'inherit';
         input.style.textAlign = 'center';
-
         cell.textContent = '';
         cell.appendChild(input);
         input.focus();
-
         const handleBlur = () => {
             const value = input.value.trim();
             const isValid = value === '' ||
                 !isNaN(parseFloat(value)) ||
                 (!isNaN(parseFloat(value.replace('%', ''))) && value.includes('%'));
-
             if (isValid) {
                 cell.textContent = value || '';
-
-                if (value) {
-                    cell.classList.add('has-content');
-                } else {
-                    cell.classList.remove('has-content');
-                }
-
+                if (value) cell.classList.add('has-content');
+                else cell.classList.remove('has-content');
                 calculateAverages();
-
                 if (detectMeaningfulChange(oldValue, value)) {
                     setHasUnsavedChanges(true);
-                    saveFormData();
+                    saveFormData(); // Save to sessionStorage
                 }
+                saveFormData();
             } else {
                 showAlert('error', 'Please enter a valid number (with or without % sign)');
                 cell.textContent = currentText || '';
-                if (currentText) {
-                    cell.classList.add('has-content');
-                }
+                if (currentText) cell.classList.add('has-content');
             }
         };
 
@@ -185,11 +177,24 @@ export default function GelTest() {
         input.addEventListener('keydown', handleKeyDown);
     };
 
+    // Update the handleCheckboxChange function
     const handleCheckboxChange = (e: Event) => {
         const checkbox = e.target as HTMLInputElement;
         setHasUnsavedChanges(true);
-        saveFormData();
+        saveFormData(); // Save to sessionStorage immediately
     };
+
+    // Update the report name useEffect to save form data
+    useEffect(() => {
+        if (reportName.trim() && !hasUnsavedChanges) {
+            setHasUnsavedChanges(true);
+        }
+
+        // Save form data whenever report name changes
+        if (reportName !== '') {
+            saveFormData();
+        }
+    }, [reportName]);
 
     const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
         if (!oldValue.trim() && !newValue.trim()) {
@@ -275,27 +280,118 @@ export default function GelTest() {
         }
     };
 
+    const editSavedReport = (index: number) => {
+        const reports = getSavedReports();
+        if (index < 0 || index >= reports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+
+        const report = reports[index];
+
+        // Set the report name for editing
+        setReportName(report.name);
+
+        // Store the report data to load after the tab switch
+        sessionStorage.setItem('editingReportData', JSON.stringify(report));
+        sessionStorage.setItem('editingReportIndex', index.toString());
+
+        // Switch to edit tab
+        setActiveTab('edit-report');
+
+        showAlert('info', `Now editing: ${report.name}`);
+    };
+
+    // Add useEffect to handle tab switch and data loading
+    useEffect(() => {
+        if (activeTab === 'edit-report') {
+            // Check if we have report data to load (after tab switch)
+            const editingReportData = sessionStorage.getItem('editingReportData');
+            const editingIndex = sessionStorage.getItem('editingReportIndex');
+
+            if (editingReportData && editingIndex !== null) {
+                // Use setTimeout to ensure DOM is fully rendered
+                setTimeout(() => {
+                    const report = JSON.parse(editingReportData) as GelTestReport;
+                    loadReportData(report);
+                    setHasUnsavedChanges(true);
+                }, 100);
+            }
+        }
+    }, [activeTab]);
+
+    // Enhanced loadReportData function
+    const loadReportData = (report: GelTestReport) => {
+        // Load editable cells
+        setReportName(report.name);
+        const editableCells = document.querySelectorAll('.editable');
+        editableCells.forEach((cell, index) => {
+            const key = `editable_${index}`;
+            if (report.formData[key] !== undefined) {
+                const value = report.formData[key] as string;
+                cell.textContent = value;
+
+                // Update class based on content
+                if (value.trim()) {
+                    cell.classList.add('has-content');
+                } else {
+                    cell.classList.remove('has-content');
+                }
+            }
+        });
+
+        // Load checkboxes
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach((checkbox, index) => {
+            const key = `checkbox_${index}`;
+            if (report.formData[key] !== undefined) {
+                (checkbox as HTMLInputElement).checked = report.formData[key] as boolean;
+            }
+        });
+
+        // Recalculate averages after a brief delay to ensure DOM is updated
+        setTimeout(() => {
+            calculateAverages();
+        }, 150);
+
+        // Save the loaded data to session storage
+        saveFormData();
+    };
+
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
+        // Save editable cell values
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             formData[`editable_${index}`] = cell.textContent?.trim() || '';
         });
 
+        // Save checkbox states
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach((checkbox, index) => {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
 
+        // Save report name
+        formData.reportName = reportName;
+
+        // Save to session storage
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
+    // Enhanced loadFormData function
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
         if (savedData) {
             const formData = JSON.parse(savedData);
 
+            // Load report name
+            if (formData.reportName !== undefined) {
+                setReportName(formData.reportName);
+            }
+
+            // Load editable cell values
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 const key = `editable_${index}`;
@@ -307,6 +403,7 @@ export default function GelTest() {
                 }
             });
 
+            // Load checkbox states
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 const key = `checkbox_${index}`;
@@ -315,7 +412,11 @@ export default function GelTest() {
                 }
             });
 
-            calculateAverages();
+            // Recalculate averages after a brief delay to ensure DOM is updated
+            setTimeout(() => {
+                calculateAverages();
+            }, 100);
+
             setHasUnsavedChanges(true);
         }
     };
@@ -334,6 +435,10 @@ export default function GelTest() {
 
         setReportName('');
 
+        // Clear editing data
+        sessionStorage.removeItem('editingReportIndex');
+        sessionStorage.removeItem('editingReportData');
+
         const averageCells = document.querySelectorAll('.average-cell');
         averageCells.forEach(cell => {
             cell.textContent = '0';
@@ -344,6 +449,8 @@ export default function GelTest() {
             meanCell.textContent = '0';
         }
 
+        // Only clear session storage when explicitly clearing the form
+        // (not during normal navigation)
         sessionStorage.removeItem('gelTestFormData');
         setHasUnsavedChanges(false);
     };
@@ -370,6 +477,7 @@ export default function GelTest() {
             formData: {}
         };
 
+        // Collect current form data
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
@@ -381,11 +489,33 @@ export default function GelTest() {
         });
 
         const savedReports = getSavedReports();
-        savedReports.push(reportData);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
+        const editingIndex = sessionStorage.getItem('editingReportIndex');
 
+        if (editingIndex !== null) {
+            const index = parseInt(editingIndex);
+            const originalReport = savedReports[index];
+
+            if (reportName === originalReport.name) {
+                // Same name - update the existing report
+                savedReports[index] = reportData;
+                showAlert('success', 'Report updated successfully!');
+            } else {
+                // Different name - create new report and keep the old one
+                savedReports.push(reportData);
+                showAlert('success', 'New report created with updated name!');
+            }
+
+            // Clear the editing data
+            sessionStorage.removeItem('editingReportIndex');
+            sessionStorage.removeItem('editingReportData');
+        } else {
+            // New report (not editing)
+            savedReports.push(reportData);
+            showAlert('success', 'Report saved successfully!');
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
         clearFormData();
-        showAlert('success', 'Report saved successfully!');
         loadSavedReports();
         setActiveTab('saved-reports');
     };
@@ -452,31 +582,53 @@ export default function GelTest() {
         }
 
         try {
-            const { jsPDF } = (window as any).jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
+            const fileName = reportName.trim() || 'Gel_Test_Report';
 
-            // Add title
-            const fileName = reportName.trim() || 'Gel Test Report';
-            doc.setFontSize(16);
-            doc.text(fileName, 105, 15, { align: 'center' });
+            // Extract all form data
+            const formData: { [key: string]: string | boolean } = {};
 
-            // Add current date
-            const currentDate = new Date().toLocaleDateString();
-            doc.setFontSize(10);
-            doc.text(`Generated on: ${currentDate}`, 105, 22, { align: 'center' });
+            // Extract editable cells
+            const editableCells = document.querySelectorAll('.editable');
+            editableCells.forEach((cell, index) => {
+                formData[`editable_${index}`] = cell.textContent?.trim() || '';
+            });
 
-            // Convert table to canvas using html2canvas
-            const canvas = await (window as any).html2canvas(table);
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 190;
-            const imgHeight = canvas.height * imgWidth / canvas.width;
+            // Extract checkbox states
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach((checkbox, index) => {
+                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            });
 
-            // Add image to PDF
-            doc.addImage(imgData, 'PNG', 10, 30, imgWidth, imgHeight);
+            // Extract data cells
+            const dataCells = document.querySelectorAll('.data-cell');
+            dataCells.forEach((cell, index) => {
+                // You might want to create a better mapping for data cells
+                formData[`data_${index}`] = cell.textContent?.trim() || '';
+            });
 
-            // Save the PDF
-            doc.save(`${fileName}.pdf`);
-            showAlert('success', 'PDF file exported successfully');
+            // Extract averages
+            const averages: { [key: string]: string } = {};
+            const averageCells = document.querySelectorAll('.average-cell');
+            averageCells.forEach((cell, index) => {
+                averages[`average_${index}`] = cell.textContent?.trim() || '0';
+            });
+
+            const meanCell = document.querySelector('.mean-cell');
+            if (meanCell) {
+                averages.mean = meanCell.textContent?.trim() || '0';
+            }
+
+            // Generate PDF using the modular component
+            const blob = await pdf(
+                <GelTestPDF
+                    reportName={fileName}
+                    tableData={formData}
+                    averages={averages}
+                />
+            ).toBlob();
+
+            saveAs(blob, `${fileName}.pdf`);
+            showAlert('success', 'PDF exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
             showAlert('error', 'Error generating PDF. Please try again.');
@@ -588,7 +740,7 @@ export default function GelTest() {
 
     return (
         <>
-            <div className="min-h-screen">
+            <div className="pb-4">
                 <Header />
                 <div className="container">
                     <div className="text-center text-white mb-6">
@@ -626,19 +778,19 @@ export default function GelTest() {
                                     placeholder="Enter report name"
                                 />
                                 <button
-                                    className="save-btn w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[linear-gradient(135deg,_rgb(123,0,255,0.29)_0%,_rgb(76,0,198,0.637)_100%)] text-white text-sm hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5))] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
                                     onClick={saveReport}
                                 >
                                     Save Report
                                 </button>
                                 <button
-                                    className="save-btn export-excel w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] text-white text-sm hover:bg-[#219955] hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-excel w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToExcel}
                                 >
                                     Export as Excel
                                 </button>
                                 <button
-                                    className="save-btn export-pdf w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] text-white text-sm hover:bg-[#c0392b] hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-pdf w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToPDF}
                                 >
                                     Export as PDF
@@ -902,6 +1054,12 @@ export default function GelTest() {
                                                             onClick={() => previewSavedReport(index)}
                                                         >
                                                             Preview
+                                                        </button>
+                                                        <button
+                                                            className="preview-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
+                                                            onClick={() => editSavedReport(index)}
+                                                        >
+                                                            Edit
                                                         </button>
                                                         <button
                                                             className="delete-btn cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-600"

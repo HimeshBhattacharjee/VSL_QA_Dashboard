@@ -11,7 +11,7 @@ const Greeting: React.FC = () => {
     return (
         <div className="text-center my-8 py-4">
             <div className="greeting text-5xl font-bold text-[#321D53] text-shadow-md">
-                {getGreeting()}, Vikings!
+                {getGreeting()}, Viking!
             </div>
         </div>
     );
