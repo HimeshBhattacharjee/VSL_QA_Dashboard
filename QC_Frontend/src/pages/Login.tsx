@@ -17,10 +17,12 @@ export default function Login() {
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        if (
-            (activeTab === "admin" && username === "admin" && password === "admin") ||
-            (activeTab === "user" && username === "user" && password === "user")
-        ) {
+        if (activeTab === "admin" && username === "admin" && password === "admin") {
+            sessionStorage.setItem("isLoggedIn", "true");
+            sessionStorage.setItem("username", username);
+            showAlert('success', 'Login successful!');
+            navigate("/admin");
+        } else if (activeTab === "user" && username === "user" && password === "user") {
             sessionStorage.setItem("isLoggedIn", "true");
             sessionStorage.setItem("username", username);
             showAlert('success', 'Login successful!');

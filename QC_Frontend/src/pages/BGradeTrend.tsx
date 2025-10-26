@@ -42,65 +42,20 @@ export default function BGradeTrend() {
         totalDefect: 0,
         defectRate: '0%'
     });
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasData, setHasData] = useState(false);
 
     const B_GRADE_API_BASE_URL = 'http://localhost:8000/bgrade';
-
-    // Create initial empty chart data
-    const getEmptyChartData = (message = 'No data available') => ({
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Count',
-                data: [],
-                backgroundColor: 'rgba(200, 200, 200, 0.5)',
-                borderColor: 'rgba(200, 200, 200, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: message,
-                    font: {
-                        size: 16
-                    }
-                },
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Count'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: currentAnalysisType === 'b-grade' ? 'Grade' : 'Defect Reason'
-                    }
-                }
-            }
-        }
-    });
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         setStartDate(today);
         setEndDate(today);
         
-        // Initialize with empty chart instead of null
-        setChartData(getEmptyChartData('Select dates to view data'));
-        
-        fetchAndDisplayData(true);
+        setEmptyChartState('Select dates to view data');
 
         const timer = setTimeout(() => {
+            showAlert('warning', 'No data found for the selected date range');
             setIsInitialLoad(false);
         }, 1000);
 
@@ -119,6 +74,10 @@ export default function BGradeTrend() {
 
     const setActiveButton = (type: 'b-grade' | 'defect') => {
         setCurrentAnalysisType(type);
+        // Immediately set loading state and reset data when switching buttons
+        setIsLoading(true);
+        setHasData(false);
+        setEmptyChartState('Loading...');
     };
 
     const fetchAndDisplayData = async (suppressAlerts = false) => {
@@ -126,9 +85,12 @@ export default function BGradeTrend() {
             if (!suppressAlerts && !isInitialLoad) {
                 showAlert('error', 'Please select both start and end dates.');
             }
-            setChartData(getEmptyChartData('Select dates to view data'));
+            setEmptyChartState('Select dates to view data');
+            setIsLoading(false);
             return;
         }
+
+        setIsLoading(true);
 
         try {
             if (currentAnalysisType === 'b-grade') {
@@ -155,28 +117,95 @@ export default function BGradeTrend() {
             if (!suppressAlerts && !isInitialLoad) {
                 showAlert('error', `Failed to fetch data: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
-            setChartData(getEmptyChartData('Error loading data'));
+            setEmptyChartState('No data available for the selected criteria');
+            setHasData(false);
+        } finally {
+            setIsLoading(false);
         }
+    };
+
+    const setEmptyChartState = (message: string) => {
+        setChartData({
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Count',
+                    data: [],
+                    backgroundColor: [],
+                    borderColor: [],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: message,
+                        font: { size: 16 }
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Count' }
+                    },
+                    x: {
+                        title: { 
+                            display: true, 
+                            text: currentAnalysisType === 'b-grade' ? 'Grade' : 'Defect Reason' 
+                        }
+                    }
+                }
+            }
+        });
+        setMetrics({
+            totalProduction: 0,
+            totalDefect: 0,
+            defectRate: '0%'
+        });
+    };
+
+    // Helper function to check if all values in an object are zero
+    const allValuesAreZero = (obj: { [key: string]: number }): boolean => {
+        const values = Object.values(obj);
+        return values.length > 0 && values.every(value => value === 0);
     };
 
     const processAggregatedGradeData = (result: GradeAnalysisResponse) => {
         const gradeCounts = result.grade_counts;
+        
+        // Check if we have data AND if all values are not zero
+        if (Object.keys(gradeCounts).length === 0 || allValuesAreZero(gradeCounts)) {
+            showAlert('warning', 'No data found for the selected date range');
+            setEmptyChartState('No data available for the selected criteria');
+            setHasData(false);
+            return;
+        }
+
+        setHasData(true);
         setMetrics({
             totalProduction: result.total_production,
             totalDefect: result.total_defects,
             defectRate: `${result.defect_rate}%`
         });
         
-        // Check if we have data
-        if (Object.keys(gradeCounts).length === 0) {
-            setChartData(getEmptyChartData('No grade data available for selected period'));
-        } else {
-            createGradeChart(gradeCounts);
-        }
+        createGradeChart(gradeCounts);
     };
 
     const processAggregatedDefectData = (result: DefectAnalysisResponse) => {
         const reasonCounts = result.defect_reasons;
+        
+        // Check if we have data AND if all values are not zero
+        if (Object.keys(reasonCounts).length === 0 || allValuesAreZero(reasonCounts)) {
+            showAlert('warning', 'No data found for the selected date range');
+            setEmptyChartState('No data available for the selected criteria');
+            setHasData(false);
+            return;
+        }
+
+        setHasData(true);
         const defectRate = result.total_production > 0 ?
             ((result.total_b_grade / result.total_production) * 100).toFixed(2) : '0';
 
@@ -185,11 +214,8 @@ export default function BGradeTrend() {
             totalDefect: result.total_b_grade,
             defectRate: `${defectRate}%`
         });
-        if (Object.keys(reasonCounts).length === 0) {
-            setChartData(getEmptyChartData('No defect data available for selected period'));
-        } else {
-            createDefectChart(reasonCounts);
-        }
+        
+        createDefectChart(reasonCounts);
     };
 
     const createGradeChart = (gradeCounts: GradeCounts) => {
@@ -197,7 +223,6 @@ export default function BGradeTrend() {
         const data = Object.values(gradeCounts);
 
         setChartData({
-            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
@@ -279,7 +304,6 @@ export default function BGradeTrend() {
         );
 
         setChartData({
-            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
@@ -353,7 +377,7 @@ export default function BGradeTrend() {
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 mx-5 shadow-2xl">
-                    <div className="flex flex-col md:flex-row gap-4 items-center justify-center mb-6 flex-wrap">
+                    <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
                         <div className="flex flex-col">
                             <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 mb-1">Start Date</label>
                             <input
@@ -378,7 +402,7 @@ export default function BGradeTrend() {
 
                         <button
                             onClick={() => setActiveButton('defect')}
-                            className={`bg-white text-black rounded-lg px-5 py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mt-6 ${currentAnalysisType === 'defect'
+                            className={`bg-white text-black rounded-lg px-5 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'defect'
                                     ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent'
                                     : 'border-b-2 border-b-[#667eea] hover:-translate-y-0.5'
                                 }`}
@@ -388,7 +412,7 @@ export default function BGradeTrend() {
 
                         <button
                             onClick={() => setActiveButton('b-grade')}
-                            className={`bg-white text-black rounded-lg px-5 py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mt-6 ${currentAnalysisType === 'b-grade'
+                            className={`bg-white text-black rounded-lg px-5 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'b-grade'
                                     ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent'
                                     : 'border-b-2 border-b-[#667eea]'
                                 }`}
@@ -397,12 +421,22 @@ export default function BGradeTrend() {
                         </button>
                     </div>
 
-                    <div className="chart-container mb-6">
-                        <ZoomableChart
-                            chartData={chartData?.data || { labels: [], datasets: [] }}
-                            options={chartData?.options || {}}
-                            type={chartData?.type || 'bar'}
-                        />
+                    <div className="chart-container mb-6 h-96">
+                        {isLoading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-gray-500 text-lg">Loading chart data...</div>
+                            </div>
+                        ) : hasData ? (
+                            <ZoomableChart
+                                chartData={chartData.data}
+                                options={chartData.options}
+                                type="bar"
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-gray-500 text-lg">No data available for the selected criteria</div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

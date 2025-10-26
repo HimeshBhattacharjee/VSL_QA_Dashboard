@@ -26,6 +26,10 @@ export default function Header() {
                 setPageTitle("VSL Quality Portal Login");
                 setPageSubTitle("");
                 break;
+            case '/admin':
+                setPageTitle("VSL Quality Portal Admin Section");
+                setPageSubTitle("Create and manage user accounts");
+                break;
             case '/home':
                 setPageTitle("Welcome to VSL's Quality Department");
                 setPageSubTitle("Real-time access to test reports and quality checks");
@@ -71,8 +75,8 @@ export default function Header() {
                 setPageSubTitle("Detailed quality metrics for Final QC process");
                 break;
             case '/quality-audit':
-                setPageTitle("Quality Audit");
-                setPageSubTitle("Detailed Audit Checksheet Maintenance");
+                setPageTitle("Quality Audit Checksheet");
+                setPageSubTitle("Doc. No.: VSL/QAD/FM/119");
                 break;
             default:
                 setPageTitle("VSL Quality Portal");

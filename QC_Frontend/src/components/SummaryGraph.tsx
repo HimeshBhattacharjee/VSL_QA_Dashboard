@@ -29,6 +29,7 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         rejectionRate: '0%'
     });
     const [isLoading, setIsLoading] = useState(true);
+    const [currentPreLamDataType, setCurrentPreLamDataType] = useState<'pre-el' | 'visual'>('pre-el');
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -56,6 +57,23 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         monthly: 'Monthly Metrics',
         weekly: 'Weekly Metrics',
         daily: 'Daily Metrics'
+    };
+
+    // Function to get the actual inspection type (handles pre-lam toggle)
+    const getActualInspectionType = (): 'pre-el' | 'visual' | 'lam-qc' | 'fqc' => {
+        if (type === 'pre-lam') {
+            return currentPreLamDataType;
+        }
+        return type;
+    };
+
+    // Function to get display title (handles pre-lam prefix)
+    const getDisplayTitle = (): string => {
+        if (type === 'pre-lam') {
+            const prefix = currentPreLamDataType === 'pre-el' ? 'Pre-EL ' : 'Visual ';
+            return `${prefix}${period.charAt(0).toUpperCase() + period.slice(1)} Metrics`;
+        }
+        return periodTitles[period];
     };
 
     // Function to get date range based on period
@@ -137,8 +155,11 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         setIsLoading(true);
 
         try {
+            // Get the actual inspection type (handles pre-lam toggle)
+            const actualInspectionType = getActualInspectionType();
+
             // Load data for the current inspection type
-            const inspectionData = await loadInspectionData(type);
+            const inspectionData = await loadInspectionData(actualInspectionType);
             const { startDate, endDate } = getDateRange(period);
 
             // Filter data for the selected period
@@ -269,6 +290,13 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         setPeriod(newPeriod);
     };
 
+    // Function to toggle pre-lam data type (pre-el ↔ visual)
+    const togglePreLamDataType = () => {
+        if (type === 'pre-lam') {
+            setCurrentPreLamDataType(prev => prev === 'pre-el' ? 'visual' : 'pre-el');
+        }
+    };
+
     // Initialize chart and load data
     useEffect(() => {
         updateChartWithData();
@@ -278,25 +306,31 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                 chartInstance.current.destroy();
             }
         };
-    }, [period, type]);
+    }, [period, type, currentPreLamDataType]); // Added currentPreLamDataType to dependencies
 
-    // Auto-refresh data every 30 seconds
+    // Auto-refresh data every 30 seconds AND toggle pre-lam data type
     useEffect(() => {
         const interval = setInterval(() => {
-            updateChartWithData();
+            if (type === 'pre-lam') {
+                // For pre-lam section, toggle between pre-el and visual data
+                togglePreLamDataType();
+            } else {
+                // For other sections, just refresh the data
+                updateChartWithData();
+            }
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [period, type]);
+    }, [period, type]); // Only depend on period and type, not currentPreLamDataType
 
     return (
         <div className={`report-section bg-white rounded-2xl p-3 shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 hover:shadow-2xl cursor-pointer min-h-[480px] flex flex-col`}>
-            <div className={`section-header text-center mb-4 pb-3 border-b-2 ${sectionColors[type]}`}>
+            <div className={`section-header text-center mb-2 pb-2 border-b-2 ${sectionColors[type]}`}>
                 <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
                 <p className="text-sm text-gray-600">{subtitle}</p>
             </div>
 
-            <div className="period-selector flex gap-2 justify-center mb-4">
+            <div className="period-selector flex gap-2 justify-center mb-2">
                 <select
                     className="period-dropdown px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold cursor-pointer shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:shadow-xl"
                     value={period}
@@ -319,7 +353,7 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
             <div className="chart-display-container flex flex-col items-center gap-5 flex-grow">
                 <div className="selected-period-card bg-gray-50 rounded-xl p-4 border-l-4 border-green-400 w-full max-w-md shadow-lg">
                     <div className="selected-period-title text-lg font-semibold text-gray-800 mb-3 text-center">
-                        {periodTitles[period]}
+                        {getDisplayTitle()}
                         {isLoading && <span className="text-sm text-gray-500 ml-2">Loading...</span>}
                     </div>
 

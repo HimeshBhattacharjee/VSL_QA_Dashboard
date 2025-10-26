@@ -4,6 +4,7 @@ import { PreviewModalProvider } from './context/PreviewModalContext';
 import { ConfirmModalProvider } from './context/ConfirmModalContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Admin from './pages/Admin';
 import QualityTests from './pages/QualityTests';
 import GelTest from './pages/GelTest';
 import PeelTest from './pages/PeelTest';
@@ -43,6 +44,7 @@ export default function App() {
                         <Route path="/" element={<Login />} />
                         <Route element={<ProtectedLayout />}>
                             <Route path="/home" element={<Home />} />
+                            <Route path="/admin" element={<Admin />} />
                             <Route path="/quality-tests" element={<QualityTests />} />
                             <Route path="/gel-test" element={<GelTest />} />
                             <Route path="/peel-test" element={<PeelTest />} />

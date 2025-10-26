@@ -753,14 +753,13 @@ export default function GelTest() {
 
                     <div className="flex justify-center mx-4">
                         <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-4 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-3 px-6 rounded-tr-xl rounded-tl-xl text-center cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('edit-report')}
                         >
                             Edit Report
                         </div>
                         <div
-
-                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-4 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-3 px-6 rounded-tr-xl rounded-tl-xl text-center cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('saved-reports')}
                         >
                             Saved Reports
@@ -774,7 +773,7 @@ export default function GelTest() {
                                     type="text"
                                     value={reportName}
                                     onChange={(e) => setReportName(e.target.value)}
-                                    className="report-name-input p-2.5 rounded-md bg-white border-b-[rgba(48,30,107)] border-b-2 w-[50%] text-center text-md"
+                                    className="report-name-input p-2.5 rounded-md bg-white border-b-[rgba(48,30,107)] border-b-2 w-[50%] text-center text-sm"
                                     placeholder="Enter report name"
                                 />
                                 <button
@@ -1030,7 +1029,7 @@ export default function GelTest() {
                     {activeTab === 'saved-reports' && (
                         <div className="tab-content active">
                             <div className="saved-reports-container bg-white p-5 rounded-md shadow-lg mx-4 my-3">
-                                <h2 className="text-3xl font-bold mb-4 text-center">Saved Gel Test Reports</h2>
+                                <h2 className="text-2xl font-bold mb-4 text-center">Saved Gel Test Reports</h2>
 
                                 {savedReports.length === 0 ? (
                                     <div className="text-center py-8">
@@ -1043,7 +1042,7 @@ export default function GelTest() {
                                             <div key={index} className="report-item border border-gray-200 rounded-lg p-4 mb-4 shadow-sm hover:shadow-md transition-shadow">
                                                 <div className="flex justify-between items-center">
                                                     <div>
-                                                        <h3 className="text-xl font-semibold text-gray-800">{report.name}</h3>
+                                                        <h3 className="text-xl font-bold text-gray-800">{report.name}</h3>
                                                         <p className="text-gray-500 text-sm mt-1">
                                                             Saved on: {new Date(report.timestamp).toLocaleString()}
                                                         </p>
@@ -1056,7 +1055,7 @@ export default function GelTest() {
                                                             Preview
                                                         </button>
                                                         <button
-                                                            className="preview-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
+                                                            className="edit-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
                                                             onClick={() => editSavedReport(index)}
                                                         >
                                                             Edit

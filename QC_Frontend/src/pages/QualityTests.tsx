@@ -12,11 +12,10 @@ export default function QualityTests() {
     };
 
     return (
-        <div className="min-h-screen">
+        <div className="pb-4">
             <Header />
-            
             <div className="max-w-7xl mx-auto">
-                <div className="text-center text-white mb-10">
+                <div className="text-center text-white mb-6">
                     <button 
                         onClick={handleBackToHome}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"

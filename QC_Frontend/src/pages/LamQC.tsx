@@ -275,8 +275,8 @@ export default function LamQC() {
                         <span className="font-bold text-md">⇐</span> Back to Quality Analysis
                     </button>
                 </div>
-                <div className="display bg-white rounded-2xl p-5 mx-5 shadow-2xl min-h-[500px]">
-                    <div className="date-selector flex flex-col md:flex-row gap-4 items-center justify-center mb-6 flex-wrap">
+                <div className="display bg-white rounded-2xl p-5 mx-5 shadow-2xl">
+                    <div className="date-selector flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
                         <div className="date-input flex flex-col">
                             <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 mb-1">Start Date</label>
                             <input

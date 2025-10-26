@@ -263,9 +263,9 @@ export default function Visual() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] p-4">
+        <div className="pb-4">
             <Header />
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-4">
                 <div className="text-center text-white mb-6">
                     <button
                         onClick={handleBackToPreLamDashboard}
