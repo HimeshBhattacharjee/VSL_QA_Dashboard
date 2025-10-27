@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import { PreviewModalContent, usePreviewModal } from '../context/PreviewModalContext';
+import ZoomableChart from '../components/ZoomableChart';
 
 type ReportData = {
     name: string;
@@ -12,6 +14,13 @@ type ReportData = {
 };
 
 type TabType = 'edit-report' | 'saved-reports' | 'report-analysis';
+
+type GraphData = {
+    date: string;
+    average_value: number;
+    max_value: number;
+    min_value: number;
+};
 
 const STORAGE_KEY = 'peelTestReports';
 const PEEL_API_BASE_URL = 'http://localhost:8000/peel';
@@ -23,21 +32,33 @@ export default function PeelTest() {
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [previewReport, setPreviewReport] = useState<ReportData | null>(null);
+    const [currentPreviewReportIndex, setCurrentPreviewReportIndex] = useState<number | null>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
+    const { showPreview } = usePreviewModal();
 
     // Edit Report Tab States
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [selectedShift, setSelectedShift] = useState('');
     const [showReportEditor, setShowReportEditor] = useState(false);
     const [formData, setFormData] = useState<Record<string, string>>({});
+    const [tableData, setTableData] = useState<Record<string, string>>({});
 
     // Analysis Tab States
     const [monthYear, setMonthYear] = useState(() => new Date().toISOString().slice(0, 7));
     const [stringer, setStringer] = useState('1');
     const [cellFace, setCellFace] = useState('');
     const [showChart, setShowChart] = useState(false);
-    const chartRef = useRef<HTMLCanvasElement>(null);
+    const [graphData, setGraphData] = useState<GraphData[]>([]);
+
+    // Initialize with today's date
+    useEffect(() => {
+        const today = new Date().toISOString().split('T')[0];
+        setSelectedDate(today);
+
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        setMonthYear(currentMonth);
+    }, []);
 
     // Navigation functions
     const handleBackToTests = () => {
@@ -63,6 +84,7 @@ export default function PeelTest() {
         setHasUnsavedChanges(false);
         setCurrentEditingReport(null);
         setFormData({});
+        setTableData({});
     };
 
     // Report management functions
@@ -107,20 +129,20 @@ export default function PeelTest() {
         const existingLocalReport = savedReports.find(report => report.name === reportName);
 
         if (existingLocalReport) {
-            setCurrentEditingReport(reportName);
+            loadReportForEditing(existingLocalReport);
             showAlert('success', 'Loaded locally saved report');
         } else {
             try {
                 const mongoData = await fetchPeelData(selectedDate, selectedShift);
                 if (mongoData && mongoData.length > 0) {
-                    setCurrentEditingReport(reportName);
+                    createReportFromMongoData(reportName, mongoData);
                     showAlert('success', 'Report created from database data');
                 } else {
-                    setCurrentEditingReport(reportName);
+                    createNewReport(reportName);
                     showAlert('info', 'No data found in database. Created blank report');
                 }
             } catch (error) {
-                setCurrentEditingReport(reportName);
+                createNewReport(reportName);
                 showAlert('info', 'Created blank report');
             }
         }
@@ -128,12 +150,111 @@ export default function PeelTest() {
         setShowReportEditor(true);
     };
 
+    const loadReportForEditing = (report: ReportData) => {
+        setTableData(report.formData);
+        setCurrentEditingReport(report.name);
+        setHasUnsavedChanges(false);
+    };
+
+    const createReportFromMongoData = (reportName: string, mongoData: any[]) => {
+        const newFormData: Record<string, string> = {};
+
+        mongoData.forEach((record, repIndex) => {
+            if (repIndex >= 24) return;
+
+            // Set basic information
+            newFormData[`row_${repIndex}_cell_0`] = record.Date || '';
+            newFormData[`row_${repIndex}_cell_1`] = record.Shift || '';
+            newFormData[`row_${repIndex}_cell_2`] = record.Stringer?.toString() || '';
+            newFormData[`row_${repIndex}_cell_3`] = record.Unit || '';
+            newFormData[`row_${repIndex}_cell_4`] = record.PO || '';
+            newFormData[`row_${repIndex}_cell_5`] = record.Cell_Vendor || record['Cell Vendor'] || '';
+
+            // Front side data
+            for (let position = 1; position <= 16; position++) {
+                for (let ribbon = 1; ribbon <= 7; ribbon++) {
+                    const key = `Front_${position}_${ribbon}`;
+                    if (record[key] !== undefined) {
+                        const cellIndex = 6 + (position - 1) * 7 + (ribbon - 1);
+                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = record[key]?.toString() || '';
+                    }
+                }
+            }
+
+            // Back side data
+            for (let position = 1; position <= 16; position++) {
+                for (let ribbon = 1; ribbon <= 7; ribbon++) {
+                    const key = `Back_${position}_${ribbon}`;
+                    if (record[key] !== undefined) {
+                        const cellIndex = 118 + (position - 1) * 7 + (ribbon - 1);
+                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = record[key]?.toString() || '';
+                    }
+                }
+            }
+        });
+
+        setTableData(newFormData);
+        setCurrentEditingReport(reportName);
+        setHasUnsavedChanges(false);
+    };
+
+    const createNewReport = (reportName: string) => {
+        setTableData({});
+        setCurrentEditingReport(reportName);
+        setHasUnsavedChanges(false);
+    };
+
+    const handleCellChange = (rowIndex: number, cellIndex: number, value: string) => {
+        const cellId = `row_${rowIndex}_cell_${cellIndex}`;
+        setTableData(prev => ({
+            ...prev,
+            [cellId]: value
+        }));
+        setHasUnsavedChanges(true);
+    };
+
+    const handleSignatureChange = (type: string, value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            [type]: value
+        }));
+        setHasUnsavedChanges(true);
+    };
+
+    // Calculate averages for a specific row and position
+    const calculateAverage = (rowIndex: number, startCell: number, count: number): string => {
+        let sum = 0;
+        let validCount = 0;
+
+        for (let i = 0; i < count; i++) {
+            const cellId = `row_${rowIndex}_cell_${startCell + i}`;
+            const value = tableData[cellId];
+            if (value && !isNaN(parseFloat(value))) {
+                sum += parseFloat(value);
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? (sum / validCount).toFixed(2) : '0.00';
+    };
+
+    // Check if cell should be highlighted
+    const shouldHighlightCell = (value: string): boolean => {
+        return value === '' || (parseFloat(value) < 1.0 && !isNaN(parseFloat(value)));
+    };
+
     // Saved Reports functions
     const previewSavedReport = (index: number) => {
         const savedReports = getSavedReports();
         if (index >= 0 && index < savedReports.length) {
             setPreviewReport(savedReports[index]);
-            setShowPreviewModal(true);
+            setCurrentPreviewReportIndex(index);
+            showPreview({
+                title: `Preview: ${savedReports[index].name}`,
+                // content: <GelTestPreview report={report} />,
+                exportExcel: () => exportPreviewToExcel(index),
+                exportPDF: () => exportPreviewToPDF(index)
+            });
         }
     };
 
@@ -157,7 +278,7 @@ export default function PeelTest() {
             setSelectedShift(shift);
         }
 
-        setCurrentEditingReport(report.name);
+        loadReportForEditing(report);
         setShowReportEditor(true);
         setActiveTab('edit-report');
         showAlert('success', 'Report loaded for editing');
@@ -204,8 +325,10 @@ export default function PeelTest() {
         try {
             const graphData = await fetchGraphData(monthName, parseInt(year), parseInt(stringer), cellFace);
             if (graphData && graphData.data && graphData.data.length > 0) {
+                setGraphData(graphData.data);
                 showAlert('success', 'Analysis completed successfully');
             } else {
+                setGraphData([]);
                 showAlert('warning', 'No data available for the selected criteria');
             }
         } catch (error) {
@@ -227,6 +350,15 @@ export default function PeelTest() {
         }
     };
 
+    const getCellFaceDisplayName = (cellFace: string) => {
+        switch (cellFace) {
+            case 'front': return 'Front';
+            case 'back': return 'Back';
+            case 'both': return 'Front + Back';
+            default: return cellFace;
+        }
+    };
+
     // Save report function
     const saveReport = () => {
         if (!currentEditingReport) {
@@ -237,7 +369,7 @@ export default function PeelTest() {
         const reportData: ReportData = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
-            formData: { ...formData },
+            formData: { ...tableData, ...formData },
             rowData: []
         };
 
@@ -255,13 +387,15 @@ export default function PeelTest() {
         showAlert('success', 'Report saved successfully!');
     };
 
-    // Export functions (simplified)
+    // Export functions
     const exportToPDF = () => {
         showAlert('info', 'PDF export functionality would be implemented here');
+        // Implementation would use jsPDF and html2canvas similar to the original
     };
 
     const exportToExcel = () => {
         showAlert('info', 'Excel export functionality would be implemented here');
+        // Implementation would use xlsx library similar to the original
     };
 
     const exportPreviewToPDF = () => {
@@ -272,11 +406,167 @@ export default function PeelTest() {
         showAlert('info', 'Preview Excel export functionality would be implemented here');
     };
 
+    // Generate table rows
+    const generateTableRows = () => {
+        const rows = [];
+        const repetitions = 24;
+
+        for (let rep = 0; rep < repetitions; rep++) {
+            // Front section header
+            rows.push(
+                <tr key={`front-header-${rep}`}>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_0`] || ''}
+                            onChange={(e) => handleCellChange(rep, 0, e.target.value)}
+                        />
+                    </td>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_1`] || ''}
+                            onChange={(e) => handleCellChange(rep, 1, e.target.value)}
+                        />
+                    </td>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_2`] || ''}
+                            onChange={(e) => handleCellChange(rep, 2, e.target.value)}
+                        />
+                    </td>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_3`] || ''}
+                            onChange={(e) => handleCellChange(rep, 3, e.target.value)}
+                        />
+                    </td>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_4`] || ''}
+                            onChange={(e) => handleCellChange(rep, 4, e.target.value)}
+                        />
+                    </td>
+                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                        <input
+                            type="text"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            value={tableData[`row_${rep}_cell_5`] || ''}
+                            onChange={(e) => handleCellChange(rep, 5, e.target.value)}
+                        />
+                    </td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Front</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">1</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">2</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">3</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">4</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">5</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">6</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">7</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Avg. Value (N/mm)</td>
+                </tr>
+            );
+
+            // Front data rows
+            for (let i = 1; i <= 16; i++) {
+                const startCell = 6 + (i - 1) * 7;
+                const average = calculateAverage(rep, startCell, 7);
+
+                rows.push(
+                    <tr key={`front-data-${rep}-${i}`}>
+                        <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">{i}</td>
+                        {[0, 1, 2, 3, 4, 5, 6].map(offset => {
+                            const cellIndex = startCell + offset;
+                            const value = tableData[`row_${rep}_cell_${cellIndex}`] || '';
+                            const isHighlighted = shouldHighlightCell(value);
+
+                            return (
+                                <td
+                                    key={`front-${rep}-${i}-${offset}`}
+                                    className={`border border-gray-300 p-1 ${isHighlighted ? 'bg-red-200' : ''}`}
+                                >
+                                    <input
+                                        type="text"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                        value={value}
+                                        onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
+                                    />
+                                </td>
+                            );
+                        })}
+                        <td className="border border-gray-300 p-1 font-semibold text-center">
+                            {average}
+                        </td>
+                    </tr>
+                );
+            }
+
+            // Back section header
+            rows.push(
+                <tr key={`back-header-${rep}`}>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Back</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">1</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">2</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">3</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">4</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">5</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">6</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">7</td>
+                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Avg. Value (N/mm)</td>
+                </tr>
+            );
+
+            // Back data rows
+            for (let i = 1; i <= 16; i++) {
+                const startCell = 118 + (i - 1) * 7;
+                const average = calculateAverage(rep, startCell, 7);
+
+                rows.push(
+                    <tr key={`back-data-${rep}-${i}`}>
+                        <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">{i}</td>
+                        {[0, 1, 2, 3, 4, 5, 6].map(offset => {
+                            const cellIndex = startCell + offset;
+                            const value = tableData[`row_${rep}_cell_${cellIndex}`] || '';
+                            const isHighlighted = shouldHighlightCell(value);
+
+                            return (
+                                <td
+                                    key={`back-${rep}-${i}-${offset}`}
+                                    className={`border border-gray-300 p-1 ${isHighlighted ? 'bg-red-200' : ''}`}
+                                >
+                                    <input
+                                        type="text"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                        value={value}
+                                        onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
+                                    />
+                                </td>
+                            );
+                        })}
+                        <td className="border border-gray-300 p-1 font-semibold text-center">
+                            {average}
+                        </td>
+                    </tr>
+                );
+            }
+        }
+
+        return rows;
+    };
+
     // Render components
     const renderEditReportTab = () => (
         <div className="">
             {/* Date Selection */}
-            <div className="date-selector bg-gray-50 p-2 mb-2 rounded-lg border border-gray-200">
+            <div className="date-selector bg-gray-50 p-2 rounded-lg border border-gray-200">
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
                     <label htmlFor="date-select" className="font-semibold text-gray-700">
                         Select Date:
@@ -313,31 +603,29 @@ export default function PeelTest() {
 
             {/* Report Info Display */}
             {showReportEditor && currentEditingReport && (
-                <div className="report-info bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="save-actions flex items-center justify-between">
-                        <p className="current-report-title text-red-600 font-bold bg-white rounded px-3 py-2">
+                <div className="report-info p-2 rounded-lg">
+                    <div className="save-actions flex items-center justify-center gap-2">
+                        <p className="current-report-title text-red-600 font-bold bg-white rounded p-2">
                             Currently editing: <span>{currentEditingReport}</span>
                         </p>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={saveReport}
-                                className="save-btn px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                            >
-                                Save Report
-                            </button>
-                            <button
-                                onClick={exportToExcel}
-                                className="export-excel px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                            >
-                                Export as Excel
-                            </button>
-                            <button
-                                onClick={exportToPDF}
-                                className="export-pdf px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                            >
-                                Export as PDF
-                            </button>
-                        </div>
+                        <button
+                            className="save-btn w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5))] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            onClick={saveReport}
+                        >
+                            Save Report
+                        </button>
+                        <button
+                            className="export-excel w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            onClick={exportToExcel}
+                        >
+                            Export as Excel
+                        </button>
+                        <button
+                            className="export-pdf w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            onClick={exportToPDF}
+                        >
+                            Export as PDF
+                        </button>
                     </div>
                 </div>
             )}
@@ -391,47 +679,7 @@ export default function PeelTest() {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td className="border border-gray-300 p-2">{selectedDate}</td>
-                                    <td className="border border-gray-300 p-2">{selectedShift}</td>
-                                    <td className="border border-gray-300 p-2">
-                                        <input
-                                            type="text"
-                                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            placeholder="Stringer"
-                                            onChange={(e) => setFormData(prev => ({ ...prev, stringer: e.target.value }))}
-                                        />
-                                    </td>
-                                    <td className="border border-gray-300 p-2">
-                                        <input
-                                            type="text"
-                                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            placeholder="Unit"
-                                            onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
-                                        />
-                                    </td>
-                                    <td className="border border-gray-300 p-2">
-                                        <input
-                                            type="text"
-                                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            placeholder="PO"
-                                            onChange={(e) => setFormData(prev => ({ ...prev, po: e.target.value }))}
-                                        />
-                                    </td>
-                                    <td className="border border-gray-300 p-2">
-                                        <input
-                                            type="text"
-                                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            placeholder="Cell Vendor"
-                                            onChange={(e) => setFormData(prev => ({ ...prev, cellVendor: e.target.value }))}
-                                        />
-                                    </td>
-                                    {/* More cells would be generated dynamically */}
-                                    <td colSpan={8} className="border border-gray-300 p-2 text-center text-gray-500">
-                                        Data cells would be generated here
-                                    </td>
-                                    <td className="border border-gray-300 p-2"></td>
-                                </tr>
+                                {generateTableRows()}
                             </tbody>
                         </table>
 
@@ -443,7 +691,8 @@ export default function PeelTest() {
                                     type="text"
                                     className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
                                     placeholder="Name"
-                                    onChange={(e) => setFormData(prev => ({ ...prev, preparedBy: e.target.value }))}
+                                    value={formData.preparedBy || ''}
+                                    onChange={(e) => handleSignatureChange('preparedBy', e.target.value)}
                                 />
                             </div>
                             <div className="signature flex-1 text-center">
@@ -452,7 +701,8 @@ export default function PeelTest() {
                                     type="text"
                                     className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
                                     placeholder="Name"
-                                    onChange={(e) => setFormData(prev => ({ ...prev, acceptedBy: e.target.value }))}
+                                    value={formData.acceptedBy || ''}
+                                    onChange={(e) => handleSignatureChange('acceptedBy', e.target.value)}
                                 />
                             </div>
                             <div className="signature flex-1 text-center">
@@ -461,7 +711,8 @@ export default function PeelTest() {
                                     type="text"
                                     className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
                                     placeholder="Name"
-                                    onChange={(e) => setFormData(prev => ({ ...prev, verifiedBy: e.target.value }))}
+                                    value={formData.verifiedBy || ''}
+                                    onChange={(e) => handleSignatureChange('verifiedBy', e.target.value)}
                                 />
                             </div>
                         </div>
@@ -487,28 +738,28 @@ export default function PeelTest() {
                         savedReports.map((report, index) => (
                             <div key={index} className="saved-report-item border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                 <div className="flex justify-between items-center">
-                                    <div className="saved-report-info">
-                                        <h3 className="font-bold text-gray-800">{report.name}</h3>
-                                        <p className="text-sm mt-1 text-gray-600">
+                                    <div className="report-info">
+                                        <h3 className="font-semibold text-lg text-gray-800">{report.name}</h3>
+                                        <p className="text-sm text-gray-600">
                                             Saved on: {new Date(report.timestamp).toLocaleString()}
                                         </p>
                                     </div>
-                                    <div className="saved-report-actions flex space-x-2">
+                                    <div className="report-actions flex gap-2">
                                         <button
                                             onClick={() => previewSavedReport(index)}
-                                            className="action-btn cursor-pointer px-4 py-2 bg-blue-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-600"
+                                            className="preview-btn py-2 px-4 cursor-pointer bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
                                         >
                                             Preview
                                         </button>
                                         <button
                                             onClick={() => editSavedReport(index)}
-                                            className="action-btn edit-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
+                                            className="edit-btn py-2 px-4 cursor-pointer bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
                                         >
                                             Edit
                                         </button>
                                         <button
                                             onClick={() => deleteSavedReport(index)}
-                                            className="action-btn delete-report cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-600"
+                                            className="delete-btn py-2 px-4 cursor-pointer bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
                                         >
                                             Delete
                                         </button>
@@ -523,8 +774,8 @@ export default function PeelTest() {
     };
 
     const renderReportAnalysisTab = () => (
-        <div className="report-analysis-container bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap mb-4">
+        <div className="report-analysis-container bg-white rounded-lg border border-gray-200 p-2">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
                 <label htmlFor="monthYear" className="font-semibold text-gray-700">
                     Month & Year:
                 </label>
@@ -568,67 +819,187 @@ export default function PeelTest() {
                     Analyze
                 </button>
             </div>
-
-            {/* Chart Area */}
-            <div className={`chart-container bg-white rounded-lg p-4 ${showChart ? 'block' : 'hidden'}`}>
-                <div className="chart-wrapper h-96">
-                    <canvas ref={chartRef} id="peel-strength-chart" className="w-full h-full"></canvas>
+            {showChart && graphData.length > 0 && (
+                <div className="chart-container bg-white rounded-lg p-2">
+                    <ZoomableChart
+                        chartData={prepareChartData()}
+                        options={prepareChartOptions()}
+                        type="line"
+                    />
                 </div>
-                {!showChart && (
-                    <div className="no-data-message text-center py-8 text-gray-500">
-                        No data available for the selected criteria. Please try different parameters.
-                    </div>
-                )}
-            </div>
-        </div >
+            )}
+            {showChart && graphData.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                    No data available for the selected criteria. Please try different parameters.
+                </div>
+            )}
+        </div>
     );
 
+    const prepareChartData = () => {
+        const labels = graphData.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('en-GB');
+        });
+
+        const dataPoints = graphData.map(item => item.average_value);
+        const maxValues = graphData.map(item => item.max_value);
+        const minValues = graphData.map(item => item.min_value);
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: `Average Peel Strength (N/mm)`,
+                    data: dataPoints,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: `Maximum Value (N/mm)`,
+                    data: maxValues,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 3,
+                    tension: 0.4
+                },
+                {
+                    label: `Minimum Value (N/mm)`,
+                    data: minValues,
+                    borderColor: '#ddb505',
+                    backgroundColor: 'rgba(255, 250, 0, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 3,
+                    tension: 0.4
+                },
+                {
+                    label: 'Minimum Requirement (1.0 N/mm)',
+                    data: Array(labels.length).fill(1.0),
+                    borderColor: '#ff4444',
+                    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0
+                }
+            ]
+        };
+    };
+
+    const prepareChartOptions = () => {
+        const [year, month] = monthYear.split('-');
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthName = monthNames[parseInt(month) - 1];
+
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Peel Strength Analysis - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}, Stringer ${stringer}, ${getCellFaceDisplayName(cellFace)}`,
+                    font: {
+                        size: 16,
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context: any) {
+                            const datasetLabel = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            if (datasetLabel.includes('Average')) {
+                                return `Avg Strength: ${value} N/mm`;
+                            } else if (datasetLabel.includes('Maximum')) {
+                                return `Max Strength: ${value} N/mm`;
+                            } else if (datasetLabel.includes('Minimum Value')) {
+                                return `Min Strength: ${value} N/mm`;
+                            } else if (datasetLabel.includes('Requirement')) {
+                                return `Min Requirement: ${value} N/mm`;
+                            }
+                            return `${datasetLabel}: ${value} N/mm`;
+                        }
+                    }
+                },
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Day of Month'
+                    },
+                    grid: {
+                        display: true
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Peel Strength (N/mm)'
+                    },
+                    min: 0,
+                    grid: {
+                        display: true
+                    },
+                    ticks: {
+                        callback: function (value: any) {
+                            return value + ' N/mm';
+                        }
+                    }
+                }
+            },
+            animation: {
+                duration: 1000
+            }
+        };
+    };
+
     const renderPreviewModal = () => {
-        if (!showPreviewModal) return null;
+        if (!showPreviewModal || !previewReport) return null;
 
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-                    <div className="preview-header flex justify-between items-center p-4 border-b border-gray-200">
-                        <div className="preview-title text-xl font-bold text-gray-800">
-                            Preview: {previewReport?.name || 'Report'}
-                        </div>
-                        <div className="preview-buttons flex gap-2">
-                            <button
-                                onClick={exportPreviewToExcel}
-                                className="preview-export-excel px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                            >
-                                Export as Excel
-                            </button>
-                            <button
-                                onClick={exportPreviewToPDF}
-                                className="preview-export-pdf px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                            >
-                                Export as PDF
-                            </button>
-                            <button
-                                onClick={() => setShowPreviewModal(false)}
-                                className="close-preview w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 text-xl font-bold"
-                            >
-                                &times;
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="preview-report overflow-auto p-4 max-h-[calc(90vh-80px)]">
-                        {previewReport ? (
-                            <div className="test-report-container">
-                                <div className="bg-white p-6 border border-gray-300">
-                                    <h3 className="text-lg font-bold mb-4">{previewReport.name}</h3>
-                                    <p className="text-gray-600">Preview content would be displayed here with all report data.</p>
-                                    <div className="mt-4 p-4 bg-gray-50 rounded">
-                                        <pre className="text-sm">{JSON.stringify(previewReport.formData, null, 2)}</pre>
-                                    </div>
-                                </div>
+                <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-gray-800">{previewReport.name}</h2>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={exportPreviewToExcel}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                >
+                                    Export as Excel
+                                </button>
+                                <button
+                                    onClick={exportPreviewToPDF}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                                >
+                                    Export as PDF
+                                </button>
+                                <button
+                                    onClick={() => setShowPreviewModal(false)}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                                >
+                                    Close
+                                </button>
                             </div>
-                        ) : (
-                            <p className="text-gray-500 text-center py-8">No report selected for preview</p>
-                        )}
+                        </div>
+
+                        <div className="preview-content">
+                            {/* Preview content would render the report similar to the edit view but read-only */}
+                            <div className="text-center text-gray-500 py-8">
+                                Preview content would be displayed here
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -638,7 +1009,7 @@ export default function PeelTest() {
     return (
         <div className="pb-4">
             <Header />
-            <div className="max-w-7xl mx-auto">
+            <div className="container">
                 <div className="text-center text-white mb-6">
                     <button onClick={handleBackToTests}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
@@ -647,33 +1018,36 @@ export default function PeelTest() {
                     </button>
                 </div>
 
-                {/* Tab Navigation */}
-                <div className="tab-container flex mx-4">
-                    {[
-                        { id: 'edit-report', label: 'Edit Report' },
-                        { id: 'saved-reports', label: 'Saved Reports' },
-                        { id: 'report-analysis', label: 'Report Analysis' }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            className={`tab ${activeTab === tab.id ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                            onClick={() => setActiveTab(tab.id as TabType)}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                <div className="flex justify-center mx-4">
+                    <div
+                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        onClick={() => setActiveTab('edit-report')}
+                    >
+                        Edit Report
+                    </div>
+                    <div
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        onClick={() => setActiveTab('saved-reports')}
+                    >
+                        Saved Reports
+                    </div>
+                    <div
+                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        onClick={() => setActiveTab('report-analysis')}
+                    >
+                        Report Analysis
+                    </div>
                 </div>
-
                 {/* Tab Content */}
-                <div className="tab-content my-2.5 mx-4">
+                <div className="tab-content mt-2 mx-4">
                     {activeTab === 'edit-report' && renderEditReportTab()}
                     {activeTab === 'saved-reports' && renderSavedReportsTab()}
                     {activeTab === 'report-analysis' && renderReportAnalysisTab()}
                 </div>
-            </div>
 
-            {/* Modals */}
-            {renderPreviewModal()}
-        </div>
+                {/* Preview Modal */}
+                {renderPreviewModal()}
+            </div>
+        </div >
     );
 }

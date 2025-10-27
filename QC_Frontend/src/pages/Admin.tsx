@@ -48,7 +48,7 @@ const Admin = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 relative overflow-hidden">
             {/* Animated Background Elements */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -right-32 w-80 h-80 bg-purple-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
@@ -59,25 +59,25 @@ const Admin = () => {
             <div className="relative z-10 max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-16">
-                    <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                    <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
                         User Management
                     </h1>
-                    <p className="text-gray-300 text-lg">Create and manage user accounts with style</p>
+                    <p className="text-gray-300 text-md">Create and manage user accounts with style</p>
                 </div>
 
                 {/* Main Tab Container */}
-                <div className="flex items-center justify-center min-h-[70vh]">
+                <div className="flex items-center justify-center p-4">
                     {/* Create User Tab */}
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                                ? 'w-1/2 mx-4 transform hover:scale-105'
+                                ? 'w-1/3 mx-4 transform hover:scale-105'
                                 : activeTab === 'create'
                                     ? 'w-full scale-100'
                                     : 'w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
-                            className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl border border-gray-700 shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'create' ? 'h-auto min-h-[600px]' : 'h-64 cursor-pointer'
+                            className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl border border-gray-700 shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'create' ? 'h-auto' : 'cursor-pointer'
                                 }`}
                             onClick={() => !activeTab && setActiveTab('create')}
                         >
@@ -86,11 +86,11 @@ const Admin = () => {
                                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600'
                                     : 'bg-gradient-to-r from-cyan-700 to-blue-700'
                                 }`}>
-                                <div className="flex items-center justify-center space-x-4">
-                                    <div className={`p-3 rounded-2xl bg-white bg-opacity-20 ${activeTab === 'create' ? 'scale-110' : ''
+                                <div className="flex items-center justify-center">
+                                    <div className={`p-2 rounded-2xl bg-transparent bg-opacity-20 ${activeTab === 'create' ? 'scale-110' : ''
                                         } transition-transform duration-300`}>
                                         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                         </svg>
                                     </div>
                                     <h2 className="text-3xl font-bold text-white">Create Users</h2>
@@ -166,7 +166,7 @@ const Admin = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex justify-center space-x-4 pt-6">
+                                            <div className="flex justify-center space-x-4 pt-4">
                                                 <button
                                                     type="submit"
                                                     className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
@@ -207,14 +207,14 @@ const Admin = () => {
                     {/* Manage Users Tab */}
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                                ? 'w-1/2 mx-4 transform hover:scale-105'
+                                ? 'w-1/3 mx-4 transform hover:scale-105'
                                 : activeTab === 'manage'
                                     ? 'w-full scale-100'
                                     : 'w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
-                            className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl border border-gray-700 shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'manage' ? 'h-auto min-h-[600px]' : 'h-64 cursor-pointer'
+                            className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl border border-gray-700 shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'manage' ? 'h-auto' : 'cursor-pointer'
                                 }`}
                             onClick={() => !activeTab && setActiveTab('manage')}
                         >
@@ -223,11 +223,11 @@ const Admin = () => {
                                     ? 'bg-gradient-to-r from-purple-600 to-pink-600'
                                     : 'bg-gradient-to-r from-purple-700 to-pink-700'
                                 }`}>
-                                <div className="flex items-center justify-center space-x-4">
-                                    <div className={`p-3 rounded-2xl bg-white bg-opacity-20 ${activeTab === 'manage' ? 'scale-110' : ''
+                                <div className="flex items-center justify-center">
+                                    <div className={`p-2 rounded-2xl bg-transparent bg-opacity-20 ${activeTab === 'manage' ? 'scale-110' : ''
                                         } transition-transform duration-300`}>
                                         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
                                     </div>
                                     <h2 className="text-3xl font-bold text-white">Manage Users</h2>
@@ -331,7 +331,7 @@ const Admin = () => {
                                                 onClick={() => setActiveTab(null)}
                                                 className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-slate-600"
                                             >
-                                                Back to Overview
+                                                Back
                                             </button>
                                         </div>
                                     </div>

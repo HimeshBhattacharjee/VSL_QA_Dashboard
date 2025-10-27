@@ -14,10 +14,17 @@ export default {
             animation: {
                 'slide-in-right': 'slideInRight 0.3s ease forwards',
             },
+            animation: {
+                wave: 'wave 0.6s ease-in-out infinite',
+            },
             keyframes: {
                 slideInRight: {
                     from: { transform: 'translateX(100%)', opacity: '0' },
                     to: { transform: 'translateX(0)', opacity: '1' },
+                },
+                wave: {
+                    '0%, 100%': { transform: 'translateY(0)' },
+                    '50%': { transform: 'translateY(-8px)' },
                 }
             },
             backgroundImage: {

@@ -40,7 +40,7 @@ export default function Home() {
                 >
                     <div className="text-4xl mb-2 relative z-20">📝</div>
                     <h2 className="text-3xl font-bold text-gray-800 mb-2 relative z-20">
-                        Quality Audit Check
+                        IPQC Audit
                     </h2>
                     <p className="text-gray-600 relative z-20">
                         Maintain detailed quality audit checksheets

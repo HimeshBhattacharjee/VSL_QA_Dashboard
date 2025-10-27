@@ -1049,19 +1049,19 @@ export default function GelTest() {
                                                     </div>
                                                     <div className="flex space-x-2">
                                                         <button
-                                                            className="preview-btn cursor-pointer px-4 py-2 bg-blue-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-600"
+                                                            className="preview-btn cursor-pointer px-4 py-2 bg-blue-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-700"
                                                             onClick={() => previewSavedReport(index)}
                                                         >
                                                             Preview
                                                         </button>
                                                         <button
-                                                            className="edit-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
+                                                            className="edit-btn cursor-pointer px-4 py-2 bg-green-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-700"
                                                             onClick={() => editSavedReport(index)}
                                                         >
                                                             Edit
                                                         </button>
                                                         <button
-                                                            className="delete-btn cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-600"
+                                                            className="delete-btn cursor-pointer px-4 py-2 bg-red-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-700"
                                                             onClick={() => deleteSavedReport(index)}
                                                         >
                                                             Delete

@@ -15,7 +15,6 @@ export interface StageData {
     id: number;
     name: string;
     parameters: ParameterData[];
-    renderObservation?: (props: ObservationRenderProps) => JSX.Element; // Stage-specific renderer
 }
 
 export interface ParameterData {
@@ -25,6 +24,7 @@ export interface ParameterData {
     typeOfInspection: string;
     inspectionFrequency: string;
     observations: ObservationData[];
+    renderObservation?: (props: ObservationRenderProps) => JSX.Element;
 }
 
 export interface ObservationData {
@@ -36,6 +36,8 @@ export interface ObservationData {
 export interface ObservationRenderProps {
     stageId: number;
     paramId: string;
+    timeSlot: string;
     value: string;
-    onUpdate: (stageId: number, paramId: string, value: string) => void;
+    observationData: ObservationData;
+    onUpdate: (stageId: number, paramId: string, timeSlot: string, value: string) => void;
 }
