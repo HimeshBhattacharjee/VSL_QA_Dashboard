@@ -7,10 +7,10 @@ const PreLamObservations = {
             <div className="flex flex-col items-center max-w-full">
                 <input
                     type="number"
-                    value={props.value}
+                    value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                     placeholder="Enter %"
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
+                    className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                     min="0"
                     max="100"
                     step="0.1"
@@ -25,10 +25,10 @@ const PreLamObservations = {
             <div className="flex flex-col items-center max-w-full">
                 <input
                     type="number"
-                    value={props.value}
+                    value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                     placeholder="Enter °C"
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
+                    className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                     min="0"
                     max="100"
                     step="0.1"
@@ -41,9 +41,9 @@ const PreLamObservations = {
     renderAccessControl: (props: ObservationRenderProps) => (
         <div className="w-full flex justify-center">
             <select
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             >
                 <option value="">Select Status</option>
                 <option value="OK">Checked OK</option>
@@ -61,7 +61,7 @@ export const preLamStage: StageData = {
         {
             id: "1-1",
             parameters: "Humidity",
-            criteria: "≤60%",
+            criteria: "≤ 60%",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
@@ -73,7 +73,7 @@ export const preLamStage: StageData = {
         {
             id: "1-2",
             parameters: "Temperature",
-            criteria: "25±5°C",
+            criteria: "25 ± 5 °C",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [

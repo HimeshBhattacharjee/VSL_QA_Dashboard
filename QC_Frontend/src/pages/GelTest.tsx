@@ -9,6 +9,7 @@ import { usePreviewModal } from '../context/PreviewModalContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { GelTestPreview } from '../components/previews/GelTestPreview';
 import GelTestPDF from '../components/pdfGens/GelTestPDF';
+import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 interface GelTestReport {
     name: string;
@@ -521,19 +522,11 @@ export default function GelTest() {
     };
 
     const deleteSavedReport = (index: number) => {
-        showConfirm({
-            title: 'Delete Report',
-            message: 'Are you sure you want to delete this report? This action cannot be undone.',
-            type: 'warning',
-            confirmText: 'Delete',
-            onConfirm: function () {
-                const savedReports = getSavedReports();
-                savedReports.splice(index, 1);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
-                loadSavedReports();
-                showAlert('info', 'Report deleted successfully');
-            }
-        });
+        const savedReports = getSavedReports();
+        savedReports.splice(index, 1);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
+        loadSavedReports();
+        showAlert('info', 'Report deleted successfully');
     };
 
     const previewSavedReport = (index: number) => {
@@ -1027,52 +1020,13 @@ export default function GelTest() {
                     )}
 
                     {activeTab === 'saved-reports' && (
-                        <div className="tab-content active">
-                            <div className="saved-reports-container bg-white p-5 rounded-md shadow-lg mx-4 my-3">
-                                <h2 className="text-2xl font-bold mb-4 text-center">Saved Gel Test Reports</h2>
-
-                                {savedReports.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <p className="text-gray-500 text-lg">No saved reports found.</p>
-                                        <p className="text-gray-400 mt-2">Create and save your first report in the "Edit Report" tab.</p>
-                                    </div>
-                                ) : (
-                                    <div className="reports-list">
-                                        {savedReports.map((report, index) => (
-                                            <div key={index} className="report-item border border-gray-200 rounded-lg p-4 mb-4 shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <h3 className="text-xl font-bold text-gray-800">{report.name}</h3>
-                                                        <p className="text-gray-500 text-sm mt-1">
-                                                            Saved on: {new Date(report.timestamp).toLocaleString()}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex space-x-2">
-                                                        <button
-                                                            className="preview-btn cursor-pointer px-4 py-2 bg-blue-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-700"
-                                                            onClick={() => previewSavedReport(index)}
-                                                        >
-                                                            Preview
-                                                        </button>
-                                                        <button
-                                                            className="edit-btn cursor-pointer px-4 py-2 bg-green-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-700"
-                                                            onClick={() => editSavedReport(index)}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            className="delete-btn cursor-pointer px-4 py-2 bg-red-600 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-700"
-                                                            onClick={() => deleteSavedReport(index)}
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="tab-content active mx-4 mt-2">
+                            <SavedReportsNChecksheets
+                                reports={savedReports}
+                                onPreview={previewSavedReport}
+                                onEdit={editSavedReport}
+                                onDelete={deleteSavedReport}
+                            />
                         </div>
                     )}
                 </div>

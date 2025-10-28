@@ -1,3 +1,4 @@
+// audit.ts
 import { JSX } from "react";
 
 export interface AuditData {
@@ -29,7 +30,7 @@ export interface ParameterData {
 
 export interface ObservationData {
     timeSlot: string;
-    value: string;
+    value: string | Record<string, string>; // Updated to support both string and object values
     sampleReadings?: string[];
 }
 
@@ -37,7 +38,7 @@ export interface ObservationRenderProps {
     stageId: number;
     paramId: string;
     timeSlot: string;
-    value: string;
+    value: string | Record<string, string>; // Updated to support both string and object values
     observationData: ObservationData;
-    onUpdate: (stageId: number, paramId: string, timeSlot: string, value: string) => void;
+    onUpdate: (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string>) => void;
 }

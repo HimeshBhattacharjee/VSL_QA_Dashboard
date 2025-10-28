@@ -6,55 +6,115 @@ const AutoFrontGlassObservations = {
         <div className="flex flex-col space-y-1">
             <input
                 type="text"
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Supplier, Lot No."
-                className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     ),
 
-    renderSurfaceQuality: (props: ObservationRenderProps) => (
-        <select
-            value={props.value}
-            onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-        >
-            <option value="">Select Quality</option>
-            <option value="OK">OK - No Defects</option>
-            <option value="Minor Defects">Minor Defects</option>
-            <option value="Major Defects">Major Defects</option>
-            <option value="Rejected">Rejected</option>
-        </select>
-    ),
+    renderSurfaceQuality: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Sample-1": "", "Sample-2": "", "Sample-3": "",
+                "Sample-4": "", "Sample-5": "", "Sample-6": ""
+            }
+            : props.value as Record<string, string>;
+
+        return (
+            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
+                {/* Top 3 samples */}
+                <div className="flex justify-between p-2 gap-2">
+                    {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
+                        <div key={sample} className="flex flex-col items-center">
+                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
+                            <select
+                                value={sampleValue[sample] || ''}
+                                onChange={(e) => {
+                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
+                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                            >
+                                <option value="">Select</option>
+                                <option value="OK">Checked OK</option>
+                                <option value="NG">Checked NG</option>
+                                <option value="NA">N/A</option>
+                            </select>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Bottom 3 samples */}
+                <div className="flex justify-between p-2">
+                    {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
+                        <div key={sample} className="flex flex-col items-center">
+                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
+                            <select
+                                value={sampleValue[sample] || ''}
+                                onChange={(e) => {
+                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
+                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                            >
+                                <option value="">Select</option>
+                                <option value="OK">Checked OK</option>
+                                <option value="NG">Checked NG</option>
+                                <option value="NA">N/A</option>
+                            </select>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    },
 
     renderVacuumCup: (props: ObservationRenderProps) => (
         <select
-            value={props.value}
+            value={props.value as string}
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
-            <option value="">Select Condition</option>
-            <option value="Good">Good</option>
-            <option value="Damaged">Damaged</option>
-            <option value="Needs Replacement">Needs Replacement</option>
+            <option value="">Select Status</option>
+            <option value="OK">Checked OK</option>
+            <option value="NG">Checked NG</option>
+            <option value="NA">N/A</option>
         </select>
     ),
 
-    renderDimensions: (props: ObservationRenderProps) => (
-        <div className="flex flex-col items-center">
-            <input
-                type="number"
-                value={props.value}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter mm"
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
-                step="0.01"
-                min="0"
-            />
-            <span className="text-xs text-gray-500 mt-1">mm</span>
-        </div>
-    )
+    renderDimensions: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? { "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "" }
+            : props.value as Record<string, string>;
+
+        return (
+            <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border border-gray-400">
+                <div className="flex justify-between p-2 gap-2">
+                    {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4'].map((sample) => (
+                        <div key={sample} className="flex flex-col items-center">
+                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
+                            <input
+                                type="number"
+                                value={sampleValue[sample] || ''}
+                                onChange={(e) => {
+                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
+                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+                                }}
+                                placeholder="Enter mm"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                step="0.01"
+                                min="0"
+                            />
+                        </div>
+                    ))}
+                </div>
+                <div className="text-center">
+                    <span className="text-xs text-gray-500">mm</span>
+                </div>
+            </div>
+        );
+    }
 };
 
 export const autoFrontGlassStage: StageData = {
@@ -64,14 +124,13 @@ export const autoFrontGlassStage: StageData = {
         {
             id: "2-1",
             parameters: "Front Glass Status",
-            criteria: "Supplier, Lot No. and Expiry date",
+            criteria: "Supplier, Lot No. and Expiry Date",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "Supplier", value: "" },
+                { timeSlot: "Lot No.", value: "" },
+                { timeSlot: "Expiry Date", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderGlassStatus
         },
@@ -82,10 +141,28 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                {
+                    timeSlot: "4 hrs",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": "",
+                        "Sample-5": "",
+                        "Sample-6": ""
+                    }
+                },
+                {
+                    timeSlot: "8 hrs",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": "",
+                        "Sample-5": "",
+                        "Sample-6": ""
+                    }
+                }
             ],
             renderObservation: AutoFrontGlassObservations.renderSurfaceQuality
         },
@@ -96,9 +173,7 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
                 { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
                 { timeSlot: "8 hrs", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderVacuumCup
@@ -110,10 +185,24 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                {
+                    timeSlot: "Line-3",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                },
+                {
+                    timeSlot: "Line-4",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
@@ -124,10 +213,24 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                {
+                    timeSlot: "Line-3",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                },
+                {
+                    timeSlot: "Line-4",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
@@ -138,10 +241,24 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                {
+                    timeSlot: "Line-3",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                },
+                {
+                    timeSlot: "Line-4",
+                    value: {
+                        "Sample-1": "",
+                        "Sample-2": "",
+                        "Sample-3": "",
+                        "Sample-4": ""
+                    }
+                }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         }

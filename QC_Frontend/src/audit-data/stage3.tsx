@@ -6,16 +6,16 @@ const FrontEncapsulantObservations = {
         <div className="flex flex-col items-center">
             <input
                 type="number"
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder={props.paramId.includes('Humidity') ? 'Enter %' : 'Enter °C'}
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
-                min={props.paramId.includes('Humidity') ? '0' : '15'}
-                max={props.paramId.includes('Humidity') ? '100' : '35'}
+                placeholder={props.paramId === '3-1' ? 'Enter %' : 'Enter °C'}
+                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
+                min="0"
+                max="100"
                 step="0.1"
             />
             <span className="text-xs text-gray-500 mt-1">
-                {props.paramId.includes('Humidity') ? '%' : '°C'}
+                {props.paramId === '3-1' ? '%' : '°C'}
             </span>
         </div>
     ),
@@ -24,22 +24,21 @@ const FrontEncapsulantObservations = {
         <div className="flex flex-col space-y-1">
             <input
                 type="text"
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Supplier, Lot No."
-                className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     ),
 
     renderUsageValidity: (props: ObservationRenderProps) => (
         <select
-            value={props.value}
+            value={props.value as string}
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
             <option value="">Select Validity</option>
-            <option value="Within 8 hrs">Within 8 hrs</option>
+            <option value="Used within 8 hrs">Used within 8 hrs</option>
             <option value="Expired">Expired</option>
             <option value="NA">N/A</option>
         </select>
@@ -49,10 +48,10 @@ const FrontEncapsulantObservations = {
         <div className="flex flex-col items-center">
             <input
                 type="number"
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 placeholder="Enter mm"
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
+                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                 min="-10"
                 max="10"
                 step="0.1"
@@ -61,28 +60,71 @@ const FrontEncapsulantObservations = {
         </div>
     ),
 
-    renderAestheticCondition: (props: ObservationRenderProps) => (
-        <select
-            value={props.value}
-            onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-        >
-            <option value="">Select Condition</option>
-            <option value="Good">Good - No Issues</option>
-            <option value="Minor Issues">Minor Issues</option>
-            <option value="Major Issues">Major Issues</option>
-            <option value="Rejected">Rejected</option>
-        </select>
-    ),
+    renderAestheticCondition: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Sample-1": "", "Sample-2": "", "Sample-3": "",
+                "Sample-4": "", "Sample-5": "", "Sample-6": ""
+            }
+            : props.value as Record<string, string>;
+
+        return (
+            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
+                {/* Top 3 samples */}
+                <div className="flex justify-between px-2 py-2 gap-2">
+                    {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
+                        <div key={sample} className="flex flex-col items-center">
+                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
+                            <select
+                                value={sampleValue[sample] || ''}
+                                onChange={(e) => {
+                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
+                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                            >
+                                <option value="">Select</option>
+                                <option value="OK">Checked OK</option>
+                                <option value="NG">Checked NG</option>
+                                <option value="NA">N/A</option>
+                            </select>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Bottom 3 samples */}
+                <div className="flex justify-between px-2 py-2">
+                    {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
+                        <div key={sample} className="flex flex-col items-center">
+                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
+                            <select
+                                value={sampleValue[sample] || ''}
+                                onChange={(e) => {
+                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
+                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                            >
+                                <option value="">Select</option>
+                                <option value="OK">Checked OK</option>
+                                <option value="NG">Checked NG</option>
+                                <option value="NA">N/A</option>
+                            </select>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    },
 
     renderDimensions: (props: ObservationRenderProps) => (
         <div className="flex flex-col items-center">
             <input
                 type="number"
-                value={props.value}
+                value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 placeholder="Enter value"
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
+                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                 step="0.01"
                 min="0"
             />
@@ -98,7 +140,7 @@ export const frontEncapsulantStage: StageData = {
         {
             id: "3-1",
             parameters: "Storage Humidity",
-            criteria: "≤60%",
+            criteria: "≤ 60%",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 2 hrs",
             observations: [
@@ -112,7 +154,7 @@ export const frontEncapsulantStage: StageData = {
         {
             id: "3-2",
             parameters: "Storage Temperature",
-            criteria: "25±5°C",
+            criteria: "25 ± 5 °C",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 2 hrs",
             observations: [
@@ -126,14 +168,14 @@ export const frontEncapsulantStage: StageData = {
         {
             id: "3-3",
             parameters: "Encapsulant Status",
-            criteria: "Supplier, Lot NO and Expiry date",
+            criteria: "Supplier, Type, Lot No. and Expiry Date",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "Supplier", value: "" },
+                { timeSlot: "Type", value: "" },
+                { timeSlot: "Lot No.", value: "" },
+                { timeSlot: "Expiry Date", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderEncapsulantStatus
         },
@@ -144,10 +186,7 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderUsageValidity
         },
@@ -158,9 +197,7 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
                 { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
                 { timeSlot: "8 hrs", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderAlignment
@@ -172,9 +209,7 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
                 { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
                 { timeSlot: "8 hrs", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderAestheticCondition
@@ -186,10 +221,8 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         },
@@ -200,10 +233,8 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         },
@@ -214,10 +245,8 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "2 hrs", value: "" },
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "6 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         }

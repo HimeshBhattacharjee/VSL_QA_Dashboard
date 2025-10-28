@@ -1,8 +1,8 @@
 // stage4.tsx
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-const CellSortingObservations = {
-    renderCellStatus: (props: ObservationRenderProps) => (
+const TabbingStringingObservations = {
+    renderINTCRibbonStatus: (props: ObservationRenderProps) => (
         <div className="flex flex-col space-y-1">
             <input
                 type="text"
@@ -13,15 +13,15 @@ const CellSortingObservations = {
         </div>
     ),
 
-    renderUsageValidity: (props: ObservationRenderProps) => (
+    renderRibbonSpool: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
-            <option value="">Select Validity</option>
-            <option value="Used within 8 hrs">Used within 8 hrs</option>
-            <option value="Expired">Expired</option>
+            <option value="">Select Status</option>
+            <option value="OK">Checked OK</option>
+            <option value="NG">Checked NG</option>
             <option value="NA">N/A</option>
         </select>
     ),
@@ -83,73 +83,71 @@ const CellSortingObservations = {
     )
 };
 
-export const cellSortingStage: StageData = {
-    id: 4,
-    name: "Cell Sorting",
+export const tabbingStringingStage: StageData = {
+    id: 5,
+    name: "Tabbing and Stringing",
     parameters: [
         {
-            id: "4-1",
-            parameters: "Cell Status",
-            criteria: "As per Order (Supplier, Watt Peak, Lot No. and Expiry Date)",
+            id: "5-1",
+            parameters: "INTC Ribbon Status",
+            criteria: "As per Production Order / BOM Engineering Specification",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "Supplier", value: "" },
-                { timeSlot: "WP", value: "" },
-                { timeSlot: "Lot No.", value: "" },
+                { timeSlot: "Dimension", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: CellSortingObservations.renderCellStatus
+            renderObservation: TabbingStringingObservations.renderINTCRibbonStatus
         },
         {
-            id: "4-2",
-            parameters: "Usage Validity",
-            criteria: "Use within 8 hours after opening inner packaging",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
-            ],
-            renderObservation: CellSortingObservations.renderUsageValidity
-        },
-        {
-            id: "4-3",
-            parameters: "Storage Conditions",
-            criteria: "Solar cells not stacked more than 2 boxes",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
-            ],
-            renderObservation: CellSortingObservations.renderStorageConditions
-        },
-        {
-            id: "4-4",
-            parameters: "Cell Appearance",
-            criteria: "Color conformity, no notch, no crack, no broken, same power level, efficiency as per specs",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
-            ],
-            renderObservation: CellSortingObservations.renderCellAppearance
-        },
-        {
-            id: "4-5",
-            parameters: "Hand Gloves Change Frequency",
-            criteria: "Change after 8 hrs or in case of tearing/damage",
+            id: "5-2",
+            parameters: "Ribbon Spool Aesthetics",
+            criteria: "Spool Gap, Damage or Coating Defect",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: CellSortingObservations.renderGlovesChange
+            renderObservation: TabbingStringingObservations.renderRibbonSpool
         },
         {
-            id: "4-6",
+            id: "5-3",
+            parameters: "Flux Status",
+            criteria: "As per Production Order / BOM Engineering Specification",
+            typeOfInspection: "Aesthetics",
+            inspectionFrequency: "Every shift",
+            observations: [
+                { timeSlot: "Supplier", value: "" },
+                { timeSlot: "Expiry Date", value: "" }
+            ],
+            renderObservation: TabbingStringingObservations.renderStorageConditions
+        },
+        {
+            id: "5-4",
+            parameters: "Machine Laser Power",
+            criteria: "As per laser power range 50 % ± 20 %",
+            typeOfInspection: "Aesthetics",
+            inspectionFrequency: "Every shift",
+            observations: [
+                { timeSlot: "4 hrs", value: "" },
+                { timeSlot: "8 hrs", value: "" }
+            ],
+            renderObservation: TabbingStringingObservations.renderCellAppearance
+        },
+        {
+            id: "5-5",
+            parameters: "Cell Appearance",
+            criteria: "Free from chip, rough edge, cross cut ,crack etc.",
+            typeOfInspection: "Aesthetics",
+            inspectionFrequency: "Every shift",
+            observations: [
+                { timeSlot: "", value: "" }
+            ],
+            renderObservation: TabbingStringingObservations.renderGlovesChange
+        },
+        {
+            id: "5-6",
             parameters: "Cell Dimensions",
             criteria: "Length & Width ±0.5mm, Thickness ±20μm",
             typeOfInspection: "Measurements",
@@ -159,7 +157,7 @@ export const cellSortingStage: StageData = {
                 { timeSlot: "Width", value: "" },
                 { timeSlot: "Thickness", value: "" }
             ],
-            renderObservation: CellSortingObservations.renderCellDimensions
+            renderObservation: TabbingStringingObservations.renderCellDimensions
         }
     ]
 };

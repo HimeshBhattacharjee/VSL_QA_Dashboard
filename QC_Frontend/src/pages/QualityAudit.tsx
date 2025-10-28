@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { initialStages } from '../audit-data';
-import { AuditData, StageData, ParameterData, ObservationData } from '../types/audit';
+import { AuditData } from '../types/audit';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 interface SavedChecksheet {
     id: string;
@@ -136,7 +137,7 @@ export default function QualityAudit() {
         }
     };
 
-    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string) => {
+    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string>) => {
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -256,40 +257,32 @@ export default function QualityAudit() {
 
     const deleteSavedChecksheet = (index: number) => {
         const checksheet = savedChecksheets[index];
-        showConfirm({
-            title: 'Delete Report',
-            message: 'Are you sure you want to delete this checksheet? This action cannot be undone.',
-            type: 'warning',
-            confirmText: 'Delete',
-            onConfirm: () => {
-                setSavedChecksheets(prev => {
-                    const updated = prev.filter((_, i) => i !== index);
-                    localStorage.setItem('qualityAuditChecksheets', JSON.stringify(updated));
-                    return updated;
-                });
-                if (currentChecksheetId === checksheet.id) {
-                    setCurrentChecksheetId(null);
-                    setAuditData({
-                        lineNumber: '',
-                        date: new Date().toISOString().split('T')[0],
-                        shift: '',
-                        productionOrderNo: '',
-                        moduleType: '',
-                        customerSpecAvailable: false,
-                        specificationSignedOff: false,
-                        stages: initialStages
-                    });
-                }
-                showAlert('success', 'Checksheet deleted successfully!');
-            }
+        setSavedChecksheets(prev => {
+            const updated = prev.filter((_, i) => i !== index);
+            localStorage.setItem('qualityAuditChecksheets', JSON.stringify(updated));
+            return updated;
         });
+        if (currentChecksheetId === checksheet.id) {
+            setCurrentChecksheetId(null);
+            setAuditData({
+                lineNumber: '',
+                date: new Date().toISOString().split('T')[0],
+                shift: '',
+                productionOrderNo: '',
+                moduleType: '',
+                customerSpecAvailable: false,
+                specificationSignedOff: false,
+                stages: initialStages
+            });
+        }
+        showAlert('success', 'Checksheet deleted successfully!');
     };
 
     // Create stage buttons data
     const stageButtons = Array.from({ length: 16 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 4,
+        enabled: index < 5,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 
@@ -583,7 +576,7 @@ export default function QualityAudit() {
                                                                         {param.renderObservation ? (
                                                                             param.renderObservation({
                                                                                 stageId: selectedStageId,
-                                                                                paramId: param.id,
+                                                                                paramId: param.id, // Fixed: should be param.id, not param.parameters
                                                                                 timeSlot: obs.timeSlot,
                                                                                 value: obs.value,
                                                                                 observationData: obs,
@@ -591,13 +584,20 @@ export default function QualityAudit() {
                                                                             })
                                                                         ) : (
                                                                             <div className="w-full flex justify-center">
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={obs.value}
-                                                                                    onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
-                                                                                    placeholder="Enter value"
-                                                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                                                />
+                                                                                {/* Handle both string and object values */}
+                                                                                {typeof obs.value === 'string' ? (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={obs.value}
+                                                                                        onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
+                                                                                        placeholder="Enter value"
+                                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="text-xs text-gray-500 p-2 border border-gray-300 rounded bg-gray-50">
+                                                                                        Complex data structure - use custom renderer
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -617,54 +617,24 @@ export default function QualityAudit() {
                 {/* Saved Checksheets Tab */}
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        <div className="saved-reports-container bg-white p-5 rounded-md shadow-lg">
-                            <h2 className="text-2xl font-bold mb-4 text-center">Saved Checksheets</h2>
-
-                            {savedChecksheets.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <p className="text-gray-500 text-lg">No saved checksheets found.</p>
-                                    <p className="text-gray-400 mt-2">Create and save your first checksheet in the "Create/Edit Checksheet" tab.</p>
-                                </div>
-                            ) : (
-                                <div className="reports-list">
-                                    {savedChecksheets.map((checksheet, index) => (
-                                        <div key={checksheet.id} className="report-item border border-gray-200 rounded-lg p-4 mb-4 shadow-sm hover:shadow-md transition-shadow">
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-gray-800">{checksheet.name}</h3>
-                                                    <p className="text-gray-500 text-sm mt-1">
-                                                        Saved on: {new Date(checksheet.timestamp).toLocaleString()}
-                                                    </p>
-                                                    <p className="text-gray-600 text-sm">
-                                                        Product: {checksheet.data.productionOrderNo} | Module: {checksheet.data.moduleType}
-                                                    </p>
-                                                </div>
-                                                <div className="flex space-x-2">
-                                                    <button
-                                                        className="preview-btn cursor-pointer px-4 py-2 bg-blue-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-blue-600"
-                                                        onClick={() => previewSavedChecksheet(index)}
-                                                    >
-                                                        Preview
-                                                    </button>
-                                                    <button
-                                                        className="edit-btn cursor-pointer px-4 py-2 bg-green-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-green-600"
-                                                        onClick={() => editSavedChecksheet(index)}
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        className="delete-btn cursor-pointer px-4 py-2 bg-red-500 text-white text-sm rounded-md font-medium transition-colors hover:bg-red-600"
-                                                        onClick={() => deleteSavedChecksheet(index)}
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                        <SavedReportsNChecksheets
+                            reports={savedChecksheets.map(sheet => ({
+                                ...sheet,
+                                timestamp: sheet.timestamp
+                            }))}
+                            onPreview={previewSavedChecksheet}
+                            onEdit={editSavedChecksheet}
+                            onDelete={deleteSavedChecksheet}
+                            emptyMessage={{
+                                title: 'No saved checksheets found.',
+                                description: 'Create and save your first checksheet in the "Create/Edit Checksheet" tab.'
+                            }}
+                            showAdditionalInfo={(report: any) => (
+                                <p className="text-gray-600 text-sm">
+                                    Product: {report.data.productionOrderNo} | Module: {report.data.moduleType}
+                                </p>
                             )}
-                        </div>
+                        />
                     </div>
                 )}
             </div>

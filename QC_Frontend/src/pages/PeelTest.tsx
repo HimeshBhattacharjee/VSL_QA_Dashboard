@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { PreviewModalContent, usePreviewModal } from '../context/PreviewModalContext';
+import { PeelTestPreview } from '../components/previews/PeelTestPreview';
 import ZoomableChart from '../components/ZoomableChart';
+import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 type ReportData = {
     name: string;
@@ -30,8 +32,6 @@ export default function PeelTest() {
     const [activeTab, setActiveTab] = useState<TabType>('edit-report');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
-    const [showPreviewModal, setShowPreviewModal] = useState(false);
-    const [previewReport, setPreviewReport] = useState<ReportData | null>(null);
     const [currentPreviewReportIndex, setCurrentPreviewReportIndex] = useState<number | null>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -243,18 +243,24 @@ export default function PeelTest() {
         return value === '' || (parseFloat(value) < 1.0 && !isNaN(parseFloat(value)));
     };
 
-    // Saved Reports functions
+    const generatePreviewHTML = (report: ReportData): React.ReactNode => {
+        return <PeelTestPreview report={report} />;
+    };
+
     const previewSavedReport = (index: number) => {
         const savedReports = getSavedReports();
         if (index >= 0 && index < savedReports.length) {
-            setPreviewReport(savedReports[index]);
+            const report = savedReports[index];
             setCurrentPreviewReportIndex(index);
-            showPreview({
-                title: `Preview: ${savedReports[index].name}`,
-                // content: <GelTestPreview report={report} />,
+
+            const previewContent: PreviewModalContent = {
+                title: `Preview: ${report.name}`,
+                content: generatePreviewHTML(report),
                 exportExcel: () => exportPreviewToExcel(index),
                 exportPDF: () => exportPreviewToPDF(index)
-            });
+            };
+
+            showPreview(previewContent);
         }
     };
 
@@ -285,18 +291,10 @@ export default function PeelTest() {
     };
 
     const deleteSavedReport = (index: number) => {
-        showConfirm({
-            title: 'Delete Report',
-            message: 'Are you sure you want to delete this report? This action cannot be undone.',
-            type: 'warning',
-            confirmText: 'Delete',
-            onConfirm: () => {
-                const savedReports = getSavedReports();
-                const updatedReports = savedReports.filter((_, i) => i !== index);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedReports));
-                showAlert('info', 'Report deleted successfully');
-            }
-        });
+        const savedReports = getSavedReports();
+        const updatedReports = savedReports.filter((_, i) => i !== index);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedReports));
+        showAlert('info', 'Report deleted successfully');
     };
 
     // Analysis functions
@@ -398,12 +396,22 @@ export default function PeelTest() {
         // Implementation would use xlsx library similar to the original
     };
 
-    const exportPreviewToPDF = () => {
-        showAlert('info', 'Preview PDF export functionality would be implemented here');
+    const exportPreviewToPDF = (index: number) => {
+        if (currentPreviewReportIndex !== null) {
+            const savedReports = getSavedReports();
+            const report = savedReports[currentPreviewReportIndex];
+            showAlert('info', `Exporting ${report.name} as PDF...`);
+            // Add your PDF export logic here
+        }
     };
 
-    const exportPreviewToExcel = () => {
-        showAlert('info', 'Preview Excel export functionality would be implemented here');
+    const exportPreviewToExcel = (index: number) => {
+        if (currentPreviewReportIndex !== null) {
+            const savedReports = getSavedReports();
+            const report = savedReports[currentPreviewReportIndex];
+            showAlert('info', `Exporting ${report.name} as Excel...`);
+            // Add your Excel export logic here
+        }
     };
 
     // Generate table rows
@@ -724,52 +732,17 @@ export default function PeelTest() {
 
     const renderSavedReportsTab = () => {
         const savedReports = getSavedReports();
-
         return (
-            <div className="saved-reports-container bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-2xl text-center font-bold text-gray-800 mb-2">Saved Reports</h2>
-
-                <div className="saved-reports-list space-y-4">
-                    {savedReports.length === 0 ? (
-                        <div className="no-reports-message text-center py-8 text-gray-500">
-                            No saved reports found. Create and save a report first.
-                        </div>
-                    ) : (
-                        savedReports.map((report, index) => (
-                            <div key={index} className="saved-report-item border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-center">
-                                    <div className="report-info">
-                                        <h3 className="font-semibold text-lg text-gray-800">{report.name}</h3>
-                                        <p className="text-sm text-gray-600">
-                                            Saved on: {new Date(report.timestamp).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="report-actions flex gap-2">
-                                        <button
-                                            onClick={() => previewSavedReport(index)}
-                                            className="preview-btn py-2 px-4 cursor-pointer bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-                                        >
-                                            Preview
-                                        </button>
-                                        <button
-                                            onClick={() => editSavedReport(index)}
-                                            className="edit-btn py-2 px-4 cursor-pointer bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => deleteSavedReport(index)}
-                                            className="delete-btn py-2 px-4 cursor-pointer bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
+            <SavedReportsNChecksheets
+                reports={savedReports}
+                onPreview={previewSavedReport}
+                onEdit={editSavedReport}
+                onDelete={deleteSavedReport}
+                emptyMessage={{
+                    title: 'No saved reports found.',
+                    description: 'Create and save a report first.'
+                }}
+            />
         );
     };
 
@@ -963,49 +936,6 @@ export default function PeelTest() {
         };
     };
 
-    const renderPreviewModal = () => {
-        if (!showPreviewModal || !previewReport) return null;
-
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                    <div className="p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold text-gray-800">{previewReport.name}</h2>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={exportPreviewToExcel}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                >
-                                    Export as Excel
-                                </button>
-                                <button
-                                    onClick={exportPreviewToPDF}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                                >
-                                    Export as PDF
-                                </button>
-                                <button
-                                    onClick={() => setShowPreviewModal(false)}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="preview-content">
-                            {/* Preview content would render the report similar to the edit view but read-only */}
-                            <div className="text-center text-gray-500 py-8">
-                                Preview content would be displayed here
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="pb-4">
             <Header />
@@ -1044,9 +974,6 @@ export default function PeelTest() {
                     {activeTab === 'saved-reports' && renderSavedReportsTab()}
                     {activeTab === 'report-analysis' && renderReportAnalysisTab()}
                 </div>
-
-                {/* Preview Modal */}
-                {renderPreviewModal()}
             </div>
         </div >
     );
