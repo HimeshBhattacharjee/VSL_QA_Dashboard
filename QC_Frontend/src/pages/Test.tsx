@@ -3,7 +3,7 @@ import { initialStages } from '../audit-data';
 import { AuditData } from "../types/audit";
 
 export default function Test() {
-    const stageID = 5;
+    const stageID = 8;
 
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
@@ -16,7 +16,7 @@ export default function Test() {
         stages: initialStages
     });
 
-    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string>) => {
+    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string> | Record<string, Record<string, string>>) => {
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>

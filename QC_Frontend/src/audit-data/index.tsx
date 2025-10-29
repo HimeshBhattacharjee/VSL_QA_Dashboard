@@ -4,11 +4,17 @@ import { autoFrontGlassStage } from './stage2';
 import { frontEncapsulantStage } from './stage3';
 import { cellSortingStage } from './stage4';
 import { tabbingStringingStage } from './stage5';
+import { roboticLayupStage } from './stage6';
+import { autoBussingStage } from './stage7';
+import { autoTapingNLayupStage } from './stage8';
 
 export const initialStages: StageData[] = [
     preLamStage,
     autoFrontGlassStage,
     frontEncapsulantStage,
     cellSortingStage,
-    tabbingStringingStage
+    tabbingStringingStage,
+    roboticLayupStage,
+    autoBussingStage,
+    autoTapingNLayupStage
 ];

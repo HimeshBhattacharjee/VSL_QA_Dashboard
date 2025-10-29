@@ -69,7 +69,7 @@ const FrontEncapsulantObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
+            <div className="flex flex-col rounded-lg bg-white shadow-sm border">
                 {/* Top 3 samples */}
                 <div className="flex justify-between px-2 py-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (

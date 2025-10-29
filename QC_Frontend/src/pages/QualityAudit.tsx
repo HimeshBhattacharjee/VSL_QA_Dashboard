@@ -137,7 +137,7 @@ export default function QualityAudit() {
         }
     };
 
-    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string>) => {
+    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string> | Record<string, Record<string, string>>) => {
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -282,7 +282,7 @@ export default function QualityAudit() {
     const stageButtons = Array.from({ length: 16 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 5,
+        enabled: index < 8,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 
@@ -342,8 +342,6 @@ export default function QualityAudit() {
                                                     <option value="">Select</option>
                                                     <option value="I">I</option>
                                                     <option value="II">II</option>
-                                                    <option value="III">III</option>
-                                                    <option value="IV">IV</option>
                                                 </select>
                                             </div>
                                         </div>

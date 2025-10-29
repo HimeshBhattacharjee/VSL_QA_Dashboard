@@ -1,4 +1,3 @@
-// stage1.tsx
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const PreLamObservations = {
