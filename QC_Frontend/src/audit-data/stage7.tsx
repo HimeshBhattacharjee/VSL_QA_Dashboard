@@ -1,364 +1,899 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-const AutoBussingObservations = {
-    renderSupplier: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter supplier"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-32"
-            />
-        </div>
-    ),
-
-    renderWidth: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter width"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-32"
-            />
-        </div>
-    ),
-
-    renderThickness: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter thickness"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-32"
-            />
-        </div>
-    ),
-
-    renderExpiry: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="DD.MM.YYYY"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-40"
-            />
-        </div>
-    ),
-
-    renderSolderingTime: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter seconds"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-24"
-                min="0"
-                step="0.1"
-            />
-        </div>
-    ),
-
-    renderTemperature: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter °C"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-24"
-                min="0"
-                step="1"
-            />
-        </div>
-    ),
-
-    renderPercentage: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <div className="flex flex-col items-center">
-                <input
-                    type="number"
-                    value={props.value as string}
-                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    placeholder="Enter %"
-                    className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-20"
-                    min="0"
-                    max="100"
-                    step="1"
-                />
-                <span className="text-xs text-gray-500 mt-1">%</span>
+// Reusable section components
+const LineSection = {
+    // For time-based inputs (4hrs & 8hrs)
+    TimeBasedSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2">
+                <div className="flex flex-col items-center justify-between">
+                    <span className="text-xs text-gray-500">4 hours</span>
+                    {children('4hrs')}
+                </div>
+                <div className="flex flex-col items-center justify-between">
+                    <span className="text-xs text-gray-500">8 hours</span>
+                    {children('8hrs')}
+                </div>
             </div>
         </div>
     ),
 
-    renderLength: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter mm"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-20"
-                min="0"
-                step="1"
-            />
+    // For single input sections (no time slots)
+    SingleInputSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            {children}
         </div>
     ),
 
-    renderAlignment: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter mm"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-20"
-                min="0"
-                step="0.01"
-            />
+    BusRibbonStatusSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: (label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date') => React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2 justify-between">
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Supplier</span>
+                    {children('Supplier')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Width</span>
+                    {children('Width')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Thickness</span>
+                    {children('Thickness')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Expiry Date</span>
+                    {children('Expiry Date')}
+                </div>
+            </div>
         </div>
     ),
 
-    renderPeelStrength: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter N"
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm w-20"
-                min="0"
-                step="0.01"
-            />
+    // For soldering time with TCA positions
+    SolderingTimeSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: (position: 'Front TCA 1 L' | 'Middle TCA 1 L' | 'Back TCA 1 L' | 'Front TCA 1 R' | 'Middle TCA 1 R' | 'Back TCA 1 R') => React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2 justify-between">
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Front TCA 1</span>
+                    {children('Front TCA 1 L')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Middle TCA 1</span>
+                    {children('Middle TCA 1 L')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Back TCA 1</span>
+                    {children('Back TCA 1 L')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Front TCA 1</span>
+                    {children('Front TCA 1 R')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Middle TCA 1</span>
+                    {children('Middle TCA 1 R')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Back TCA 1</span>
+                    {children('Back TCA 1 R')}
+                </div>
+            </div>
         </div>
     ),
 
-    renderStatusCheck: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <select
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm w-32"
-            >
-                <option value="">Select Status</option>
-                <option value="OK">Checked OK</option>
-                <option value="NG">Checked NG</option>
-                <option value="NA">N/A</option>
-            </select>
+    SolderingTraceSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: (label: 'Top' | 'Middle' | 'Bottom') => React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2 justify-between">
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Top</span>
+                    {children('Top')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Middle</span>
+                    {children('Middle')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Bottom</span>
+                    {children('Bottom')}
+                </div>
+            </div>
+        </div>
+    ),
+
+    BusBarCutLength: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: (type: 'I' | 'Small L' | 'Big L' | 'Terminal') => React.ReactNode;
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2 justify-between">
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">I</span>
+                    {children('I')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Small L</span>
+                    {children('Small L')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Big L</span>
+                    {children('Big L')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Terminal</span>
+                    {children('Terminal')}
+                </div>
+            </div>
+        </div>
+    ),
+
+    PeelStrengthSection: ({ line, value, onUpdate, children }: {
+        line: 'Line-4' | 'Line-5';
+        value: Record<string, string>;
+        onUpdate: (updatedValue: Record<string, string>) => void;
+        children: {
+            byPosition: (position: number) => React.ReactNode;
+            byLabel: (label: 'Line' | 'Position' | 'Side') => React.ReactNode;
+        };
+
+    }) => (
+        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+            <div className="text-center mb-2">
+                <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
+            </div>
+            <div className="flex gap-2 justify-between mb-2">
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Line</span>
+                    {children.byLabel('Line')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Position</span>
+                    {children.byLabel('Position')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500">Side</span>
+                    {children.byLabel('Side')}
+                </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(position => (
+                    <div key={position} className="flex flex-col items-center">
+                        <span className="text-xs text-gray-500">Pos {position}</span>
+                        {children.byPosition(position)}
+                    </div>
+                ))}
+            </div>
         </div>
     )
+};
+
+// Reusable input components
+const InputComponents = {
+    Select: ({ value, onChange, options, className = "w-36" }: {
+        value: string;
+        onChange: (value: string) => void;
+        options: { value: string; label: string }[];
+        className?: string;
+    }) => (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+        >
+            <option value="">Select</option>
+            {options.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+        </select>
+    ),
+
+    TextInput: ({ value, onChange, placeholder, className = "w-full" }: {
+        value: string;
+        onChange: (value: string) => void;
+        placeholder: string;
+        className?: string;
+    }) => (
+        <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+        />
+    ),
+
+    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
+        value: string;
+        onChange: (value: string) => void;
+        placeholder: string;
+        min?: number;
+        step?: number;
+        className?: string;
+    }) => (
+        <input
+            type="number"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+            min={min}
+            step={step}
+        />
+    )
+};
+
+const AutoBussingObservations = {
+    renderBusRibbonStatus: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-Supplier": "", "Line-4-Width": "", "Line-4-Thickness": "", "Line-4-Expiry Date": "",
+                "Line-5-Supplier": "", "Line-5-Width": "", "Line-5-Thickness": "", "Line-5-Expiry Date": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex flex-col justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.BusRibbonStatusSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(label) => (
+                        <InputComponents.TextInput
+                            value={sampleValue[`Line-4-${label}`] || ''}
+                            onChange={(value) => handleUpdate('Line-4', label, value)}
+                            placeholder=""
+                        />
+                    )}
+                </LineSection.BusRibbonStatusSection>
+
+                {/* Line-5 Section */}
+                <LineSection.BusRibbonStatusSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(label) => (
+                        <InputComponents.TextInput
+                            value={sampleValue[`Line-5-${label}`] || ''}
+                            onChange={(value) => handleUpdate('Line-5', label, value)}
+                            placeholder=""
+                        />
+                    )}
+                </LineSection.BusRibbonStatusSection>
+            </div>
+        );
+    },
+
+    renderSolderingTime: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-Front TCA 1": "", "Line-4-Middle TCA 1": "", "Line-4-Back TCA 1": "",
+                "Line-5-Front TCA 1": "", "Line-5-Middle TCA 1": "", "Line-5-Back TCA 1": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', position: 'Front TCA 1 L' | 'Middle TCA 1 L' | 'Back TCA 1 L' | 'Front TCA 1 R' | 'Middle TCA 1 R' | 'Back TCA 1 R', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${position}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex flex-col justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.SolderingTimeSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(position) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${position}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', position, value)}
+                                placeholder="Sec"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">seconds</span>
+                        </div>
+                    )}
+                </LineSection.SolderingTimeSection>
+
+                {/* Line-5 Section */}
+                <LineSection.SolderingTimeSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(position) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-5-${position}`] || ''}
+                                onChange={(value) => handleUpdate('Line-5', position, value)}
+                                placeholder="Sec"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">seconds</span>
+                        </div>
+                    )}
+                </LineSection.SolderingTimeSection>
+            </div>
+        );
+    },
+
+    renderCoolingTemperature: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? { "Line-4": "", "Line-5": "" }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', value: string) => {
+            const updatedValue = { ...sampleValue, [line]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.SingleInputSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    <div className="flex justify-between gap-2">
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-4"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-4"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                    </div >
+                </LineSection.SingleInputSection >
+
+                {/* Line-5 Section */}
+                < LineSection.SingleInputSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    <div className="flex justify-between gap-2">
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-5"] || ''}
+                                onChange={(value) => handleUpdate('Line-5', value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-5"] || ''}
+                                onChange={(value) => handleUpdate('Line-5', value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                    </div >
+                </LineSection.SingleInputSection >
+            </div >
+        );
+    },
+
+    renderSolderingIronTemperature: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-4hrs": "", "Line-4-8hrs": "",
+                "Line-5-4hrs": "", "Line-5-8hrs": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', timeSlot: '4hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.TimeBasedSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+
+                {/* Line-5 Section */}
+                <LineSection.TimeBasedSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-5-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
+                                placeholder="Enter °C"
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">°C</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+            </div>
+        );
+    },
+
+    renderSolderingTripCalibration: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? { "Line-4": "", "Line-5": "" }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', value: string) => {
+            const updatedValue = { ...sampleValue, [line]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.SingleInputSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    <InputComponents.Select
+                        value={sampleValue["Line-4"] || ''}
+                        onChange={(value) => handleUpdate('Line-4', value)}
+                        options={[
+                            { value: "OK", label: "Checked OK" },
+                            { value: "NG", label: "Checked NG" },
+                            { value: "NA", label: "N/A" }
+                        ]}
+                    />
+                </LineSection.SingleInputSection>
+
+                {/* Line-5 Section */}
+                <LineSection.SingleInputSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    <InputComponents.Select
+                        value={sampleValue["Line-5"] || ''}
+                        onChange={(value) => handleUpdate('Line-5', value)}
+                        options={[
+                            { value: "OK", label: "Checked OK" },
+                            { value: "NG", label: "Checked NG" },
+                            { value: "NA", label: "N/A" }
+                        ]}
+                    />
+                </LineSection.SingleInputSection>
+            </div>
+        );
+    },
+
+    renderSolderingTraces: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-Top": "", "Line-4-Middle": "", "Line-4-Bottom": "",
+                "Line-5-Top": "", "Line-5-Middle": "", "Line-5-Bottom": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', label: 'Top' | 'Middle' | 'Bottom', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex flex-col justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.SolderingTraceSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(label) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${label}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', label, value)}
+                                placeholder="Enter %"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">%</span>
+                        </div>
+                    )}
+                </LineSection.SolderingTraceSection>
+
+                {/* Line-5 Section */}
+                <LineSection.SolderingTraceSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(label) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-5-${label}`] || ''}
+                                onChange={(value) => handleUpdate('Line-5', label, value)}
+                                placeholder="Enter %"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">%</span>
+                        </div>
+                    )}
+                </LineSection.SolderingTraceSection>
+            </div>
+        );
+    },
+
+    renderBusBarCutLength: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-I": "", "Line-4-Small L": "", "Line-4-Big L": "", "Line-4-Terminal": "",
+                "Line-5-I": "", "Line-5-Small L": "", "Line-5-Big L": "", "Line-5-Terminal": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', type: 'I' | 'Small L' | 'Big L' | 'Terminal', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${type}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex flex-col justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.BusBarCutLength
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(type) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${type}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', type, value)}
+                                placeholder="Enter mm"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">mm</span>
+                        </div>
+                    )}
+                </LineSection.BusBarCutLength>
+
+                {/* Line-5 Section */}
+                <LineSection.BusBarCutLength
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(type) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-5-${type}`] || ''}
+                                onChange={(value) => handleUpdate('Line-5', type, value)}
+                                placeholder="Enter mm"
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">mm</span>
+                        </div>
+                    )}
+                </LineSection.BusBarCutLength>
+            </div>
+        );
+    },
+
+    renderStringAlignment: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-4hrs": "", "Line-4-8hrs": "",
+                "Line-5-4hrs": "", "Line-5-8hrs": ""
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: 'Line-4' | 'Line-5', timeSlot: '4hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {/* Line-4 Section */}
+                <LineSection.TimeBasedSection
+                    line="Line-4"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder="Enter mm"
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">mm</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+
+                {/* Line-5 Section */}
+                <LineSection.TimeBasedSection
+                    line="Line-5"
+                    value={sampleValue}
+                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                >
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-5-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
+                                placeholder="Enter mm"
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">mm</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+            </div>
+        );
+    },
+
+    renderPeelStrength: (props: ObservationRenderProps) => {
+        const sampleValue = typeof props.value === 'string'
+            ? {
+                "Line-4-Line": "", "Line-4-Position": "", "Line-4-Side": "",
+                ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(pos => [`Line-4-Pos${pos}`, ""])),
+                "Line-5-Line": "", "Line-5-Position": "", "Line-5-Side": "",
+                ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(pos => [`Line-5-Pos${pos}`, ""])),
+            }
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (key: string, value: string) => {
+            const updatedValue = { ...sampleValue, [key]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        const renderLineSection = (line: 'Line-4' | 'Line-5') => (
+            <LineSection.PeelStrengthSection
+                line={line}
+                value={sampleValue}
+                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                children={{
+                    // 🔹 byLabel: for Line / Position / Side
+                    byLabel: (label) => (label != 'Side') ? (
+                        <InputComponents.TextInput
+                            value={sampleValue[`${line}-${label}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-${label}`, value)}
+                            placeholder={`Enter ${label}`}
+                        />
+                    ) : (
+                        <InputComponents.Select
+                            value={sampleValue[`${line}-${label}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-${label}`, value)}
+                            options={[
+                                { value: "Top", label: "Top" },
+                                { value: "Middle", label: "Middle" },
+                                { value: "Bottom", label: "Bottom" },
+                                { value: "Off", label: "Off" }
+                            ]}
+                        />),
+                    // 🔹 byPosition: for grid 1–20
+                    byPosition: (position) => (
+                        <div className="flex flex-col items-center">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`${line}-Pos${position}`] || ''}
+                                onChange={(value) => handleUpdate(`${line}-Pos${position}`, value)}
+                                placeholder="Enter N"
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
+                        </div>
+                    ),
+                }}
+            />
+        );
+
+        return (
+            <div className="flex flex-col gap-4">
+                {renderLineSection('Line-4')}
+                {renderLineSection('Line-5')}
+            </div>
+        );
+    }
+
 };
 
 export const autoBussingStage: StageData = {
     id: 7,
     name: "Auto Bussing",
     parameters: [
-        // Aesthetics Parameters
         {
             id: "7-1",
-            parameters: "BUS Ribbon Status - Supplier",
-            criteria: "As per Production Order /BOM Engineering Specification",
+            parameters: "BUS Ribbon Status",
+            criteria: "As per Production Order / BOM Engineering Specification",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderSupplier
+            renderObservation: AutoBussingObservations.renderBusRibbonStatus
         },
         {
             id: "7-2",
-            parameters: "BUS Ribbon Status - Width",
-            criteria: "5.0 & 4.0 mm",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderWidth
-        },
-        {
-            id: "7-3",
-            parameters: "BUS Ribbon Status - Thickness",
-            criteria: "0.400 & 0.350 mm",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderThickness
-        },
-        {
-            id: "7-4",
-            parameters: "BUS Ribbon Status - Expiry",
-            criteria: "16.06.2026/14.06.2026",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderExpiry
-        },
-        {
-            id: "7-5",
             parameters: "Soldering Time",
             criteria: "1.2 ± 0.4 Sec.",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "Front TCA", value: "" },
-                { timeSlot: "Middle TCA", value: "" },
-                { timeSlot: "Back TCA", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoBussingObservations.renderSolderingTime
         },
         {
-            id: "7-6",
-            parameters: "Cooling Temperature",
-            criteria: "40°±15℃",
+            id: "7-3",
+            parameters: "Soldering Cooling Temperature",
+            criteria: "40° ± 15° C",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderTemperature
+            renderObservation: AutoBussingObservations.renderCoolingTemperature
         },
         {
-            id: "7-7",
+            id: "7-4",
             parameters: "Soldering Iron Temperature",
-            criteria: "370° C to 410° C",
+            criteria: "370° C to 410° C (Manual Bussing)",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hrs",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderTemperature
+            renderObservation: AutoBussingObservations.renderSolderingIronTemperature
         },
         {
-            id: "7-8",
+            id: "7-5",
             parameters: "Soldering Trip Calibration",
-            criteria: "Calibration once/day, SPC graph update",
+            criteria: "Calibration should be done once/day, SPC graph update",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every day",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderStatusCheck
+            renderObservation: AutoBussingObservations.renderSolderingTripCalibration
         },
-        // Measurement Parameters
         {
-            id: "7-9",
-            parameters: "Soldering Coverage - Top",
-            criteria: "≥50% width of bus ribbon",
-            typeOfInspection: "Measurement",
+            id: "7-6",
+            parameters: "Soldering Traces at Interconnect and Bus Ribbon Junction",
+            criteria: "Soldering must cover ≥ 50% width of bus ribbon",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderPercentage
+            renderObservation: AutoBussingObservations.renderSolderingTraces
         },
         {
-            id: "7-10",
-            parameters: "Soldering Coverage - Middle",
-            criteria: "≥50% width of bus ribbon",
-            typeOfInspection: "Measurement",
+            id: "7-7",
+            parameters: "Bus Bar Cut Length",
+            criteria: "I = 345 ± 5 mm, Small L = 170 ± 5 mm, Big L = 365 ± 5 mm, Terminal height = 20 ± 5 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderPercentage
+            renderObservation: AutoBussingObservations.renderBusBarCutLength
         },
         {
-            id: "7-11",
-            parameters: "Soldering Coverage - Bottom",
-            criteria: "≥50% width of bus ribbon",
-            typeOfInspection: "Measurement",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderPercentage
-        },
-        {
-            id: "7-12",
-            parameters: "Bus Bar Cut Length - I Type",
-            criteria: "345±5 mm",
-            typeOfInspection: "Measurement",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderLength
-        },
-        {
-            id: "7-13",
-            parameters: "Bus Bar Cut Length - Small L",
-            criteria: "170±5 mm",
-            typeOfInspection: "Measurement",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderLength
-        },
-        {
-            id: "7-14",
-            parameters: "Bus Bar Cut Length - Big L",
-            criteria: "365±5 mm",
-            typeOfInspection: "Measurement",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderLength
-        },
-        {
-            id: "7-15",
-            parameters: "Bus Bar Cut Length - Terminal Height",
-            criteria: "20±5 mm",
-            typeOfInspection: "Measurement",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderLength
-        },
-        {
-            id: "7-16",
+            id: "7-8",
             parameters: "String Alignment",
-            criteria: "≤0.5mm",
-            typeOfInspection: "Measurement",
+            criteria: "≤ 0.5mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hrs",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoBussingObservations.renderAlignment
+            renderObservation: AutoBussingObservations.renderStringAlignment
         },
-        // Functionality Parameters
         {
-            id: "7-17",
+            id: "7-9",
             parameters: "Peel Strength Bus Ribbon to INTC Ribbon",
-            criteria: "≥ 1.5 N (Average)",
+            criteria: "≥ 1.5 N (Average) (Multi BB Round Wire)",
             typeOfInspection: "Functionality",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "Position 1", value: "" },
-                { timeSlot: "Position 2", value: "" },
-                { timeSlot: "Position 3", value: "" },
-                { timeSlot: "Position 4", value: "" },
-                { timeSlot: "Position 5", value: "" },
-                { timeSlot: "Position 6", value: "" },
-                { timeSlot: "Position 7", value: "" },
-                { timeSlot: "Position 8", value: "" },
-                { timeSlot: "Position 9", value: "" },
-                { timeSlot: "Position 10", value: "" },
-                { timeSlot: "Position 11", value: "" },
-                { timeSlot: "Position 12", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoBussingObservations.renderPeelStrength
         }

@@ -7,6 +7,11 @@ import { tabbingStringingStage } from './stage5';
 import { roboticLayupStage } from './stage6';
 import { autoBussingStage } from './stage7';
 import { autoTapingNLayupStage } from './stage8';
+import { rearEncapsulantStage } from './stage9';
+import { backSheetStage } from './stage10';
+import { rearGlassLoadingStage } from './stage11';
+import { preLamELVisualStage } from './stage12';
+import { preLamRepairNAutoEdgeSealStage } from './stage13';
 
 export const initialStages: StageData[] = [
     preLamStage,
@@ -16,5 +21,10 @@ export const initialStages: StageData[] = [
     tabbingStringingStage,
     roboticLayupStage,
     autoBussingStage,
-    autoTapingNLayupStage
+    autoTapingNLayupStage,
+    rearEncapsulantStage,
+    backSheetStage,
+    rearGlassLoadingStage,
+    preLamELVisualStage,
+    preLamRepairNAutoEdgeSealStage
 ];

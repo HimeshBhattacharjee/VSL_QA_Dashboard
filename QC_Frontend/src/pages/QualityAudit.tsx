@@ -239,7 +239,6 @@ export default function QualityAudit() {
         showAlert('success', `Stage ${selectedStageId} saved successfully!`);
     };
 
-    // Saved Checksheet Functions
     const previewSavedChecksheet = (index: number) => {
         // Implement it later
     };
@@ -282,7 +281,7 @@ export default function QualityAudit() {
     const stageButtons = Array.from({ length: 16 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 8,
+        enabled: index < 13,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 

@@ -44,7 +44,7 @@ const LineSection = {
 
 // Reusable input components
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-24" }: {
+    Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
@@ -77,7 +77,7 @@ const InputComponents = {
         />
     ),
 
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-20" }: {
+    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
         value: string;
         onChange: (value: string) => void;
         placeholder: string;
@@ -207,7 +207,7 @@ const AutoTapingNLayupObservations = {
         );
     },
 
-    renderSupplier: (props: ObservationRenderProps) => {
+    renderCellFixingTape: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
                 "Line-3": "", "Line-4": ""
@@ -227,11 +227,25 @@ const AutoTapingNLayupObservations = {
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Enter supplier"
-                    />
+                    <div className="flex justify-between gap-2">
+                        <InputComponents.TextInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Supplier"
+                        />
+                        <InputComponents.TextInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Type"
+                        />
+                        <InputComponents.NumberInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Qty."
+                            min={0}
+                            step={1}
+                        />
+                    </div>
                 </LineSection.SingleInputSection>
 
                 {/* Line-4 Section */}
@@ -240,101 +254,25 @@ const AutoTapingNLayupObservations = {
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Enter supplier"
-                    />
-                </LineSection.SingleInputSection>
-            </div>
-        );
-    },
-
-    renderTapeType: (props: ObservationRenderProps) => {
-        const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3": "", "Line-4": ""
-            }
-            : props.value as Record<string, string>;
-
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
-            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-        };
-
-        return (
-            <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Enter type"
-                    />
-                </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Enter type"
-                    />
-                </LineSection.SingleInputSection>
-            </div>
-        );
-    },
-
-    renderTapeQty: (props: ObservationRenderProps) => {
-        const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3": "", "Line-4": ""
-            }
-            : props.value as Record<string, string>;
-
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
-            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-        };
-
-        return (
-            <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Enter qty"
-                        min={0}
-                        step={1}
-                    />
-                </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Enter qty"
-                        min={0}
-                        step={1}
-                    />
+                    <div className="flex justify-between gap-2">
+                        <InputComponents.TextInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Supplier"
+                        />
+                        <InputComponents.TextInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Type"
+                        />
+                        <InputComponents.NumberInput
+                            value={sampleValue["Line-3"] || ''}
+                            onChange={(value) => handleUpdate('Line-3', value)}
+                            placeholder="Qty."
+                            min={0}
+                            step={1}
+                        />
+                    </div>
                 </LineSection.SingleInputSection>
             </div>
         );
@@ -512,7 +450,7 @@ export const autoTapingNLayupStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderStatusCheck
         },
@@ -521,7 +459,7 @@ export const autoTapingNLayupStage: StageData = {
             parameters: "RFID Tag Position",
             criteria: "Laminate Inside/Not required",
             typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
+            inspectionFrequency: "Every 4 hours",
             observations: [
                 { timeSlot: "", value: "" }
             ],
@@ -529,10 +467,10 @@ export const autoTapingNLayupStage: StageData = {
         },
         {
             id: "8-3",
-            parameters: "Logo Watt peak & Vikram Logo",
-            criteria: "Module Watt Peak tolerance as per PO No",
+            parameters: "Logo Watt Peak & Vikram Logo",
+            criteria: "Module Watt Peak tolerance as per PO No.",
             typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
+            inspectionFrequency: "Every 4 hours",
             observations: [
                 { timeSlot: "", value: "" }
             ],
@@ -541,9 +479,9 @@ export const autoTapingNLayupStage: StageData = {
         {
             id: "8-4",
             parameters: "Barcode Serial No",
-            criteria: "Module SL no as per PO No",
+            criteria: "Module SL No. as per PO No.",
             typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
+            inspectionFrequency: "Every 4 hours",
             observations: [
                 { timeSlot: "", value: "" }
             ],
@@ -554,7 +492,7 @@ export const autoTapingNLayupStage: StageData = {
             parameters: "Foreign particles",
             criteria: "Not allowed",
             typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
+            inspectionFrequency: "Every 4 hours",
             observations: [
                 { timeSlot: "", value: "" }
             ],
@@ -562,123 +500,100 @@ export const autoTapingNLayupStage: StageData = {
         },
         {
             id: "8-6",
-            parameters: "Cell fixing tape - Supplier",
-            criteria: "As per BOM Engineering Specification",
+            parameters: "Cell fixing tape - Supplier, Type & Quantity",
+            criteria: "Tape Qty should be 45 ± 15",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
                 { timeSlot: "", value: "" }
             ],
-            renderObservation: AutoTapingNLayupObservations.renderSupplier
+            renderObservation: AutoTapingNLayupObservations.renderCellFixingTape
         },
-        {
-            id: "8-7",
-            parameters: "Cell fixing tape - Type",
-            criteria: "As per BOM Engineering Specification",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoTapingNLayupObservations.renderTapeType
-        },
-        {
-            id: "8-8",
-            parameters: "Cell fixing tape - Quantity",
-            criteria: "45±15",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoTapingNLayupObservations.renderTapeQty
-        },
-        // Measurement Parameters
         {
             id: "8-9",
             parameters: "Cell to Cell Gap",
             criteria: "0.8 mm to 1.8 mm for M10, 0.3 mm to 1.3 mm for M10R & G12",
-            typeOfInspection: "Measurement",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderGap
         },
         {
             id: "8-10",
             parameters: "String to String Gap",
-            criteria: "1.5±0.5 mm",
-            typeOfInspection: "Measurement",
+            criteria: "1.5 ± 0.5 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderGap
         },
         {
             id: "8-11",
-            parameters: "Creep edge distance - Left side",
-            criteria: "≥12 mm",
-            typeOfInspection: "Measurement",
+            parameters:"Creep edge distance - Left side",
+            criteria: "Left Side Gap ≥ 12 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderDistance
         },
         {
             id: "8-12",
             parameters: "Creep edge distance - Right side",
-            criteria: "≥12 mm",
-            typeOfInspection: "Measurement",
+            criteria: "Right Side Gap ≥ 12 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderDistance
         },
         {
             id: "8-13",
             parameters: "Creep edge distance - Top side",
-            criteria: "≥12 mm",
-            typeOfInspection: "Measurement",
+            criteria: "Top Side Gap ≥ 12 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderDistance
         },
         {
             id: "8-14",
             parameters: "Creep edge distance - Bottom side",
-            criteria: "≥12 mm",
-            typeOfInspection: "Measurement",
+            criteria: "Bottom Side Gap ≥ 12 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderDistance
         },
         {
             id: "8-15",
             parameters: "Space between 2 portions of half cut cell module",
-            criteria: "15±5 mm",
-            typeOfInspection: "Measurement",
+            criteria: "Middle Gap 15 ± 5 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderDistance
         },
         {
             id: "8-16",
             parameters: "Cell fixing tape dimension",
-            criteria: "Tape length 21±5 mm",
-            typeOfInspection: "Measurement",
+            criteria: "Tape length 21 ± 5 mm",
+            typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs & 8 hrs", value: "" }
+                { timeSlot: "", value: "" }
             ],
             renderObservation: AutoTapingNLayupObservations.renderTapeLength
         }
