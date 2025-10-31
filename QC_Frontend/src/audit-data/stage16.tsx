@@ -1,6 +1,6 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-const PreLamELVisualObservations = {
+const LaminateInspectionObservations = {
     renderSerialNumbers: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
@@ -47,17 +47,29 @@ const PreLamELVisualObservations = {
                 </div>
             </div>
         );
-    }
+    },
+
+    renderInputNumber: (props: ObservationRenderProps) => (
+        <input
+            type="number"
+            min={0}
+            step={0.001}
+            value={props.value as string}
+            onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            placeholder="Value"
+        />
+    ),
 };
 
-export const preLamELVisualStage: StageData = {
-    id: 12,
-    name: "Pre-Lam EL & Visual",
+export const laminateInspectionStage: StageData = {
+    id: 16,
+    name: "Laminate inspection",
     parameters: [
         {
-            id: "12-1",
-            parameters: "Pre Lam EL (Module acceptance criteria Pre-Lamination EL)",
-            criteria: "VSL/QAD/SC/07",
+            id: "16-1",
+            parameters: "Air bubbles, delamination, foreign particles, cell breakage, edge chipping etc checked as per given spec",
+            criteria: "Module acceptance criteria (visual) - VSL/QAD/SC/03",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 2 hours",
             observations: [
@@ -84,39 +96,67 @@ export const preLamELVisualStage: StageData = {
                     }
                 }
             ],
-            renderObservation: PreLamELVisualObservations.renderSerialNumbers
+            renderObservation: LaminateInspectionObservations.renderSerialNumbers
         },
         {
-            id: "12-2",
-            parameters: "Pre Lam Visual (Module acceptance criteria Pre-Lamination Visual)",
-            criteria: "VSL/QAD/SC/03",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
+            id: "16-2",
+            parameters: "Creep edge distance - Left side gap",
+            criteria: "≥ 12 mm",
+            typeOfInspection: "Measurements",
+            inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                }
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
             ],
-            renderObservation: PreLamELVisualObservations.renderSerialNumbers
+            renderObservation: LaminateInspectionObservations.renderInputNumber
+        },
+        {
+            id: "16-3",
+            parameters: "Creep edge distance - Right side gap",
+            criteria: "≥ 12 mm",
+            typeOfInspection: "Measurements",
+            inspectionFrequency: "Every 4 hours",
+            observations: [
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
+            ],
+            renderObservation: LaminateInspectionObservations.renderInputNumber
+        },
+        {
+            id: "16-4",
+            parameters: "Creep edge distance - Top side gap",
+            criteria: "≥ 12 mm",
+            typeOfInspection: "Measurements",
+            inspectionFrequency: "Every 4 hours",
+            observations: [
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
+            ],
+            renderObservation: LaminateInspectionObservations.renderInputNumber
+        },
+        {
+            id: "16-5",
+            parameters: "Creep edge distance - Bottom side gap",
+            criteria: "≥ 12 mm",
+            typeOfInspection: "Measurements",
+            inspectionFrequency: "Every 4 hours",
+            observations: [
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
+            ],
+            renderObservation: LaminateInspectionObservations.renderInputNumber
+        },
+        {
+            id: "16-6",
+            parameters: "Space between 2 portion of half cut cell module",
+            criteria: "Middle gap 15 ± 5 mm",
+            typeOfInspection: "Measurements",
+            inspectionFrequency: "Every 4 hours",
+            observations: [
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
+            ],
+            renderObservation: LaminateInspectionObservations.renderInputNumber
         }
     ]
 };

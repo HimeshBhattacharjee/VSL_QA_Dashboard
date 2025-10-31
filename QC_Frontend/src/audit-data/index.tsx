@@ -12,6 +12,9 @@ import { backSheetStage } from './stage10';
 import { rearGlassLoadingStage } from './stage11';
 import { preLamELVisualStage } from './stage12';
 import { preLamRepairNAutoEdgeSealStage } from './stage13';
+import { laminationStage } from './stage14';
+import { autoTrimmingStage } from './stage15';
+import { laminateInspectionStage } from './stage16';
 
 export const initialStages: StageData[] = [
     preLamStage,
@@ -26,5 +29,8 @@ export const initialStages: StageData[] = [
     backSheetStage,
     rearGlassLoadingStage,
     preLamELVisualStage,
-    preLamRepairNAutoEdgeSealStage
+    preLamRepairNAutoEdgeSealStage,
+    laminationStage,
+    autoTrimmingStage,
+    laminateInspectionStage
 ];

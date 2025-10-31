@@ -278,10 +278,10 @@ export default function QualityAudit() {
     };
 
     // Create stage buttons data
-    const stageButtons = Array.from({ length: 16 }, (_, index) => ({
+    const stageButtons = Array.from({ length: 24 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 13,
+        enabled: index < 16,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 
