@@ -281,7 +281,7 @@ export default function QualityAudit() {
     const stageButtons = Array.from({ length: 24 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 16,
+        enabled: index < 20,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 

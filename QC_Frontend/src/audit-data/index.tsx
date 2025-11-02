@@ -15,6 +15,11 @@ import { preLamRepairNAutoEdgeSealStage } from './stage13';
 import { laminationStage } from './stage14';
 import { autoTrimmingStage } from './stage15';
 import { laminateInspectionStage } from './stage16';
+import { autoFramingStage } from './stage17';
+import { junctionBoxFixingStage } from './stage18';
+import { autoJBSolderingStage } from './stage19';
+import { autoPottingStage } from './stage20';
+import { curingStage } from './stage21';
 
 export const initialStages: StageData[] = [
     preLamStage,
@@ -32,5 +37,10 @@ export const initialStages: StageData[] = [
     preLamRepairNAutoEdgeSealStage,
     laminationStage,
     autoTrimmingStage,
-    laminateInspectionStage
+    laminateInspectionStage,
+    autoFramingStage,
+    junctionBoxFixingStage,
+    autoJBSolderingStage,
+    autoPottingStage,
+    curingStage
 ];
