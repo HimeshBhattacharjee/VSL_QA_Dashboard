@@ -3,7 +3,7 @@ import { initialStages } from '../audit-data';
 import { AuditData } from "../types/audit";
 
 export default function Test() {
-    const stageID = 8;
+    const stageID = 20;
 
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
@@ -95,7 +95,7 @@ export default function Test() {
                                                     {param.renderObservation ? (
                                                         param.renderObservation({
                                                             stageId: stageID,
-                                                            paramId: param.id, // Fixed: should be param.id, not param.parameters
+                                                            paramId: param.id,
                                                             timeSlot: obs.timeSlot,
                                                             value: obs.value,
                                                             observationData: obs,
@@ -103,7 +103,6 @@ export default function Test() {
                                                         })
                                                     ) : (
                                                         <div className="w-full flex justify-center">
-                                                            {/* Handle both string and object values */}
                                                             {typeof obs.value === 'string' ? (
                                                                 <input
                                                                     type="text"

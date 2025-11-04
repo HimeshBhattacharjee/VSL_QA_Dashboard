@@ -206,7 +206,6 @@ const LineSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-36" }: {
         value: string;
@@ -277,7 +276,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex flex-col justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.BusRibbonStatusSection
                     line="Line-4"
                     value={sampleValue}
@@ -291,8 +289,6 @@ const AutoBussingObservations = {
                         />
                     )}
                 </LineSection.BusRibbonStatusSection>
-
-                {/* Line-5 Section */}
                 <LineSection.BusRibbonStatusSection
                     line="Line-5"
                     value={sampleValue}
@@ -325,7 +321,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex flex-col justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.SolderingTimeSection
                     line="Line-4"
                     value={sampleValue}
@@ -344,8 +339,6 @@ const AutoBussingObservations = {
                         </div>
                     )}
                 </LineSection.SolderingTimeSection>
-
-                {/* Line-5 Section */}
                 <LineSection.SolderingTimeSection
                     line="Line-5"
                     value={sampleValue}
@@ -370,17 +363,16 @@ const AutoBussingObservations = {
 
     renderCoolingTemperature: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
-            ? { "Line-4": "", "Line-5": "" }
+            ? { "Line-4-left": "", "Line-4-right": "", "Line-5-left": "", "Line-5-right": "" }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-4' | 'Line-5', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: 'Line-4' | 'Line-5', section: 'left' | 'right', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${section}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -389,8 +381,8 @@ const AutoBussingObservations = {
                     <div className="flex justify-between gap-2">
                         <div className="flex flex-col items-center">
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
+                                value={sampleValue["Line-4-left"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', 'left', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -399,8 +391,8 @@ const AutoBussingObservations = {
                         </div>
                         <div className="flex flex-col items-center">
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
+                                value={sampleValue["Line-4-right"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', 'right', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -409,8 +401,6 @@ const AutoBussingObservations = {
                         </div>
                     </div >
                 </LineSection.SingleInputSection >
-
-                {/* Line-5 Section */}
                 < LineSection.SingleInputSection
                     line="Line-5"
                     value={sampleValue}
@@ -419,8 +409,8 @@ const AutoBussingObservations = {
                     <div className="flex justify-between gap-2">
                         <div className="flex flex-col items-center">
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-5"] || ''}
-                                onChange={(value) => handleUpdate('Line-5', value)}
+                                value={sampleValue["Line-5-left"] || ''}
+                                onChange={(value) => handleUpdate('Line-5', 'left', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -429,8 +419,8 @@ const AutoBussingObservations = {
                         </div>
                         <div className="flex flex-col items-center">
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-5"] || ''}
-                                onChange={(value) => handleUpdate('Line-5', value)}
+                                value={sampleValue["Line-5-right"] || ''}
+                                onChange={(value) => handleUpdate('Line-5', 'right', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -458,7 +448,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -477,8 +466,6 @@ const AutoBussingObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-5 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-5"
                     value={sampleValue}
@@ -513,7 +500,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -524,13 +510,11 @@ const AutoBussingObservations = {
                         onChange={(value) => handleUpdate('Line-4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" },
-                            { value: "NA", label: "N/A" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
-
-                {/* Line-5 Section */}
                 <LineSection.SingleInputSection
                     line="Line-5"
                     value={sampleValue}
@@ -541,8 +525,8 @@ const AutoBussingObservations = {
                         onChange={(value) => handleUpdate('Line-5', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" },
-                            { value: "NA", label: "N/A" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -565,7 +549,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex flex-col justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.SolderingTraceSection
                     line="Line-4"
                     value={sampleValue}
@@ -584,8 +567,6 @@ const AutoBussingObservations = {
                         </div>
                     )}
                 </LineSection.SolderingTraceSection>
-
-                {/* Line-5 Section */}
                 <LineSection.SolderingTraceSection
                     line="Line-5"
                     value={sampleValue}
@@ -623,7 +604,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex flex-col justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.BusBarCutLength
                     line="Line-4"
                     value={sampleValue}
@@ -642,8 +622,6 @@ const AutoBussingObservations = {
                         </div>
                     )}
                 </LineSection.BusBarCutLength>
-
-                {/* Line-5 Section */}
                 <LineSection.BusBarCutLength
                     line="Line-5"
                     value={sampleValue}
@@ -681,7 +659,6 @@ const AutoBussingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -700,8 +677,6 @@ const AutoBussingObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-5 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-5"
                     value={sampleValue}
@@ -745,7 +720,6 @@ const AutoBussingObservations = {
                 value={sampleValue}
                 onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 children={{
-                    // 🔹 byLabel: for Line / Position / Side
                     byLabel: (label) => (label != 'Side') ? (
                         <InputComponents.TextInput
                             value={sampleValue[`${line}-${label}`] || ''}
@@ -763,7 +737,6 @@ const AutoBussingObservations = {
                                 { value: "Off", label: "Off" }
                             ]}
                         />),
-                    // 🔹 byPosition: for grid 1–20
                     byPosition: (position) => (
                         <div className="flex flex-col items-center">
                             <InputComponents.NumberInput

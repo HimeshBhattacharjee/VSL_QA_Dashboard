@@ -13,11 +13,11 @@ const LineSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
@@ -90,7 +90,6 @@ const SafetyTestObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -103,14 +102,11 @@ const SafetyTestObservations = {
                             options={[
                                 { value: "Pass", label: "Pass" },
                                 { value: "Fail", label: "Fail" },
-                                { value: "OFF", label: "OFF" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -123,8 +119,7 @@ const SafetyTestObservations = {
                             options={[
                                 { value: "Pass", label: "Pass" },
                                 { value: "Fail", label: "Fail" },
-                                { value: "OFF", label: "OFF" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -148,7 +143,6 @@ const SafetyTestObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -162,8 +156,6 @@ const SafetyTestObservations = {
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -196,7 +188,6 @@ const SafetyTestObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -209,14 +200,11 @@ const SafetyTestObservations = {
                             options={[
                                 { value: "Pass", label: "Pass" },
                                 { value: "Fail", label: "Fail" },
-                                { value: "OFF", label: "OFF" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -229,8 +217,7 @@ const SafetyTestObservations = {
                             options={[
                                 { value: "Pass", label: "Pass" },
                                 { value: "Fail", label: "Fail" },
-                                { value: "OFF", label: "OFF" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}

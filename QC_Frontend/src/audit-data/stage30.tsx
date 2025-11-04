@@ -10,9 +10,8 @@ const AutoSorterObservations = {
             >
                 <option value="">Select Status</option>
                 <option value="OK">Checked OK</option>
-                <option value="NG">Checked NG</option>
+                <option value="NG">Checked Not OK</option>
                 <option value="OFF">OFF</option>
-                <option value="NA">N/A</option>
             </select>
         </div>
     )

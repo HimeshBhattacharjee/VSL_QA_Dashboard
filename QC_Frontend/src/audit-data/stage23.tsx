@@ -10,7 +10,7 @@ const CleaningObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-row rounded-lg bg-white shadow-sm border border-gray-400">
+            <div className="flex flex-row rounded-lg bg-white shadow-sm border border-gray-200">
                 <div className="flex flex-col justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -22,7 +22,6 @@ const CleaningObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="Enter sl no."
                                 className="w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                             />
                         </div>
@@ -39,7 +38,6 @@ const CleaningObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="Enter sl no."
                                 className="w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                             />
                         </div>

@@ -1,8 +1,6 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-// Reusable section components
 const LineSection = {
-    // For time-based inputs (4hrs & 8hrs)
     TimeBasedSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
@@ -15,18 +13,17 @@ const LineSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
         </div>
     ),
 
-    // For single input sections (no time slots)
     SingleInputSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
@@ -42,7 +39,6 @@ const LineSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
@@ -113,7 +109,6 @@ const AutoTapingNLayupObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -125,14 +120,12 @@ const AutoTapingNLayupObservations = {
                             onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" },
-                                { value: "NA", label: "N/A" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -144,8 +137,8 @@ const AutoTapingNLayupObservations = {
                             onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" },
-                                { value: "NA", label: "N/A" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -168,7 +161,6 @@ const AutoTapingNLayupObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -184,8 +176,6 @@ const AutoTapingNLayupObservations = {
                         ]}
                     />
                 </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -212,14 +202,13 @@ const AutoTapingNLayupObservations = {
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', field: 'Supplier' | 'Type' | 'Quantity', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${field}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -229,24 +218,24 @@ const AutoTapingNLayupObservations = {
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Supplier</span>
                             <InputComponents.TextInput
-                                value={sampleValue["Line-3"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', value)}
+                                value={sampleValue["Line-3-Supplier"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', 'Supplier', value)}
                                 placeholder=""
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Type</span>
                             <InputComponents.TextInput
-                                value={sampleValue["Line-3"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', value)}
+                                value={sampleValue["Line-3-Type"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', 'Type', value)}
                                 placeholder=""
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Quantity</span>
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-3"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', value)}
+                                value={sampleValue["Line-3-Quantity"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', 'Quantity', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -254,8 +243,6 @@ const AutoTapingNLayupObservations = {
                         </div>
                     </div>
                 </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -265,24 +252,24 @@ const AutoTapingNLayupObservations = {
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Supplier</span>
                             <InputComponents.TextInput
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
+                                value={sampleValue["Line-4-Supplier"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', 'Supplier', value)}
                                 placeholder=""
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Type</span>
                             <InputComponents.TextInput
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
+                                value={sampleValue["Line-4-Type"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', 'Type', value)}
                                 placeholder=""
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Quantity</span>
                             <InputComponents.NumberInput
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
+                                value={sampleValue["Line-4-Quantity"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', 'Quantity', value)}
                                 placeholder=""
                                 min={0}
                                 step={1}
@@ -309,7 +296,6 @@ const AutoTapingNLayupObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -328,8 +314,6 @@ const AutoTapingNLayupObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -367,7 +351,6 @@ const AutoTapingNLayupObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -386,8 +369,6 @@ const AutoTapingNLayupObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -425,7 +406,6 @@ const AutoTapingNLayupObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -444,8 +424,6 @@ const AutoTapingNLayupObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -469,12 +447,10 @@ const AutoTapingNLayupObservations = {
     }
 };
 
-// The StageData export remains exactly the same as before
 export const autoTapingNLayupStage: StageData = {
     id: 8,
     name: "Auto Taping and Layup",
     parameters: [
-        // Aesthetics Parameters
         {
             id: "8-1",
             parameters: "Gap between cell edge to Label",

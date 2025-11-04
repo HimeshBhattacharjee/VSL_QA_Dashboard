@@ -13,18 +13,17 @@ const TrimmingSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
         </div>
     ),
 
-    // For single input sections (shift-based)
     SingleInputSection: ({ machine, value, onUpdate, children }: {
         machine: 'Auto trimming - 3' | 'Auto trimming - 4';
         value: Record<string, string>;
@@ -40,7 +39,6 @@ const TrimmingSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
@@ -111,7 +109,6 @@ const AutoTrimmingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Auto trimming - 3 Section */}
                 <TrimmingSection.TimeBasedSection
                     machine="Auto trimming - 3"
                     value={sampleValue}
@@ -123,14 +120,12 @@ const AutoTrimmingObservations = {
                             onChange={(value) => handleUpdate('Auto trimming - 3', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" },
-                                { value: "NA", label: "N/A" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </TrimmingSection.TimeBasedSection>
-
-                {/* Auto trimming - 4 Section */}
                 <TrimmingSection.TimeBasedSection
                     machine="Auto trimming - 4"
                     value={sampleValue}
@@ -142,8 +137,8 @@ const AutoTrimmingObservations = {
                             onChange={(value) => handleUpdate('Auto trimming - 4', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" },
-                                { value: "NA", label: "N/A" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -155,7 +150,7 @@ const AutoTrimmingObservations = {
     renderBladeChangeFrequency: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Auto trimming - 3": "", 
+                "Auto trimming - 3": "",
                 "Auto trimming - 4": ""
             }
             : props.value as Record<string, string>;
@@ -167,7 +162,6 @@ const AutoTrimmingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Auto trimming - 3 Section */}
                 <TrimmingSection.SingleInputSection
                     machine="Auto trimming - 3"
                     value={sampleValue}
@@ -178,14 +172,12 @@ const AutoTrimmingObservations = {
                         onChange={(value) => handleUpdate('Auto trimming - 3', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" },
-                            { value: "NA", label: "N/A" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                         className="w-full"
                     />
                 </TrimmingSection.SingleInputSection>
-
-                {/* Auto trimming - 4 Section */}
                 <TrimmingSection.SingleInputSection
                     machine="Auto trimming - 4"
                     value={sampleValue}
@@ -196,8 +188,8 @@ const AutoTrimmingObservations = {
                         onChange={(value) => handleUpdate('Auto trimming - 4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" },
-                            { value: "NA", label: "N/A" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                         className="w-full"
                     />
@@ -218,12 +210,12 @@ export const autoTrimmingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { 
-                    timeSlot: "", 
+                {
+                    timeSlot: "",
                     value: {
-                        "Auto trimming - 3-4hrs": "", 
+                        "Auto trimming - 3-4hrs": "",
                         "Auto trimming - 3-8hrs": "",
-                        "Auto trimming - 4-4hrs": "", 
+                        "Auto trimming - 4-4hrs": "",
                         "Auto trimming - 4-8hrs": ""
                     }
                 }
@@ -237,10 +229,10 @@ export const autoTrimmingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { 
-                    timeSlot: "", 
+                {
+                    timeSlot: "",
                     value: {
-                        "Auto trimming - 3": "", 
+                        "Auto trimming - 3": "",
                         "Auto trimming - 4": ""
                     }
                 }

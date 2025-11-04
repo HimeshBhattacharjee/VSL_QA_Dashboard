@@ -7,7 +7,7 @@ const AutoFrontGlassObservations = {
                 type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     ),
@@ -21,7 +21,7 @@ const AutoFrontGlassObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
+            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-200">
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -85,7 +85,7 @@ const AutoFrontGlassObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border border-gray-400">
+            <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border border-gray-200">
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -97,16 +97,13 @@ const AutoFrontGlassObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="Enter mm"
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                                 step="0.01"
                                 min="0"
                             />
+                            <span className="text-xs text-gray-500 mt-1">mm</span>
                         </div>
                     ))}
-                </div>
-                <div className="text-center">
-                    <span className="text-xs text-gray-500">mm</span>
                 </div>
             </div>
         );

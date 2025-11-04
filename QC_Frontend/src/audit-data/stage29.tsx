@@ -22,7 +22,6 @@ const FQCObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="Enter sl no."
                                 className="w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                             />
                         </div>
@@ -39,7 +38,6 @@ const FQCObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="Enter sl no."
                                 className="w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                             />
                         </div>
@@ -52,7 +50,7 @@ const FQCObservations = {
 
 export const FQCStage: StageData = {
     id: 29,
-    name: "Final EL Test",
+    name: "FQC",
     parameters: [
         {
             id: "29-1",

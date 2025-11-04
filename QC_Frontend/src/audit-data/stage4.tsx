@@ -19,7 +19,7 @@ const CellSortingObservations = {
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
             <option value="">Select Validity</option>
-            <option value="4_hrs">Used within 8 hrs</option>
+            <option value="4_hrs">Used within 4 hrs</option>
             <option value="8_hrs">Used within 8 hrs</option>
             <option value="Expired">Expired</option>
             <option value="OFF">OFF</option>

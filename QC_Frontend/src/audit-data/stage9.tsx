@@ -1,4 +1,3 @@
-// stage9.tsx
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const RearEncapsulantObservations = {
@@ -10,7 +9,6 @@ const RearEncapsulantObservations = {
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 className="w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                 step="0.1"
-                placeholder={props.paramId.includes('humidity') ? 'Enter %' : 'Enter °C'}
             />
             <span className="text-xs text-gray-500 mt-1">
                 {props.paramId.includes('humidity') ? '%' : '°C'}
@@ -24,7 +22,7 @@ const RearEncapsulantObservations = {
                 type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     ),
@@ -35,10 +33,11 @@ const RearEncapsulantObservations = {
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
-            <option value="">Select Status</option>
-            <option value="WITHIN_8_HOURS">Within 8 hours</option>
-            <option value="EXPIRED">Expired</option>
-            <option value="NA">N/A</option>
+            <option value="">Select</option>
+            <option value="4_hrs">Within 4 hours</option>
+            <option value="8_hrs">Within 8 hours</option>
+            <option value="Expired">Expired</option>
+            <option value="OFF">OFF</option>
         </select>
     ),
 
@@ -51,8 +50,7 @@ const RearEncapsulantObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-col rounded-lg bg-white shadow-sm border">
-                {/* Top 3 samples */}
+            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-200">
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -67,14 +65,12 @@ const RearEncapsulantObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NOT OK">Checked NOT OK</option>
+                                <option value="NG">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
                     ))}
                 </div>
-
-                {/* Bottom 3 samples */}
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -89,7 +85,7 @@ const RearEncapsulantObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NOT OK">Checked NOT OK</option>
+                                <option value="NG">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
@@ -105,7 +101,7 @@ const RearEncapsulantObservations = {
             : props.value as Record<string, string>;
 
         return (
-            <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border">
+            <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border border-gray-200">
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -117,8 +113,7 @@ const RearEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                placeholder="mm"
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                                 step="0.001"
                                 min="0"
                             />
@@ -136,8 +131,7 @@ const RearEncapsulantObservations = {
                 type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-                placeholder="Enter value"
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     )

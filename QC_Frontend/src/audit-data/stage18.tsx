@@ -1,8 +1,6 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-// Reusable section components for Junction Box Fixing
 const JBSection = {
-    // For time-based inputs (shift & 4hrs)
     TimeBasedSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
@@ -26,7 +24,6 @@ const JBSection = {
         </div>
     ),
 
-    // For single input sections (no time slots)
     SingleInputSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
@@ -52,10 +49,9 @@ const JBSection = {
                 <span className="text-sm font-semibold text-gray-700">Junction Box Fixing - {line.split('-')[1]}</span>
             </div>
             <div className="flex gap-4">
-                {/* 4 hours time slot */}
                 <div className="flex-1">
                     <div className="text-center text-xs text-gray-500 mb-2">4 hours</div>
-                    <div className="grid grid-cols-3 gap-2 border rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-2 border border-gray-200 rounded-lg p-2">
                         {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5', 'Sample-6'].map(sample => (
                             <div key={`4hrs-${sample}`} className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500 mb-1">{sample}</span>
@@ -64,11 +60,9 @@ const JBSection = {
                         ))}
                     </div>
                 </div>
-
-                {/* 8 hours time slot */}
                 <div className="flex-1">
                     <div className="text-center text-xs text-gray-500 mb-2">8 hours</div>
-                    <div className="grid grid-cols-3 gap-2 border rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-2 border border-gray-200 rounded-lg p-2">
                         {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5', 'Sample-6'].map(sample => (
                             <div key={`8hrs-${sample}`} className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500 mb-1">{sample}</span>
@@ -82,7 +76,6 @@ const JBSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
@@ -155,7 +148,6 @@ const JunctionBoxFixingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <JBSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -216,8 +208,6 @@ const JunctionBoxFixingObservations = {
                         </div>
                     </div>
                 </JBSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <JBSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -297,7 +287,6 @@ const JunctionBoxFixingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <JBSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -322,8 +311,6 @@ const JunctionBoxFixingObservations = {
                         </div>
                     </div>
                 </JBSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <JBSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -367,7 +354,6 @@ const JunctionBoxFixingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <JBSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -400,8 +386,6 @@ const JunctionBoxFixingObservations = {
                         </div>
                     </div>
                 </JBSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <JBSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -470,7 +454,8 @@ const JunctionBoxFixingObservations = {
                             onChange={(value) => handleUpdate('Line-3', sample, timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -486,7 +471,8 @@ const JunctionBoxFixingObservations = {
                             onChange={(value) => handleUpdate('Line-4', sample, timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -510,7 +496,6 @@ const JunctionBoxFixingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <JBSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -541,8 +526,6 @@ const JunctionBoxFixingObservations = {
                         </div>
                     </div>
                 </JBSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <JBSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -592,7 +575,6 @@ const JunctionBoxFixingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <JBSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -634,8 +616,6 @@ const JunctionBoxFixingObservations = {
                         </div>
                     </div>
                 </JBSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <JBSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}

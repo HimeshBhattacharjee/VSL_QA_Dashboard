@@ -12,7 +12,6 @@ const PackingObservations = {
                 <option value="OK">Checked Ok</option>
                 <option value="NG">Checked Not OK</option>
                 <option value="OFF">OFF</option>
-                <option value="NA">N/A</option>
             </select>
         </div>
     ),
@@ -65,7 +64,7 @@ const PackingObservations = {
                 type="number"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
                 step="0.1"
                 min="0"
             />

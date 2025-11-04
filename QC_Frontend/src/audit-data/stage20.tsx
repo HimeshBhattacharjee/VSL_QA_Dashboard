@@ -45,7 +45,6 @@ const LineSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
@@ -77,6 +76,7 @@ const InputComponents = {
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+            disabled={(placeholder === 'Auto') ? true : false}
         />
     ),
 
@@ -118,7 +118,6 @@ const AutoPottingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -175,8 +174,6 @@ const AutoPottingObservations = {
                         </div>
                     </div>
                 </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -252,7 +249,6 @@ const AutoPottingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section - Every 2 hours (2hrs, 4hrs, 6hrs, 8hrs) */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -260,20 +256,17 @@ const AutoPottingObservations = {
                     timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
                 >
                     {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.Select
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked NG" }
-                                ]}
-                            />
-                        </div>
+                        <InputComponents.Select
+                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                            options={[
+                                { value: "OK", label: "Checked OK" },
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
+                            ]}
+                        />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section - Every 2 hours (2hrs, 4hrs, 6hrs, 8hrs) */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -286,7 +279,8 @@ const AutoPottingObservations = {
                             onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -319,7 +313,6 @@ const AutoPottingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <LineSection.SingleInputSection
                     line="Line-3"
                     value={sampleValue}
@@ -359,13 +352,11 @@ const AutoPottingObservations = {
                             <InputComponents.TextInput
                                 value={sampleValue["Line-3-Ratio"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'Ratio', value)}
-                                placeholder="Auto-calculated"
+                                placeholder="Auto"
                             />
                         </div>
                     </div>
                 </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -405,7 +396,7 @@ const AutoPottingObservations = {
                             <InputComponents.TextInput
                                 value={sampleValue["Line-4-Ratio"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'Ratio', value)}
-                                placeholder="Auto-calculated"
+                                placeholder="Auto"
                             />
                         </div>
                     </div>
@@ -429,7 +420,6 @@ const AutoPottingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section - Every 2 hours (2hrs, 4hrs, 6hrs, 8hrs) */}
                 <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
@@ -442,13 +432,12 @@ const AutoPottingObservations = {
                             onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section - Every 2 hours (2hrs, 4hrs, 6hrs, 8hrs) */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -461,7 +450,8 @@ const AutoPottingObservations = {
                             onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -485,7 +475,6 @@ const AutoPottingObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section - Every 4 hours (4hrs, 8hrs) */}
                 <LineSection.TimeBasedSection<TimeSlots4H8H>
                     line="Line-3"
                     value={sampleValue}
@@ -505,8 +494,6 @@ const AutoPottingObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section - Every 4 hours (4hrs, 8hrs) */}
                 <LineSection.TimeBasedSection<TimeSlots4H8H>
                     line="Line-4"
                     value={sampleValue}

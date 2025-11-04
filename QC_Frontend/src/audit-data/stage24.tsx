@@ -13,19 +13,19 @@ const LineSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">2 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">2 hours</span>
                     {children('2hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">6 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">6 hours</span>
                     {children('6hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
@@ -96,7 +96,7 @@ const InputComponents = {
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
         />
     )
 };
@@ -124,7 +124,7 @@ const SunSimulatorObservations = {
                     <InputComponents.TextInput
                         value={sampleValue["Line-3"] || ''}
                         onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Supplier name"
+                        placeholder=""
                     />
                 </LineSection.SingleInputSection>
 
@@ -136,7 +136,7 @@ const SunSimulatorObservations = {
                     <InputComponents.TextInput
                         value={sampleValue["Line-4"] || ''}
                         onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Supplier name"
+                        placeholder=""
                     />
                 </LineSection.SingleInputSection>
             </div>
@@ -167,7 +167,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-3', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -182,7 +183,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -214,11 +216,11 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-3', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
-
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -229,7 +231,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -270,7 +273,6 @@ const SunSimulatorObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -326,7 +328,6 @@ const SunSimulatorObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -379,7 +380,6 @@ const SunSimulatorObservations = {
                         <span className="text-xs text-gray-500">W/M<sup>2</sup></span>
                     </div>
                 </LineSection.SingleInputSection>
-
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -540,11 +540,11 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-3', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
-
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -555,7 +555,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -587,7 +588,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-3', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -602,7 +604,8 @@ const SunSimulatorObservations = {
                         onChange={(value) => handleUpdate('Line-4', value)}
                         options={[
                             { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
+                            { value: "NG", label: "Checked Not OK" },
+                            { value: "OFF", label: "OFF" }
                         ]}
                     />
                 </LineSection.SingleInputSection>
@@ -625,7 +628,6 @@ const SunSimulatorObservations = {
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
                 <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2 flex-1">
                     <div className="text-center mb-2">
                         <span className="text-sm font-semibold text-gray-700">Sun Simulator - 3</span>

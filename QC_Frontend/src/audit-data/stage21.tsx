@@ -13,19 +13,19 @@ const LineSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">2 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">2 hours</span>
                     {children('2hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">6 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">6 hours</span>
                     {children('6hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
@@ -285,8 +285,6 @@ const CuringObservations = {
                         </div>
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -335,13 +333,12 @@ const CuringObservations = {
                             onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
                 </LineSection.TimeBasedSection>
-
-                {/* Line-4 Section */}
                 <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
@@ -353,7 +350,8 @@ const CuringObservations = {
                             onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
                             options={[
                                 { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked NG" }
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}

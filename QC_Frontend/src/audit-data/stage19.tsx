@@ -120,7 +120,7 @@ const AutoJBSolderingObservations = {
                             options={[
                                 { value: "ESD band used", label: "ESD band used" },
                                 { value: "ESD band not used", label: "ESD band not used" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}
@@ -137,7 +137,7 @@ const AutoJBSolderingObservations = {
                             options={[
                                 { value: "ESD band used", label: "ESD band used" },
                                 { value: "ESD band not used", label: "ESD band not used" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                         />
                     )}

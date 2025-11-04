@@ -8,17 +8,11 @@ const RFIDObservations = {
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             >
-                <option value="">Select Status</option>
+                <option value="">Select</option>
                 <option value="OK">Checked Ok</option>
-                <option value="NG">Checked NG</option>
-                <option value="NA">N/A</option>
+                <option value="NG">Checked Not OK</option>
+                <option value="OFF">OFF</option>
             </select>
-        </div>
-    ),
-    
-    renderFullWidth: (props: ObservationRenderProps) => (
-        <div className="w-full text-center text-gray-500 py-2">
-            No observations required
         </div>
     )
 };
@@ -56,9 +50,9 @@ export const rfidStage: StageData = {
             parameters: "RFID ITEMS",
             criteria: "Module Serial Number, Name Of The Manufacturer Of PV Module, Month & Year Of The Manufacture Of Module, Country Of Origin For PV Module, Power: Pmpp Of The Module, Current: Imp of The Module, Isc of the Module, Module Model Number, Name of The Manufacturer Of Solar Cell, Month & Year of The Manufacture Of Solar Cell, Country of Origin For Solar Cell, Voltage: Vmpp of The Module, Fill Factor (FF) of The Module, Voc of The Module, Name of The Test Lab Issuing IEC Certificate, Date Of Obtaining IEC Certificate, IV Curve",
             typeOfInspection: "RFID Scanner",
-            inspectionFrequency: "",
-            observations: [],
-            renderObservation: RFIDObservations.renderFullWidth
+            inspectionFrequency: "Every shift",
+            observations: [{ timeSlot: "", value: "" }],
+            renderObservation: RFIDObservations.renderSelector
         }
     ]
 };

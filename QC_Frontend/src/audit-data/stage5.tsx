@@ -100,10 +100,10 @@ const TabbingStringingObservations = {
 
         return (
             <div className="flex flex-col space-y-4">
-                <div className="border rounded-lg p-3 bg-blue-50">
+                <div className="border border-gray-200 rounded-lg p-3 bg-blue-50">
                     <div className="grid grid-cols-3 gap-3">
                         {[7, 8, 9].map(stringerNumber => (
-                            <div key={stringerNumber} className="border rounded p-2 bg-white">
+                            <div key={stringerNumber} className="border border-gray-200 rounded p-2 bg-white">
                                 <h5 className="font-semibold text-center mb-2 text-sm">Stringer {stringerNumber}</h5>
                                 <div className="grid grid-cols-2 gap-1">
                                     {Object.entries(allStringerData[`Stringer-${stringerNumber}`] || {}).map(([key, value]) => (
@@ -124,6 +124,9 @@ const TabbingStringingObservations = {
                                                         props.onUpdate(stageId, paramId, timeSlot, updatedData);
                                                     }}
                                                 />
+                                            )}
+                                            {props.paramId.includes('laser-power') && (
+                                                <span className="text-xs text-gray-500 mt-1">%</span>
                                             )}
                                             {props.paramId.includes('cell-appearance') && (
                                                 <TabbingStringingObservations.renderSelector
@@ -172,6 +175,9 @@ const TabbingStringingObservations = {
                                                         props.onUpdate(stageId, paramId, timeSlot, updatedData);
                                                     }}
                                                 />
+                                            )}
+                                            {(props.paramId.includes('groove-length') || props.paramId.includes('cell-width')) && (
+                                                <span className="text-xs text-gray-500 mt-1">mm</span>
                                             )}
                                         </div>
                                     ))}
@@ -180,10 +186,10 @@ const TabbingStringingObservations = {
                         ))}
                     </div>
                 </div>
-                <div className="border rounded-lg p-3 bg-green-50">
+                <div className="border border-gray-200 rounded-lg p-3 bg-green-50">
                     <div className="grid grid-cols-3 gap-3">
                         {[10, 11, 12].map(stringerNumber => (
-                            <div key={stringerNumber} className="border rounded p-2 bg-white">
+                            <div key={stringerNumber} className="border border-gray-200 rounded p-2 bg-white">
                                 <h5 className="font-semibold text-center mb-2 text-sm">Stringer {stringerNumber}</h5>
                                 <div className="grid grid-cols-2 gap-1">
                                     {Object.entries(allStringerData[`Stringer-${stringerNumber}`] || {}).map(([key, value]) => (
@@ -204,6 +210,9 @@ const TabbingStringingObservations = {
                                                         props.onUpdate(stageId, paramId, timeSlot, updatedData);
                                                     }}
                                                 />
+                                            )}
+                                            {props.paramId.includes('laser-power') && (
+                                                <span className="text-xs text-gray-500 mt-1">%</span>
                                             )}
                                             {props.paramId.includes('cell-appearance') && (
                                                 <TabbingStringingObservations.renderSelector
@@ -252,6 +261,9 @@ const TabbingStringingObservations = {
                                                         props.onUpdate(stageId, paramId, timeSlot, updatedData);
                                                     }}
                                                 />
+                                            )}
+                                            {(props.paramId.includes('groove-length') || props.paramId.includes('cell-width')) && (
+                                                <span className="text-xs text-gray-500 mt-1">mm</span>
                                             )}
                                         </div>
                                     ))}
@@ -271,7 +283,6 @@ const createCombinedStringerParameters = () => {
         if (i >= 7 && i <= 9) allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
         else allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
     }
-
     return allStringersData;
 };
 
@@ -285,7 +296,6 @@ const createCombinedCellWidthParameters = () => {
             "Lower-B-L": "", "Lower-B-R": ""
         };
     }
-
     return allStringersData;
 };
 
@@ -374,7 +384,7 @@ export const tabbingStringingStage: StageData = {
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },
         {
-            id: "5-8",
+            id: "5-8-tds",
             parameters: "Deionized Water TDS Value",
             criteria: "Specific tolerance 0 to 5 ppm",
             typeOfInspection: "Functionality",

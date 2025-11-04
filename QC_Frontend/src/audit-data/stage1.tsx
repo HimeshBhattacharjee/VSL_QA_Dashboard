@@ -8,7 +8,6 @@ const PreLamObservations = {
                     type="number"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    placeholder="Enter %"
                     className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                     min="0"
                     max="100"
@@ -26,7 +25,6 @@ const PreLamObservations = {
                     type="number"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    placeholder="Enter °C"
                     className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                     min="0"
                     max="100"
