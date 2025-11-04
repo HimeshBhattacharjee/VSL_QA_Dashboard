@@ -3,7 +3,7 @@ import { initialStages } from '../audit-data';
 import { AuditData } from "../types/audit";
 
 export default function Test() {
-    const stageID = 20;
+    const stageID = 8;
 
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',

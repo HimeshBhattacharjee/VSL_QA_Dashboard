@@ -7,7 +7,7 @@ const TabbingStringingObservations = {
                 type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
             />
         </div>
     ),
@@ -18,10 +18,10 @@ const TabbingStringingObservations = {
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
-            <option value="">Select Status</option>
+            <option value="">Select</option>
             <option value="OK">Checked OK</option>
-            <option value="NG">Checked NG</option>
-            <option value="NA">N/A</option>
+            <option value="NG">Checked Not OK</option>
+            <option value="OFF">OFF</option>
         </select>
     ),
 
@@ -32,16 +32,13 @@ const TabbingStringingObservations = {
             step={0.001}
             value={props.value as string}
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            placeholder="Value"
+            className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         />
     ),
 
     renderStringerSection: (props: ObservationRenderProps) => {
         const stringerData = props.value as Record<string, string>;
         const stringerNumber = parseInt(props.timeSlot.replace('Stringer-', ''));
-
-        // Determine if this stringer goes in top or bottom half
         const isTopHalf = stringerNumber >= 7 && stringerNumber <= 9;
 
         return (
@@ -103,7 +100,6 @@ const TabbingStringingObservations = {
 
         return (
             <div className="flex flex-col space-y-4">
-                {/* Top Row - Stringers 7-9 */}
                 <div className="border rounded-lg p-3 bg-blue-50">
                     <div className="grid grid-cols-3 gap-3">
                         {[7, 8, 9].map(stringerNumber => (
@@ -184,8 +180,6 @@ const TabbingStringingObservations = {
                         ))}
                     </div>
                 </div>
-
-                {/* Bottom Row - Stringers 10-12 */}
                 <div className="border rounded-lg p-3 bg-green-50">
                     <div className="grid grid-cols-3 gap-3">
                         {[10, 11, 12].map(stringerNumber => (
@@ -271,19 +265,11 @@ const TabbingStringingObservations = {
     }
 };
 
-// Create combined parameters for all stringers
 const createCombinedStringerParameters = () => {
     const allStringersData: Record<string, Record<string, string>> = {};
-
-    // Create data structure for all stringers (7-12)
     for (let i = 7; i <= 12; i++) {
-        if (i >= 7 && i <= 9) {
-            // Top stringers (7-9)
-            allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
-        } else {
-            // Bottom stringers (10-12)
-            allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
-        }
+        if (i >= 7 && i <= 9) allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
+        else allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
     }
 
     return allStringersData;
@@ -291,8 +277,6 @@ const createCombinedStringerParameters = () => {
 
 const createCombinedCellWidthParameters = () => {
     const allStringersData: Record<string, Record<string, string>> = {};
-
-    // Create data structure for all stringers (7-12) with cell width measurements
     for (let i = 7; i <= 12; i++) {
         allStringersData[`Stringer-${i}`] = {
             "Upper-A-L": "", "Upper-A-R": "",
@@ -309,7 +293,6 @@ export const tabbingStringingStage: StageData = {
     id: 5,
     name: "Tabbing and Stringing",
     parameters: [
-        // ... (other parameters remain the same)
         {
             id: "5-1",
             parameters: "INTC Ribbon Status",
@@ -346,8 +329,6 @@ export const tabbingStringingStage: StageData = {
             ],
             renderObservation: TabbingStringingObservations.renderInputText
         },
-
-        // Combined Laser Power - All Stringers (7-12)
         {
             id: "5-4-laser-power",
             parameters: "Machine Laser Power",
@@ -359,8 +340,6 @@ export const tabbingStringingStage: StageData = {
             ],
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },
-
-        // Combined Cell Appearance - All Stringers (7-12)
         {
             id: "5-5-cell-appearance",
             parameters: "Cell Appearance",
@@ -372,8 +351,6 @@ export const tabbingStringingStage: StageData = {
             ],
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },
-
-        // Combined Cell Width - All Stringers (7-12)
         {
             id: "5-6-cell-width",
             parameters: "Cell Width Measurements",
@@ -385,8 +362,6 @@ export const tabbingStringingStage: StageData = {
             ],
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },
-
-        // Combined Groove Length - All Stringers (7-12)
         {
             id: "5-7-groove-length",
             parameters: "Groove Laser Cutting Length",

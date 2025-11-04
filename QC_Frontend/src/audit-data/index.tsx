@@ -20,6 +20,16 @@ import { junctionBoxFixingStage } from './stage18';
 import { autoJBSolderingStage } from './stage19';
 import { autoPottingStage } from './stage20';
 import { curingStage } from './stage21';
+import { autoFilingStage } from './stage22';
+import { cleaningStage } from './stage23';
+import { sunSimulatorStage } from './stage24';
+import { rfidStage } from './stage25';
+import { safetyTestStage } from './stage26';
+import { finalELStage } from './stage27';
+import { backLabelFixingStage } from './stage28';
+import { FQCStage } from './stage29';
+import { autoSorterStage } from './stage30';
+import { packingStage } from './stage31';
 
 export const initialStages: StageData[] = [
     preLamStage,
@@ -42,5 +52,15 @@ export const initialStages: StageData[] = [
     junctionBoxFixingStage,
     autoJBSolderingStage,
     autoPottingStage,
-    curingStage
+    curingStage,
+    autoFilingStage,
+    cleaningStage,
+    sunSimulatorStage,
+    rfidStage,
+    safetyTestStage,
+    finalELStage,
+    backLabelFixingStage,
+    FQCStage,
+    autoSorterStage,
+    packingStage
 ];

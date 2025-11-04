@@ -1,13 +1,11 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-// Reusable section components
 const LineSection = {
-    // For time-based inputs (2hrs)
     TimeBasedSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
-        children: (timeSlot: '2hrs') => React.ReactNode;
+        children: (timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs') => React.ReactNode;
     }) => (
         <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
@@ -18,11 +16,22 @@ const LineSection = {
                     <span className="text-xs text-gray-500">2 hours</span>
                     {children('2hrs')}
                 </div>
+                <div className="flex flex-col items-center justify-between">
+                    <span className="text-xs text-gray-500">4 hours</span>
+                    {children('4hrs')}
+                </div>
+                <div className="flex flex-col items-center justify-between">
+                    <span className="text-xs text-gray-500">6 hours</span>
+                    {children('6hrs')}
+                </div>
+                <div className="flex flex-col items-center justify-between">
+                    <span className="text-xs text-gray-500">8 hours</span>
+                    {children('8hrs')}
+                </div>
             </div>
         </div>
     ),
 
-    // For single input sections (no time slots)
     SingleInputSection: ({ line, value, onUpdate, children }: {
         line: 'Line-3' | 'Line-4';
         value: Record<string, string>;
@@ -38,7 +47,6 @@ const LineSection = {
     )
 };
 
-// Reusable input components
 const InputComponents = {
     Select: ({ value, onChange, options, className = "w-full" }: {
         value: string;
@@ -82,48 +90,54 @@ const CuringObservations = {
     renderHumidity: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Line-3-2hrs": "", "Line-4-2hrs": ""
+                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
+                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-2hrs`]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-3-2hrs"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="%"
-                        min={0}
-                        step={0.1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
-                <LineSection.SingleInputSection
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500">%</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+                <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-4-2hrs"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="%"
-                        min={0}
-                        step={0.1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500">%</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
             </div>
         );
     },
@@ -131,48 +145,54 @@ const CuringObservations = {
     renderTemperature: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Line-3-2hrs": "", "Line-4-2hrs": ""
+                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
+                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-2hrs`]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-3-2hrs"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="°C"
-                        min={0}
-                        step={0.1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
-                <LineSection.SingleInputSection
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500">°C</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+                <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-4-2hrs"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="°C"
-                        min={0}
-                        step={0.1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.1}
+                            />
+                            <span className="text-xs text-gray-500">°C</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
             </div>
         );
     },
@@ -180,48 +200,54 @@ const CuringObservations = {
     renderCuringTime: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Line-3": "", "Line-4": ""
+                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
+                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Hours"
-                        min={0}
-                        step={1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
-
-                {/* Line-4 Section */}
-                <LineSection.SingleInputSection
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500">Hours</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
+                <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Hours"
-                        min={0}
-                        step={1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500">Hours</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
             </div>
         );
     },
@@ -229,48 +255,56 @@ const CuringObservations = {
     renderStacking: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Line-3": "", "Line-4": ""
+                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
+                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder="Quantity"
-                        min={0}
-                        step={1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500">Nos</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
 
                 {/* Line-4 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.NumberInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder="Quantity"
-                        min={0}
-                        step={1}
-                        className="w-full"
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                            <span className="text-xs text-gray-500">Nos</span>
+                        </div>
+                    )}
+                </LineSection.TimeBasedSection>
             </div>
         );
     },
@@ -278,48 +312,52 @@ const CuringObservations = {
     renderCuringQuality: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Line-3": "", "Line-4": ""
+                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
+                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                {/* Line-3 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-3"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.Select
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        options={[
-                            { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
-                        ]}
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <InputComponents.Select
+                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                            options={[
+                                { value: "OK", label: "Checked OK" },
+                                { value: "NG", label: "Checked NG" }
+                            ]}
+                        />
+                    )}
+                </LineSection.TimeBasedSection>
 
                 {/* Line-4 Section */}
-                <LineSection.SingleInputSection
+                <LineSection.TimeBasedSection
                     line="Line-4"
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <InputComponents.Select
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        options={[
-                            { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked NG" }
-                        ]}
-                    />
-                </LineSection.SingleInputSection>
+                    {(timeSlot) => (
+                        <InputComponents.Select
+                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                            options={[
+                                { value: "OK", label: "Checked OK" },
+                                { value: "NG", label: "Checked NG" }
+                            ]}
+                        />
+                    )}
+                </LineSection.TimeBasedSection>
             </div>
         );
     }

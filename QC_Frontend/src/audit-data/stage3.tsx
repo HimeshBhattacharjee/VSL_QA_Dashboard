@@ -1,4 +1,3 @@
-// stage3.tsx
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const FrontEncapsulantObservations = {
@@ -8,7 +7,6 @@ const FrontEncapsulantObservations = {
                 type="number"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder={props.paramId === '3-1' ? 'Enter %' : 'Enter °C'}
                 className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                 min="0"
                 max="100"
@@ -38,9 +36,10 @@ const FrontEncapsulantObservations = {
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
             <option value="">Select Validity</option>
-            <option value="Used within 8 hrs">Used within 8 hrs</option>
+            <option value="4_hrs">Used within 4 hrs</option>
+            <option value="8_hrs">Used within 8 hrs</option>
             <option value="Expired">Expired</option>
-            <option value="NA">N/A</option>
+            <option value="OFF">OFF</option>
         </select>
     ),
 
@@ -50,7 +49,6 @@ const FrontEncapsulantObservations = {
                 type="number"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter mm"
                 className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                 min="-10"
                 max="10"
@@ -70,7 +68,6 @@ const FrontEncapsulantObservations = {
 
         return (
             <div className="flex flex-col rounded-lg bg-white shadow-sm border">
-                {/* Top 3 samples */}
                 <div className="flex justify-between px-2 py-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -85,14 +82,12 @@ const FrontEncapsulantObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NG">Checked NG</option>
-                                <option value="NA">N/A</option>
+                                <option value="NG">Checked Not OK</option>
+                                <option value="OFF">OFF</option>
                             </select>
                         </div>
                     ))}
                 </div>
-
-                {/* Bottom 3 samples */}
                 <div className="flex justify-between px-2 py-2">
                     {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -107,8 +102,8 @@ const FrontEncapsulantObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NG">Checked NG</option>
-                                <option value="NA">N/A</option>
+                                <option value="NG">Checked Not OK</option>
+                                <option value="OFF">OFF</option>
                             </select>
                         </div>
                     ))}
@@ -123,7 +118,6 @@ const FrontEncapsulantObservations = {
                 type="number"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                placeholder="Enter value"
                 className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
                 step="0.01"
                 min="0"

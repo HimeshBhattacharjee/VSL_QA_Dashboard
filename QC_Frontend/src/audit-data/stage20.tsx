@@ -537,7 +537,7 @@ export const autoPottingStage: StageData = {
     parameters: [
         {
             id: "20-1",
-            parameters: "JB potting status",
+            parameters: "JB Potting status",
             criteria: "As per Production Order /BOM Engineering Specification",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
@@ -548,8 +548,8 @@ export const autoPottingStage: StageData = {
         },
         {
             id: "20-2",
-            parameters: "Aesthetic condition of poured potting material",
-            criteria: "Potting shall not comes out of JB",
+            parameters: "Aesthetic Condition of Poured Potting Material",
+            criteria: "Potting shall not come out of JB",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 2 hours",
             observations: [
@@ -559,8 +559,8 @@ export const autoPottingStage: StageData = {
         },
         {
             id: "20-3",
-            parameters: "Potting material mixing ratio",
-            criteria: "Potting material mixing ratio as per set process recipe (5±1:1)",
+            parameters: "Potting Material Mixing Ratio",
+            criteria: "Potting material mixing ratio as per set process recipe ((5 ± 1) : 1)",
             typeOfInspection: "Functionality",
             inspectionFrequency: "Every shift",
             observations: [
@@ -582,7 +582,7 @@ export const autoPottingStage: StageData = {
         {
             id: "20-5",
             parameters: "Curing Quality",
-            criteria: "Hardness should be ≥ 12 Shore A after 4 hrs. of curing",
+            criteria: "Hardness should be ≥ 12 Shore A after 4 hours of curing",
             typeOfInspection: "Functionality",
             inspectionFrequency: "Every 4 hours",
             observations: [

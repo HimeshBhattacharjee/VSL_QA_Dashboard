@@ -182,7 +182,6 @@ const AutoTapingNLayupObservations = {
                             { value: "Outside", label: "Outside RFID" },
                             { value: "NotRequired", label: "Not required" }
                         ]}
-                        className="w-full"
                     />
                 </LineSection.SingleInputSection>
 
@@ -200,7 +199,6 @@ const AutoTapingNLayupObservations = {
                             { value: "Outside", label: "Outside RFID" },
                             { value: "NotRequired", label: "Not required" }
                         ]}
-                        className="w-full"
                     />
                 </LineSection.SingleInputSection>
             </div>
@@ -228,23 +226,32 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     <div className="flex justify-between gap-2">
-                        <InputComponents.TextInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Supplier"
-                        />
-                        <InputComponents.TextInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Type"
-                        />
-                        <InputComponents.NumberInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Qty."
-                            min={0}
-                            step={1}
-                        />
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Supplier</span>
+                            <InputComponents.TextInput
+                                value={sampleValue["Line-3"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', value)}
+                                placeholder=""
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Type</span>
+                            <InputComponents.TextInput
+                                value={sampleValue["Line-3"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', value)}
+                                placeholder=""
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Quantity</span>
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-3"] || ''}
+                                onChange={(value) => handleUpdate('Line-3', value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                        </div>
                     </div>
                 </LineSection.SingleInputSection>
 
@@ -255,23 +262,32 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     <div className="flex justify-between gap-2">
-                        <InputComponents.TextInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Supplier"
-                        />
-                        <InputComponents.TextInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Type"
-                        />
-                        <InputComponents.NumberInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder="Qty."
-                            min={0}
-                            step={1}
-                        />
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Supplier</span>
+                            <InputComponents.TextInput
+                                value={sampleValue["Line-4"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', value)}
+                                placeholder=""
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Type</span>
+                            <InputComponents.TextInput
+                                value={sampleValue["Line-4"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', value)}
+                                placeholder=""
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 items-center">
+                            <span className="text-xs text-gray-500">Quantity</span>
+                            <InputComponents.NumberInput
+                                value={sampleValue["Line-4"] || ''}
+                                onChange={(value) => handleUpdate('Line-4', value)}
+                                placeholder=""
+                                min={0}
+                                step={1}
+                            />
+                        </div>
                     </div>
                 </LineSection.SingleInputSection>
             </div>
@@ -300,13 +316,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={0.01}
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
 
@@ -317,13 +336,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={0.01}
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
             </div>
@@ -352,14 +374,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={0.01}
-                            className="w-24"
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
 
@@ -370,14 +394,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={0.01}
-                            className="w-24"
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
             </div>
@@ -406,13 +432,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={1}
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
 
@@ -423,13 +452,16 @@ const AutoTapingNLayupObservations = {
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
                     {(timeSlot) => (
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            placeholder="Enter mm"
-                            min={0}
-                            step={1}
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                            <InputComponents.NumberInput
+                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
+                                placeholder=""
+                                min={0}
+                                step={0.01}
+                            />
+                            <span className="text-xs text-gray-500">mm</span>
+                        </div>
                     )}
                 </LineSection.TimeBasedSection>
             </div>
@@ -533,7 +565,7 @@ export const autoTapingNLayupStage: StageData = {
         },
         {
             id: "8-11",
-            parameters:"Creep edge distance - Left side",
+            parameters: "Creep edge distance - Left side",
             criteria: "Left Side Gap ≥ 12 mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",

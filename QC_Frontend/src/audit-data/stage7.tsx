@@ -1,8 +1,6 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
-// Reusable section components
 const LineSection = {
-    // For time-based inputs (4hrs & 8hrs)
     TimeBasedSection: ({ line, value, onUpdate, children }: {
         line: 'Line-4' | 'Line-5';
         value: Record<string, string>;
@@ -15,18 +13,17 @@ const LineSection = {
             </div>
             <div className="flex gap-2">
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">4 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
                 <div className="flex flex-col items-center justify-between">
-                    <span className="text-xs text-gray-500">8 hours</span>
+                    <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
             </div>
         </div>
     ),
 
-    // For single input sections (no time slots)
     SingleInputSection: ({ line, value, onUpdate, children }: {
         line: 'Line-4' | 'Line-5';
         value: Record<string, string>;
@@ -53,26 +50,25 @@ const LineSection = {
             </div>
             <div className="flex gap-2 justify-between">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Supplier</span>
+                    <span className="text-xs text-gray-500 mb-1">Supplier</span>
                     {children('Supplier')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Width</span>
+                    <span className="text-xs text-gray-500 mb-1">Width</span>
                     {children('Width')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Thickness</span>
+                    <span className="text-xs text-gray-500 mb-1">Thickness</span>
                     {children('Thickness')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Expiry Date</span>
+                    <span className="text-xs text-gray-500 mb-1">Expiry Date</span>
                     {children('Expiry Date')}
                 </div>
             </div>
         </div>
     ),
 
-    // For soldering time with TCA positions
     SolderingTimeSection: ({ line, value, onUpdate, children }: {
         line: 'Line-4' | 'Line-5';
         value: Record<string, string>;
@@ -85,27 +81,27 @@ const LineSection = {
             </div>
             <div className="flex gap-2 justify-between">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Front TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Front TCA 1</span>
                     {children('Front TCA 1 L')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Middle TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Middle TCA 1</span>
                     {children('Middle TCA 1 L')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Back TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Back TCA 1</span>
                     {children('Back TCA 1 L')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Front TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Front TCA 1</span>
                     {children('Front TCA 1 R')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Middle TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Middle TCA 1</span>
                     {children('Middle TCA 1 R')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Back TCA 1</span>
+                    <span className="text-xs text-gray-500 mb-1">Back TCA 1</span>
                     {children('Back TCA 1 R')}
                 </div>
             </div>
@@ -124,15 +120,15 @@ const LineSection = {
             </div>
             <div className="flex gap-2 justify-between">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Top</span>
+                    <span className="text-xs text-gray-500 mb-1">Top</span>
                     {children('Top')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Middle</span>
+                    <span className="text-xs text-gray-500 mb-1">Middle</span>
                     {children('Middle')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Bottom</span>
+                    <span className="text-xs text-gray-500 mb-1">Bottom</span>
                     {children('Bottom')}
                 </div>
             </div>
@@ -151,19 +147,19 @@ const LineSection = {
             </div>
             <div className="flex gap-2 justify-between">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">I</span>
+                    <span className="text-xs text-gray-500 mb-1">I</span>
                     {children('I')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Small L</span>
+                    <span className="text-xs text-gray-500 mb-1">Small L</span>
                     {children('Small L')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Big L</span>
+                    <span className="text-xs text-gray-500 mb-1">Big L</span>
                     {children('Big L')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Terminal</span>
+                    <span className="text-xs text-gray-500 mb-1">Terminal</span>
                     {children('Terminal')}
                 </div>
             </div>
@@ -186,22 +182,22 @@ const LineSection = {
             </div>
             <div className="flex gap-2 justify-between mb-2">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Line</span>
+                    <span className="text-xs text-gray-500 mb-1">Line</span>
                     {children.byLabel('Line')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Position</span>
+                    <span className="text-xs text-gray-500 mb-1">Position</span>
                     {children.byLabel('Position')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500">Side</span>
+                    <span className="text-xs text-gray-500 mb-1">Side</span>
                     {children.byLabel('Side')}
                 </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(position => (
                     <div key={position} className="flex flex-col items-center">
-                        <span className="text-xs text-gray-500">Pos {position}</span>
+                        <span className="text-xs text-gray-500 mb-1">Pos {position}</span>
                         {children.byPosition(position)}
                     </div>
                 ))}
@@ -340,7 +336,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-4-${position}`] || ''}
                                 onChange={(value) => handleUpdate('Line-4', position, value)}
-                                placeholder="Sec"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -360,7 +356,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-5-${position}`] || ''}
                                 onChange={(value) => handleUpdate('Line-5', position, value)}
-                                placeholder="Sec"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -395,7 +391,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-4"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -405,7 +401,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-4"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -425,7 +421,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-5"] || ''}
                                 onChange={(value) => handleUpdate('Line-5', value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -435,7 +431,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-5"] || ''}
                                 onChange={(value) => handleUpdate('Line-5', value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -473,7 +469,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-4-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -493,7 +489,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-5-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
-                                placeholder="Enter °C"
+                                placeholder=""
                                 min={0}
                                 step={1}
                             />
@@ -580,7 +576,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-4-${label}`] || ''}
                                 onChange={(value) => handleUpdate('Line-4', label, value)}
-                                placeholder="Enter %"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -600,7 +596,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-5-${label}`] || ''}
                                 onChange={(value) => handleUpdate('Line-5', label, value)}
-                                placeholder="Enter %"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -638,7 +634,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-4-${type}`] || ''}
                                 onChange={(value) => handleUpdate('Line-4', type, value)}
-                                placeholder="Enter mm"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -658,7 +654,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-5-${type}`] || ''}
                                 onChange={(value) => handleUpdate('Line-5', type, value)}
-                                placeholder="Enter mm"
+                                placeholder=""
                                 min={0}
                                 step={0.1}
                             />
@@ -696,7 +692,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-4-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder="Enter mm"
+                                placeholder=""
                                 min={0}
                                 step={0.01}
                             />
@@ -716,7 +712,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`Line-5-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
-                                placeholder="Enter mm"
+                                placeholder=""
                                 min={0}
                                 step={0.01}
                             />
@@ -754,7 +750,7 @@ const AutoBussingObservations = {
                         <InputComponents.TextInput
                             value={sampleValue[`${line}-${label}`] || ''}
                             onChange={(value) => handleUpdate(`${line}-${label}`, value)}
-                            placeholder={`Enter ${label}`}
+                            placeholder=""
                         />
                     ) : (
                         <InputComponents.Select
@@ -773,7 +769,7 @@ const AutoBussingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue[`${line}-Pos${position}`] || ''}
                                 onChange={(value) => handleUpdate(`${line}-Pos${position}`, value)}
-                                placeholder="Enter N"
+                                placeholder=""
                                 min={0}
                                 step={0.01}
                             />

@@ -1,4 +1,3 @@
-// stage2.tsx
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const AutoFrontGlassObservations = {
@@ -23,7 +22,6 @@ const AutoFrontGlassObservations = {
 
         return (
             <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
-                {/* Top 3 samples */}
                 <div className="flex justify-between p-2 gap-2">
                     {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -38,14 +36,12 @@ const AutoFrontGlassObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NG">Checked NG</option>
-                                <option value="NA">N/A</option>
+                                <option value="NG">Checked Not OK</option>
+                                <option value="OFF">OFF</option>
                             </select>
                         </div>
                     ))}
                 </div>
-
-                {/* Bottom 3 samples */}
                 <div className="flex justify-between p-2">
                     {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
@@ -60,8 +56,8 @@ const AutoFrontGlassObservations = {
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
-                                <option value="NG">Checked NG</option>
-                                <option value="NA">N/A</option>
+                                <option value="NG">Checked Not OK</option>
+                                <option value="OFF">OFF</option>
                             </select>
                         </div>
                     ))}
@@ -76,10 +72,10 @@ const AutoFrontGlassObservations = {
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
             className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         >
-            <option value="">Select Status</option>
+            <option value="">Select</option>
             <option value="OK">Checked OK</option>
-            <option value="NG">Checked NG</option>
-            <option value="NA">N/A</option>
+            <option value="NG">Checked Not OK</option>
+            <option value="OFF">OFF</option>
         </select>
     ),
 
