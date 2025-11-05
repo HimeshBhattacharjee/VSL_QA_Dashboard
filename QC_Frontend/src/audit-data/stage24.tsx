@@ -102,47 +102,6 @@ const InputComponents = {
 };
 
 const SunSimulatorObservations = {
-    renderSupplierName: (props: ObservationRenderProps) => {
-        const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3": "", "Line-4": ""
-            }
-            : props.value as Record<string, string>;
-
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
-            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-        };
-
-        return (
-            <div className="flex justify-between gap-4">
-                <LineSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-3"] || ''}
-                        onChange={(value) => handleUpdate('Line-3', value)}
-                        placeholder=""
-                    />
-                </LineSection.SingleInputSection>
-
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.TextInput
-                        value={sampleValue["Line-4"] || ''}
-                        onChange={(value) => handleUpdate('Line-4', value)}
-                        placeholder=""
-                    />
-                </LineSection.SingleInputSection>
-            </div>
-        );
-    },
-
     renderHardwareCleaning: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
@@ -419,7 +378,7 @@ const SunSimulatorObservations = {
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
-        const CalibrationInputGroup = ({ line, timeSlot }: { line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs' }) => (
+        const CalibrationInputGroup = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs') => (
             <div className="p-2 border border-gray-200 rounded bg-gray-50">
                 <div className="text-center text-xs font-medium text-gray-700 mb-2">{timeSlot.replace('hrs', ' hours')}</div>
                 <div className="flex flex-col gap-1 mb-2">
@@ -495,10 +454,10 @@ const SunSimulatorObservations = {
                         <span className="text-sm font-semibold text-gray-700">Sun Simulator - 3 Calibration Data</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <CalibrationInputGroup line="Line-3" timeSlot="2hrs" />
-                        <CalibrationInputGroup line="Line-3" timeSlot="4hrs" />
-                        <CalibrationInputGroup line="Line-3" timeSlot="6hrs" />
-                        <CalibrationInputGroup line="Line-3" timeSlot="8hrs" />
+                        {CalibrationInputGroup("Line-3", "2hrs")}
+                        {CalibrationInputGroup("Line-3", "4hrs")}
+                        {CalibrationInputGroup("Line-3", "6hrs")}
+                        {CalibrationInputGroup("Line-3", "8hrs")}
                     </div>
                 </div>
                 <div className="border border-gray-300 rounded-lg bg-white shadow-sm p-2">
@@ -506,10 +465,10 @@ const SunSimulatorObservations = {
                         <span className="text-sm font-semibold text-gray-700">Sun Simulator - 4 Calibration Data</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <CalibrationInputGroup line="Line-4" timeSlot="2hrs" />
-                        <CalibrationInputGroup line="Line-4" timeSlot="4hrs" />
-                        <CalibrationInputGroup line="Line-4" timeSlot="6hrs" />
-                        <CalibrationInputGroup line="Line-4" timeSlot="8hrs" />
+                        {CalibrationInputGroup("Line-4", "2hrs")}
+                        {CalibrationInputGroup("Line-4", "4hrs")}
+                        {CalibrationInputGroup("Line-4", "6hrs")}
+                        {CalibrationInputGroup("Line-4", "8hrs")}
                     </div>
                 </div>
             </div>
@@ -731,17 +690,6 @@ export const sunSimulatorStage: StageData = {
     parameters: [
         {
             id: "24-1",
-            parameters: "Sun-simulator Supplier name",
-            criteria: "Supplier",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: SunSimulatorObservations.renderSupplierName
-        },
-        {
-            id: "24-2",
             parameters: "Cleaning of Sun Simulator Hardware parts",
             criteria: "Aesthetics check",
             typeOfInspection: "Aesthetics",
@@ -752,7 +700,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderHardwareCleaning
         },
         {
-            id: "24-3",
+            id: "24-2",
             parameters: "Presence of black cover in Sun Simulator",
             criteria: "Aesthetics check",
             typeOfInspection: "Aesthetics",
@@ -763,7 +711,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderBlackCover
         },
         {
-            id: "24-4",
+            id: "24-3",
             parameters: "Room Temp",
             criteria: "25± 2°C",
             typeOfInspection: "Aesthetics",
@@ -774,7 +722,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderRoomTemp
         },
         {
-            id: "24-5",
+            id: "24-6",
             parameters: "Humidity",
             criteria: "50-80%",
             typeOfInspection: "Aesthetics",
@@ -785,7 +733,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderHumidity
         },
         {
-            id: "24-6",
+            id: "24-7",
             parameters: "Irradiance",
             criteria: "1000W/M²",
             typeOfInspection: "Aesthetics",
@@ -796,7 +744,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderIrradiance
         },
         {
-            id: "24-7",
+            id: "24-8",
             parameters: "Calibration Data",
             criteria: "Each sun simulator calibrated every 2 hours using valid second reference PV module. Calibration performed at 25 ± 2 ˚C room temperature and 25 ± 2 ˚C reference PV module temperature. Calibration Limit of Pmax, Voc and Isc ± 0.2%",
             typeOfInspection: "Aesthetics",
@@ -807,7 +755,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderCalibrationData
         },
         {
-            id: "24-8",
+            id: "24-9",
             parameters: "Current Sorting",
             criteria: "Current binning as per customer requirement",
             typeOfInspection: "Aesthetics",
@@ -818,7 +766,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderCurrentSorting
         },
         {
-            id: "24-9",
+            id: "24-10",
             parameters: "Module binning as per Wp",
             criteria: "As per production Order",
             typeOfInspection: "Aesthetics",
@@ -829,7 +777,7 @@ export const sunSimulatorStage: StageData = {
             renderObservation: SunSimulatorObservations.renderModuleBinning
         },
         {
-            id: "24-10",
+            id: "24-11",
             parameters: "Contact block verification by measuring the resistance",
             criteria: "Resistance of the contact block ≤20 mΩ",
             typeOfInspection: "Functionality",

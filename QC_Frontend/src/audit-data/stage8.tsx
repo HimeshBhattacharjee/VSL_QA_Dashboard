@@ -40,7 +40,7 @@ const LineSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-full" }: {
+    Select: ({ value, onChange, options, className = "" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
@@ -217,10 +217,15 @@ const AutoTapingNLayupObservations = {
                     <div className="flex justify-between gap-2">
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Supplier</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-3-Supplier"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'Supplier', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "TERAOKA", label: "TERAOKA" },
+                                    { value: "TESA", label: "TESA" },
+                                    { value: "CYBRID", label: "Cybrid" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">
@@ -251,10 +256,15 @@ const AutoTapingNLayupObservations = {
                     <div className="flex justify-between gap-2">
                         <div className="flex flex-col gap-1 items-center">
                             <span className="text-xs text-gray-500">Supplier</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-4-Supplier"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'Supplier', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "TERAOKA", label: "TERAOKA" },
+                                    { value: "TESA", label: "TESA" },
+                                    { value: "CYBRID", label: "Cybrid" },
+                                    { value: "NA", label: "N/A" },
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col gap-1 items-center">

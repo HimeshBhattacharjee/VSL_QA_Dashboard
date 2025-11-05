@@ -75,7 +75,7 @@ const InputComponents = {
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${(placeholder === 'Auto') ? 'bg-gray-200' : 'bg-white'} ${className}`}
             disabled={(placeholder === 'Auto') ? true : false}
         />
     ),
@@ -96,6 +96,19 @@ const InputComponents = {
             className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
             min={min}
             step={step}
+        />
+    ),
+
+    DateInput: ({ value, onChange, className = "w-full" }: {
+        value: string;
+        onChange: (value: string) => void;
+        className?: string;
+    }) => (
+        <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
         />
     )
 };
@@ -126,10 +139,15 @@ const AutoPottingObservations = {
                     <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier A</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-3-SupplierA"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'SupplierA', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -142,18 +160,22 @@ const AutoPottingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date A</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-3-ExpA"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'ExpA', value)}
-                                placeholder=""
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier B</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-3-SupplierB"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'SupplierB', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -166,10 +188,9 @@ const AutoPottingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date B</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-3-ExpB"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'ExpB', value)}
-                                placeholder=""
                             />
                         </div>
                     </div>
@@ -182,10 +203,15 @@ const AutoPottingObservations = {
                     <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier A</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-4-SupplierA"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'SupplierA', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -198,18 +224,22 @@ const AutoPottingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date A</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-4-ExpA"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'ExpA', value)}
-                                placeholder=""
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier B</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-4-SupplierB"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'SupplierB', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -222,10 +252,9 @@ const AutoPottingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date B</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-4-ExpB"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'ExpB', value)}
-                                placeholder=""
                             />
                         </div>
                     </div>
@@ -297,19 +326,47 @@ const AutoPottingObservations = {
             }
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', field: string, value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-${field}`]: value };
-            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        const handleBulkUpdate = (updated: Record<string, string>) => {
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updated);
         };
 
-        const calculateRatio = (partA: string, partB: string) => {
-            const numA = parseFloat(partA);
-            const numB = parseFloat(partB);
-            if (!isNaN(numA) && !isNaN(numB) && numB !== 0) {
-                return (numA / numB).toFixed(2);
-            }
-            return '';
+        const parseNumberSafe = (s: string) => {
+            if (s === null || s === undefined || s.trim() === '') return NaN;
+            const n = parseFloat(s);
+            return isFinite(n) ? n : NaN;
         };
+
+        const gcd = (a: number, b: number) => {
+            if (a === 0 || b === 0) return 1;
+            const scale = Math.pow(10, Math.max(decimalPlaces(a), decimalPlaces(b)));
+            let intA = Math.round(Math.abs(a) * scale);
+            let intB = Math.round(Math.abs(b) * scale);
+            while (intB) {
+                const temp = intA % intB;
+                intA = intB;
+                intB = temp;
+            }
+            return intA / scale;
+        };
+
+        const decimalPlaces = (num: number) => {
+            const str = num.toString();
+            if (str.includes('.')) return str.split('.')[1].length;
+            return 0;
+        };
+
+        const formatRatio = (aStr: string, bStr: string) => {
+            const a = parseNumberSafe(aStr);
+            const b = parseNumberSafe(bStr);
+            if (isNaN(a) || isNaN(b) || b === 0) return '';
+            const divisor = gcd(a, b) || 1;
+            const simpA = a / divisor;
+            const simpB = b / divisor;
+            const normalizedA = simpA / simpB;
+            const normalizedB = simpB / simpB;
+            return `${normalizedA.toFixed(2)}:${normalizedB.toFixed(0)}`;
+        };
+
 
         return (
             <div className="flex justify-between gap-4">
@@ -324,9 +381,12 @@ const AutoPottingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-3-PartA"] || ''}
                                 onChange={(value) => {
-                                    handleUpdate('Line-3', 'PartA', value);
-                                    const ratio = calculateRatio(value, sampleValue["Line-3-PartB"] || '');
-                                    if (ratio) handleUpdate('Line-3', 'Ratio', ratio);
+                                    const updated: Record<string, string> = {
+                                        ...sampleValue,
+                                        "Line-3-PartA": value
+                                    };
+                                    updated["Line-3-Ratio"] = formatRatio(updated["Line-3-PartA"], updated["Line-3-PartB"]);
+                                    handleBulkUpdate(updated);
                                 }}
                                 placeholder=""
                                 step={0.01}
@@ -338,9 +398,12 @@ const AutoPottingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-3-PartB"] || ''}
                                 onChange={(value) => {
-                                    handleUpdate('Line-3', 'PartB', value);
-                                    const ratio = calculateRatio(sampleValue["Line-3-PartA"] || '', value);
-                                    if (ratio) handleUpdate('Line-3', 'Ratio', ratio);
+                                    const updated: Record<string, string> = {
+                                        ...sampleValue,
+                                        "Line-3-PartB": value
+                                    };
+                                    updated["Line-3-Ratio"] = formatRatio(updated["Line-3-PartA"], updated["Line-3-PartB"]);
+                                    handleBulkUpdate(updated);
                                 }}
                                 placeholder=""
                                 step={0.01}
@@ -351,12 +414,16 @@ const AutoPottingObservations = {
                             <span className="text-xs text-gray-500">Ratio</span>
                             <InputComponents.TextInput
                                 value={sampleValue["Line-3-Ratio"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'Ratio', value)}
+                                onChange={(value) => {
+                                    const updated = { ...sampleValue, "Line-3-Ratio": value };
+                                    handleBulkUpdate(updated);
+                                }}
                                 placeholder="Auto"
                             />
                         </div>
                     </div>
                 </LineSection.SingleInputSection>
+
                 <LineSection.SingleInputSection
                     line="Line-4"
                     value={sampleValue}
@@ -368,9 +435,12 @@ const AutoPottingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-4-PartA"] || ''}
                                 onChange={(value) => {
-                                    handleUpdate('Line-4', 'PartA', value);
-                                    const ratio = calculateRatio(value, sampleValue["Line-4-PartB"] || '');
-                                    if (ratio) handleUpdate('Line-4', 'Ratio', ratio);
+                                    const updated: Record<string, string> = {
+                                        ...sampleValue,
+                                        "Line-4-PartA": value
+                                    };
+                                    updated["Line-4-Ratio"] = formatRatio(updated["Line-4-PartA"], updated["Line-4-PartB"]);
+                                    handleBulkUpdate(updated);
                                 }}
                                 placeholder=""
                                 step={0.01}
@@ -382,9 +452,12 @@ const AutoPottingObservations = {
                             <InputComponents.NumberInput
                                 value={sampleValue["Line-4-PartB"] || ''}
                                 onChange={(value) => {
-                                    handleUpdate('Line-4', 'PartB', value);
-                                    const ratio = calculateRatio(sampleValue["Line-4-PartA"] || '', value);
-                                    if (ratio) handleUpdate('Line-4', 'Ratio', ratio);
+                                    const updated: Record<string, string> = {
+                                        ...sampleValue,
+                                        "Line-4-PartB": value
+                                    };
+                                    updated["Line-4-Ratio"] = formatRatio(updated["Line-4-PartA"], updated["Line-4-PartB"]);
+                                    handleBulkUpdate(updated);
                                 }}
                                 placeholder=""
                                 step={0.01}
@@ -395,7 +468,10 @@ const AutoPottingObservations = {
                             <span className="text-xs text-gray-500">Ratio</span>
                             <InputComponents.TextInput
                                 value={sampleValue["Line-4-Ratio"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'Ratio', value)}
+                                onChange={(value) => {
+                                    const updated = { ...sampleValue, "Line-4-Ratio": value };
+                                    handleBulkUpdate(updated);
+                                }}
                                 placeholder="Auto"
                             />
                         </div>

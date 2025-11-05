@@ -29,6 +29,35 @@ const FrontEncapsulantObservations = {
         </div>
     ),
 
+    renderSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
+                <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
+                <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
+                <option value="CT">Cybrid Technologies Pvt. Ltd</option>
+                <option value="CYMAX">Cymax PTE. Ltd</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
+    ),
+
     renderUsageValidity: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
@@ -171,7 +200,11 @@ export const frontEncapsulantStage: StageData = {
                 { timeSlot: "Lot No.", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: FrontEncapsulantObservations.renderEncapsulantStatus
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return FrontEncapsulantObservations.renderSupplier(props);
+                if (props.timeSlot === "Expiry Date") return FrontEncapsulantObservations.renderExpiryDate(props);
+                return FrontEncapsulantObservations.renderEncapsulantStatus(props);
+            }
         },
         {
             id: "3-4",

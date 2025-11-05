@@ -127,6 +127,19 @@ const InputComponents = {
             min={min}
             step={step}
         />
+    ),
+
+    DateInput: ({ value, onChange, className = "w-full" }: {
+        value: string;
+        onChange: (value: string) => void;
+        className?: string;
+    }) => (
+        <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+        />
     )
 };
 
@@ -153,10 +166,20 @@ const AutoFramingObservations = {
                 >
                     <div className="flex flex-col items-center gap-2">
                         <span className="text-xs text-gray-500">Supplier</span>
-                        <InputComponents.TextInput
+                        <InputComponents.Select
                             value={sampleValue["Line-3-supplier"] || ''}
                             onChange={(value) => handleUpdate('Line-3', 'supplier', value)}
-                            placeholder=""
+                            options={[
+                                { value: "TNE", label: "Taihe new energy" },
+                                { value: "YMD", label: "Yuejja Metallic (Davin)" },
+                                { value: "ANAN", label: "Anan" },
+                                { value: "YT", label: "YONZ TECHNOLOGY" },
+                                { value: "JUIXIN", label: "Juixin" },
+                                { value: "YIHUA", label: "Yihua" },
+                                { value: "RALPRO", label: "Ralpro" },
+                                { value: "VR", label: "Vishakha Renewables" },
+                                { value: "NA", label: "N/A" }
+                            ]}
                         />
                     </div>
                 </FramingSection.SingleInputSection>
@@ -167,10 +190,20 @@ const AutoFramingObservations = {
                 >
                     <div className="flex flex-col items-center gap-2">
                         <span className="text-xs text-gray-500">Supplier</span>
-                        <InputComponents.TextInput
+                        <InputComponents.Select
                             value={sampleValue["Line-4-supplier"] || ''}
                             onChange={(value) => handleUpdate('Line-4', 'supplier', value)}
-                            placeholder=""
+                            options={[
+                                { value: "TNE", label: "Taihe new energy" },
+                                { value: "YMD", label: "Yuejja Metallic (Davin)" },
+                                { value: "ANAN", label: "Anan" },
+                                { value: "YT", label: "YONZ TECHNOLOGY" },
+                                { value: "JUIXIN", label: "Juixin" },
+                                { value: "YIHUA", label: "Yihua" },
+                                { value: "RALPRO", label: "Ralpro" },
+                                { value: "VR", label: "Vishakha Renewables" },
+                                { value: "NA", label: "N/A" }
+                            ]}
                         />
                     </div>
                 </FramingSection.SingleInputSection>
@@ -198,13 +231,18 @@ const AutoFramingObservations = {
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <div className="flex flex-row gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-3-supplier"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'supplier', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -217,10 +255,9 @@ const AutoFramingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-3-exp"] || ''}
                                 onChange={(value) => handleUpdate('Line-3', 'exp', value)}
-                                placeholder=""
                             />
                         </div>
                     </div>
@@ -230,13 +267,18 @@ const AutoFramingObservations = {
                     value={sampleValue}
                     onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                 >
-                    <div className="flex flex-row gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Supplier</span>
-                            <InputComponents.TextInput
+                            <InputComponents.Select
                                 value={sampleValue["Line-4-supplier"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'supplier', value)}
-                                placeholder=""
+                                options={[
+                                    { value: "HUITAN", label: "Huitan" },
+                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                    { value: "ADARSHA", label: "Adarsha Speciality" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
                             />
                         </div>
                         <div className="flex flex-col items-center gap-2">
@@ -249,10 +291,9 @@ const AutoFramingObservations = {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-xs text-gray-500">Expiry Date</span>
-                            <InputComponents.TextInput
+                            <InputComponents.DateInput
                                 value={sampleValue["Line-4-exp"] || ''}
                                 onChange={(value) => handleUpdate('Line-4', 'exp', value)}
-                                placeholder=""
                             />
                         </div>
                     </div>

@@ -12,6 +12,36 @@ const RearGlassLoadingObservations = {
         </div>
     ),
 
+    renderSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="XS">Xinyi Solar</option>
+                <option value="CSG">CSG Holding Co., Ltd.</option>
+                <option value="GB">Gurjat Borosil</option>
+                <option value="KG">Kibing Group</option>
+                <option value="FGG">Flat Glass Group Co., Ltd</option>
+                <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
+    ),
+
     renderUsageValidity: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
@@ -141,7 +171,11 @@ export const rearGlassLoadingStage: StageData = {
                 { timeSlot: "Lot No.", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: RearGlassLoadingObservations.renderRearGlassLoadingStatus
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return RearGlassLoadingObservations.renderSupplier(props);
+                else if (props.timeSlot === "Expiry Date") return RearGlassLoadingObservations.renderExpiryDate(props);
+                return RearGlassLoadingObservations.renderRearGlassLoadingStatus(props);
+            }
         },
         {
             id: "11-2",

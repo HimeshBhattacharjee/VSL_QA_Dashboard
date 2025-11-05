@@ -12,6 +12,35 @@ const CellSortingObservations = {
         </div>
     ),
 
+    renderSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="AIKO">Aiko</option>
+                <option value="JTPV">JTPV</option>
+                <option value="SNP">Solar N-Plus</option>
+                <option value="YINGFA">Yingfa</option>
+                <option value="SS">Solar space</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
+    ),
+
     renderUsageValidity: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
@@ -98,7 +127,11 @@ export const cellSortingStage: StageData = {
                 { timeSlot: "Lot No.", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: CellSortingObservations.renderCellStatus
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return CellSortingObservations.renderSupplier(props);
+                else if (props.timeSlot === "Expiry Date") return CellSortingObservations.renderExpiryDate(props);
+                return CellSortingObservations.renderCellStatus(props);
+            }
         },
         {
             id: "4-2",

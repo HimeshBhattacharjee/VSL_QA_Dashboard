@@ -27,6 +27,35 @@ const RearEncapsulantObservations = {
         </div>
     ),
 
+    renderSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
+                <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
+                <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
+                <option value="CT">Cybrid Technologies Pvt. Ltd</option>
+                <option value="CYMAX">Cymax PTE. Ltd</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
+    ),
+
     renderUsageValidity: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
@@ -181,7 +210,11 @@ export const rearEncapsulantStage: StageData = {
                 { timeSlot: "Lot No.", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: RearEncapsulantObservations.renderEncapsulantStatus
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return RearEncapsulantObservations.renderSupplier(props);
+                if (props.timeSlot === "Expiry Date") return RearEncapsulantObservations.renderExpiryDate(props);
+                return RearEncapsulantObservations.renderEncapsulantStatus(props);
+            }
         },
         {
             id: "9-4",
@@ -201,28 +234,8 @@ export const rearEncapsulantStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "4 hours",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                },
-                {
-                    timeSlot: "8 hours",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                }
+                { timeSlot: "4 hours", value: "" },
+                { timeSlot: "8 hours", value: "" }
             ],
             renderObservation: RearEncapsulantObservations.renderAestheticCondition
         },
@@ -233,24 +246,8 @@ export const rearEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: RearEncapsulantObservations.renderDimensions
         },
@@ -261,24 +258,8 @@ export const rearEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: RearEncapsulantObservations.renderDimensions
         },
@@ -289,24 +270,8 @@ export const rearEncapsulantStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: RearEncapsulantObservations.renderDimensions
         },

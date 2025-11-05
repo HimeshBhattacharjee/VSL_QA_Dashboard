@@ -12,6 +12,38 @@ const TabbingStringingObservations = {
         </div>
     ),
 
+    renderINTCSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="JUREN">Juren</option>
+                <option value="SUNBY">Sunby</option>
+                <option value="YB">YourBest</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderFluxSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="RC">Reality chemical</option>
+                <option value="AS">Arbital Solutions Pvt Ltd.</option>
+                <option value="KESTER">Kester</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
     renderSelector: (props: ObservationRenderProps) => (
         <select
             value={props.value as string}
@@ -34,6 +66,17 @@ const TabbingStringingObservations = {
             onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
             className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
         />
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
     ),
 
     renderStringerSection: (props: ObservationRenderProps) => {
@@ -314,7 +357,11 @@ export const tabbingStringingStage: StageData = {
                 { timeSlot: "Dimension", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: TabbingStringingObservations.renderInputText
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return TabbingStringingObservations.renderINTCSupplier(props);
+                else if (props.timeSlot === "Expiry Date") return TabbingStringingObservations.renderExpiryDate(props);
+                return TabbingStringingObservations.renderInputText(props);
+            }
         },
         {
             id: "5-2",
@@ -337,7 +384,11 @@ export const tabbingStringingStage: StageData = {
                 { timeSlot: "Supplier", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: TabbingStringingObservations.renderInputText
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return TabbingStringingObservations.renderFluxSupplier(props);
+                else if (props.timeSlot === "Expiry Date") return TabbingStringingObservations.renderExpiryDate(props);
+                return TabbingStringingObservations.renderInputText(props);
+            }
         },
         {
             id: "5-4-laser-power",

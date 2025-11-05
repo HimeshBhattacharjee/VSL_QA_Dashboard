@@ -12,6 +12,36 @@ const AutoFrontGlassObservations = {
         </div>
     ),
 
+    renderSupplier: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            >
+                <option value="">Select</option>
+                <option value="XS">Xinyi Solar</option>
+                <option value="CSG">CSG Holding Co., Ltd.</option>
+                <option value="GB">Gurjat Borosil</option>
+                <option value="KG">Kibing Group</option>
+                <option value="FGG">Flat Glass Group Co., Ltd</option>
+                <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
+                <option value="NA">N/A</option>
+            </select>
+        </div>
+    ),
+
+    renderExpiryDate: (props: ObservationRenderProps) => (
+        <div className="flex flex-col space-y-1">
+            <input
+                type="date"
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            />
+        </div>
+    ),
+
     renderSurfaceQuality: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
@@ -125,7 +155,11 @@ export const autoFrontGlassStage: StageData = {
                 { timeSlot: "Lot No.", value: "" },
                 { timeSlot: "Expiry Date", value: "" }
             ],
-            renderObservation: AutoFrontGlassObservations.renderGlassStatus
+            renderObservation: (props: ObservationRenderProps) => {
+                if (props.timeSlot === "Supplier") return AutoFrontGlassObservations.renderSupplier(props);
+                else if (props.timeSlot === "Expiry Date") return AutoFrontGlassObservations.renderExpiryDate(props);
+                return AutoFrontGlassObservations.renderGlassStatus(props);
+            }
         },
         {
             id: "2-2",
@@ -134,28 +168,8 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "4 hrs",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                },
-                {
-                    timeSlot: "8 hrs",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": "",
-                        "Sample-5": "",
-                        "Sample-6": ""
-                    }
-                }
+                { timeSlot: "4 hrs", value: "" },
+                { timeSlot: "8 hrs", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderSurfaceQuality
         },
@@ -178,24 +192,8 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
@@ -206,24 +204,8 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
@@ -234,24 +216,8 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                {
-                    timeSlot: "Line-3",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                },
-                {
-                    timeSlot: "Line-4",
-                    value: {
-                        "Sample-1": "",
-                        "Sample-2": "",
-                        "Sample-3": "",
-                        "Sample-4": ""
-                    }
-                }
+                { timeSlot: "Line-3", value: "" },
+                { timeSlot: "Line-4", value: "" }
             ],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         }
