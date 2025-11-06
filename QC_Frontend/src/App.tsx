@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from 'react-
 import { AlertProvider } from './context/AlertContext';
 import { PreviewModalProvider } from './context/PreviewModalContext';
 import { ConfirmModalProvider } from './context/ConfirmModalContext';
+import { LineProvider } from './context/LineContext';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
@@ -29,7 +30,9 @@ function AppProviders({ children }: { children: React.ReactNode }) {
         <AlertProvider>
             <PreviewModalProvider>
                 <ConfirmModalProvider>
-                    {children}
+                    <LineProvider>
+                        {children}
+                    </LineProvider>
                 </ConfirmModalProvider>
             </PreviewModalProvider>
         </AlertProvider>

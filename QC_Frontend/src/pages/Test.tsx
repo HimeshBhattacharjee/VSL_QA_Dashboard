@@ -1,10 +1,53 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { initialStages } from '../audit-data';
-import { AuditData } from "../types/audit";
+import { AuditData, StageData } from "../types/audit";
+import { useLine } from '../context/LineContext';
+import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
+import { createTabbingStringingStage } from "../audit-data/stage5";
+
+const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
+    return useMemo(() => {
+        if (!lineNumber) return baseStages;
+
+        return baseStages.map(stage => {
+            // Handle stage 5 separately
+            if (stage.id === 5) {
+                return createTabbingStringingStage(lineNumber);
+            }
+
+            // Handle other line-dependent stages
+            const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
+            if (!stageConfig) return stage;
+
+            const lineOptions = stageConfig.lineMapping[lineNumber];
+            if (!lineOptions || !Array.isArray(lineOptions)) return stage;
+
+            return {
+                ...stage,
+                parameters: stage.parameters.map(param => {
+                    if (stageConfig.parameters.includes(param.id)) {
+                        return {
+                            ...param,
+                            observations: lineOptions.map((option: string) => ({
+                                timeSlot: option,
+                                value: ""
+                            }))
+                        };
+                    }
+                    return param;
+                })
+            };
+        });
+    }, [baseStages, lineNumber]);
+};
 
 export default function Test() {
-    const stageID = 2;
+    const stageID = 5;
+    const { lineNumber, setLineNumber } = useLine();
+    const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
+    setLineNumber('II')
 
+    // Initialize audit data with line-dependent stages
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
         date: new Date().toISOString().split('T')[0],
@@ -13,8 +56,15 @@ export default function Test() {
         moduleType: '',
         customerSpecAvailable: false,
         specificationSignedOff: false,
-        stages: initialStages
+        stages: lineDependentStages
     });
+
+    useEffect(() => {
+        setAuditData(prev => ({
+            ...prev,
+            stages: lineDependentStages
+        }));
+    }, [lineDependentStages]);
 
     const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string> | Record<string, Record<string, string>>) => {
         setAuditData(prev => ({

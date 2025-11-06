@@ -1,23 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { initialStages } from '../audit-data';
-import { AuditData } from '../types/audit';
+import { AuditData, StageData } from '../types/audit';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import { useLine } from '../context/LineContext';
+import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
+import { createTabbingStringingStage } from '../audit-data/stage5';
 
-interface SavedChecksheet {
-    id: string;
-    name: string;
-    timestamp: number;
-    data: AuditData;
-}
+interface SavedChecksheet { id: string; name: string; timestamp: number; data: AuditData; }
+
+const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
+    return useMemo(() => {
+        if (!lineNumber) return baseStages;
+
+        return baseStages.map(stage => {
+            // Handle stage 5 separately
+            if (stage.id === 5) {
+                return createTabbingStringingStage(lineNumber);
+            }
+
+            // Handle other line-dependent stages
+            const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
+            if (!stageConfig) return stage;
+
+            const lineOptions = stageConfig.lineMapping[lineNumber];
+            if (!lineOptions || !Array.isArray(lineOptions)) return stage;
+
+            return {
+                ...stage,
+                parameters: stage.parameters.map(param => {
+                    if (stageConfig.parameters.includes(param.id)) {
+                        return {
+                            ...param,
+                            observations: lineOptions.map((option: string) => ({
+                                timeSlot: option,
+                                value: ""
+                            }))
+                        };
+                    }
+                    return param;
+                })
+            };
+        });
+    }, [baseStages, lineNumber]);
+};
 
 export default function QualityAudit() {
     const navigate = useNavigate();
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
+    const { lineNumber, setLineNumber } = useLine();
     const [activeTab, setActiveTab] = useState<'create-edit' | 'saved-reports'>('create-edit');
     const [currentView, setCurrentView] = useState<'basicInfo' | 'stageSelection' | 'stageDetail'>('basicInfo');
     const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
@@ -34,7 +69,9 @@ export default function QualityAudit() {
         }
     }, []);
 
-    // Initialize audit data
+    const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
+
+    // Initialize audit data with line-dependent stages
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
         date: new Date().toISOString().split('T')[0],
@@ -43,8 +80,21 @@ export default function QualityAudit() {
         moduleType: '',
         customerSpecAvailable: false,
         specificationSignedOff: false,
-        stages: initialStages
+        stages: lineDependentStages
     });
+
+    useEffect(() => {
+        setAuditData(prev => ({
+            ...prev,
+            stages: lineDependentStages
+        }));
+    }, [lineDependentStages]);
+
+    // Update your handleLineChange function
+    const handleLineChange = (line: string) => {
+        setLineNumber(line);
+        setAuditData(prev => ({ ...prev, lineNumber: line }));
+    };
 
     // Check if checksheet exists when line, date, or shift changes
     useEffect(() => {
@@ -113,7 +163,7 @@ export default function QualityAudit() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: () => {
-                    // Clear current state
+                    setLineNumber(''); // Clear line number
                     setAuditData({
                         lineNumber: '',
                         date: new Date().toISOString().split('T')[0],
@@ -133,6 +183,7 @@ export default function QualityAudit() {
                 }
             });
         } else {
+            setLineNumber(''); // Clear line number
             navigate('/home');
         }
     };
@@ -160,7 +211,6 @@ export default function QualityAudit() {
 
     const generatePDFReport = () => {
         console.log('Generating PDF with data:', auditData);
-        // PDF generation logic here
     };
 
     const isBasicInfoComplete = () => {
@@ -277,7 +327,6 @@ export default function QualityAudit() {
         showAlert('success', 'Checksheet deleted successfully!');
     };
 
-    // Create stage buttons data
     const stageButtons = Array.from({ length: 31 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
@@ -333,9 +382,7 @@ export default function QualityAudit() {
                                                 </span>
                                                 <select
                                                     value={auditData.lineNumber}
-                                                    onChange={(e) =>
-                                                        setAuditData({ ...auditData, lineNumber: e.target.value })
-                                                    }
+                                                    onChange={(e) => handleLineChange(e.target.value)}
                                                     className="text-sm p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
                                                 >
                                                     <option value="">Select</option>

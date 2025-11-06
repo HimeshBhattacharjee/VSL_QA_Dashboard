@@ -1,46 +1,84 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const AutoFrontGlassObservations = {
-    renderGlassStatus: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            />
-        </div>
-    ),
+    renderGlassStatus: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
+        const isNA = (value: string) => value.toUpperCase() === 'N/A';
+        const isNG = (value: string) => value.toUpperCase() === 'NG';
 
-    renderSupplier: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
-            <select
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            >
-                <option value="">Select</option>
-                <option value="XS">Xinyi Solar</option>
-                <option value="CSG">CSG Holding Co., Ltd.</option>
-                <option value="GB">Gurjat Borosil</option>
-                <option value="KG">Kibing Group</option>
-                <option value="FGG">Flat Glass Group Co., Ltd</option>
-                <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
-                <option value="NA">N/A</option>
-            </select>
-        </div>
-    ),
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
+            if (isNG(value)) return 'bg-red-100';
+            return 'bg-white';
+        };
 
-    renderExpiryDate: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
-            <input
-                type="date"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            />
-        </div>
-    ),
+        return (
+            <div className="flex flex-col space-y-1">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+            </div>
+        );
+    },
+
+    renderSupplier: (props: ObservationRenderProps) => {
+        const isNA = (value: string) => value === 'NA';
+
+        const getBackgroundColor = (value: string) => {
+            if (isNA(value)) return 'bg-yellow-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <select
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                >
+                    <option value="">Select</option>
+                    <option value="XS">Xinyi Solar</option>
+                    <option value="CSG">CSG Holding Co., Ltd.</option>
+                    <option value="GB">Gurjat Borosil</option>
+                    <option value="KG">Kibing Group</option>
+                    <option value="FGG">Flat Glass Group Co., Ltd</option>
+                    <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
+                    <option value="NA">N/A</option>
+                </select>
+            </div>
+        );
+    },
+
+    renderExpiryDate: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
+        const isNA = (value: string) => value.toUpperCase() === 'N/A';
+
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
+            if (value) {
+                const inputDate = new Date(value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                inputDate.setHours(0, 0, 0, 0);
+                if (inputDate < today) return 'bg-red-100';
+            }
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <input
+                    type="date"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+            </div>
+        );
+    },
 
     renderSurfaceQuality: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
@@ -49,6 +87,12 @@ const AutoFrontGlassObservations = {
                 "Sample-4": "", "Sample-5": "", "Sample-6": ""
             }
             : props.value as Record<string, string>;
+
+        const getBackgroundColor = (value: string) => {
+            if (value === 'OFF') return 'bg-yellow-100';
+            if (value === 'NG') return 'bg-red-100';
+            return 'bg-white';
+        };
 
         return (
             <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-200">
@@ -62,7 +106,7 @@ const AutoFrontGlassObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
@@ -72,7 +116,7 @@ const AutoFrontGlassObservations = {
                         </div>
                     ))}
                 </div>
-                <div className="flex justify-between p-2">
+                <div className="flex justify-between p-2 gap-2">
                     {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
                             <span className="text-xs text-gray-500 mb-1">{sample}</span>
@@ -82,7 +126,7 @@ const AutoFrontGlassObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
@@ -96,23 +140,45 @@ const AutoFrontGlassObservations = {
         );
     },
 
-    renderVacuumCup: (props: ObservationRenderProps) => (
-        <select
-            value={props.value as string}
-            onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-        >
-            <option value="">Select</option>
-            <option value="OK">Checked OK</option>
-            <option value="NG">Checked Not OK</option>
-            <option value="OFF">OFF</option>
-        </select>
-    ),
+    renderVacuumCup: (props: ObservationRenderProps) => {
+        const getBackgroundColor = (value: string) => {
+            if (value === 'OFF') return 'bg-yellow-100';
+            if (value === 'NG') return 'bg-red-100';
+            return 'bg-white';
+        };
+
+        return (
+            <select
+                value={props.value as string}
+                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+            >
+                <option value="">Select</option>
+                <option value="OK">Checked OK</option>
+                <option value="NG">Checked Not OK</option>
+                <option value="OFF">OFF</option>
+            </select>
+        );
+    },
 
     renderDimensions: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? { "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "" }
             : props.value as Record<string, string>;
+
+        const isOff = (value: string) => {
+            return typeof value === 'string' && value.toUpperCase() === 'OFF';
+        };
+
+        const isNA = (value: string) => {
+            return typeof value === 'string' && value.toUpperCase() === 'N/A';
+        };
+
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
+            if (!value) return 'bg-white';
+            return 'bg-white';
+        };
 
         return (
             <div className="flex flex-col p-2 rounded-lg bg-white shadow-sm border border-gray-200">
@@ -121,15 +187,13 @@ const AutoFrontGlassObservations = {
                         <div key={sample} className="flex flex-col items-center">
                             <span className="text-xs text-gray-500 mb-1">{sample}</span>
                             <input
-                                type="number"
+                                type="text"
                                 value={sampleValue[sample] || ''}
                                 onChange={(e) => {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-                                step="0.01"
-                                min="0"
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             />
                             <span className="text-xs text-gray-500 mt-1">mm</span>
                         </div>
@@ -191,10 +255,7 @@ export const autoFrontGlassStage: StageData = {
             criteria: "As per Engg. drawing ±1mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
         {
@@ -203,10 +264,7 @@ export const autoFrontGlassStage: StageData = {
             criteria: "As per Engg. drawing ±1mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         },
         {
@@ -215,10 +273,7 @@ export const autoFrontGlassStage: StageData = {
             criteria: "As per Engg. drawing ±0.2mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: AutoFrontGlassObservations.renderDimensions
         }
     ]

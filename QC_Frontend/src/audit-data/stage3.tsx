@@ -1,99 +1,164 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const FrontEncapsulantObservations = {
-    renderStorageConditions: (props: ObservationRenderProps) => (
-        <div className="flex flex-col items-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
-                min="0"
-                max="100"
-                step="0.1"
-            />
-            <span className="text-xs text-gray-500 mt-1">
-                {props.paramId === '3-1' ? '%' : '°C'}
-            </span>
-        </div>
-    ),
+    renderStorageConditions: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
 
-    renderEncapsulantStatus: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
-            <input
-                type="text"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            />
-        </div>
-    ),
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value)) return 'bg-yellow-100';
+            if (!value) return 'bg-white';
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return 'bg-white';
+            if (props.paramId === '3-1') return numValue > 60 ? 'bg-red-100' : 'bg-white';
+            else if (props.paramId === '3-2') return (numValue < 20 || numValue > 30) ? 'bg-red-100' : 'bg-white';
+            return 'bg-white';
+        };
 
-    renderSupplier: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
+        return (
+            <div className="flex flex-col items-center">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+                <span className="text-xs text-gray-500 mt-1">
+                    {props.paramId === '3-1' ? '%' : '°C'}
+                </span>
+            </div>
+        );
+    },
+
+    renderEncapsulantStatus: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
+        const isNA = (value: string) => value.toUpperCase() === 'N/A';
+        const isNG = (value: string) => value.toUpperCase() === 'NG';
+
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
+            if (isNG(value)) return 'bg-red-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+            </div>
+        );
+    },
+
+    renderSupplier: (props: ObservationRenderProps) => {
+        const isNA = (value: string) => value === 'NA';
+
+        const getBackgroundColor = (value: string) => {
+            if (isNA(value)) return 'bg-yellow-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <select
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                >
+                    <option value="">Select</option>
+                    <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
+                    <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
+                    <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
+                    <option value="CT">Cybrid Technologies Pvt. Ltd</option>
+                    <option value="CYMAX">Cymax PTE. Ltd</option>
+                    <option value="NA">N/A</option>
+                </select>
+            </div>
+        );
+    },
+
+    renderExpiryDate: (props: ObservationRenderProps) => {
+        const getBackgroundColor = (value: string) => {
+            if (value) {
+                const inputDate = new Date(value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                inputDate.setHours(0, 0, 0, 0);
+                if (inputDate < today) return 'bg-red-100';
+            }
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <input
+                    type="date"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+            </div>
+        );
+    },
+
+    renderUsageValidity: (props: ObservationRenderProps) => {
+        const getBackgroundColor = (value: string) => {
+            if (value === 'OFF') return 'bg-yellow-100';
+            if (value === 'Expired') return 'bg-red-100';
+            return 'bg-white';
+        };
+
+        return (
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
-                <option value="">Select</option>
-                <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
-                <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
-                <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
-                <option value="CT">Cybrid Technologies Pvt. Ltd</option>
-                <option value="CYMAX">Cymax PTE. Ltd</option>
-                <option value="NA">N/A</option>
+                <option value="">Select Validity</option>
+                <option value="4_hrs">Used within 4 hrs</option>
+                <option value="8_hrs">Used within 8 hrs</option>
+                <option value="Expired">Expired</option>
+                <option value="OFF">OFF</option>
             </select>
-        </div>
-    ),
+        );
+    },
 
-    renderExpiryDate: (props: ObservationRenderProps) => (
-        <div className="flex flex-col space-y-1">
-            <input
-                type="date"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            />
-        </div>
-    ),
+    renderAlignment: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
 
-    renderUsageValidity: (props: ObservationRenderProps) => (
-        <select
-            value={props.value as string}
-            onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-        >
-            <option value="">Select Validity</option>
-            <option value="4_hrs">Used within 4 hrs</option>
-            <option value="8_hrs">Used within 8 hrs</option>
-            <option value="Expired">Expired</option>
-            <option value="OFF">OFF</option>
-        </select>
-    ),
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value)) return 'bg-yellow-100';
+            if (!value) return 'bg-white';
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return 'bg-white';
+            return (numValue < -5 || numValue > 5) ? 'bg-red-100' : 'bg-white';
+        };
 
-    renderAlignment: (props: ObservationRenderProps) => (
-        <div className="flex flex-col items-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
-                min="-10"
-                max="10"
-                step="0.1"
-            />
-            <span className="text-xs text-gray-500 mt-1">mm</span>
-        </div>
-    ),
+        return (
+            <div className="flex flex-col items-center">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+                <span className="text-xs text-gray-500 mt-1">mm</span>
+            </div>
+        );
+    },
 
     renderAestheticCondition: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Sample-1": "", "Sample-2": "", "Sample-3": "",
-                "Sample-4": "", "Sample-5": "", "Sample-6": ""
-            }
+            ? { "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "", "Sample-5": "", "Sample-6": "" }
             : props.value as Record<string, string>;
+
+        const getBackgroundColor = (value: string) => {
+            if (value === 'OFF') return 'bg-yellow-100';
+            if (value === 'NG') return 'bg-red-100';
+            return 'bg-white';
+        };
 
         return (
             <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-200">
@@ -107,7 +172,7 @@ const FrontEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
@@ -117,7 +182,7 @@ const FrontEncapsulantObservations = {
                         </div>
                     ))}
                 </div>
-                <div className="flex justify-between px-2 py-2">
+                <div className="flex justify-between px-2 py-2 gap-2">
                     {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
                         <div key={sample} className="flex flex-col items-center">
                             <span className="text-xs text-gray-500 mb-1">{sample}</span>
@@ -127,7 +192,7 @@ const FrontEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="OK">Checked OK</option>
@@ -141,19 +206,26 @@ const FrontEncapsulantObservations = {
         );
     },
 
-    renderDimensions: (props: ObservationRenderProps) => (
-        <div className="flex flex-col items-center">
-            <input
-                type="number"
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="w-36 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white shadow-sm"
-                step="0.01"
-                min="0"
-            />
-            <span className="text-xs text-gray-500 mt-1">mm</span>
-        </div>
-    )
+    renderDimensions: (props: ObservationRenderProps) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
+
+        const getBackgroundColor = (value: string) => {
+            if (isOff(value)) return 'bg-yellow-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col items-center">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
+                <span className="text-xs text-gray-500 mt-1">mm</span>
+            </div>
+        );
+    }
 };
 
 export const frontEncapsulantStage: StageData = {
@@ -247,10 +319,7 @@ export const frontEncapsulantStage: StageData = {
             criteria: "±2mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         },
         {
@@ -259,10 +328,7 @@ export const frontEncapsulantStage: StageData = {
             criteria: "±2mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         },
         {
@@ -271,10 +337,7 @@ export const frontEncapsulantStage: StageData = {
             criteria: "±0.05mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "Line-3", value: "" },
-                { timeSlot: "Line-4", value: "" }
-            ],
+            observations: [],
             renderObservation: FrontEncapsulantObservations.renderDimensions
         }
     ]
