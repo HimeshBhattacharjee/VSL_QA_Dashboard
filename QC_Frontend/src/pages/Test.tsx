@@ -4,24 +4,19 @@ import { AuditData, StageData } from "../types/audit";
 import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import { createTabbingStringingStage } from "../audit-data/stage5";
+import { createAutoBussingStage } from "../audit-data/stage7";
 
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
         if (!lineNumber) return baseStages;
 
         return baseStages.map(stage => {
-            // Handle stage 5 separately
-            if (stage.id === 5) {
-                return createTabbingStringingStage(lineNumber);
-            }
-
-            // Handle other line-dependent stages
+            if (stage.id === 5) return createTabbingStringingStage(lineNumber);
+            if (stage.id === 7) return createAutoBussingStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
-
             const lineOptions = stageConfig.lineMapping[lineNumber];
             if (!lineOptions || !Array.isArray(lineOptions)) return stage;
-
             return {
                 ...stage,
                 parameters: stage.parameters.map(param => {
@@ -42,10 +37,10 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
 };
 
 export default function Test() {
-    const stageID = 5;
+    const stageID = 7;
     const { lineNumber, setLineNumber } = useLine();
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
-    setLineNumber('II')
+    setLineNumber('I')
 
     // Initialize audit data with line-dependent stages
     const [auditData, setAuditData] = useState<AuditData>({
@@ -88,38 +83,35 @@ export default function Test() {
     return (
         <>
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Parameters
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Criteria
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Type of Inspection
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Inspection Frequency
-                            </th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Observations
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {auditData.stages
-                            .find(stage => stage.id === stageID)
-                            ?.parameters.map((param) => (
-                                <tr key={param.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                {auditData.stages
+                    .find(stage => stage.id === stageID)
+                    ?.parameters.map((param) => (
+                        <table key={param.id} className="min-w-full border border-gray-200 rounded-lg overflow-hidden mb-2">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                        Parameters
+                                    </th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                        Criteria
+                                    </th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                        Type of Inspection
+                                    </th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                        Inspection Frequency
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white">
+                                <tr className="bg-blue-50 font-bold">
+                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                         {param.parameters}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                         {param.criteria}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 text-green-800' :
                                             param.typeOfInspection === 'Measurements' ? 'bg-blue-100 text-blue-800' :
                                                 param.typeOfInspection === 'Functionality' ? 'bg-purple-100 text-purple-800' :
@@ -128,10 +120,17 @@ export default function Test() {
                                             {param.typeOfInspection}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                         {param.inspectionFrequency}
                                     </td>
-                                    <td className="px-6 py-4">
+                                </tr>
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border border-gray-200">
+                                        Observations
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-4 border border-gray-200">
                                         <div className="flex justify-center space-x-2 w-full">
                                             {param.observations.map((obs) => (
                                                 <div
@@ -153,6 +152,7 @@ export default function Test() {
                                                         })
                                                     ) : (
                                                         <div className="w-full flex justify-center">
+                                                            {/* Handle both string and object values */}
                                                             {typeof obs.value === 'string' ? (
                                                                 <input
                                                                     type="text"
@@ -173,9 +173,9 @@ export default function Test() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
-                    </tbody>
-                </table>
+                            </tbody>
+                        </table>
+                    ))}
             </div>
         </>
     )

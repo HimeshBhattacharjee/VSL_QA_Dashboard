@@ -9,20 +9,17 @@ import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 import { createTabbingStringingStage } from '../audit-data/stage5';
+import { createAutoBussingStage } from '../audit-data/stage7';
 
 interface SavedChecksheet { id: string; name: string; timestamp: number; data: AuditData; }
 
+// In QualityAudit.tsx - update the useLineDependentStages hook
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
         if (!lineNumber) return baseStages;
-
         return baseStages.map(stage => {
-            // Handle stage 5 separately
-            if (stage.id === 5) {
-                return createTabbingStringingStage(lineNumber);
-            }
-
-            // Handle other line-dependent stages
+            if (stage.id === 5) return createTabbingStringingStage(lineNumber);
+            if (stage.id === 7) return createAutoBussingStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
 
@@ -327,10 +324,10 @@ export default function QualityAudit() {
         showAlert('success', 'Checksheet deleted successfully!');
     };
 
-    const stageButtons = Array.from({ length: 31 }, (_, index) => ({
+    const stageButtons = Array.from({ length: 32 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
-        enabled: index < 31,
+        enabled: index < 32,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
 
@@ -563,38 +560,35 @@ export default function QualityAudit() {
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                    Parameters
-                                                </th>
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                    Criteria
-                                                </th>
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                    Type of Inspection
-                                                </th>
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                    Inspection Frequency
-                                                </th>
-                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                    Observations
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                            {auditData.stages
-                                                .find(stage => stage.id === selectedStageId)
-                                                ?.parameters.map((param) => (
-                                                    <tr key={param.id} className="hover:bg-gray-50">
-                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                    {auditData.stages
+                                        .find(stage => stage.id === selectedStageId)
+                                        ?.parameters.map((param) => (
+                                            <table key={param.id} className="min-w-full border border-gray-200 rounded-lg overflow-hidden mb-2">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                                            Parameters
+                                                        </th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                                            Criteria
+                                                        </th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                                            Type of Inspection
+                                                        </th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
+                                                            Inspection Frequency
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white">
+                                                    <tr className="bg-blue-50 font-bold">
+                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                                             {param.parameters}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                                             {param.criteria}
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 text-green-800' :
                                                                 param.typeOfInspection === 'Measurements' ? 'bg-blue-100 text-blue-800' :
                                                                     param.typeOfInspection === 'Functionality' ? 'bg-purple-100 text-purple-800' :
@@ -603,10 +597,17 @@ export default function QualityAudit() {
                                                                 {param.typeOfInspection}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
                                                             {param.inspectionFrequency}
                                                         </td>
-                                                        <td className="px-6 py-4">
+                                                    </tr>
+                                                    <tr>
+                                                        <td colSpan={4} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border border-gray-200">
+                                                            Observations
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td colSpan={4} className="px-6 py-4 border border-gray-200">
                                                             <div className="flex justify-center space-x-2 w-full">
                                                                 {param.observations.map((obs) => (
                                                                     <div
@@ -620,7 +621,7 @@ export default function QualityAudit() {
                                                                         {param.renderObservation ? (
                                                                             param.renderObservation({
                                                                                 stageId: selectedStageId,
-                                                                                paramId: param.id, // Fixed: should be param.id, not param.parameters
+                                                                                paramId: param.id,
                                                                                 timeSlot: obs.timeSlot,
                                                                                 value: obs.value,
                                                                                 observationData: obs,
@@ -649,9 +650,9 @@ export default function QualityAudit() {
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
+                                                </tbody>
+                                            </table>
+                                        ))}
                                 </div>
                             </div>
                         )}

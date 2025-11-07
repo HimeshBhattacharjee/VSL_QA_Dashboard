@@ -1,8 +1,48 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
+
+// Helper function to get line configuration based on lineNumber
+const getLineConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[7];
+    if (!stageConfig) return ['Line-4', 'Line-5']; // Default fallback
+
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions : ['Line-4', 'Line-5'];
+};
+
+// Helper function for conditional formatting
+const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'measurement' | 'date' = 'status') => {
+    if (!value) return 'bg-white';
+
+    const upperValue = value.toUpperCase();
+
+    // OFF formatting (case insensitive)
+    if (upperValue === 'OFF') return 'bg-yellow-100';
+
+    // Status-based formatting
+    if (type === 'status') {
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'NG') return 'bg-red-100';
+        if (upperValue === 'OK') return 'bg-green-100';
+    }
+
+    // Date-based formatting
+    if (type === 'date') {
+        if (value) {
+            const inputDate = new Date(value);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            inputDate.setHours(0, 0, 0, 0);
+            if (inputDate < today) return 'bg-red-100';
+        }
+    }
+
+    return 'bg-white';
+};
 
 const LineSection = {
     TimeBasedSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
@@ -25,7 +65,7 @@ const LineSection = {
     ),
 
     SingleInputSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
@@ -39,7 +79,7 @@ const LineSection = {
     ),
 
     BusRibbonStatusSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date') => React.ReactNode;
@@ -70,7 +110,7 @@ const LineSection = {
     ),
 
     SolderingTimeSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (position: 'Front TCA 1 L' | 'Middle TCA 1 L' | 'Back TCA 1 L' | 'Front TCA 1 R' | 'Middle TCA 1 R' | 'Back TCA 1 R') => React.ReactNode;
@@ -109,7 +149,7 @@ const LineSection = {
     ),
 
     SolderingTraceSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (label: 'Top' | 'Middle' | 'Bottom') => React.ReactNode;
@@ -136,7 +176,7 @@ const LineSection = {
     ),
 
     BusBarCutLength: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (type: 'I' | 'Small L' | 'Big L' | 'Terminal') => React.ReactNode;
@@ -167,14 +207,13 @@ const LineSection = {
     ),
 
     PeelStrengthSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-4' | 'Line-5';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: {
             byPosition: (position: number) => React.ReactNode;
             byLabel: (label: 'Line' | 'Position' | 'Side') => React.ReactNode;
         };
-
     }) => (
         <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
@@ -207,16 +246,17 @@ const LineSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "" }: {
+    Select: ({ value, onChange, options, className = "", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
     }) => (
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -225,38 +265,22 @@ const InputComponents = {
         </select>
     ),
 
-    TextInput: ({ value, onChange, placeholder, className = "w-full" }: {
+    TextInput: ({ value, onChange, placeholder, className = "w-full", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         placeholder: string;
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
     }) => (
-        <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-        />
-    ),
-
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
-        value: string;
-        onChange: (value: string) => void;
-        placeholder: string;
-        min?: number;
-        step?: number;
-        className?: string;
-    }) => (
-        <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-            min={min}
-            step={step}
-        />
+        <div className="flex flex-col items-center">
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type)} ${className}`}
+            />
+        </div>
     ),
 
     DateInput: ({ value, onChange, className = "w-full" }: {
@@ -268,648 +292,533 @@ const InputComponents = {
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, 'date')} ${className}`}
         />
     )
 };
 
 const AutoBussingObservations = {
-    renderBusRibbonStatus: (props: ObservationRenderProps) => {
+    renderBusRibbonStatus: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-4-Supplier": "", "Line-4-Width": "", "Line-4-Thickness": "", "Line-4-Expiry Date": "",
-                "Line-5-Supplier": "", "Line-5-Width": "", "Line-5-Thickness": "", "Line-5-Expiry Date": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['Supplier', 'Width', 'Thickness', 'Expiry Date'].map(label =>
+                        [`${line}-${label}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-4' | 'Line-5', label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date', value: string) => {
+        const handleUpdate = (line: string, label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
-            <div className="flex flex-col justify-between gap-4">
-                <LineSection.BusRibbonStatusSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(label) => (label === 'Supplier') ? (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-4-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', label, value)}
-                            options={[
-                                { value: "JUREN", label: "Juren" },
-                                { value: "SUNBY", label: "Sunby" },
-                                { value: "YB", label: "YourBest" },
-                                { value: "NA", label: "N/A" }
-                            ]}
-                        />
-                    ) : (label === 'Expiry Date') ? (
-                        <InputComponents.DateInput
-                            value={sampleValue[`Line-4-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', label, value)}
-                        />
-                    ) : (
-                        <InputComponents.TextInput
-                            value={sampleValue[`Line-4-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', label, value)}
-                            placeholder=""
-                        />
-                    )}
-                </LineSection.BusRibbonStatusSection>
-                <LineSection.BusRibbonStatusSection
-                    line="Line-5"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(label) => (label === 'Supplier') ? (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-5-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-5', label, value)}
-                            options={[
-                                { value: "JUREN", label: "Juren" },
-                                { value: "SUNBY", label: "Sunby" },
-                                { value: "YB", label: "YourBest" },
-                                { value: "NA", label: "N/A" }
-                            ]}
-                        />
-                    ) : (label === 'Expiry Date') ? (
-                        <InputComponents.DateInput
-                            value={sampleValue[`Line-5-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-5', label, value)}
-                        />
-                    ) : (
-                        <InputComponents.TextInput
-                            value={sampleValue[`Line-5-${label}`] || ''}
-                            onChange={(value) => handleUpdate('Line-5', label, value)}
-                            placeholder=""
-                        />
-                    )}
-                </LineSection.BusRibbonStatusSection>
-            </div >
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.BusRibbonStatusSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(label) => (label === 'Supplier') ? (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${label}`] || ''}
+                                onChange={(value) => handleUpdate(line, label, value)}
+                                options={[
+                                    { value: "JUREN", label: "Juren" },
+                                    { value: "SUNBY", label: "Sunby" },
+                                    { value: "YB", label: "YourBest" },
+                                    { value: "NA", label: "N/A" }
+                                ]}
+                                type="status"
+                            />
+                        ) : (label === 'Expiry Date') ? (
+                            <InputComponents.DateInput
+                                value={sampleValue[`${line}-${label}`] || ''}
+                                onChange={(value) => handleUpdate(line, label, value)}
+                            />
+                        ) : (
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${label}`] || ''}
+                                onChange={(value) => handleUpdate(line, label, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
+                        )}
+                    </LineSection.BusRibbonStatusSection>
+                ))}
+            </div>
         );
     },
 
-renderSolderingTime: (props: ObservationRenderProps) => {
-    const sampleValue = typeof props.value === 'string'
-        ? {
-            "Line-4-Front TCA 1": "", "Line-4-Middle TCA 1": "", "Line-4-Back TCA 1": "",
-            "Line-5-Front TCA 1": "", "Line-5-Middle TCA 1": "", "Line-5-Back TCA 1": ""
-        }
-        : props.value as Record<string, string>;
-
-    const handleUpdate = (line: 'Line-4' | 'Line-5', position: 'Front TCA 1 L' | 'Middle TCA 1 L' | 'Back TCA 1 L' | 'Front TCA 1 R' | 'Middle TCA 1 R' | 'Back TCA 1 R', value: string) => {
-        const updatedValue = { ...sampleValue, [`${line}-${position}`]: value };
-        props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-    };
-
-    return (
-        <div className="flex flex-col justify-between gap-4">
-            <LineSection.SolderingTimeSection
-                line="Line-4"
-                value={sampleValue}
-                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-            >
-                {(position) => (
-                    <div className="flex flex-col items-center">
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-4-${position}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', position, value)}
-                            placeholder=""
-                            min={0}
-                            step={0.1}
-                        />
-                        <span className="text-xs text-gray-500 mt-1">seconds</span>
-                    </div>
-                )}
-            </LineSection.SolderingTimeSection>
-            <LineSection.SolderingTimeSection
-                line="Line-5"
-                value={sampleValue}
-                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-            >
-                {(position) => (
-                    <div className="flex flex-col items-center">
-                        <InputComponents.NumberInput
-                            value={sampleValue[`Line-5-${position}`] || ''}
-                            onChange={(value) => handleUpdate('Line-5', position, value)}
-                            placeholder=""
-                            min={0}
-                            step={0.1}
-                        />
-                        <span className="text-xs text-gray-500 mt-1">seconds</span>
-                    </div>
-                )}
-            </LineSection.SolderingTimeSection>
-        </div>
-    );
-},
-
-    renderCoolingTemperature: (props: ObservationRenderProps) => {
+    renderSolderingTime: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? { "Line-4-left": "", "Line-4-right": "", "Line-5-left": "", "Line-5-right": "" }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['Front TCA 1 L', 'Middle TCA 1 L', 'Back TCA 1 L', 'Front TCA 1 R', 'Middle TCA 1 R', 'Back TCA 1 R'].map(position =>
+                        [`${line}-${position}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-4' | 'Line-5', section: 'left' | 'right', value: string) => {
+        const handleUpdate = (line: string, position: 'Front TCA 1 L' | 'Middle TCA 1 L' | 'Back TCA 1 L' | 'Front TCA 1 R' | 'Middle TCA 1 R' | 'Back TCA 1 R', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${position}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.SolderingTimeSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(position) => (
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${position}`] || ''}
+                                onChange={(value) => handleUpdate(line, position, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
+                        )}
+                    </LineSection.SolderingTimeSection>
+                ))}
+            </div>
+        );
+    },
+
+    renderCoolingTemperature: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['left', 'right'].map(section =>
+                        [`${line}-${section}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, section: 'left' | 'right', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${section}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex justify-between gap-2">
-                        <div className="flex flex-col items-center">
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-4-left"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'left', value)}
+                {lines.map(line => (
+                    <LineSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <div className="flex justify-between gap-2">
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-left`] || ''}
+                                onChange={(value) => handleUpdate(line, 'left', value)}
                                 placeholder=""
-                                min={0}
-                                step={1}
+                                type="temperature"
                             />
-                            <span className="text-xs text-gray-500 mt-1">°C</span>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-4-right"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'right', value)}
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-right`] || ''}
+                                onChange={(value) => handleUpdate(line, 'right', value)}
                                 placeholder=""
-                                min={0}
-                                step={1}
+                                type="temperature"
                             />
-                            <span className="text-xs text-gray-500 mt-1">°C</span>
                         </div>
-                    </div >
-                </LineSection.SingleInputSection >
-                < LineSection.SingleInputSection
-                    line="Line-5"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex justify-between gap-2">
-                        <div className="flex flex-col items-center">
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-5-left"] || ''}
-                                onChange={(value) => handleUpdate('Line-5', 'left', value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500 mt-1">°C</span>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-5-right"] || ''}
-                                onChange={(value) => handleUpdate('Line-5', 'right', value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500 mt-1">°C</span>
-                        </div>
-                    </div >
-                </LineSection.SingleInputSection >
-            </div >
+                    </LineSection.SingleInputSection>
+                ))}
+            </div>
         );
     },
 
-        renderSolderingIronTemperature: (props: ObservationRenderProps) => {
-            const sampleValue = typeof props.value === 'string'
-                ? {
-                    "Line-4-4hrs": "", "Line-4-8hrs": "",
-                    "Line-5-4hrs": "", "Line-5-8hrs": ""
-                }
-                : props.value as Record<string, string>;
+    renderSolderingIronTemperature: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['4hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
 
-            const handleUpdate = (line: 'Line-4' | 'Line-5', timeSlot: '4hrs' | '8hrs', value: string) => {
-                const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
-                props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-            };
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
 
-            return (
-                <div className="flex justify-between gap-4">
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
                     <LineSection.TimeBasedSection
-                        line="Line-4"
+                        key={line}
+                        line={line}
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         {(timeSlot) => (
-                            <div className="flex flex-col items-center">
-                                <InputComponents.NumberInput
-                                    value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                    onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                    placeholder=""
-                                    min={0}
-                                    step={1}
-                                />
-                                <span className="text-xs text-gray-500 mt-1">°C</span>
-                            </div>
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                placeholder=""
+                                type="temperature"
+                            />
                         )}
                     </LineSection.TimeBasedSection>
+                ))}
+            </div>
+        );
+    },
+
+    renderSolderingTripCalibration: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(lines.map(line => [`${line}`, ""]))
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, value: string) => {
+            const updatedValue = { ...sampleValue, [line]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <InputComponents.Select
+                            value={sampleValue[line] || ''}
+                            onChange={(value) => handleUpdate(line, value)}
+                            options={[
+                                { value: "OK", label: "Checked OK" },
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "NA", label: "N/A" }
+                            ]}
+                            type="status"
+                        />
+                    </LineSection.SingleInputSection>
+                ))}
+            </div>
+        );
+    },
+
+    renderSolderingTraces: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['Top', 'Middle', 'Bottom'].map(label =>
+                        [`${line}-${label}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, label: 'Top' | 'Middle' | 'Bottom', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.SolderingTraceSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(label) => (
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${label}`] || ''}
+                                onChange={(value) => handleUpdate(line, label, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
+                        )}
+                    </LineSection.SolderingTraceSection>
+                ))}
+            </div>
+        );
+    },
+
+    renderBusBarCutLength: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['I', 'Small L', 'Big L', 'Terminal'].map(type =>
+                        [`${line}-${type}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, type: 'I' | 'Small L' | 'Big L' | 'Terminal', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${type}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.BusBarCutLength
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(type) => (
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${type}`] || ''}
+                                onChange={(value) => handleUpdate(line, type, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
+                        )}
+                    </LineSection.BusBarCutLength>
+                ))}
+            </div>
+        );
+    },
+
+    renderStringAlignment: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['4hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
                     <LineSection.TimeBasedSection
-                        line="Line-5"
+                        key={line}
+                        line={line}
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         {(timeSlot) => (
-                            <div className="flex flex-col items-center">
-                                <InputComponents.NumberInput
-                                    value={sampleValue[`Line-5-${timeSlot}`] || ''}
-                                    onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
-                                    placeholder=""
-                                    min={0}
-                                    step={1}
-                                />
-                                <span className="text-xs text-gray-500 mt-1">°C</span>
-                            </div>
+                            <InputComponents.TextInput
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
                         )}
                     </LineSection.TimeBasedSection>
-                </div>
-            );
-        },
+                ))}
+            </div>
+        );
+    },
 
-            renderSolderingTripCalibration: (props: ObservationRenderProps) => {
-                const sampleValue = typeof props.value === 'string'
-                    ? { "Line-4": "", "Line-5": "" }
-                    : props.value as Record<string, string>;
+    renderPeelStrength: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    [
+                        ['Line', ''], ['Position', ''], ['Side', ''],
+                        ...Array.from({ length: 20 }, (_, i) => [`Pos${i + 1}`, ''])
+                    ].map(([key]) => [`${line}-${key}`, ""])
+                )
+            )
+            : props.value as Record<string, string>;
 
-                const handleUpdate = (line: 'Line-4' | 'Line-5', value: string) => {
-                    const updatedValue = { ...sampleValue, [line]: value };
-                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                };
+        const handleUpdate = (key: string, value: string) => {
+            const updatedValue = { ...sampleValue, [key]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
 
-                return (
-                    <div className="flex justify-between gap-4">
-                        <LineSection.SingleInputSection
-                            line="Line-4"
-                            value={sampleValue}
-                            onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                        >
-                            <InputComponents.Select
-                                value={sampleValue["Line-4"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', value)}
-                                options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked Not OK" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
-                        </LineSection.SingleInputSection>
-                        <LineSection.SingleInputSection
-                            line="Line-5"
-                            value={sampleValue}
-                            onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                        >
-                            <InputComponents.Select
-                                value={sampleValue["Line-5"] || ''}
-                                onChange={(value) => handleUpdate('Line-5', value)}
-                                options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked Not OK" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
-                        </LineSection.SingleInputSection>
-                    </div>
-                );
+        const renderLineSection = (line: string) => (
+            <LineSection.PeelStrengthSection
+                key={line}
+                line={line}
+                value={sampleValue}
+                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                children={{
+                    byLabel: (label) => (label !== 'Side') ? (
+                        <InputComponents.TextInput
+                            value={sampleValue[`${line}-${label}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-${label}`, value)}
+                            placeholder=""
+                            type="measurement"
+                        />
+                    ) : (
+                        <InputComponents.Select
+                            value={sampleValue[`${line}-${label}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-${label}`, value)}
+                            options={[
+                                { value: "Top", label: "Top" },
+                                { value: "Middle", label: "Middle" },
+                                { value: "Bottom", label: "Bottom" },
+                                { value: "OFF", label: "OFF" }
+                            ]}
+                            type="status"
+                        />
+                    ),
+                    byPosition: (position) => (
+                        <InputComponents.TextInput
+                            value={sampleValue[`${line}-Pos${position}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-Pos${position}`, value)}
+                            placeholder=""
+                            type="measurement"
+                        />
+                    ),
+                }}
+            />
+        );
+
+        return (
+            <div className="flex gap-4">
+                {lines.map(renderLineSection)}
+            </div>
+        );
+    }
+};
+
+// Factory function for creating auto bussing stage with line configuration
+export const createAutoBussingStage = (lineNumber: string): StageData => {
+    return {
+        id: 7,
+        name: "Auto Bussing",
+        parameters: [
+            {
+                id: "7-1",
+                parameters: "BUS Ribbon Status",
+                criteria: "As per Production Order / BOM Engineering Specification",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderBusRibbonStatus({ ...props, lineNumber })
             },
-
-                renderSolderingTraces: (props: ObservationRenderProps) => {
-                    const sampleValue = typeof props.value === 'string'
-                        ? {
-                            "Line-4-Top": "", "Line-4-Middle": "", "Line-4-Bottom": "",
-                            "Line-5-Top": "", "Line-5-Middle": "", "Line-5-Bottom": ""
-                        }
-                        : props.value as Record<string, string>;
-
-                    const handleUpdate = (line: 'Line-4' | 'Line-5', label: 'Top' | 'Middle' | 'Bottom', value: string) => {
-                        const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
-                        props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                    };
-
-                    return (
-                        <div className="flex flex-col justify-between gap-4">
-                            <LineSection.SolderingTraceSection
-                                line="Line-4"
-                                value={sampleValue}
-                                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                            >
-                                {(label) => (
-                                    <div className="flex flex-col items-center">
-                                        <InputComponents.NumberInput
-                                            value={sampleValue[`Line-4-${label}`] || ''}
-                                            onChange={(value) => handleUpdate('Line-4', label, value)}
-                                            placeholder=""
-                                            min={0}
-                                            step={0.1}
-                                        />
-                                        <span className="text-xs text-gray-500 mt-1">%</span>
-                                    </div>
-                                )}
-                            </LineSection.SolderingTraceSection>
-                            <LineSection.SolderingTraceSection
-                                line="Line-5"
-                                value={sampleValue}
-                                onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                            >
-                                {(label) => (
-                                    <div className="flex flex-col items-center">
-                                        <InputComponents.NumberInput
-                                            value={sampleValue[`Line-5-${label}`] || ''}
-                                            onChange={(value) => handleUpdate('Line-5', label, value)}
-                                            placeholder=""
-                                            min={0}
-                                            step={0.1}
-                                        />
-                                        <span className="text-xs text-gray-500 mt-1">%</span>
-                                    </div>
-                                )}
-                            </LineSection.SolderingTraceSection>
-                        </div>
-                    );
-                },
-
-                    renderBusBarCutLength: (props: ObservationRenderProps) => {
-                        const sampleValue = typeof props.value === 'string'
-                            ? {
-                                "Line-4-I": "", "Line-4-Small L": "", "Line-4-Big L": "", "Line-4-Terminal": "",
-                                "Line-5-I": "", "Line-5-Small L": "", "Line-5-Big L": "", "Line-5-Terminal": ""
-                            }
-                            : props.value as Record<string, string>;
-
-                        const handleUpdate = (line: 'Line-4' | 'Line-5', type: 'I' | 'Small L' | 'Big L' | 'Terminal', value: string) => {
-                            const updatedValue = { ...sampleValue, [`${line}-${type}`]: value };
-                            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                        };
-
-                        return (
-                            <div className="flex flex-col justify-between gap-4">
-                                <LineSection.BusBarCutLength
-                                    line="Line-4"
-                                    value={sampleValue}
-                                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                                >
-                                    {(type) => (
-                                        <div className="flex flex-col items-center">
-                                            <InputComponents.NumberInput
-                                                value={sampleValue[`Line-4-${type}`] || ''}
-                                                onChange={(value) => handleUpdate('Line-4', type, value)}
-                                                placeholder=""
-                                                min={0}
-                                                step={0.1}
-                                            />
-                                            <span className="text-xs text-gray-500 mt-1">mm</span>
-                                        </div>
-                                    )}
-                                </LineSection.BusBarCutLength>
-                                <LineSection.BusBarCutLength
-                                    line="Line-5"
-                                    value={sampleValue}
-                                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                                >
-                                    {(type) => (
-                                        <div className="flex flex-col items-center">
-                                            <InputComponents.NumberInput
-                                                value={sampleValue[`Line-5-${type}`] || ''}
-                                                onChange={(value) => handleUpdate('Line-5', type, value)}
-                                                placeholder=""
-                                                min={0}
-                                                step={0.1}
-                                            />
-                                            <span className="text-xs text-gray-500 mt-1">mm</span>
-                                        </div>
-                                    )}
-                                </LineSection.BusBarCutLength>
-                            </div>
-                        );
-                    },
-
-                        renderStringAlignment: (props: ObservationRenderProps) => {
-                            const sampleValue = typeof props.value === 'string'
-                                ? {
-                                    "Line-4-4hrs": "", "Line-4-8hrs": "",
-                                    "Line-5-4hrs": "", "Line-5-8hrs": ""
-                                }
-                                : props.value as Record<string, string>;
-
-                            const handleUpdate = (line: 'Line-4' | 'Line-5', timeSlot: '4hrs' | '8hrs', value: string) => {
-                                const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
-                                props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                            };
-
-                            return (
-                                <div className="flex justify-between gap-4">
-                                    <LineSection.TimeBasedSection
-                                        line="Line-4"
-                                        value={sampleValue}
-                                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                                    >
-                                        {(timeSlot) => (
-                                            <div className="flex flex-col items-center">
-                                                <InputComponents.NumberInput
-                                                    value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                                    onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                                    placeholder=""
-                                                    min={0}
-                                                    step={0.01}
-                                                />
-                                                <span className="text-xs text-gray-500 mt-1">mm</span>
-                                            </div>
-                                        )}
-                                    </LineSection.TimeBasedSection>
-                                    <LineSection.TimeBasedSection
-                                        line="Line-5"
-                                        value={sampleValue}
-                                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                                    >
-                                        {(timeSlot) => (
-                                            <div className="flex flex-col items-center">
-                                                <InputComponents.NumberInput
-                                                    value={sampleValue[`Line-5-${timeSlot}`] || ''}
-                                                    onChange={(value) => handleUpdate('Line-5', timeSlot, value)}
-                                                    placeholder=""
-                                                    min={0}
-                                                    step={0.01}
-                                                />
-                                                <span className="text-xs text-gray-500 mt-1">mm</span>
-                                            </div>
-                                        )}
-                                    </LineSection.TimeBasedSection>
-                                </div>
-                            );
-                        },
-
-                            renderPeelStrength: (props: ObservationRenderProps) => {
-                                const sampleValue = typeof props.value === 'string'
-                                    ? {
-                                        "Line-4-Line": "", "Line-4-Position": "", "Line-4-Side": "",
-                                        ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(pos => [`Line-4-Pos${pos}`, ""])),
-                                        "Line-5-Line": "", "Line-5-Position": "", "Line-5-Side": "",
-                                        ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(pos => [`Line-5-Pos${pos}`, ""])),
-                                    }
-                                    : props.value as Record<string, string>;
-
-                                const handleUpdate = (key: string, value: string) => {
-                                    const updatedValue = { ...sampleValue, [key]: value };
-                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                                };
-
-                                const renderLineSection = (line: 'Line-4' | 'Line-5') => (
-                                    <LineSection.PeelStrengthSection
-                                        line={line}
-                                        value={sampleValue}
-                                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                                        children={{
-                                            byLabel: (label) => (label != 'Side') ? (
-                                                <InputComponents.TextInput
-                                                    value={sampleValue[`${line}-${label}`] || ''}
-                                                    onChange={(value) => handleUpdate(`${line}-${label}`, value)}
-                                                    placeholder=""
-                                                />
-                                            ) : (
-                                                <InputComponents.Select
-                                                    value={sampleValue[`${line}-${label}`] || ''}
-                                                    onChange={(value) => handleUpdate(`${line}-${label}`, value)}
-                                                    options={[
-                                                        { value: "Top", label: "Top" },
-                                                        { value: "Middle", label: "Middle" },
-                                                        { value: "Bottom", label: "Bottom" },
-                                                        { value: "OFF", label: "OFF" }
-                                                    ]}
-                                                />),
-                                            byPosition: (position) => (
-                                                <div className="flex flex-col items-center">
-                                                    <InputComponents.NumberInput
-                                                        value={sampleValue[`${line}-Pos${position}`] || ''}
-                                                        onChange={(value) => handleUpdate(`${line}-Pos${position}`, value)}
-                                                        placeholder=""
-                                                        min={0}
-                                                        step={0.01}
-                                                    />
-                                                    <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
-                                                </div>
-                                            ),
-                                        }}
-                                    />
-                                );
-
-                                return (
-                                    <div className="flex flex-col gap-4">
-                                        {renderLineSection('Line-4')}
-                                        {renderLineSection('Line-5')}
-                                    </div>
-                                );
-                            }
-
+            {
+                id: "7-2",
+                parameters: "Soldering Time",
+                criteria: "1.2 ± 0.4 Sec.",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderSolderingTime({ ...props, lineNumber })
+            },
+            {
+                id: "7-3",
+                parameters: "Soldering Cooling Temperature",
+                criteria: "40° ± 15° C",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderCoolingTemperature({ ...props, lineNumber })
+            },
+            {
+                id: "7-4",
+                parameters: "Soldering Iron Temperature",
+                criteria: "370° C to 410° C (Manual Bussing)",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 4 hrs",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderSolderingIronTemperature({ ...props, lineNumber })
+            },
+            {
+                id: "7-5",
+                parameters: "Soldering Trip Calibration",
+                criteria: "Calibration should be done once/day, SPC graph update",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every day",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderSolderingTripCalibration({ ...props, lineNumber })
+            },
+            {
+                id: "7-6",
+                parameters: "Soldering Traces at Interconnect and Bus Ribbon Junction",
+                criteria: "Soldering must cover ≥ 50% width of bus ribbon",
+                typeOfInspection: "Measurements",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderSolderingTraces({ ...props, lineNumber })
+            },
+            {
+                id: "7-7",
+                parameters: "Bus Bar Cut Length",
+                criteria: "I = 345 ± 5 mm, Small L = 170 ± 5 mm, Big L = 365 ± 5 mm, Terminal height = 20 ± 5 mm",
+                typeOfInspection: "Measurements",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderBusBarCutLength({ ...props, lineNumber })
+            },
+            {
+                id: "7-8",
+                parameters: "String Alignment",
+                criteria: "≤ 0.5mm",
+                typeOfInspection: "Measurements",
+                inspectionFrequency: "Every 4 hrs",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderStringAlignment({ ...props, lineNumber })
+            },
+            {
+                id: "7-9",
+                parameters: "Peel Strength Bus Ribbon to INTC Ribbon",
+                criteria: "≥ 1.5 N (Average) (Multi BB Round Wire)",
+                typeOfInspection: "Functionality",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoBussingObservations.renderPeelStrength({ ...props, lineNumber })
+            }
+        ]
+    };
 };
 
-export const autoBussingStage: StageData = {
-    id: 7,
-    name: "Auto Bussing",
-    parameters: [
-        {
-            id: "7-1",
-            parameters: "BUS Ribbon Status",
-            criteria: "As per Production Order / BOM Engineering Specification",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderBusRibbonStatus
-        },
-        {
-            id: "7-2",
-            parameters: "Soldering Time",
-            criteria: "1.2 ± 0.4 Sec.",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderSolderingTime
-        },
-        {
-            id: "7-3",
-            parameters: "Soldering Cooling Temperature",
-            criteria: "40° ± 15° C",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderCoolingTemperature
-        },
-        {
-            id: "7-4",
-            parameters: "Soldering Iron Temperature",
-            criteria: "370° C to 410° C (Manual Bussing)",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hrs",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderSolderingIronTemperature
-        },
-        {
-            id: "7-5",
-            parameters: "Soldering Trip Calibration",
-            criteria: "Calibration should be done once/day, SPC graph update",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every day",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderSolderingTripCalibration
-        },
-        {
-            id: "7-6",
-            parameters: "Soldering Traces at Interconnect and Bus Ribbon Junction",
-            criteria: "Soldering must cover ≥ 50% width of bus ribbon",
-            typeOfInspection: "Measurements",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderSolderingTraces
-        },
-        {
-            id: "7-7",
-            parameters: "Bus Bar Cut Length",
-            criteria: "I = 345 ± 5 mm, Small L = 170 ± 5 mm, Big L = 365 ± 5 mm, Terminal height = 20 ± 5 mm",
-            typeOfInspection: "Measurements",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderBusBarCutLength
-        },
-        {
-            id: "7-8",
-            parameters: "String Alignment",
-            criteria: "≤ 0.5mm",
-            typeOfInspection: "Measurements",
-            inspectionFrequency: "Every 4 hrs",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderStringAlignment
-        },
-        {
-            id: "7-9",
-            parameters: "Peel Strength Bus Ribbon to INTC Ribbon",
-            criteria: "≥ 1.5 N (Average) (Multi BB Round Wire)",
-            typeOfInspection: "Functionality",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoBussingObservations.renderPeelStrength
-        }
-    ]
-};
+// Keep the original export for backward compatibility
+export const autoBussingStage: StageData = createAutoBussingStage('II');
