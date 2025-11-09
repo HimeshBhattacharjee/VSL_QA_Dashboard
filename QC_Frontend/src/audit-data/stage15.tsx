@@ -1,8 +1,23 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
+
+const getLineConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[15];
+    if (!stageConfig) return ['Auto trimming - 3', 'Auto trimming - 4'];
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions : ['Auto trimming - 3', 'Auto trimming - 4'];
+};
+
+const getBackgroundColor = (value: string) => {
+    if (!value) return 'bg-white';
+    if (value === 'OFF') return 'bg-yellow-100';
+    if (value === 'NG') return 'bg-red-100';
+    return 'bg-white';
+};
 
 const TrimmingSection = {
     TimeBasedSection: ({ machine, value, onUpdate, children }: {
-        machine: 'Auto trimming - 3' | 'Auto trimming - 4';
+        machine: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
@@ -25,7 +40,7 @@ const TrimmingSection = {
     ),
 
     SingleInputSection: ({ machine, value, onUpdate, children }: {
-        machine: 'Auto trimming - 3' | 'Auto trimming - 4';
+        machine: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
@@ -40,7 +55,7 @@ const TrimmingSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-full" }: {
+    Select: ({ value, onChange, options, className = "" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
@@ -49,195 +64,130 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
             ))}
         </select>
-    ),
-
-    TextInput: ({ value, onChange, placeholder, className = "w-full" }: {
-        value: string;
-        onChange: (value: string) => void;
-        placeholder: string;
-        className?: string;
-    }) => (
-        <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-        />
-    ),
-
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
-        value: string;
-        onChange: (value: string) => void;
-        placeholder: string;
-        min?: number;
-        step?: number;
-        className?: string;
-    }) => (
-        <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-            min={min}
-            step={step}
-        />
     )
 };
 
 const AutoTrimmingObservations = {
-    renderCuttingAesthetics: (props: ObservationRenderProps) => {
+    renderCuttingAesthetics: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const machines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Auto trimming - 3-4hrs": "", "Auto trimming - 3-8hrs": "",
-                "Auto trimming - 4-4hrs": "", "Auto trimming - 4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                machines.flatMap(machine =>
+                    ['4hrs', '8hrs'].map(timeSlot =>
+                        [`${machine}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (machine: 'Auto trimming - 3' | 'Auto trimming - 4', timeSlot: '4hrs' | '8hrs', value: string) => {
+        const handleUpdate = (machine: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${machine}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <TrimmingSection.TimeBasedSection
-                    machine="Auto trimming - 3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Auto trimming - 3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Auto trimming - 3', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </TrimmingSection.TimeBasedSection>
-                <TrimmingSection.TimeBasedSection
-                    machine="Auto trimming - 4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Auto trimming - 4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Auto trimming - 4', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </TrimmingSection.TimeBasedSection>
+                {machines.map(machine => (
+                    <TrimmingSection.TimeBasedSection
+                        key={machine}
+                        machine={machine}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${machine}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(machine, timeSlot, value)}
+                                options={[
+                                    { value: "OK", label: "Checked OK" },
+                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "OFF", label: "OFF" }
+                                ]}
+                            />
+                        )}
+                    </TrimmingSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderBladeChangeFrequency: (props: ObservationRenderProps) => {
+    renderBladeChangeFrequency: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const machines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Auto trimming - 3": "",
-                "Auto trimming - 4": ""
-            }
+            ? Object.fromEntries(
+                machines.map(machine => [machine, ""])
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (machine: 'Auto trimming - 3' | 'Auto trimming - 4', value: string) => {
+        const handleUpdate = (machine: string, value: string) => {
             const updatedValue = { ...sampleValue, [machine]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <TrimmingSection.SingleInputSection
-                    machine="Auto trimming - 3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.Select
-                        value={sampleValue["Auto trimming - 3"] || ''}
-                        onChange={(value) => handleUpdate('Auto trimming - 3', value)}
-                        options={[
-                            { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked Not OK" },
-                            { value: "OFF", label: "OFF" }
-                        ]}
-                        className="w-full"
-                    />
-                </TrimmingSection.SingleInputSection>
-                <TrimmingSection.SingleInputSection
-                    machine="Auto trimming - 4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <InputComponents.Select
-                        value={sampleValue["Auto trimming - 4"] || ''}
-                        onChange={(value) => handleUpdate('Auto trimming - 4', value)}
-                        options={[
-                            { value: "OK", label: "Checked OK" },
-                            { value: "NG", label: "Checked Not OK" },
-                            { value: "OFF", label: "OFF" }
-                        ]}
-                        className="w-full"
-                    />
-                </TrimmingSection.SingleInputSection>
+                {machines.map(machine => (
+                    <TrimmingSection.SingleInputSection
+                        key={machine}
+                        machine={machine}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <InputComponents.Select
+                            value={sampleValue[machine] || ''}
+                            onChange={(value) => handleUpdate(machine, value)}
+                            options={[
+                                { value: "OK", label: "Checked OK" },
+                                { value: "NG", label: "Checked Not OK" },
+                                { value: "OFF", label: "OFF" }
+                            ]}
+                            className="w-full"
+                        />
+                    </TrimmingSection.SingleInputSection>
+                ))}
             </div>
         );
     }
 };
 
-export const autoTrimmingStage: StageData = {
-    id: 15,
-    name: "Auto Trimming",
-    parameters: [
-        {
-            id: "15-1",
-            parameters: "Trimmed portion cutting aesthetics",
-            criteria: "Trimmed edges & corners should be smooth",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                {
-                    timeSlot: "",
-                    value: {
-                        "Auto trimming - 3-4hrs": "",
-                        "Auto trimming - 3-8hrs": "",
-                        "Auto trimming - 4-4hrs": "",
-                        "Auto trimming - 4-8hrs": ""
-                    }
-                }
-            ],
-            renderObservation: AutoTrimmingObservations.renderCuttingAesthetics
-        },
-        {
-            id: "15-2",
-            parameters: "Trimming Blade change frequency",
-            criteria: "Reverse the blade after 37500 nos cycles, then replace it after next 37500 nos cycles",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                {
-                    timeSlot: "",
-                    value: {
-                        "Auto trimming - 3": "",
-                        "Auto trimming - 4": ""
-                    }
-                }
-            ],
-            renderObservation: AutoTrimmingObservations.renderBladeChangeFrequency
-        }
-    ]
+export const createAutoTrimmingStage = (lineNumber: string): StageData => {
+    return {
+        id: 15,
+        name: "Auto Trimming",
+        parameters: [
+            {
+                id: "15-1",
+                parameters: "Trimmed portion cutting aesthetics",
+                criteria: "Trimmed edges & corners should be smooth",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 4 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoTrimmingObservations.renderCuttingAesthetics({ ...props, lineNumber })
+            },
+            {
+                id: "15-2",
+                parameters: "Trimming Blade change frequency",
+                criteria: "Reverse the blade after 37500 nos cycles, then replace it after next 37500 nos cycles",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoTrimmingObservations.renderBladeChangeFrequency({ ...props, lineNumber })
+            }
+        ]
+    };
 };
+
+export const autoTrimmingStage: StageData = createAutoTrimmingStage('II');

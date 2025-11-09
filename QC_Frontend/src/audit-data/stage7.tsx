@@ -1,32 +1,21 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 import { LINE_DEPENDENT_CONFIG } from './lineConfig';
 
-// Helper function to get line configuration based on lineNumber
 const getLineConfiguration = (lineNumber: string): string[] => {
     const stageConfig = LINE_DEPENDENT_CONFIG[7];
-    if (!stageConfig) return ['Line-4', 'Line-5']; // Default fallback
-
+    if (!stageConfig) return ['Line-4', 'Line-5'];
     const lineOptions = stageConfig.lineMapping[lineNumber];
     return Array.isArray(lineOptions) ? lineOptions : ['Line-4', 'Line-5'];
 };
 
-// Helper function for conditional formatting
 const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'measurement' | 'date' = 'status') => {
     if (!value) return 'bg-white';
-
     const upperValue = value.toUpperCase();
-
-    // OFF formatting (case insensitive)
     if (upperValue === 'OFF') return 'bg-yellow-100';
-
-    // Status-based formatting
     if (type === 'status') {
-        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'NA') return 'bg-yellow-100';
         if (upperValue === 'NG') return 'bg-red-100';
-        if (upperValue === 'OK') return 'bg-green-100';
     }
-
-    // Date-based formatting
     if (type === 'date') {
         if (value) {
             const inputDate = new Date(value);
@@ -36,7 +25,6 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
             if (inputDate < today) return 'bg-red-100';
         }
     }
-
     return 'bg-white';
 };
 
@@ -88,7 +76,7 @@ const LineSection = {
             <div className="text-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2 justify-between">
+            <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col items-center">
                     <span className="text-xs text-gray-500 mb-1">Supplier</span>
                     {children('Supplier')}
@@ -119,7 +107,7 @@ const LineSection = {
             <div className="text-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2 justify-between">
+            <div className="grid grid-cols-3 gap-2">
                 <div className="flex flex-col items-center">
                     <span className="text-xs text-gray-500 mb-1">Front TCA 1</span>
                     {children('Front TCA 1 L')}
@@ -219,7 +207,7 @@ const LineSection = {
             <div className="text-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2 justify-between mb-2">
+            <div className="grid grid-cols-3 gap-2 mb-2">
                 <div className="flex flex-col items-center">
                     <span className="text-xs text-gray-500 mb-1">Line</span>
                     {children.byLabel('Line')}
@@ -256,7 +244,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type)} ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -507,7 +495,7 @@ const AutoBussingObservations = {
                             options={[
                                 { value: "OK", label: "Checked OK" },
                                 { value: "NG", label: "Checked Not OK" },
-                                { value: "NA", label: "N/A" }
+                                { value: "OFF", label: "OFF" }
                             ]}
                             type="status"
                         />
@@ -702,7 +690,6 @@ const AutoBussingObservations = {
     }
 };
 
-// Factory function for creating auto bussing stage with line configuration
 export const createAutoBussingStage = (lineNumber: string): StageData => {
     return {
         id: 7,

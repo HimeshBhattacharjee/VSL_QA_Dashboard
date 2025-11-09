@@ -5,6 +5,11 @@ import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import { createTabbingStringingStage } from "../audit-data/stage5";
 import { createAutoBussingStage } from "../audit-data/stage7";
+import { createAutoTapingNLayupStage } from "../audit-data/stage8";
+import { createLaminationStage } from "../audit-data/stage14";
+import { createAutoTrimmingStage } from "../audit-data/stage15";
+import { createAutoFramingStage } from "../audit-data/stage17";
+import { createJunctionBoxFixingStage } from "../audit-data/stage18";
 
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
@@ -13,6 +18,11 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
         return baseStages.map(stage => {
             if (stage.id === 5) return createTabbingStringingStage(lineNumber);
             if (stage.id === 7) return createAutoBussingStage(lineNumber);
+            if (stage.id === 8) return createAutoTapingNLayupStage(lineNumber);
+            if (stage.id === 14) return createLaminationStage(lineNumber);
+            if (stage.id === 15) return createAutoTrimmingStage(lineNumber);
+            if (stage.id === 17) return createAutoFramingStage(lineNumber);
+            if (stage.id === 18) return createJunctionBoxFixingStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
             const lineOptions = stageConfig.lineMapping[lineNumber];
@@ -37,12 +47,10 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
 };
 
 export default function Test() {
-    const stageID = 7;
+    const stageID = 19;
     const { lineNumber, setLineNumber } = useLine();
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
     setLineNumber('I')
-
-    // Initialize audit data with line-dependent stages
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
         date: new Date().toISOString().split('T')[0],

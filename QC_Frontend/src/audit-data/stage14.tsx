@@ -1,8 +1,20 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 import { useState, useEffect, useCallback } from 'react';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
 
-// Create a proper React component for the laminator parameters
-const LaminatorParametersComponent = (props: ObservationRenderProps) => {
+const getLaminatorConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[14];
+    if (!stageConfig) {
+        return lineNumber === 'I' ? ['Laminator-1', 'Laminator-2', 'Laminator-3', 'Laminator-4']
+            : ['Laminator-5', 'Laminator-6', 'Laminator-7', 'Laminator-8'];
+    }
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions :
+        lineNumber === 'I' ? ['Laminator-1', 'Laminator-2', 'Laminator-3', 'Laminator-4']
+            : ['Laminator-5', 'Laminator-6', 'Laminator-7', 'Laminator-8'];
+};
+
+const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumber?: string }) => {
     const defaultLaminatorData = {
         "upper": {
             "Chamber_1_Pumping": "",
@@ -46,11 +58,19 @@ const LaminatorParametersComponent = (props: ObservationRenderProps) => {
         return { ...defaultLaminatorData, ...props.value };
     });
 
+    const [isOffMode, setIsOffMode] = useState(false);
+
     useEffect(() => {
         if (props.value && typeof props.value === 'object') {
             setLocalData(prev => ({ ...prev, ...props.value }));
         }
     }, [props.value]);
+
+    // Check if OFF mode should be active
+    useEffect(() => {
+        const recipeIsOff = localData.selectedRecipe?.toUpperCase() === 'OFF';
+        setIsOffMode(recipeIsOff);
+    }, [localData.selectedRecipe]);
 
     const updateParent = useCallback((newData: any) => {
         props.onUpdate(props.stageId, props.paramId, props.timeSlot, newData);
@@ -83,6 +103,17 @@ const LaminatorParametersComponent = (props: ObservationRenderProps) => {
         updateParent(updatedData);
     }, [localData, updateParent]);
 
+    const getSelectClassName = (): string => {
+        const baseClass = "px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-white shadow-sm";
+        return isOffMode ? `${baseClass} bg-yellow-100` : baseClass;
+    };
+
+    const getBackgroundColor = (value: string) => {
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
+        if (isOff(value)) return 'bg-yellow-100';
+        return 'bg-white';
+    };
+
     const LaminatorTable = useCallback(({ title, lamNo, data, onUpdate }: {
         title: string; lamNo: string; data: any;
         onUpdate: (field: string, value: string) => void;
@@ -106,42 +137,42 @@ const LaminatorParametersComponent = (props: ObservationRenderProps) => {
                             <div className="col-span-1 text-sm text-gray-600">Chamber {chamberNum}</div>
                             <div className="col-span-1">
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={data[`Chamber_${chamberNum}_Pumping`] || ''}
                                     onChange={(e) => onUpdate(`Chamber_${chamberNum}_Pumping`, e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_Pumping`] || '')}`}
                                 />
                             </div>
                             <div className="col-span-1">
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={data[`Chamber_${chamberNum}_PressingCooling`] || ''}
                                     onChange={(e) => onUpdate(`Chamber_${chamberNum}_PressingCooling`, e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_PressingCooling`] || '')}`}
                                 />
                             </div>
                             <div className="col-span-1">
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={data[`Chamber_${chamberNum}_Venting`] || ''}
                                     onChange={(e) => onUpdate(`Chamber_${chamberNum}_Venting`, e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_Venting`] || '')}`}
                                 />
                             </div>
                             <div className="col-span-1">
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={data[`Chamber_${chamberNum}_LowerTemp`] || ''}
                                     onChange={(e) => onUpdate(`Chamber_${chamberNum}_LowerTemp`, e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_LowerTemp`] || '')}`}
                                 />
                             </div>
                             <div className="col-span-1">
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={data[`Chamber_${chamberNum}_UpperTemp`] || ''}
                                     onChange={(e) => onUpdate(`Chamber_${chamberNum}_UpperTemp`, e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_UpperTemp`] || '')}`}
                                 />
                             </div>
                         </div>
@@ -158,7 +189,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps) => {
                 <select
                     value={localData.selectedRecipe || ''}
                     onChange={(e) => updateRecipe(e.target.value)}
-                    className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                    className={getSelectClassName()}
                 >
                     <option value="">Select Recipe</option>
                     <option value="1">Recipe 1</option>
@@ -166,73 +197,57 @@ const LaminatorParametersComponent = (props: ObservationRenderProps) => {
                     <option value="3">Recipe 3</option>
                     <option value="4">Recipe 4</option>
                     <option value="5">Recipe 5</option>
+                    <option value="OFF">OFF</option>
                 </select>
             </div>
-
-            <div className="grid gap-2">
-                <LaminatorTable
-                    title="Upper"
-                    lamNo={props.paramId.split('-')[3]}
-                    data={localData.upper}
-                    onUpdate={updateUpperParameter}
-                />
-                <LaminatorTable
-                    title="Lower"
-                    lamNo={props.paramId.split('-')[3]}
-                    data={localData.lower}
-                    onUpdate={updateLowerParameter}
-                />
-            </div>
+            {!isOffMode && (
+                <div className="grid gap-2">
+                    <LaminatorTable
+                        title="Upper"
+                        lamNo={props.paramId[props.paramId.length - 1]}
+                        data={localData.upper}
+                        onUpdate={updateUpperParameter}
+                    />
+                    <LaminatorTable
+                        title="Lower"
+                        lamNo={props.paramId[props.paramId.length - 1]}
+                        data={localData.lower}
+                        onUpdate={updateLowerParameter}
+                    />
+                </div>
+            )}
+            {isOffMode && (
+                <div className="text-center bg-yellow-100 rounded-lg border border-yellow-300">
+                    <p className="text-yellow-800 font-medium p-2">Laminator is OFF - Upper and Lower sections are hidden</p>
+                </div>
+            )}
         </div>
     );
 };
 
 const LaminationObservations = {
-    renderLaminatorParameters: (props: ObservationRenderProps) => {
-        // Simply return the React component
+    renderLaminatorParameters: (props: ObservationRenderProps & { lineNumber?: string }) => {
         return <LaminatorParametersComponent {...props} />;
     }
 };
 
-export const laminationStage: StageData = {
-    id: 14,
-    name: "Lamination Process",
-    parameters: [
-        {
-            id: "14-1-lam-5",
-            parameters: "Laminator-5 Machine Setup as per Recipe",
+export const createLaminationStage = (lineNumber: string): StageData => {
+    const laminators = getLaminatorConfiguration(lineNumber);
+
+    return {
+        id: 14,
+        name: "Lamination Process",
+        parameters: laminators.map((laminator, index) => ({
+            id: `14-${index + 1}-${laminator.toLowerCase().replace('-', '')}`,
+            parameters: `${laminator} Machine Setup as per Recipe`,
             criteria: "Lamination process parameter spec. - VSL/PDN/SC/22",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [{ timeSlot: "", value: "" }],
-            renderObservation: LaminationObservations.renderLaminatorParameters
-        },
-        {
-            id: "14-2-lam-6",
-            parameters: "Laminator-6 Machine Setup as per Recipe",
-            criteria: "Lamination process parameter spec. - VSL/PDN/SC/22",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [{ timeSlot: "", value: "" }],
-            renderObservation: LaminationObservations.renderLaminatorParameters
-        },
-        {
-            id: "14-3-lam-7",
-            parameters: "Laminator-7 Machine Setup as per Recipe",
-            criteria: "Lamination process parameter spec. - VSL/PDN/SC/22",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [{ timeSlot: "", value: "" }],
-            renderObservation: LaminationObservations.renderLaminatorParameters
-        },
-        {
-            id: "14-4-lam-8",
-            parameters: "Laminator-8 Machine Setup as per Recipe",
-            criteria: "Lamination process parameter spec. - VSL/PDN/SC/22",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [{ timeSlot: "", value: "" }],
-            renderObservation: LaminationObservations.renderLaminatorParameters
-        }
-    ]
+            renderObservation: (props: ObservationRenderProps) =>
+                LaminationObservations.renderLaminatorParameters({ ...props, lineNumber })
+        }))
+    };
 };
+
+export const laminationStage: StageData = createLaminationStage('II');

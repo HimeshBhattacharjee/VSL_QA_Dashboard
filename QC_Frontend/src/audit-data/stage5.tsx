@@ -4,11 +4,7 @@ import { useLine } from '../context/LineContext';
 
 const StringerSectionWithLine = (props: ObservationRenderProps) => {
     const { lineNumber } = useLine();
-
-    if (props.paramId === '5-11-peel-strength') {
-        return TabbingStringingObservations.renderPeelStrengthSection({ ...props, lineNumber });
-    }
-
+    if (props.paramId === '5-11-peel-strength') return TabbingStringingObservations.renderPeelStrengthSection({ ...props, lineNumber });
     return TabbingStringingObservations.renderCombinedStringerSectionWithLine({ ...props, lineNumber });
 };
 

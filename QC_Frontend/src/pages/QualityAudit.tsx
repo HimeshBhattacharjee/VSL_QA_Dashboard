@@ -10,16 +10,25 @@ import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 import { createTabbingStringingStage } from '../audit-data/stage5';
 import { createAutoBussingStage } from '../audit-data/stage7';
+import { createAutoTapingNLayupStage } from '../audit-data/stage8';
+import { createLaminationStage } from '../audit-data/stage14';
+import { createAutoTrimmingStage } from '../audit-data/stage15';
+import { createAutoFramingStage } from '../audit-data/stage17';
+import { createJunctionBoxFixingStage } from '../audit-data/stage18';
 
 interface SavedChecksheet { id: string; name: string; timestamp: number; data: AuditData; }
 
-// In QualityAudit.tsx - update the useLineDependentStages hook
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
         if (!lineNumber) return baseStages;
         return baseStages.map(stage => {
             if (stage.id === 5) return createTabbingStringingStage(lineNumber);
             if (stage.id === 7) return createAutoBussingStage(lineNumber);
+            if (stage.id === 8) return createAutoTapingNLayupStage(lineNumber);
+            if (stage.id === 14) return createLaminationStage(lineNumber);
+            if (stage.id === 15) return createAutoTrimmingStage(lineNumber);
+            if (stage.id === 17) return createAutoFramingStage(lineNumber);
+            if (stage.id === 18) return createJunctionBoxFixingStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
 
