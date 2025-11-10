@@ -120,4 +120,67 @@ export const LINE_DEPENDENT_CONFIG: { [stageId: number]: { parameters: string[];
             'II': ['Line-3', 'Line-4']
         }
     },
+    19: {
+        parameters: ['19-1', '19-2', '19-3'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    20: {
+        parameters: ['20-1', '20-2', '20-3', '20-4', '20-5'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    21: {
+        parameters: ['21-1', '21-2', '21-3', '21-4', '21-5'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    22: {
+        parameters: ['22-1', '22-2'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    23: {
+        parameters: ['23-1'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    24: {
+        parameters: ['24-1', '24-2', '24-3', '24-4', '24-5', '24-6', '24-7', '24-8', '24-9'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    26: {
+        parameters: ['26-1', '26-2', '26-3'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    27: {
+        parameters: ['27-1'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
+    29: {
+        parameters: ['29-1'],
+        lineMapping: {
+            'I': ['Line-1', 'Line-2'],
+            'II': ['Line-3', 'Line-4']
+        }
+    },
 };

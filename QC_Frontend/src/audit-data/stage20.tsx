@@ -1,4 +1,5 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
 
 type TimeSlot2H = '2hrs';
 type TimeSlot4H = '4hrs';
@@ -7,9 +8,36 @@ type TimeSlot8H = '8hrs';
 type AllTimeSlots = TimeSlot2H | TimeSlot4H | TimeSlot6H | TimeSlot8H;
 type TimeSlots4H8H = TimeSlot4H | TimeSlot8H;
 
+const getLineConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[20];
+    if (!stageConfig) return ['Line-3', 'Line-4'];
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions : ['Line-3', 'Line-4'];
+};
+
+const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'measurement' | 'date' = 'status') => {
+    if (!value) return 'bg-white';
+    const upperValue = value.toUpperCase();
+    if (upperValue === 'OFF') return 'bg-yellow-100';
+    if (type === 'status') {
+        if (upperValue === 'NA') return 'bg-yellow-100';
+        if (upperValue === 'NG') return 'bg-red-100';
+    }
+    if (type === 'date') {
+        if (value) {
+            const inputDate = new Date(value);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            inputDate.setHours(0, 0, 0, 0);
+            if (inputDate < today) return 'bg-red-100';
+        }
+    }
+    return 'bg-white';
+};
+
 const LineSection = {
     TimeBasedSection: <T extends AllTimeSlots>({ line, value, onUpdate, children, timeSlots }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (timeSlot: T) => React.ReactNode;
@@ -31,7 +59,7 @@ const LineSection = {
     ),
 
     SingleInputSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
@@ -46,16 +74,17 @@ const LineSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-full" }: {
+    Select: ({ value, onChange, options, className = "", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
     }) => (
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 ${getBackgroundColor(value, type)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -64,38 +93,20 @@ const InputComponents = {
         </select>
     ),
 
-    TextInput: ({ value, onChange, placeholder, className = "w-full" }: {
+    TextInput: ({ value, onChange, placeholder, className = "w-full", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         placeholder: string;
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
     }) => (
         <input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${(placeholder === 'Auto') ? 'bg-gray-200' : 'bg-white'} ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center ${(placeholder === 'Auto') ? 'bg-gray-200' : getBackgroundColor(value, type)} ${className}`}
             disabled={(placeholder === 'Auto') ? true : false}
-        />
-    ),
-
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
-        value: string;
-        onChange: (value: string) => void;
-        placeholder: string;
-        min?: number;
-        step?: number;
-        className?: string;
-    }) => (
-        <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-            min={min}
-            step={step}
         />
     ),
 
@@ -108,222 +119,161 @@ const InputComponents = {
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center ${getBackgroundColor(value, 'date')} ${className}`}
         />
     )
 };
 
 const AutoPottingObservations = {
-    renderJBPottingStatus: (props: ObservationRenderProps) => {
+    renderJBPottingStatus: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-SupplierA": "", "Line-3-TypeA": "", "Line-3-ExpA": "",
-                "Line-3-SupplierB": "", "Line-3-TypeB": "", "Line-3-ExpB": "",
-                "Line-4-SupplierA": "", "Line-4-TypeA": "", "Line-4-ExpA": "",
-                "Line-4-SupplierB": "", "Line-4-TypeB": "", "Line-4-ExpB": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['SupplierA', 'TypeA', 'ExpA', 'SupplierB', 'TypeB', 'ExpB'].map(field =>
+                        [`${line}-${field}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', field: string, value: string) => {
+        const handleUpdate = (line: string, field: string, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${field}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="grid grid-cols-3 gap-2">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Supplier A</span>
-                            <InputComponents.Select
-                                value={sampleValue["Line-3-SupplierA"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'SupplierA', value)}
-                                options={[
-                                    { value: "HUITAN", label: "Huitan" },
-                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
-                                    { value: "ADARSHA", label: "Adarsha Speciality" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
+                {lines.map(line => (
+                    <LineSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Supplier A</span>
+                                <InputComponents.Select
+                                    value={sampleValue[`${line}-SupplierA`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'SupplierA', value)}
+                                    options={[
+                                        { value: "HUITAN", label: "Huitan" },
+                                        { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                        { value: "ADARSHA", label: "Adarsha Speciality" },
+                                        { value: "NA", label: "N/A" }
+                                    ]}
+                                    type="status"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Type A</span>
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-TypeA`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'TypeA', value)}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Expiry Date A</span>
+                                <InputComponents.DateInput
+                                    value={sampleValue[`${line}-ExpA`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'ExpA', value)}
+                                />
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Supplier B</span>
+                                <InputComponents.Select
+                                    value={sampleValue[`${line}-SupplierB`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'SupplierB', value)}
+                                    options={[
+                                        { value: "HUITAN", label: "Huitan" },
+                                        { value: "TONSAN", label: "Tonsan (HB fuller)" },
+                                        { value: "ADARSHA", label: "Adarsha Speciality" },
+                                        { value: "NA", label: "N/A" }
+                                    ]}
+                                    type="status"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Type B</span>
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-TypeB`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'TypeB', value)}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Expiry Date B</span>
+                                <InputComponents.DateInput
+                                    value={sampleValue[`${line}-ExpB`] || ''}
+                                    onChange={(value) => handleUpdate(line, 'ExpB', value)}
+                                />
+                            </div>
                         </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Type A</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-3-TypeA"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'TypeA', value)}
-                                placeholder=""
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Expiry Date A</span>
-                            <InputComponents.DateInput
-                                value={sampleValue["Line-3-ExpA"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'ExpA', value)}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Supplier B</span>
-                            <InputComponents.Select
-                                value={sampleValue["Line-3-SupplierB"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'SupplierB', value)}
-                                options={[
-                                    { value: "HUITAN", label: "Huitan" },
-                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
-                                    { value: "ADARSHA", label: "Adarsha Speciality" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Type B</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-3-TypeB"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'TypeB', value)}
-                                placeholder=""
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Expiry Date B</span>
-                            <InputComponents.DateInput
-                                value={sampleValue["Line-3-ExpB"] || ''}
-                                onChange={(value) => handleUpdate('Line-3', 'ExpB', value)}
-                            />
-                        </div>
-                    </div>
-                </LineSection.SingleInputSection>
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="grid grid-cols-3 gap-2">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Supplier A</span>
-                            <InputComponents.Select
-                                value={sampleValue["Line-4-SupplierA"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'SupplierA', value)}
-                                options={[
-                                    { value: "HUITAN", label: "Huitan" },
-                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
-                                    { value: "ADARSHA", label: "Adarsha Speciality" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Type A</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-4-TypeA"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'TypeA', value)}
-                                placeholder=""
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Expiry Date A</span>
-                            <InputComponents.DateInput
-                                value={sampleValue["Line-4-ExpA"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'ExpA', value)}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Supplier B</span>
-                            <InputComponents.Select
-                                value={sampleValue["Line-4-SupplierB"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'SupplierB', value)}
-                                options={[
-                                    { value: "HUITAN", label: "Huitan" },
-                                    { value: "TONSAN", label: "Tonsan (HB fuller)" },
-                                    { value: "ADARSHA", label: "Adarsha Speciality" },
-                                    { value: "NA", label: "N/A" }
-                                ]}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Type B</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-4-TypeB"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'TypeB', value)}
-                                placeholder=""
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Expiry Date B</span>
-                            <InputComponents.DateInput
-                                value={sampleValue["Line-4-ExpB"] || ''}
-                                onChange={(value) => handleUpdate('Line-4', 'ExpB', value)}
-                            />
-                        </div>
-                    </div>
-                </LineSection.SingleInputSection>
+                    </LineSection.SingleInputSection>
+                ))}
             </div>
         );
     },
 
-    renderAestheticCondition: (props: ObservationRenderProps) => {
+    renderAestheticCondition: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: AllTimeSlots, value: string) => {
+        const handleUpdate = (line: string, timeSlot: AllTimeSlots, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                        timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={[
+                                    { value: "OK", label: "Checked OK" },
+                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "OFF", label: "OFF" }
+                                ]}
+                                type="status"
+                            />
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderMixingRatio: (props: ObservationRenderProps) => {
+    renderMixingRatio: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-PartA": "", "Line-3-PartB": "", "Line-3-Ratio": "",
-                "Line-4-PartA": "", "Line-4-PartB": "", "Line-4-Ratio": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['PartA', 'PartB', 'Ratio'].map(field =>
+                        [`${line}-${field}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
         const handleBulkUpdate = (updated: Record<string, string>) => {
@@ -367,291 +317,226 @@ const AutoPottingObservations = {
             return `${normalizedA.toFixed(2)}:${normalizedB.toFixed(0)}`;
         };
 
-
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex gap-2">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Part A</span>
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-3-PartA"] || ''}
-                                onChange={(value) => {
-                                    const updated: Record<string, string> = {
-                                        ...sampleValue,
-                                        "Line-3-PartA": value
-                                    };
-                                    updated["Line-3-Ratio"] = formatRatio(updated["Line-3-PartA"], updated["Line-3-PartB"]);
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder=""
-                                step={0.01}
-                            />
-                            <span className="text-xs text-gray-500">gm</span>
+                {lines.map(line => (
+                    <LineSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <div className="flex gap-2">
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Part A</span>
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-PartA`] || ''}
+                                    onChange={(value) => {
+                                        const updated: Record<string, string> = {
+                                            ...sampleValue,
+                                            [`${line}-PartA`]: value
+                                        };
+                                        updated[`${line}-Ratio`] = formatRatio(updated[`${line}-PartA`], updated[`${line}-PartB`]);
+                                        handleBulkUpdate(updated);
+                                    }}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                                <span className="text-xs text-gray-500">gm</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Part B</span>
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-PartB`] || ''}
+                                    onChange={(value) => {
+                                        const updated: Record<string, string> = {
+                                            ...sampleValue,
+                                            [`${line}-PartB`]: value
+                                        };
+                                        updated[`${line}-Ratio`] = formatRatio(updated[`${line}-PartA`], updated[`${line}-PartB`]);
+                                        handleBulkUpdate(updated);
+                                    }}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                                <span className="text-xs text-gray-500">gm</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs text-gray-500">Ratio</span>
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-Ratio`] || ''}
+                                    onChange={(value) => {
+                                        const updated = { ...sampleValue, [`${line}-Ratio`]: value };
+                                        handleBulkUpdate(updated);
+                                    }}
+                                    placeholder="Auto"
+                                    type="measurement"
+                                />
+                            </div>
                         </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Part B</span>
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-3-PartB"] || ''}
-                                onChange={(value) => {
-                                    const updated: Record<string, string> = {
-                                        ...sampleValue,
-                                        "Line-3-PartB": value
-                                    };
-                                    updated["Line-3-Ratio"] = formatRatio(updated["Line-3-PartA"], updated["Line-3-PartB"]);
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder=""
-                                step={0.01}
-                            />
-                            <span className="text-xs text-gray-500">gm</span>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Ratio</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-3-Ratio"] || ''}
-                                onChange={(value) => {
-                                    const updated = { ...sampleValue, "Line-3-Ratio": value };
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder="Auto"
-                            />
-                        </div>
-                    </div>
-                </LineSection.SingleInputSection>
-
-                <LineSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex gap-2">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Part A</span>
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-4-PartA"] || ''}
-                                onChange={(value) => {
-                                    const updated: Record<string, string> = {
-                                        ...sampleValue,
-                                        "Line-4-PartA": value
-                                    };
-                                    updated["Line-4-Ratio"] = formatRatio(updated["Line-4-PartA"], updated["Line-4-PartB"]);
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder=""
-                                step={0.01}
-                            />
-                            <span className="text-xs text-gray-500">gm</span>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Part B</span>
-                            <InputComponents.NumberInput
-                                value={sampleValue["Line-4-PartB"] || ''}
-                                onChange={(value) => {
-                                    const updated: Record<string, string> = {
-                                        ...sampleValue,
-                                        "Line-4-PartB": value
-                                    };
-                                    updated["Line-4-Ratio"] = formatRatio(updated["Line-4-PartA"], updated["Line-4-PartB"]);
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder=""
-                                step={0.01}
-                            />
-                            <span className="text-xs text-gray-500">gm</span>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-xs text-gray-500">Ratio</span>
-                            <InputComponents.TextInput
-                                value={sampleValue["Line-4-Ratio"] || ''}
-                                onChange={(value) => {
-                                    const updated = { ...sampleValue, "Line-4-Ratio": value };
-                                    handleBulkUpdate(updated);
-                                }}
-                                placeholder="Auto"
-                            />
-                        </div>
-                    </div>
-                </LineSection.SingleInputSection>
+                    </LineSection.SingleInputSection>
+                ))}
             </div>
         );
     },
 
-    renderCupTest: (props: ObservationRenderProps) => {
+    renderCupTest: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: AllTimeSlots, value: string) => {
+        const handleUpdate = (line: string, timeSlot: AllTimeSlots, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                        timeSlots={['2hrs', '4hrs', '6hrs', '8hrs']}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={[
+                                    { value: "OK", label: "Checked OK" },
+                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "OFF", label: "OFF" }
+                                ]}
+                                type="status"
+                            />
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderCuringQuality: (props: ObservationRenderProps) => {
+    renderCuringQuality: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-4hrs": "", "Line-3-8hrs": "",
-                "Line-4-4hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['4hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: TimeSlots4H8H, value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlots4H8H, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection<TimeSlots4H8H>
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['4hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">Shore A</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection<TimeSlots4H8H>
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    timeSlots={['4hrs', '8hrs']}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">Shore A</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection<TimeSlots4H8H>
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                        timeSlots={['4hrs', '8hrs']}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center gap-2">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                                <span className="text-xs text-gray-500">Shore A</span>
+                            </div>
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     }
 };
 
-export const autoPottingStage: StageData = {
-    id: 20,
-    name: "Auto Potting",
-    parameters: [
-        {
-            id: "20-1",
-            parameters: "JB Potting status",
-            criteria: "As per Production Order /BOM Engineering Specification",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoPottingObservations.renderJBPottingStatus
-        },
-        {
-            id: "20-2",
-            parameters: "Aesthetic Condition of Poured Potting Material",
-            criteria: "Potting shall not come out of JB",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoPottingObservations.renderAestheticCondition
-        },
-        {
-            id: "20-3",
-            parameters: "Potting Material Mixing Ratio",
-            criteria: "Potting material mixing ratio as per set process recipe ((5 ± 1) : 1)",
-            typeOfInspection: "Functionality",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoPottingObservations.renderMixingRatio
-        },
-        {
-            id: "20-4",
-            parameters: "Cup test",
-            criteria: "Potting material should be cured",
-            typeOfInspection: "Functionality",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoPottingObservations.renderCupTest
-        },
-        {
-            id: "20-5",
-            parameters: "Curing Quality",
-            criteria: "Hardness should be ≥ 12 Shore A after 4 hours of curing",
-            typeOfInspection: "Functionality",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoPottingObservations.renderCuringQuality
-        }
-    ]
+export const createAutoPottingStage = (lineNumber: string): StageData => {
+    return {
+        id: 20,
+        name: "Auto Potting",
+        parameters: [
+            {
+                id: "20-1",
+                parameters: "JB Potting status",
+                criteria: "As per Production Order /BOM Engineering Specification",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoPottingObservations.renderJBPottingStatus({ ...props, lineNumber })
+            },
+            {
+                id: "20-2",
+                parameters: "Aesthetic Condition of Poured Potting Material",
+                criteria: "Potting shall not come out of JB",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoPottingObservations.renderAestheticCondition({ ...props, lineNumber })
+            },
+            {
+                id: "20-3",
+                parameters: "Potting Material Mixing Ratio",
+                criteria: "Potting material mixing ratio as per set process recipe ((5 ± 1) : 1)",
+                typeOfInspection: "Functionality",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoPottingObservations.renderMixingRatio({ ...props, lineNumber })
+            },
+            {
+                id: "20-4",
+                parameters: "Cup test",
+                criteria: "Potting material should be cured",
+                typeOfInspection: "Functionality",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoPottingObservations.renderCupTest({ ...props, lineNumber })
+            },
+            {
+                id: "20-5",
+                parameters: "Curing Quality",
+                criteria: "Hardness should be ≥ 12 Shore A after 4 hours of curing",
+                typeOfInspection: "Functionality",
+                inspectionFrequency: "Every 4 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoPottingObservations.renderCuringQuality({ ...props, lineNumber })
+            }
+        ]
+    };
 };
+
+export const autoPottingStage: StageData = createAutoPottingStage('II');

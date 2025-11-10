@@ -1,12 +1,20 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
+const getBackgroundColor = (value: string) => {
+    if (!value) return 'bg-white';
+    const upperValue = value.toUpperCase();
+    if (upperValue === 'OFF') return 'bg-yellow-100';
+    if (upperValue === 'NG') return 'bg-red-100';
+    return 'bg-white';
+};
+
 const PackingObservations = {
     renderSelector: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
+        <div className="flex justify-center">
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
                 <option value="OK">Checked Ok</option>
@@ -22,7 +30,7 @@ const PackingObservations = {
                 type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             />
         </div>
     ),
@@ -32,7 +40,7 @@ const PackingObservations = {
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm w-full"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
                 <option value="vertically">Vertically</option>
@@ -47,7 +55,7 @@ const PackingObservations = {
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm w-full"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
                 <option value="35">35</option>
@@ -59,14 +67,12 @@ const PackingObservations = {
     ),
 
     renderMeasurement: (props: ObservationRenderProps) => (
-        <div className="w-full flex flex-col justify-center">
+        <div className="flex flex-col justify-center">
             <input
-                type="number"
+                type="text"
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                step="0.1"
-                min="0"
+                className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             />
             <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
         </div>

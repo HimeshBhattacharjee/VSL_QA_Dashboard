@@ -1,8 +1,27 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
+
+const getLineConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[19];
+    if (!stageConfig) return ['Line-3', 'Line-4'];
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions : ['Line-3', 'Line-4'];
+};
+
+const getBackgroundColor = (value: string, type: 'status' | 'measurement') => {
+    if (!value) return 'bg-white';
+    const upperValue = value.toUpperCase();
+    if (upperValue === 'OFF') return 'bg-yellow-100';
+    if (type === 'status') {
+        if (upperValue === 'NA') return 'bg-yellow-100';
+        if (upperValue === 'NG') return 'bg-red-100';
+    }
+    return 'bg-white';
+};
 
 const JBSolderingSection = {
     TimeBasedSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
@@ -23,8 +42,9 @@ const JBSolderingSection = {
             </div>
         </div>
     ),
+    
     SingleInputSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
@@ -39,16 +59,17 @@ const JBSolderingSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-full" }: {
+    Select: ({ value, onChange, options, className = "", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
         className?: string;
+        type?: 'status' | 'measurement';
     }) => (
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 ${getBackgroundColor(value, type)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -57,237 +78,192 @@ const InputComponents = {
         </select>
     ),
 
-    TextInput: ({ value, onChange, placeholder, className = "w-full" }: {
+    TextInput: ({ value, onChange, placeholder, className = "w-full", type = "status" }: {
         value: string;
         onChange: (value: string) => void;
         placeholder: string;
         className?: string;
+        type?: 'status' | 'measurement';
     }) => (
         <input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-        />
-    ),
-
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
-        value: string;
-        onChange: (value: string) => void;
-        placeholder: string;
-        min?: number;
-        step?: number;
-        className?: string;
-    }) => (
-        <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-            min={min}
-            step={step}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-center ${getBackgroundColor(value, type)} ${className}`}
         />
     )
 };
 
 const AutoJBSolderingObservations = {
-    renderESDBand: (props: ObservationRenderProps) => {
+    renderESDBand: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-4hrs": "", "Line-3-shift": "",
-                "Line-4-4hrs": "", "Line-4-shift": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line => 
+                    ['4hrs', '8hrs'].map(timeSlot => 
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '4hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <JBSolderingSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            options={[
-                                { value: "ESD band used", label: "ESD band used" },
-                                { value: "ESD band not used", label: "ESD band not used" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </JBSolderingSection.TimeBasedSection>
-                <JBSolderingSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            options={[
-                                { value: "ESD band used", label: "ESD band used" },
-                                { value: "ESD band not used", label: "ESD band not used" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </JBSolderingSection.TimeBasedSection>
+                {lines.map(line => (
+                    <JBSolderingSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={[
+                                    { value: "OK", label: "ESD band used" },
+                                    { value: "NG", label: "ESD band not used" },
+                                    { value: "OFF", label: "OFF" }
+                                ]}
+                                type="status"
+                            />
+                        )}
+                    </JBSolderingSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderTerminalInsertion: (props: ObservationRenderProps) => {
+    renderTerminalInsertion: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-4hrs": "", "Line-3-shift": "",
-                "Line-4-4hrs": "", "Line-4-shift": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line => 
+                    ['4hrs', '8hrs'].map(timeSlot => 
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '4hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <JBSolderingSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center justify-between">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500 mt-1">mm</span>
-                        </div>
-                    )}
-                </JBSolderingSection.TimeBasedSection>
-                <JBSolderingSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center justify-between">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500 mt-1">mm</span>
-                        </div>
-                    )}
-                </JBSolderingSection.TimeBasedSection>
+                {lines.map(line => (
+                    <JBSolderingSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center justify-between">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="measurement"
+                                />
+                                <span className="text-xs text-gray-500 mt-1">mm</span>
+                            </div>
+                        )}
+                    </JBSolderingSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderPullStrength: (props: ObservationRenderProps) => {
+    renderPullStrength: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3": "", "Line-4": ""
-            }
+            ? Object.fromEntries(
+                lines.map(line => [`${line}`, ""])
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', value: string) => {
+        const handleUpdate = (line: string, value: string) => {
             const updatedValue = { ...sampleValue, [line]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <JBSolderingSection.SingleInputSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex flex-col items-center justify-between">
-                        <InputComponents.NumberInput
-                            value={sampleValue["Line-3"] || ''}
-                            onChange={(value) => handleUpdate('Line-3', value)}
-                            placeholder=""
-                            min={0}
-                            step={0.1}
-                        />
-                        <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
-                    </div>
-                </JBSolderingSection.SingleInputSection>
-                <JBSolderingSection.SingleInputSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    <div className="flex flex-col items-center justify-between">
-                        <InputComponents.NumberInput
-                            value={sampleValue["Line-4"] || ''}
-                            onChange={(value) => handleUpdate('Line-4', value)}
-                            placeholder=""
-                            min={0}
-                            step={0.1}
-                        />
-                        <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
-                    </div>
-                </JBSolderingSection.SingleInputSection>
+                {lines.map(line => (
+                    <JBSolderingSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <div className="flex flex-col items-center justify-between">
+                            <InputComponents.TextInput
+                                value={sampleValue[line] || ''}
+                                onChange={(value) => handleUpdate(line, value)}
+                                placeholder=""
+                                type="measurement"
+                            />
+                            <span className="text-xs text-gray-500 mt-1">Newton (N)</span>
+                        </div>
+                    </JBSolderingSection.SingleInputSection>
+                ))}
             </div>
         );
     }
 };
 
-export const autoJBSolderingStage: StageData = {
-    id: 19,
-    name: "Auto JB Soldering",
-    parameters: [
-        {
-            id: "19-1",
-            parameters: "ESD band use",
-            criteria: "Manual JB Soldering Operator shall wear ESD band",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoJBSolderingObservations.renderESDBand
-        },
-        {
-            id: "19-2",
-            parameters: "Terminal Insertion / As per Auto soldering M/c",
-            criteria: "Inserted terminal soldering length ≥ 5mm",
-            typeOfInspection: "Measurements",
-            inspectionFrequency: "Every 4 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoJBSolderingObservations.renderTerminalInsertion
-        },
-        {
-            id: "19-3",
-            parameters: "Attachment of Bus ribbon to JB terminal",
-            criteria: "Pull strength ≥ 25 N",
-            typeOfInspection: "Functionality",
-            inspectionFrequency: "Every shift",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: AutoJBSolderingObservations.renderPullStrength
-        }
-    ]
+export const createAutoJBSolderingStage = (lineNumber: string): StageData => {
+    return {
+        id: 19,
+        name: "Auto JB Soldering",
+        parameters: [
+            {
+                id: "19-1",
+                parameters: "ESD band use",
+                criteria: "Manual JB Soldering Operator shall wear ESD band",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 4 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoJBSolderingObservations.renderESDBand({ ...props, lineNumber })
+            },
+            {
+                id: "19-2",
+                parameters: "Terminal Insertion / As per Auto soldering M/c",
+                criteria: "Inserted terminal soldering length ≥ 5mm",
+                typeOfInspection: "Measurements",
+                inspectionFrequency: "Every 4 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoJBSolderingObservations.renderTerminalInsertion({ ...props, lineNumber })
+            },
+            {
+                id: "19-3",
+                parameters: "Attachment of Bus ribbon to JB terminal",
+                criteria: "Pull strength ≥ 25 N",
+                typeOfInspection: "Functionality",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    AutoJBSolderingObservations.renderPullStrength({ ...props, lineNumber })
+            }
+        ]
+    };
 };
+
+export const autoJBSolderingStage: StageData = createAutoJBSolderingStage('II');

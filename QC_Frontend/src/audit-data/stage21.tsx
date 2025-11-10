@@ -1,11 +1,42 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { LINE_DEPENDENT_CONFIG } from './lineConfig';
+
+type TimeSlot = '2hrs' | '4hrs' | '6hrs' | '8hrs';
+
+const getLineConfiguration = (lineNumber: string): string[] => {
+    const stageConfig = LINE_DEPENDENT_CONFIG[21];
+    if (!stageConfig) return ['Line-3', 'Line-4'];
+    const lineOptions = stageConfig.lineMapping[lineNumber];
+    return Array.isArray(lineOptions) ? lineOptions : ['Line-3', 'Line-4'];
+};
+
+const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'measurement' | 'date' = 'status', criteria?: string) => {
+    if (!value) return 'bg-white';
+    const upperValue = value.toUpperCase();
+    if (upperValue === 'OFF') return 'bg-yellow-100';
+    if (type === 'status') {
+        if (upperValue === 'NA') return 'bg-yellow-100';
+        if (upperValue === 'NG') return 'bg-red-100';
+    }
+    if (type === 'measurement' || type === 'temperature') {
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) return 'bg-white';
+        if (criteria) {
+            if (criteria.includes('≥ 65%')) return numValue >= 65 ? 'bg-white' : 'bg-red-100';
+            if (criteria.includes('25 ± 2 °C')) return (numValue >= 23 && numValue <= 27) ? 'bg-white' : 'bg-red-100';
+            if (criteria.includes('≥ 4 hours')) return numValue >= 4 ? 'bg-white' : 'bg-red-100';
+            if (criteria.includes('≤ 30 no')) return numValue <= 30 ? 'bg-white' : 'bg-red-100';
+        }
+    }
+    return 'bg-white';
+};
 
 const LineSection = {
     TimeBasedSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
-        children: (timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs') => React.ReactNode;
+        children: (timeSlot: TimeSlot) => React.ReactNode;
     }) => (
         <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
@@ -33,7 +64,7 @@ const LineSection = {
     ),
 
     SingleInputSection: ({ line, value, onUpdate, children }: {
-        line: 'Line-3' | 'Line-4';
+        line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
@@ -48,16 +79,18 @@ const LineSection = {
 };
 
 const InputComponents = {
-    Select: ({ value, onChange, options, className = "w-full" }: {
+    Select: ({ value, onChange, options, className = "", type = "status", criteria }: {
         value: string;
         onChange: (value: string) => void;
         options: { value: string; label: string }[];
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
+        criteria?: string;
     }) => (
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type, criteria)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -66,359 +99,313 @@ const InputComponents = {
         </select>
     ),
 
-    NumberInput: ({ value, onChange, placeholder, min = 0, step = 1, className = "w-full" }: {
+    TextInput: ({ value, onChange, placeholder, className = "w-full", type = "status", criteria }: {
         value: string;
         onChange: (value: string) => void;
         placeholder: string;
-        min?: number;
-        step?: number;
         className?: string;
+        type?: 'status' | 'temperature' | 'measurement' | 'date';
+        criteria?: string;
     }) => (
         <input
-            type="number"
+            type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center bg-white ${className}`}
-            min={min}
-            step={step}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
         />
     )
 };
 
 const CuringObservations = {
-    renderHumidity: (props: ObservationRenderProps) => {
+    renderHumidity: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">%</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">%</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center gap-2">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="measurement"
+                                    criteria="≥ 65%"
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                            </div>
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderTemperature: (props: ObservationRenderProps) => {
+    renderTemperature: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">°C</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={0.1}
-                            />
-                            <span className="text-xs text-gray-500">°C</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center gap-2">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="temperature"
+                                    criteria="25 ± 2 °C"
+                                />
+                                <span className="text-xs text-gray-500">°C</span>
+                            </div>
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderCuringTime: (props: ObservationRenderProps) => {
+    renderCuringTime: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500">Hours</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500">Hours</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center gap-2">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="measurement"
+                                    criteria="≥ 4 hours"
+                                />
+                                <span className="text-xs text-gray-500">Hours</span>
+                            </div>
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderStacking: (props: ObservationRenderProps) => {
+    renderStacking: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500">Nos</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <div className="flex flex-col items-center gap-2">
-                            <InputComponents.NumberInput
-                                value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                                placeholder=""
-                                min={0}
-                                step={1}
-                            />
-                            <span className="text-xs text-gray-500">Nos</span>
-                        </div>
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <div className="flex flex-col items-center gap-2">
+                                <InputComponents.TextInput
+                                    value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                    onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                    placeholder=""
+                                    type="measurement"
+                                    criteria="≤ 30 no's"
+                                />
+                                <span className="text-xs text-gray-500">Nos</span>
+                            </div>
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     },
 
-    renderCuringQuality: (props: ObservationRenderProps) => {
+    renderCuringQuality: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
-            ? {
-                "Line-3-2hrs": "", "Line-3-4hrs": "", "Line-3-6hrs": "", "Line-3-8hrs": "",
-                "Line-4-2hrs": "", "Line-4-4hrs": "", "Line-4-6hrs": "", "Line-4-8hrs": ""
-            }
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    ['2hrs', '4hrs', '6hrs', '8hrs'].map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: 'Line-3' | 'Line-4', timeSlot: '2hrs' | '4hrs' | '6hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: TimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
-                <LineSection.TimeBasedSection
-                    line="Line-3"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-3-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-3', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
-                <LineSection.TimeBasedSection
-                    line="Line-4"
-                    value={sampleValue}
-                    onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                >
-                    {(timeSlot) => (
-                        <InputComponents.Select
-                            value={sampleValue[`Line-4-${timeSlot}`] || ''}
-                            onChange={(value) => handleUpdate('Line-4', timeSlot, value)}
-                            options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "OFF", label: "OFF" }
-                            ]}
-                        />
-                    )}
-                </LineSection.TimeBasedSection>
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={[
+                                    { value: "OK", label: "Checked OK" },
+                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "OFF", label: "OFF" }
+                                ]}
+                                type="status"
+                            />
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
             </div>
         );
     }
 };
 
-export const curingStage: StageData = {
-    id: 21,
-    name: "Curing",
-    parameters: [
-        {
-            id: "21-1",
-            parameters: "Humidity",
-            criteria: "≥ 65%",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: CuringObservations.renderHumidity
-        },
-        {
-            id: "21-2",
-            parameters: "Temperature",
-            criteria: "25 ± 2 °C",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: CuringObservations.renderTemperature
-        },
-        {
-            id: "21-3",
-            parameters: "Curing time",
-            criteria: "≥ 4 hours/until cure",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: CuringObservations.renderCuringTime
-        },
-        {
-            id: "21-4",
-            parameters: "Stacking",
-            criteria: "≤ 30 no's on conveyor in Zigzag orientation",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: CuringObservations.renderStacking
-        },
-        {
-            id: "21-5",
-            parameters: "Curing Quality",
-            criteria: "Sealant cured properly, not sticking to finger",
-            typeOfInspection: "Aesthetics",
-            inspectionFrequency: "Every 2 hours",
-            observations: [
-                { timeSlot: "", value: "" }
-            ],
-            renderObservation: CuringObservations.renderCuringQuality
-        }
-    ]
+export const createCuringStage = (lineNumber: string): StageData => {
+    return {
+        id: 21,
+        name: "Curing",
+        parameters: [
+            {
+                id: "21-1",
+                parameters: "Humidity",
+                criteria: "≥ 65%",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    CuringObservations.renderHumidity({ ...props, lineNumber })
+            },
+            {
+                id: "21-2",
+                parameters: "Temperature",
+                criteria: "25 ± 2 °C",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    CuringObservations.renderTemperature({ ...props, lineNumber })
+            },
+            {
+                id: "21-3",
+                parameters: "Curing time",
+                criteria: "≥ 4 hours/until cure",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    CuringObservations.renderCuringTime({ ...props, lineNumber })
+            },
+            {
+                id: "21-4",
+                parameters: "Stacking",
+                criteria: "≤ 30 no's on conveyor in Zigzag orientation",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    CuringObservations.renderStacking({ ...props, lineNumber })
+            },
+            {
+                id: "21-5",
+                parameters: "Curing Quality",
+                criteria: "Sealant cured properly, not sticking to finger",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every 2 hours",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    CuringObservations.renderCuringQuality({ ...props, lineNumber })
+            }
+        ]
+    };
 };
+
+export const curingStage: StageData = createCuringStage('II');

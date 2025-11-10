@@ -1,20 +1,30 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 
 const AutoSorterObservations = {
-    renderSelector: (props: ObservationRenderProps) => (
-        <div className="w-full flex justify-center">
-            <select
-                value={props.value as string}
-                onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-            >
-                <option value="">Select Status</option>
-                <option value="OK">Checked OK</option>
-                <option value="NG">Checked Not OK</option>
-                <option value="OFF">OFF</option>
-            </select>
-        </div>
-    )
+    renderSelector: (props: ObservationRenderProps) => {
+        const getBackgroundColor = (value: string) => {
+            if (!value) return 'bg-white';
+            const upperValue = value.toUpperCase();
+            if (upperValue === 'OFF') return 'bg-yellow-100';
+            if (upperValue === 'NG') return 'bg-red-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="w-full flex justify-center">
+                <select
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                >
+                    <option value="">Select Status</option>
+                    <option value="OK">Checked OK</option>
+                    <option value="NG">Checked Not OK</option>
+                    <option value="OFF">OFF</option>
+                </select>
+            </div>
+        )
+    }
 };
 
 export const autoSorterStage: StageData = {

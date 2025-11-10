@@ -10,6 +10,12 @@ import { createLaminationStage } from "../audit-data/stage14";
 import { createAutoTrimmingStage } from "../audit-data/stage15";
 import { createAutoFramingStage } from "../audit-data/stage17";
 import { createJunctionBoxFixingStage } from "../audit-data/stage18";
+import { createAutoJBSolderingStage } from "../audit-data/stage19";
+import { createAutoPottingStage } from "../audit-data/stage20";
+import { createCuringStage } from "../audit-data/stage21";
+import { createAutoFilingStage } from "../audit-data/stage22";
+import { createSunSimulatorStage } from "../audit-data/stage24";
+import { createSafetyTestStage } from "../audit-data/stage26";
 
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
@@ -23,6 +29,12 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
             if (stage.id === 15) return createAutoTrimmingStage(lineNumber);
             if (stage.id === 17) return createAutoFramingStage(lineNumber);
             if (stage.id === 18) return createJunctionBoxFixingStage(lineNumber);
+            if (stage.id === 19) return createAutoJBSolderingStage(lineNumber);
+            if (stage.id === 20) return createAutoPottingStage(lineNumber);
+            if (stage.id === 21) return createCuringStage(lineNumber);
+            if (stage.id === 22) return createAutoFilingStage(lineNumber);
+            if (stage.id === 24) return createSunSimulatorStage(lineNumber);
+            if (stage.id === 26) return createSafetyTestStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
             const lineOptions = stageConfig.lineMapping[lineNumber];
@@ -47,7 +59,7 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
 };
 
 export default function Test() {
-    const stageID = 19;
+    const stageID = 31;
     const { lineNumber, setLineNumber } = useLine();
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
     setLineNumber('I')
@@ -123,7 +135,8 @@ export default function Test() {
                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 text-green-800' :
                                             param.typeOfInspection === 'Measurements' ? 'bg-blue-100 text-blue-800' :
                                                 param.typeOfInspection === 'Functionality' ? 'bg-purple-100 text-purple-800' :
-                                                    'bg-gray-100 text-gray-800'
+                                                    param.typeOfInspection === 'RFID Scanner' ? 'bg-cyan-100 text-cyan-800' :
+                                                        'bg-gray-100 text-gray-800'
                                             }`}>
                                             {param.typeOfInspection}
                                         </span>

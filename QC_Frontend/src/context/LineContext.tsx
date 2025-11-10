@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-interface LineContextType {
-    lineNumber: string;
-    setLineNumber: (line: string) => void;
-}
+interface LineContextType { lineNumber: string; setLineNumber: (line: string) => void; }
 
 const LineContext = createContext<LineContextType | undefined>(undefined);
 
