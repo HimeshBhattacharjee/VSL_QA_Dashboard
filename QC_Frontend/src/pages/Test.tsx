@@ -59,7 +59,7 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
 };
 
 export default function Test() {
-    const stageID = 31;
+    const stageID = 24;
     const { lineNumber, setLineNumber } = useLine();
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
     setLineNumber('I')

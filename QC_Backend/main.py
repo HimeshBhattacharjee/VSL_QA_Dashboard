@@ -1,14 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import uvicorn
 from constants import SERVER_URL, PORT
 from routes.qa_route import qa_router
 from routes.bGrade_route import bgrade_router
 from routes.peel_route import peel_router
+from routes.user_route import user_router
+from generators.AuditReportGenerator import generate_audit_report
 
 app = FastAPI(
     title="Manufacturing Analytics API",
-    description="Combined API for Quality Analysis, B-Grade Trend data, and Peel Test results",
+    description="Combined API for Quality Analysis, B-Grade Trend data, Peel Test results, User Management, and Audit Reports",
     version="1.0.0"
 )
 
@@ -23,6 +26,34 @@ app.add_middleware(
 app.include_router(qa_router)
 app.include_router(bgrade_router)
 app.include_router(peel_router)
+app.include_router(user_router)
+
+@app.post("/generate-audit-report")
+async def generate_audit_report_endpoint(audit_data: dict):
+    try:
+        if not audit_data:
+            raise HTTPException(status_code=400, detail="No audit data provided")
+        
+        # Call the function from AuditReportGenerator module
+        output, filename = generate_audit_report(audit_data)
+        
+        # Use StreamingResponse for BytesIO objects
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Access-Control-Allow-Origin': 'http://localhost:5173',
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error generating audit report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
+@app.get("/api/audit-health")
+async def audit_health_check():
+    return {"status": "healthy", "message": "Audit Report API is running"}
 
 @app.get("/")
 async def root():
@@ -41,6 +72,14 @@ async def root():
             "peel_test": {
                 "base_path": "/peel",
                 "description": "Peel test data for solar cell manufacturing"
+            },
+            "user_management": {
+                "base_path": "/user",
+                "description": "User management and authentication"
+            },
+            "audit_reports": {
+                "base_path": "/generate-audit-report",
+                "description": "Generate audit reports"
             }
         },
         "documentation": {
@@ -57,7 +96,9 @@ async def global_health_check():
         "services": {
             "quality_analysis": "available",
             "b_grade_trend": "available",
-            "peel_test": "available"
+            "peel_test": "available",
+            "user_management": "available",
+            "audit_reports": "available"
         }
     }
 

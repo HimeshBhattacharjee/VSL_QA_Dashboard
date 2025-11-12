@@ -25,6 +25,24 @@ function ProtectedLayout() {
     return <Outlet />;
 }
 
+function AdminRoute() {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    const userRole = sessionStorage.getItem("userRole");
+
+    if (!isLoggedIn) return <Navigate to="/login" replace />;
+    if (userRole !== 'Admin') return <Navigate to="/home" replace />;
+    return <Admin />;
+}
+
+function UserRoute({ children }: { children: React.ReactNode }) {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    const userRole = sessionStorage.getItem("userRole");
+
+    if (!isLoggedIn) return <Navigate to="/login" replace />;
+    if (userRole === 'Admin') return <Navigate to="/admin" replace />;
+    return <>{children}</>;
+}
+
 function AppProviders({ children }: { children: React.ReactNode }) {
     return (
         <AlertProvider>
@@ -45,24 +63,77 @@ export default function App() {
             <Router>
                 <div className="min-h-screen bg-[linear-gradient(135deg,_rgb(102,126,234)_0%,_rgb(118,75,162)_100%)]">
                     <Routes>
-                        <Route path="/" element={<Login />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/" element={<Navigate to="/login" replace />} />
+                        <Route path="/admin" element={<AdminRoute />} />
                         <Route element={<ProtectedLayout />}>
-                            <Route path="/home" element={<Home />} />
-                            <Route path="/admin" element={<Admin />} />
-                            <Route path="/quality-tests" element={<QualityTests />} />
-                            <Route path="/gel-test" element={<GelTest />} />
-                            <Route path="/peel-test" element={<PeelTest />} />
-                            <Route path="/b-grade-trend" element={<BGradeTrend />} />
-                            <Route path="/quality-analysis" element={<QualityAnalysis />} />
-                            <Route path="/prelam" element={<PreLam />} />
-                            <Route path="/pre-el" element={<PreEL />} />
-                            <Route path="/visual" element={<Visual />} />
-                            <Route path="/lamqc" element={<LamQC />} />
-                            <Route path="/fqc" element={<FQC />} />
-                            <Route path="/quality-audit" element={<QualityAudit />} />
-                            <Route path="/test" element={<Test />} />
+                            <Route path="/home" element={
+                                <UserRoute>
+                                    <Home />
+                                </UserRoute>
+                            } />
+                            <Route path="/quality-tests" element={
+                                <UserRoute>
+                                    <QualityTests />
+                                </UserRoute>
+                            } />
+                            <Route path="/gel-test" element={
+                                <UserRoute>
+                                    <GelTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/peel-test" element={
+                                <UserRoute>
+                                    <PeelTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/b-grade-trend" element={
+                                <UserRoute>
+                                    <BGradeTrend />
+                                </UserRoute>
+                            } />
+                            <Route path="/quality-analysis" element={
+                                <UserRoute>
+                                    <QualityAnalysis />
+                                </UserRoute>
+                            } />
+                            <Route path="/prelam" element={
+                                <UserRoute>
+                                    <PreLam />
+                                </UserRoute>
+                            } />
+                            <Route path="/pre-el" element={
+                                <UserRoute>
+                                    <PreEL />
+                                </UserRoute>
+                            } />
+                            <Route path="/visual" element={
+                                <UserRoute>
+                                    <Visual />
+                                </UserRoute>
+                            } />
+                            <Route path="/lamqc" element={
+                                <UserRoute>
+                                    <LamQC />
+                                </UserRoute>
+                            } />
+                            <Route path="/fqc" element={
+                                <UserRoute>
+                                    <FQC />
+                                </UserRoute>
+                            } />
+                            <Route path="/quality-audit" element={
+                                <UserRoute>
+                                    <QualityAudit />
+                                </UserRoute>
+                            } />
+                            <Route path="/test" element={
+                                <UserRoute>
+                                    <Test />
+                                </UserRoute>
+                            } />
                         </Route>
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<Navigate to="/login" replace />} />
                     </Routes>
                 </div>
             </Router>

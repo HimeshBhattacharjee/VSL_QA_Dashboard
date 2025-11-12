@@ -8,6 +8,7 @@ export default function Header() {
     const [pageTitle, setPageTitle] = useState<string>('Home');
     const [pageSubTitle, setPageSubTitle] = useState<string>('');
     const [username, setUsername] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -16,13 +17,16 @@ export default function Header() {
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
         const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
+        const storedUserRole = sessionStorage.getItem("userRole");
+
         setUsername(storedUsername);
+        setUserRole(storedUserRole);
         setIsLoggedIn(storedIsLoggedIn === "true");
     }, [location.pathname]);
 
     useEffect(() => {
         switch (location.pathname) {
-            case '/':
+            case '/login':
                 setPageTitle("VSL Quality Portal Login");
                 setPageSubTitle("");
                 break;
@@ -86,7 +90,9 @@ export default function Header() {
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setDropdownOpen(false);
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setDropdownOpen(false);
+            }
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -95,39 +101,87 @@ export default function Header() {
     const handleLogout = () => {
         sessionStorage.removeItem("isLoggedIn");
         sessionStorage.removeItem("username");
+        sessionStorage.removeItem("userRole");
         setIsLoggedIn(false);
         setUsername(null);
+        setUserRole(null);
         setDropdownOpen(false);
         showAlert('success', 'Logged out successfully!');
-        navigate("/");
+        navigate("/login");
     };
 
-    const handleUserIconClick = () => { if (isLoggedIn) setDropdownOpen(!dropdownOpen) };
+    const handleUserIconClick = () => {
+        if (isLoggedIn) setDropdownOpen(!dropdownOpen);
+    };
+
+    const handleLogoClick = () => {
+        if (!isLoggedIn) {
+            navigate("/login");
+            return;
+        }
+
+        const userRole = sessionStorage.getItem("userRole");
+        if (userRole === 'Admin') {
+            navigate("/admin");
+        } else {
+            navigate("/home");
+        }
+    };
+
+    const getAvatarColor = () => {
+        switch (userRole) {
+            case 'Admin':
+                return 'bg-red-600';
+            case 'Operator':
+                return 'bg-blue-600';
+            case 'Reviewer':
+                return 'bg-green-600';
+            default:
+                return 'bg-indigo-600';
+        }
+    };
 
     return (
         <div className="w-full mb-5 pt-2">
             <nav className="flex justify-between items-center py-4 px-5 relative min-h-20">
                 <div className="flex items-center gap-5 flex-1">
-                    <img src="../LOGOS/VSL_Logo (1).png" alt="VSL Logo"
-                        className="cursor-pointer h-10 transition-all duration-300 hover:scale-105"
-                        onClick={() => navigate('/home')}
+                    <img
+                        src="../LOGOS/VSL_Logo (1).png"
+                        alt="VSL Logo"
+                        className="cursor-pointer h-10 transition-all duration-300 hover:scale-105 brightness-0 invert"
+                        onClick={handleLogoClick}
                     />
                 </div>
                 <div className="absolute left-1/2 transform -translate-x-1/2 pt-4 text-center flex-2">
                     <h1 className="text-3xl text-white mb-1 drop-shadow-lg font-bold">{pageTitle}</h1>
-                    {pageSubTitle && (<p className="text-white text-md opacity-90">{pageSubTitle}</p>)}
+                    {pageSubTitle && (
+                        <p className="text-white text-md opacity-90">{pageSubTitle}</p>
+                    )}
                 </div>
                 <div className="flex items-center justify-end flex-1 relative" ref={dropdownRef}>
                     {isLoggedIn ? (
                         <>
-                            <div onClick={handleUserIconClick}
-                                className="h-10 w-10 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 bg-indigo-600 text-white font-semibold transition-all duration-300 hover:scale-110 hover:border-white hover:shadow-lg hover:shadow-white/30 select-none"
+                            <div className="flex items-center gap-3 mr-4">
+                                <span className="text-white text-sm bg-black/30 px-3 py-1 rounded-full">
+                                    {userRole}
+                                </span>
+                            </div>
+                            <div
+                                onClick={handleUserIconClick}
+                                className={`h-10 w-10 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 text-white font-semibold transition-all duration-300 hover:scale-110 hover:border-white hover:shadow-lg hover:shadow-white/30 select-none ${getAvatarColor()}`}
                             >
-                                {username ? username.charAt(0).toUpperCase() : <span className="text-gray-300">?</span>}
+                                {username ? username.charAt(0).toUpperCase() : '?'}
                             </div>
                             {dropdownOpen && (
-                                <div className="absolute right-0 mt-2 w-36 bg-white text-gray-800 rounded-lg shadow-lg py-2 border border-gray-200 animate-fade-in">
-                                    <button onClick={handleLogout} className="block w-full text-left px-4 py-2 hover:bg-gray-100 font-medium">
+                                <div className="absolute right-0 top-12 mt-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg py-2 border border-gray-200 animate-fade-in z-50">
+                                    <div className="px-4 py-2 border-b border-gray-100">
+                                        <p className="font-semibold text-sm">{username}</p>
+                                        <p className="text-xs text-gray-600 capitalize">{userRole?.toLowerCase()}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="block w-full text-left px-4 py-2 hover:bg-gray-100 font-medium text-sm"
+                                    >
                                         Logout
                                     </button>
                                 </div>

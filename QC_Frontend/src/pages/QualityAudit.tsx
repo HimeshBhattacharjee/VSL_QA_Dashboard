@@ -251,8 +251,44 @@ export default function QualityAudit() {
         setStageChanges(prev => new Set(prev).add(stageId));
     };
 
-    const generatePDFReport = () => {
-        console.log('Generating PDF with data:', auditData);
+    const generatePDFReport = async () => {
+        try {
+            console.log('Generating PDF with data:', auditData);
+
+            const response = await fetch('http://localhost:8000/generate-audit-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(auditData) // Send the audit data
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
+
+            // Create blob from response and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Generate filename based on audit data
+            const filename = `Quality_Audit_Line${auditData.lineNumber}_${auditData.date.replace(/-/g, '')}_Shift${auditData.shift}.xlsx`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Audit report generated successfully!');
+
+        } catch (error) {
+            console.error('Error generating report:', error);
+            showAlert('error', 'Failed to generate audit report. Please try again.');
+        }
     };
 
     const isBasicInfoComplete = () => {
@@ -328,7 +364,6 @@ export default function QualityAudit() {
             return newSet;
         });
         setHasUnsavedChanges(Array.from(stageChanges).some(stageId => stageId !== selectedStageId));
-        showAlert('success', `Stage ${selectedStageId} saved successfully!`);
     };
 
     const previewSavedChecksheet = (index: number) => {
@@ -467,6 +502,7 @@ export default function QualityAudit() {
                                                 <option value="A">Shift-A</option>
                                                 <option value="B">Shift-B</option>
                                                 <option value="C">Shift-C</option>
+                                                <option value="G">Shift-G</option>
                                             </select>
                                         </div>
 

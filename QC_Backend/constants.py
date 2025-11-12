@@ -3,4 +3,4 @@ import os
 load_dotenv()
 
 SERVER_URL = 'localhost'
-PORT = '8900'
+PORT = '8000'

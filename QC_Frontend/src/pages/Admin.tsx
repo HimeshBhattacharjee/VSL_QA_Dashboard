@@ -1,55 +1,147 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Header from '../components/Header';
+import { useAlert } from '../context/AlertContext';
+import { useConfirmModal } from '../context/ConfirmModalContext';
+
+interface User {
+    id: string;
+    name: string;
+    employeeId: string;
+    phone: string;
+    role: string;
+    status: string;
+    avatar: string;
+    password: string;
+    isDefaultPassword: boolean;
+    createdAt: string;
+}
 
 const Admin = () => {
-    const [activeTab, setActiveTab] = useState(null);
-    const [users, setUsers] = useState([
-        { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Admin', status: 'Active', avatar: 'JD' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'User', status: 'Active', avatar: 'JS' },
-        { id: 3, name: 'Mike Johnson', email: 'mike@example.com', role: 'User', status: 'Inactive', avatar: 'MJ' },
-    ]);
+    const [activeTab, setActiveTab] = useState<string | null>(null);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [newUser, setNewUser] = useState({ name: '', employeeId: '', phone: '', role: 'Operator', password: '' });
+    const { showAlert } = useAlert();
+    const { showConfirm } = useConfirmModal();
+    const USER_API_BASE_URL = 'http://localhost:8000/user';
 
-    const [newUser, setNewUser] = useState({
-        name: '',
-        email: '',
-        role: 'User',
-        password: ''
-    });
+    const fetchUsers = async () => {
+        try {
+            const response = await fetch(`${USER_API_BASE_URL}/users`);
+            if (response.ok) {
+                const usersData = await response.json();
+                setUsers(usersData);
+            } else {
+                console.error('Failed to fetch users');
+                showAlert('error', 'Failed to load users');
+            }
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            showAlert('error', 'Error loading users');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const handleCreateUser = (e) => {
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const generatePassword = (name: string, employeeId: string, phone: string) => {
+        if (!name || !employeeId || !phone) return '';
+        const firstTwoLetters = name.split(' ').map(n => n[0]).join('').slice(0, 2);
+        const lastFourEmployeeId = employeeId.slice(-4);
+        const lastFourPhone = phone.slice(-4);
+        return `${firstTwoLetters}${lastFourEmployeeId}${lastFourPhone}`;
+    };
+
+    const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
-        const user = {
-            id: users.length + 1,
-            ...newUser,
-            status: 'Active',
-            avatar: newUser.name.split(' ').map(n => n[0]).join('').toUpperCase(),
-            createdAt: new Date().toLocaleDateString()
+        const generatedPassword = generatePassword(newUser.name, newUser.employeeId, newUser.phone);
+        const userData = {
+            name: newUser.name,
+            employeeId: newUser.employeeId,
+            phone: newUser.phone,
+            role: newUser.role,
+            password: generatedPassword
         };
-        setUsers([...users, user]);
-        setNewUser({ name: '', email: '', role: 'User', password: '' });
+
+        try {
+            const response = await fetch(`${USER_API_BASE_URL}/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', },
+                body: JSON.stringify(userData),
+            });
+            if (response.ok) {
+                const savedUser = await response.json();
+                setUsers([...users, savedUser]);
+                setNewUser({ name: '', employeeId: '', phone: '', role: 'Operator', password: '' });
+                showAlert('success', 'User created successfully!');
+                setActiveTab(null);
+            } else {
+                const errorData = await response.json();
+                showAlert('error', errorData.detail || 'Failed to create user');
+            }
+        } catch (error) {
+            console.error('Error creating user:', error);
+            showAlert('error', 'Error creating user');
+        }
     };
 
-    const handleInputChange = (e) => {
-        setNewUser({
-            ...newUser,
-            [e.target.name]: e.target.value
-        });
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        const updatedUser = { ...newUser, [name]: value };
+        if (name === 'name' || name === 'employeeId' || name === 'phone') {
+            if (updatedUser.name && updatedUser.employeeId && updatedUser.phone) {
+                updatedUser.password = generatePassword(updatedUser.name, updatedUser.employeeId, updatedUser.phone);
+            } else updatedUser.password = '';
+        }
+        setNewUser(updatedUser);
     };
 
-    const toggleUserStatus = (userId) => {
-        setUsers(users.map(user =>
-            user.id === userId
-                ? { ...user, status: user.status === 'Active' ? 'Inactive' : 'Active' }
-                : user
-        ));
+    const toggleUserStatus = async (userId: string) => {
+        try {
+            // Since we don't have a specific endpoint for status toggle, we'll update locally
+            // In a real application, you'd have a PATCH /api/users/{id} endpoint
+            setUsers(users.map(user =>
+                user.id === userId
+                    ? { ...user, status: user.status === 'Active' ? 'Inactive' : 'Active' }
+                    : user
+            ));
+            showAlert('success', 'User status updated successfully!');
+        } catch (error) {
+            console.error('Error updating user status:', error);
+            showAlert('error', 'Error updating user status');
+        }
     };
 
-    const deleteUser = (userId) => {
-        setUsers(users.filter(user => user.id !== userId));
+    const deleteUser = async (userId: string) => {
+        if (!confirm('Are you sure you want to delete this user?')) {
+            return;
+        }
+        try {
+            const response = await fetch(`${USER_API_BASE_URL}/users/${userId}`, {
+                method: 'DELETE',
+            });
+            if (response.ok) {
+                setUsers(users.filter(user => user.id !== userId));
+                showAlert('success', 'User deleted successfully!');
+            } else showAlert('error', 'Failed to delete user');
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            showAlert('error', 'Error deleting user');
+        }
     };
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                <div className="text-white text-xl">Loading...</div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 relative overflow-hidden">
-            {/* Animated Background Elements */}
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -right-32 w-80 h-80 bg-purple-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
                 <div className="absolute -bottom-40 -left-32 w-80 h-80 bg-blue-500 rounded-full blur-3xl opacity-20 animate-pulse delay-1000"></div>
@@ -57,23 +149,14 @@ const Admin = () => {
             </div>
 
             <div className="relative z-10 max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-16">
-                    <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                        User Management
-                    </h1>
-                    <p className="text-gray-300 text-md">Create and manage user accounts with style</p>
-                </div>
-
-                {/* Main Tab Container */}
+                <Header />
                 <div className="flex items-center justify-center p-4">
-                    {/* Create User Tab */}
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                                ? 'w-1/3 mx-4 transform hover:scale-105'
-                                : activeTab === 'create'
-                                    ? 'w-full scale-100'
-                                    : 'w-1/4 scale-75 opacity-60 blur-sm'
+                            ? 'w-1/3 mx-4 transform hover:scale-105'
+                            : activeTab === 'create'
+                                ? 'w-full scale-100'
+                                : 'w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
@@ -81,10 +164,9 @@ const Admin = () => {
                                 }`}
                             onClick={() => !activeTab && setActiveTab('create')}
                         >
-                            {/* Tab Header */}
                             <div className={`p-8 text-center ${activeTab === 'create'
-                                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600'
-                                    : 'bg-gradient-to-r from-cyan-700 to-blue-700'
+                                ? 'bg-gradient-to-r from-cyan-600 to-blue-600'
+                                : 'bg-gradient-to-r from-cyan-700 to-blue-700'
                                 }`}>
                                 <div className="flex items-center justify-center">
                                     <div className={`p-2 rounded-2xl bg-transparent bg-opacity-20 ${activeTab === 'create' ? 'scale-110' : ''
@@ -96,8 +178,6 @@ const Admin = () => {
                                     <h2 className="text-3xl font-bold text-white">Create Users</h2>
                                 </div>
                             </div>
-
-                            {/* Tab Content */}
                             <div className={`transition-all duration-700 ${activeTab === 'create' ? 'max-h-full opacity-100 p-8' : 'max-h-0 opacity-0'
                                 }`}>
                                 {activeTab === 'create' && (
@@ -114,23 +194,38 @@ const Admin = () => {
                                                         value={newUser.name}
                                                         onChange={handleInputChange}
                                                         required
-                                                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 transition-all duration-300"
+                                                        className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:border-cyan-500 text-white placeholder-gray-400 transition-all duration-300"
                                                         placeholder="Enter full name"
                                                     />
                                                 </div>
 
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-300 mb-3">
-                                                        Email Address
+                                                        Employee ID
                                                     </label>
                                                     <input
-                                                        type="email"
-                                                        name="email"
-                                                        value={newUser.email}
+                                                        type="text"
+                                                        name="employeeId"
+                                                        value={newUser.employeeId}
                                                         onChange={handleInputChange}
                                                         required
-                                                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 transition-all duration-300"
-                                                        placeholder="Enter email address"
+                                                        className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:border-cyan-500 text-white placeholder-gray-400 transition-all duration-300"
+                                                        placeholder="Enter employee ID"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                                                        Phone Number
+                                                    </label>
+                                                    <input
+                                                        type="tel"
+                                                        name="phone"
+                                                        value={newUser.phone}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:border-cyan-500 text-white placeholder-gray-400 transition-all duration-300"
+                                                        placeholder="Enter phone number"
                                                     />
                                                 </div>
 
@@ -142,41 +237,43 @@ const Admin = () => {
                                                         name="role"
                                                         value={newUser.role}
                                                         onChange={handleInputChange}
-                                                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white transition-all duration-300"
+                                                        className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:border-cyan-500 text-white transition-all duration-300 cursor-pointer"
                                                     >
-                                                        <option value="User">User</option>
+                                                        <option value="Operator">Operator</option>
+                                                        <option value="Reviewer">Reviewer</option>
                                                         <option value="Admin">Admin</option>
-                                                        <option value="Moderator">Moderator</option>
                                                     </select>
                                                 </div>
 
-                                                <div>
+                                                <div className="md:col-span-2">
                                                     <label className="block text-sm font-medium text-gray-300 mb-3">
-                                                        Password
+                                                        Generated Password
                                                     </label>
                                                     <input
-                                                        type="password"
+                                                        type="text"
                                                         name="password"
                                                         value={newUser.password}
-                                                        onChange={handleInputChange}
-                                                        required
-                                                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 transition-all duration-300"
-                                                        placeholder="Enter password"
+                                                        readOnly
+                                                        className="w-full px-4 py-3 bg-slate-600 border-2 border-slate-500 rounded-xl text-gray-300 cursor-not-allowed"
+                                                        placeholder="Password will be generated automatically"
                                                     />
+                                                    <p className="text-xs text-gray-400 mt-2">
+                                                        Password format: First 2 letters of name + last 4 digits of Employee ID + last 4 digits of phone
+                                                    </p>
                                                 </div>
                                             </div>
 
                                             <div className="flex justify-center space-x-4 pt-4">
                                                 <button
                                                     type="submit"
-                                                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
+                                                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg cursor-pointer"
                                                 >
                                                     Create User
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setActiveTab(null)}
-                                                    className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-slate-600"
+                                                    className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-slate-600 cursor-pointer"
                                                 >
                                                     Back
                                                 </button>
@@ -185,8 +282,6 @@ const Admin = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Mini View */}
                             {activeTab !== 'create' && (
                                 <div className="p-8 text-center">
                                     <p className="text-gray-400 text-lg mb-4">Click to create new users</p>
@@ -198,19 +293,15 @@ const Admin = () => {
                                 </div>
                             )}
                         </div>
-
-                        {/* Glow Effect */}
                         <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-cyan-500 to-blue-500 blur-xl opacity-20 -z-10 transition-all duration-1000 ${activeTab === 'create' ? 'scale-105 animate-pulse' : 'scale-95'
                             }`}></div>
                     </div>
-
-                    {/* Manage Users Tab */}
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                                ? 'w-1/3 mx-4 transform hover:scale-105'
-                                : activeTab === 'manage'
-                                    ? 'w-full scale-100'
-                                    : 'w-1/4 scale-75 opacity-60 blur-sm'
+                            ? 'w-1/3 mx-4 transform hover:scale-105'
+                            : activeTab === 'manage'
+                                ? 'w-full scale-100'
+                                : 'w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
@@ -218,10 +309,9 @@ const Admin = () => {
                                 }`}
                             onClick={() => !activeTab && setActiveTab('manage')}
                         >
-                            {/* Tab Header */}
                             <div className={`p-8 text-center ${activeTab === 'manage'
-                                    ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                                    : 'bg-gradient-to-r from-purple-700 to-pink-700'
+                                ? 'bg-gradient-to-r from-purple-600 to-pink-600'
+                                : 'bg-gradient-to-r from-purple-700 to-pink-700'
                                 }`}>
                                 <div className="flex items-center justify-center">
                                     <div className={`p-2 rounded-2xl bg-transparent bg-opacity-20 ${activeTab === 'manage' ? 'scale-110' : ''
@@ -239,28 +329,34 @@ const Admin = () => {
                                 }`}>
                                 {activeTab === 'manage' && (
                                     <div className="max-w-6xl mx-auto">
-                                        <div className="bg-slate-800 rounded-2xl shadow-xl overflow-hidden border border-slate-700">
+                                        <div className="bg-slate-800 rounded-2xl shadow-gray-600 shadow-lg overflow-hidden">
                                             <div className="overflow-x-auto">
                                                 <table className="w-full">
-                                                    <thead className="bg-slate-700">
+                                                    <thead className="bg-slate-900">
                                                         <tr>
-                                                            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
                                                                 User
                                                             </th>
-                                                            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                                Phone Number
+                                                            </th>
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                                Employee ID
+                                                            </th>
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Role
                                                             </th>
-                                                            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Status
                                                             </th>
-                                                            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Actions
                                                             </th>
                                                         </tr>
                                                     </thead>
-                                                    <tbody className="bg-slate-800 divide-y divide-slate-700">
+                                                    <tbody className="bg-slate-800">
                                                         {users.map((user) => (
-                                                            <tr key={user.id} className="hover:bg-slate-750 transition-colors duration-200">
+                                                            <tr key={user.id} className="hover:bg-slate-700 transition-colors duration-200">
                                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                                     <div className="flex items-center">
                                                                         <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-semibold">
@@ -270,24 +366,29 @@ const Admin = () => {
                                                                             <div className="text-sm font-medium text-white">
                                                                                 {user.name}
                                                                             </div>
-                                                                            <div className="text-sm text-gray-400">
-                                                                                {user.email}
-                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                                                    {user.phone}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                                                    {user.employeeId}
+                                                                </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                                     <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin'
-                                                                            ? 'bg-red-500 bg-opacity-20 text-red-300'
-                                                                            : 'bg-green-500 bg-opacity-20 text-green-300'
+                                                                        ? 'bg-red-500 bg-opacity-20 text-red-100'
+                                                                        : user.role === 'Operator'
+                                                                            ? 'bg-blue-500 bg-opacity-20 text-blue-100'
+                                                                            : 'bg-purple-500 bg-opacity-20 text-purple-100'
                                                                         }`}>
                                                                         {user.role}
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                                     <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.status === 'Active'
-                                                                            ? 'bg-green-500 bg-opacity-20 text-green-300'
-                                                                            : 'bg-red-500 bg-opacity-20 text-red-300'
+                                                                        ? 'bg-green-500 bg-opacity-20 text-green-100'
+                                                                        : 'bg-red-500 bg-opacity-20 text-red-100'
                                                                         }`}>
                                                                         {user.status}
                                                                     </span>
@@ -296,15 +397,15 @@ const Admin = () => {
                                                                     <button
                                                                         onClick={() => toggleUserStatus(user.id)}
                                                                         className={`${user.status === 'Active'
-                                                                                ? 'text-red-400 hover:text-red-300'
-                                                                                : 'text-green-400 hover:text-green-300'
-                                                                            } transition-colors duration-200 font-semibold`}
+                                                                            ? 'text-red-500 hover:text-red-200'
+                                                                            : 'text-green-500 hover:text-green-200'
+                                                                            } transition-colors duration-200 font-semibold cursor-pointer`}
                                                                     >
                                                                         {user.status === 'Active' ? 'Deactivate' : 'Activate'}
                                                                     </button>
                                                                     <button
                                                                         onClick={() => deleteUser(user.id)}
-                                                                        className="text-red-400 hover:text-red-300 transition-colors duration-200 font-semibold"
+                                                                        className="text-red-500 hover:text-red-200 transition-colors duration-200 font-semibold cursor-pointer"
                                                                     >
                                                                         Delete
                                                                     </button>
@@ -314,7 +415,6 @@ const Admin = () => {
                                                     </tbody>
                                                 </table>
                                             </div>
-
                                             {users.length === 0 && (
                                                 <div className="text-center py-12">
                                                     <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,11 +425,10 @@ const Admin = () => {
                                                 </div>
                                             )}
                                         </div>
-
                                         <div className="flex justify-center mt-6">
                                             <button
                                                 onClick={() => setActiveTab(null)}
-                                                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-slate-600"
+                                                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-slate-600 cursor-pointer"
                                             >
                                                 Back
                                             </button>
@@ -337,8 +436,6 @@ const Admin = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Mini View */}
                             {activeTab !== 'manage' && (
                                 <div className="p-8 text-center">
                                     <p className="text-gray-400 text-lg mb-4">Click to manage existing users</p>
@@ -350,20 +447,16 @@ const Admin = () => {
                                 </div>
                             )}
                         </div>
-
-                        {/* Glow Effect */}
                         <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500 to-pink-500 blur-xl opacity-20 -z-10 transition-all duration-1000 ${activeTab === 'manage' ? 'scale-105 animate-pulse' : 'scale-95'
                             }`}></div>
                     </div>
                 </div>
-
-                {/* Stats Overview */}
                 {!activeTab && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 max-w-4xl mx-auto">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 gap-6 p-15">
                         <div className="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
                                 <div className="p-3 bg-cyan-500 bg-opacity-20 rounded-xl">
-                                    <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="white" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                                     </svg>
                                 </div>
@@ -377,7 +470,7 @@ const Admin = () => {
                         <div className="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
                                 <div className="p-3 bg-green-500 bg-opacity-20 rounded-xl">
-                                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="white" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
@@ -392,8 +485,25 @@ const Admin = () => {
 
                         <div className="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
+                                <div className="p-3 bg-blue-500 bg-opacity-20 rounded-xl">
+                                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="white" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-sm font-medium text-gray-400">Operators</p>
+                                    <p className="text-2xl font-bold text-white">
+                                        {users.filter(user => user.role === 'Operator').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 backdrop-blur-lg">
+                            <div className="flex items-center">
                                 <div className="p-3 bg-purple-500 bg-opacity-20 rounded-xl">
-                                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="white" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
                                 </div>
