@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
-import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
-import { usePreviewModal } from '../context/PreviewModalContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import { GelTestPreview } from '../components/previews/GelTestPreview';
-import GelTestPDF from '../components/pdfGens/GelTestPDF';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 interface GelTestReport {
@@ -16,6 +10,9 @@ interface GelTestReport {
     timestamp: string;
     formData: {
         [key: string]: string | boolean;
+    };
+    averages: {
+        [key: string]: string;
     };
 }
 
@@ -25,10 +22,8 @@ export default function GelTest() {
     const [savedReports, setSavedReports] = useState<GelTestReport[]>([]);
     const [reportName, setReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [_, setCurrentPreviewIndex] = useState<number | null>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
-    const { showPreview } = usePreviewModal();
     const { showConfirm } = useConfirmModal();
     const STORAGE_KEY = 'gelTestReports';
 
@@ -158,7 +153,7 @@ export default function GelTest() {
                 calculateAverages();
                 if (detectMeaningfulChange(oldValue, value)) {
                     setHasUnsavedChanges(true);
-                    saveFormData(); // Save to sessionStorage
+                    saveFormData();
                 }
                 saveFormData();
             } else {
@@ -178,20 +173,17 @@ export default function GelTest() {
         input.addEventListener('keydown', handleKeyDown);
     };
 
-    // Update the handleCheckboxChange function
     const handleCheckboxChange = (e: Event) => {
         const checkbox = e.target as HTMLInputElement;
         setHasUnsavedChanges(true);
-        saveFormData(); // Save to sessionStorage immediately
+        saveFormData();
     };
 
-    // Update the report name useEffect to save form data
     useEffect(() => {
         if (reportName.trim() && !hasUnsavedChanges) {
             setHasUnsavedChanges(true);
         }
 
-        // Save form data whenever report name changes
         if (reportName !== '') {
             saveFormData();
         }
@@ -289,29 +281,19 @@ export default function GelTest() {
         }
 
         const report = reports[index];
-
-        // Set the report name for editing
         setReportName(report.name);
-
-        // Store the report data to load after the tab switch
         sessionStorage.setItem('editingReportData', JSON.stringify(report));
         sessionStorage.setItem('editingReportIndex', index.toString());
-
-        // Switch to edit tab
         setActiveTab('edit-report');
-
         showAlert('info', `Now editing: ${report.name}`);
     };
 
-    // Add useEffect to handle tab switch and data loading
     useEffect(() => {
         if (activeTab === 'edit-report') {
-            // Check if we have report data to load (after tab switch)
             const editingReportData = sessionStorage.getItem('editingReportData');
             const editingIndex = sessionStorage.getItem('editingReportIndex');
 
             if (editingReportData && editingIndex !== null) {
-                // Use setTimeout to ensure DOM is fully rendered
                 setTimeout(() => {
                     const report = JSON.parse(editingReportData) as GelTestReport;
                     loadReportData(report);
@@ -321,9 +303,7 @@ export default function GelTest() {
         }
     }, [activeTab]);
 
-    // Enhanced loadReportData function
     const loadReportData = (report: GelTestReport) => {
-        // Load editable cells
         setReportName(report.name);
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
@@ -332,7 +312,6 @@ export default function GelTest() {
                 const value = report.formData[key] as string;
                 cell.textContent = value;
 
-                // Update class based on content
                 if (value.trim()) {
                     cell.classList.add('has-content');
                 } else {
@@ -341,7 +320,6 @@ export default function GelTest() {
             }
         });
 
-        // Load checkboxes
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach((checkbox, index) => {
             const key = `checkbox_${index}`;
@@ -350,49 +328,39 @@ export default function GelTest() {
             }
         });
 
-        // Recalculate averages after a brief delay to ensure DOM is updated
         setTimeout(() => {
             calculateAverages();
         }, 150);
 
-        // Save the loaded data to session storage
         saveFormData();
     };
 
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
-        // Save editable cell values
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             formData[`editable_${index}`] = cell.textContent?.trim() || '';
         });
 
-        // Save checkbox states
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach((checkbox, index) => {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
 
-        // Save report name
         formData.reportName = reportName;
-
-        // Save to session storage
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
-    // Enhanced loadFormData function
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
         if (savedData) {
             const formData = JSON.parse(savedData);
 
-            // Load report name
             if (formData.reportName !== undefined) {
                 setReportName(formData.reportName);
             }
 
-            // Load editable cell values
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 const key = `editable_${index}`;
@@ -404,7 +372,6 @@ export default function GelTest() {
                 }
             });
 
-            // Load checkbox states
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 const key = `checkbox_${index}`;
@@ -413,7 +380,6 @@ export default function GelTest() {
                 }
             });
 
-            // Recalculate averages after a brief delay to ensure DOM is updated
             setTimeout(() => {
                 calculateAverages();
             }, 100);
@@ -435,8 +401,6 @@ export default function GelTest() {
         });
 
         setReportName('');
-
-        // Clear editing data
         sessionStorage.removeItem('editingReportIndex');
         sessionStorage.removeItem('editingReportData');
 
@@ -450,8 +414,6 @@ export default function GelTest() {
             meanCell.textContent = '0';
         }
 
-        // Only clear session storage when explicitly clearing the form
-        // (not during normal navigation)
         sessionStorage.removeItem('gelTestFormData');
         setHasUnsavedChanges(false);
     };
@@ -472,13 +434,23 @@ export default function GelTest() {
             return;
         }
 
+        // Collect current averages and mean
+        const averages: { [key: string]: string } = {};
+        const averageCells = document.querySelectorAll('.average-cell');
+        averageCells.forEach((cell, index) => {
+            averages[`average_${index}`] = cell.textContent?.trim() || '0';
+        });
+
+        const meanCell = document.querySelector('.mean-cell');
+        averages.mean = meanCell?.textContent?.trim() || '0';
+
         const reportData: GelTestReport = {
             name: reportName,
             timestamp: new Date().toISOString(),
-            formData: {}
+            formData: {},
+            averages: averages,
         };
 
-        // Collect current form data
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
@@ -497,20 +469,16 @@ export default function GelTest() {
             const originalReport = savedReports[index];
 
             if (reportName === originalReport.name) {
-                // Same name - update the existing report
                 savedReports[index] = reportData;
                 showAlert('success', 'Report updated successfully!');
             } else {
-                // Different name - create new report and keep the old one
                 savedReports.push(reportData);
                 showAlert('success', 'New report created with updated name!');
             }
 
-            // Clear the editing data
             sessionStorage.removeItem('editingReportIndex');
             sessionStorage.removeItem('editingReportData');
         } else {
-            // New report (not editing)
             savedReports.push(reportData);
             showAlert('success', 'Report saved successfully!');
         }
@@ -529,77 +497,20 @@ export default function GelTest() {
         showAlert('info', 'Report deleted successfully');
     };
 
-    const previewSavedReport = (index: number) => {
-        const reports = getSavedReports();
-        if (index < 0 || index >= reports.length) {
-            showAlert('error', 'Report not found');
-            return;
-        }
-
-        const report = reports[index];
-        setCurrentPreviewIndex(index);
-
-        // Show preview modal
-        showPreview({
-            title: `Preview: ${report.name}`,
-            content: <GelTestPreview report={report} />,
-            exportExcel: () => exportPreviewToExcel(index),
-            exportPDF: () => exportPreviewToPDF(index)
-        });
-    };
-
-    const closePreview = () => {
-        setCurrentPreviewIndex(null);
-    };
-
-    // Export functions implementation
-    const exportToExcel = () => {
-        const table = document.querySelector('table');
-        if (!table) {
-            showAlert('error', 'No table found to export');
-            return;
-        }
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.table_to_sheet(table);
-        XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
-        const fileName = reportName.trim() || 'Gel_Test_Report';
-        XLSX.writeFile(wb, `${fileName}.xlsx`);
-        showAlert('success', 'Excel file exported successfully');
-    };
-
-    const exportToPDF = async () => {
-        const table = tableRef.current;
-        if (!table) {
-            showAlert('error', 'No table found to export');
-            return;
-        }
-
+    const exportToExcel = async () => {
         try {
-            const fileName = reportName.trim() || 'Gel_Test_Report';
-
-            // Extract all form data
             const formData: { [key: string]: string | boolean } = {};
 
-            // Extract editable cells
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 formData[`editable_${index}`] = cell.textContent?.trim() || '';
             });
 
-            // Extract checkbox states
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
 
-            // Extract data cells
-            const dataCells = document.querySelectorAll('.data-cell');
-            dataCells.forEach((cell, index) => {
-                // You might want to create a better mapping for data cells
-                formData[`data_${index}`] = cell.textContent?.trim() || '';
-            });
-
-            // Extract averages
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
@@ -611,89 +522,199 @@ export default function GelTest() {
                 averages.mean = meanCell.textContent?.trim() || '0';
             }
 
-            // Generate PDF using the modular component
-            const blob = await pdf(
-                <GelTestPDF
-                    reportName={fileName}
-                    tableData={formData}
-                    averages={averages}
-                />
-            ).toBlob();
+            const gelReportData = {
+                report_name: reportName.trim() || 'Gel_Test_Report',
+                timestamp: new Date().toISOString(),
+                form_data: formData,
+                averages: averages,
+            };
 
-            saveAs(blob, `${fileName}.pdf`);
-            showAlert('success', 'PDF exported successfully');
+            const response = await fetch('http://localhost:8000/generate-gel-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(gelReportData),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${reportName.trim() || 'Gel_Test_Report'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Excel file exported successfully using template');
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            showAlert('error', 'Failed to export Excel file');
+        }
+    };
+
+    const exportToPDF = async () => {
+        try {
+            const formData: { [key: string]: string | boolean } = {};
+
+            const editableCells = document.querySelectorAll('.editable');
+            editableCells.forEach((cell, index) => {
+                formData[`editable_${index}`] = cell.textContent?.trim() || '';
+            });
+
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach((checkbox, index) => {
+                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            });
+
+            const averages: { [key: string]: string } = {};
+            const averageCells = document.querySelectorAll('.average-cell');
+            averageCells.forEach((cell, index) => {
+                averages[`average_${index}`] = cell.textContent?.trim() || '0';
+            });
+
+            const meanCell = document.querySelector('.mean-cell');
+            if (meanCell) {
+                averages.mean = meanCell.textContent?.trim() || '0';
+            }
+
+            const gelReportData = {
+                report_name: reportName.trim() || 'Gel_Test_Report',
+                timestamp: new Date().toISOString(),
+                form_data: formData,
+                averages: averages,
+            };
+
+            console.log('Generating PDF from Excel template...');
+
+            const response = await fetch('http://localhost:8000/generate-gel-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(gelReportData),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to generate PDF: ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${reportName.trim() || 'Gel_Test_Report'}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'PDF file exported successfully from template');
         } catch (error) {
             console.error('Error generating PDF:', error);
-            showAlert('error', 'Error generating PDF. Please try again.');
+            showAlert('error', 'Failed to generate PDF file');
         }
     };
 
-    const exportPreviewToExcel = (index: number) => {
-        const reports = getSavedReports();
-        if (index < 0 || index >= reports.length) {
-            showAlert('error', 'Report not found');
-            return;
-        }
-        const report = reports[index];
-        const previewTable = document.querySelector('.preview-report-content');
-        if (!previewTable) {
-            showAlert('error', 'No preview table found to export');
-            return;
-        }
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.table_to_sheet(previewTable);
-        XLSX.utils.book_append_sheet(wb, ws, 'Gel Test Report');
-        XLSX.writeFile(wb, `${report.name}.xlsx`);
-        showAlert('success', 'Excel file exported successfully');
-    };
-
-    const exportPreviewToPDF = async (index: number) => {
-        const reports = getSavedReports();
-        if (index < 0 || index >= reports.length) {
-            showAlert('error', 'Report not found');
-            return;
-        }
-
-        const report = reports[index];
-        const previewTable = document.querySelector('.preview-table');
-
-        if (!previewTable) {
-            showAlert('error', 'No preview table found to export');
-            return;
-        }
-
+    const exportSavedReportToExcel = async (index: number) => {
         try {
-            const { jsPDF } = (window as any).jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
+            const reports = getSavedReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
 
-            // Add title
-            doc.setFontSize(16);
-            doc.text(report.name, 105, 15, { align: 'center' });
+            const report = reports[index];
 
-            // Add current date
-            const currentDate = new Date().toLocaleDateString();
-            doc.setFontSize(10);
-            doc.text(`Generated on: ${currentDate}`, 105, 22, { align: 'center' });
+            const gelReportData = {
+                report_name: report.name,
+                timestamp: report.timestamp,
+                form_data: report.formData,
+                averages: report.averages
+            };
 
-            // Convert table to canvas using html2canvas
-            const canvas = await (window as any).html2canvas(previewTable);
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 190;
-            const imgHeight = canvas.height * imgWidth / canvas.width;
+            const response = await fetch('http://localhost:8000/generate-gel-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(gelReportData),
+            });
 
-            // Add image to PDF
-            doc.addImage(imgData, 'PNG', 10, 30, imgWidth, imgHeight);
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
 
-            // Save the PDF
-            doc.save(`${report.name}.pdf`);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${report.name}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Excel file exported successfully');
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            showAlert('error', 'Failed to export Excel file');
+        }
+    };
+
+    const exportSavedReportToPDF = async (index: number) => {
+        try {
+            const reports = getSavedReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+
+            const gelReportData = {
+                report_name: report.name,
+                timestamp: report.timestamp,
+                form_data: report.formData,
+                averages: report.averages
+            };
+
+            const response = await fetch('http://localhost:8000/generate-gel-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(gelReportData),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to generate PDF: ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${report.name}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
             showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
-            showAlert('error', 'Error generating PDF. Please try again.');
+            showAlert('error', 'Failed to generate PDF file');
         }
     };
 
-    // Set up event listeners when component mounts
     useEffect(() => {
         const editableCells = document.querySelectorAll('.editable:not(.data-cell)');
         editableCells.forEach(cell => {
@@ -710,7 +731,6 @@ export default function GelTest() {
             checkbox.addEventListener('change', handleCheckboxChange);
         });
 
-        // Cleanup event listeners
         return () => {
             editableCells.forEach(cell => {
                 cell.removeEventListener('click', handleEditableCellClick);
@@ -724,12 +744,12 @@ export default function GelTest() {
         };
     }, []);
 
-    // Handle report name changes
     useEffect(() => {
         if (reportName.trim() && !hasUnsavedChanges) {
             setHasUnsavedChanges(true);
         }
     }, [reportName]);
+
 
     return (
         <>
@@ -868,7 +888,6 @@ export default function GelTest() {
                                                 </div>
                                             </td>
                                         </tr>
-                                        {/* Continue with the rest of the table rows */}
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Pressing/Cooling Time (Sec)</td>
                                             <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
@@ -1023,7 +1042,8 @@ export default function GelTest() {
                         <div className="tab-content active mx-4 mt-2">
                             <SavedReportsNChecksheets
                                 reports={savedReports}
-                                onPreview={previewSavedReport}
+                                onExportExcel={exportSavedReportToExcel}
+                                onExportPdf={exportSavedReportToPDF}
                                 onEdit={editSavedReport}
                                 onDelete={deleteSavedReport}
                             />

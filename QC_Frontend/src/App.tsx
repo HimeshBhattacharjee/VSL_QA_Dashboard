@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import { AlertProvider } from './context/AlertContext';
-import { PreviewModalProvider } from './context/PreviewModalContext';
 import { ConfirmModalProvider } from './context/ConfirmModalContext';
 import { LineProvider } from './context/LineContext';
 import Login from './pages/Login';
@@ -46,13 +45,11 @@ function UserRoute({ children }: { children: React.ReactNode }) {
 function AppProviders({ children }: { children: React.ReactNode }) {
     return (
         <AlertProvider>
-            <PreviewModalProvider>
-                <ConfirmModalProvider>
-                    <LineProvider>
-                        {children}
-                    </LineProvider>
-                </ConfirmModalProvider>
-            </PreviewModalProvider>
+            <ConfirmModalProvider>
+                <LineProvider>
+                    {children}
+                </LineProvider>
+            </ConfirmModalProvider>
         </AlertProvider>
     );
 }

@@ -1,18 +1,9 @@
-# AuditReportGenerator.py (updated - remove Flask app parts)
-import pandas as pd
-import openpyxl
 from openpyxl import load_workbook
-from openpyxl.styles import (
-    Font, PatternFill, Alignment, Border, Side, 
-    NamedStyle, numbers
-)
+from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle, numbers)
 from openpyxl.utils import get_column_letter
 import io
 import os
-from datetime import datetime
-import json
 
-# Define custom styles
 def setup_cell_styles(workbook):
     """Create and register custom named styles"""
     

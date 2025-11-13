@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import { PreviewModalContent, usePreviewModal } from '../context/PreviewModalContext';
-import { PeelTestPreview } from '../components/previews/PeelTestPreview';
 import ZoomableChart from '../components/ZoomableChart';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
-type ReportData = {
+interface ReportData {
     name: string;
     timestamp: string;
     formData: Record<string, string>;
     rowData: any[];
-};
+    averages?: {
+        [key: string]: string;
+    };
+}
 
 type TabType = 'edit-report' | 'saved-reports' | 'report-analysis';
 
@@ -24,6 +25,16 @@ type GraphData = {
     min_value: number;
 };
 
+interface PeelTestReport {
+    name: string;
+    timestamp: string;
+    formData: Record<string, string>;
+    rowData: any[];
+    averages?: {
+        [key: string]: string;
+    };
+}
+
 const STORAGE_KEY = 'peelTestReports';
 const PEEL_API_BASE_URL = 'http://localhost:8000/peel';
 
@@ -32,10 +43,8 @@ export default function PeelTest() {
     const [activeTab, setActiveTab] = useState<TabType>('edit-report');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
-    const [currentPreviewReportIndex, setCurrentPreviewReportIndex] = useState<number | null>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const { showPreview } = usePreviewModal();
 
     // Edit Report Tab States
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -243,27 +252,6 @@ export default function PeelTest() {
         return value === '' || (parseFloat(value) < 1.0 && !isNaN(parseFloat(value)));
     };
 
-    const generatePreviewHTML = (report: ReportData): React.ReactNode => {
-        return <PeelTestPreview report={report} />;
-    };
-
-    const previewSavedReport = (index: number) => {
-        const savedReports = getSavedReports();
-        if (index >= 0 && index < savedReports.length) {
-            const report = savedReports[index];
-            setCurrentPreviewReportIndex(index);
-
-            const previewContent: PreviewModalContent = {
-                title: `Preview: ${report.name}`,
-                content: generatePreviewHTML(report),
-                exportExcel: () => exportPreviewToExcel(index),
-                exportPDF: () => exportPreviewToPDF(index)
-            };
-
-            showPreview(previewContent);
-        }
-    };
-
     const editSavedReport = (index: number) => {
         const savedReports = getSavedReports();
         const report = savedReports[index];
@@ -364,11 +352,16 @@ export default function PeelTest() {
             return;
         }
 
+        // Calculate averages for saving
+        const averages: { [key: string]: string } = {};
+        // You can add average calculation logic here based on your table data
+
         const reportData: ReportData = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
             formData: { ...tableData, ...formData },
-            rowData: []
+            rowData: [],
+            averages: averages
         };
 
         const savedReports = getSavedReports();
@@ -385,32 +378,184 @@ export default function PeelTest() {
         showAlert('success', 'Report saved successfully!');
     };
 
-    // Export functions
-    const exportToPDF = () => {
-        showAlert('info', 'PDF export functionality would be implemented here');
-        // Implementation would use jsPDF and html2canvas similar to the original
-    };
+    const exportToExcel = async () => {
+        try {
+            if (!currentEditingReport) {
+                showAlert('error', 'Please load or create a report first');
+                return;
+            }
 
-    const exportToExcel = () => {
-        showAlert('info', 'Excel export functionality would be implemented here');
-        // Implementation would use xlsx library similar to the original
-    };
+            const peelReportData = {
+                report_name: currentEditingReport,
+                timestamp: new Date().toISOString(),
+                form_data: { ...tableData, ...formData },
+                averages: {} // You can add averages calculation here if needed
+            };
+            console.log(peelReportData);
 
-    const exportPreviewToPDF = (index: number) => {
-        if (currentPreviewReportIndex !== null) {
-            const savedReports = getSavedReports();
-            const report = savedReports[currentPreviewReportIndex];
-            showAlert('info', `Exporting ${report.name} as PDF...`);
-            // Add your PDF export logic here
+            const response = await fetch('http://localhost:8000/generate-peel-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(peelReportData),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentEditingReport}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Excel file exported successfully using template');
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            showAlert('error', 'Failed to export Excel file');
         }
     };
 
-    const exportPreviewToExcel = (index: number) => {
-        if (currentPreviewReportIndex !== null) {
-            const savedReports = getSavedReports();
-            const report = savedReports[currentPreviewReportIndex];
-            showAlert('info', `Exporting ${report.name} as Excel...`);
-            // Add your Excel export logic here
+    const exportToPDF = async () => {
+        try {
+            if (!currentEditingReport) {
+                showAlert('error', 'Please load or create a report first');
+                return;
+            }
+
+            const peelReportData = {
+                report_name: currentEditingReport,
+                timestamp: new Date().toISOString(),
+                form_data: { ...tableData, ...formData },
+                averages: {} // You can add averages calculation here if needed
+            };
+
+            const response = await fetch('http://localhost:8000/generate-peel-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(peelReportData),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to generate PDF: ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentEditingReport}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'PDF file exported successfully from template');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            showAlert('error', 'Failed to generate PDF file');
+        }
+    };
+
+    const exportSavedReportToExcel = async (index: number) => {
+        try {
+            const reports = getSavedReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+
+            const peelReportData = {
+                report_name: report.name,
+                timestamp: report.timestamp,
+                form_data: report.formData,
+                averages: report.averages || {}
+            };
+
+            const response = await fetch('http://localhost:8000/generate-peel-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(peelReportData),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${report.name}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Excel file exported successfully');
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            showAlert('error', 'Failed to export Excel file');
+        }
+    };
+
+    const exportSavedReportToPDF = async (index: number) => {
+        try {
+            const reports = getSavedReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+
+            const peelReportData = {
+                report_name: report.name,
+                timestamp: report.timestamp,
+                form_data: report.formData,
+                averages: report.averages || {}
+            };
+
+            const response = await fetch('http://localhost:8000/generate-peel-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(peelReportData),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to generate PDF: ${errorText}`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${report.name}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'PDF file exported successfully');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            showAlert('error', 'Failed to generate PDF file');
         }
     };
 
@@ -735,13 +880,10 @@ export default function PeelTest() {
         return (
             <SavedReportsNChecksheets
                 reports={savedReports}
-                onPreview={previewSavedReport}
+                onExportExcel={exportSavedReportToExcel}
+                onExportPdf={exportSavedReportToPDF}
                 onEdit={editSavedReport}
                 onDelete={deleteSavedReport}
-                emptyMessage={{
-                    title: 'No saved reports found.',
-                    description: 'Create and save a report first.'
-                }}
             />
         );
     };
