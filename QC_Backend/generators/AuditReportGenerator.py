@@ -75,18 +75,13 @@ def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False,
     )
     cell.border = thin_border
 
-def fill_basic_info(worksheet, audit_data):
-    """
-    Fill basic information from audit data into the Excel worksheet with formatting
-    """
-    try:
-        # Define cell mapping and formatting for each field
+def get_template_config(line_number):
+    base_path = 'D:\\WorkingFolder\\OneDrive - vikramsolar.com\\Desktop\\VSL Projects\\QC\\QC_Data\\'
+    
+    if line_number == 'I':
+        template_path = os.path.join(base_path, 'Blank Audit Line-II.xlsx')
+        # Cell mapping for Line I
         field_config = {
-            'line_number': {
-                'cell': 'D3',
-                'label': 'Line Number',
-                'format': {'font_size': 16, 'bold': True}
-            },
             'date': {
                 'cell': 'C5', 
                 'label': 'Date',
@@ -118,14 +113,115 @@ def fill_basic_info(worksheet, audit_data):
                 'format': {'font_size': 16, 'bold': True}
             }
         }
-        
+        # Observation mapping for Line I
+        observation_cell_mapping = {
+            '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
+            '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
+            '1-3': { '': 'G11' },
+            '2-1': { 'Supplier': 'I12', 'Lot No.': 'O12', 'Expiry Date': 'Y12' },
+            '2-3': { '4 hrs': 'G15', '8 hrs': 'S15' },
+            '3-1': { '2 hrs': 'G20', '4 hrs': 'M20', '6 hrs': 'S20', '8 hrs': 'Y20' },
+            '3-2': { '2 hrs': 'G21', '4 hrs': 'M21', '6 hrs': 'S21', '8 hrs': 'Y21' },
+            '3-3': { 'Supplier': 'I22', 'Type': 'N22', 'Lot No.': 'T22', 'Expiry Date': 'Z22' },
+            '3-4': { '': 'G23' },
+            '3-5': { '4 hrs': 'G24', '8 hrs': 'S24' },
+            '3-7': { 'Line-1': 'G28', 'Line-2': 'S28' },
+            '3-8': { 'Line-1': 'G29', 'Line-2': 'S29' },
+            '3-9': { 'Line-1': 'G30', 'Line-2': 'S30' },
+            '4-1': { 'Supplier': 'I31', 'WP': 'N31', 'Lot No.': 'S31', 'Expiry Date': 'AA31' },
+            '4-2': { '4 hrs': 'G32', '8 hrs': 'S32' },
+            '4-3': { '4 hrs': 'G33', '8 hrs': 'S33' },
+            '4-4': { '4 hrs': 'G34', '8 hrs': 'S34' },
+            '4-5': { '': 'G35' },
+            '4-6': { 'Length': 'I36', 'Width': 'S36', 'Thickness': 'Z36' },
+            '5-1': { 'Supplier': 'I37', 'Dimension': 'O37', 'Expiry Date': 'Y37' },
+            '5-2': { '': 'G38' },
+            '5-3': { 'Supplier': 'I39', 'Expiry Date': 'T39' },
+            '5-8': { 'TDS Value': 'G56' },
+            '6-1': { '4 hrs': 'G132', '8 hrs': 'S132' },
+            '9-1-humidity': { '2 hrs': 'G185', '4 hrs': 'M185', '6 hrs': 'S185', '8 hrs': 'Y185' },
+            '9-2-temperature': { '2 hrs': 'G186', '4 hrs': 'M186', '6 hrs': 'S186', '8 hrs': 'Y186' },
+            '9-3': { 'Supplier': 'I187', 'Type': 'N187', 'Lot No.': 'T187', 'Expiry Date': 'Z187' },
+            '9-4': { 'Status': 'G188' },
+            '9-9': { 'Length': 'I195', 'Width': 'V195' },
+            '10-1': { 'Supplier': 'I196', 'Type': 'N196', 'Lot No.': 'T196', 'Expiry Date': 'Z196' },
+            '10-2': { '': 'G197' },
+        }
+    elif line_number == 'II':
+        template_path = os.path.join(base_path, 'Blank Audit Line-II.xlsx')
+        # Cell mapping for Line II (adjust these based on your actual Line II template)
+        field_config = {
+            'date': {
+                'cell': 'C5', 
+                'label': 'Date',
+                'format': {'font_size': 16}
+            },
+            'shift': {
+                'cell': 'E5',
+                'label': 'Shift', 
+                'format': {'font_size': 16}
+            },
+            'production_order': {
+                'cell': 'J5',
+                'label': 'Production Order No.',
+                'format': {'font_size': 16, 'bold': True}
+            },
+            'module_type': {
+                'cell': 'U5',
+                'label': 'Module Type',
+                'format': {'font_size': 16}
+            },
+            'customer_spec_available': {
+                'cell': 'D6',
+                'label': 'Customer Specification Available',
+                'format': {'font_size': 16, 'bold': True}
+            },
+            'spec_signed_off': {
+                'cell': 'M6',
+                'label': 'Specification Signed Off',
+                'format': {'font_size': 16, 'bold': True}
+            }
+        }
+        # Observation mapping for Line II (adjust these based on your actual Line II template)
+        observation_cell_mapping = {
+            '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
+            '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
+            '1-3': { '': 'G11' },
+            '2-1': { 'Supplier': 'I12', 'Lot No.': 'O12', 'Expiry Date': 'Y12' },
+            '2-3': { '4 hrs': 'G15', '8 hrs': 'S15' },
+            '3-1': { '2 hrs': 'G20', '4 hrs': 'M20', '6 hrs': 'S20', '8 hrs': 'Y20' },
+            '3-2': { '2 hrs': 'G21', '4 hrs': 'M21', '6 hrs': 'S21', '8 hrs': 'Y21' },
+            '3-3': { 'Supplier': 'I22', 'Type': 'N22', 'Lot No.': 'T22', 'Expiry Date': 'Z22' },
+            '3-4': { '': 'G23' },
+            '3-5': { '4 hrs': 'G24', '8 hrs': 'S24' },
+            '3-7': { 'Line-1': 'G28', 'Line-2': 'S28' },
+            '3-8': { 'Line-1': 'G29', 'Line-2': 'S29' },
+            '3-9': { 'Line-1': 'G30', 'Line-2': 'S30' },
+            '4-1': { 'Supplier': 'I31', 'WP': 'N31', 'Lot No.': 'S31', 'Expiry Date': 'AA31' },
+            '4-2': { '4 hrs': 'G32', '8 hrs': 'S32' },
+            '4-3': { '4 hrs': 'G33', '8 hrs': 'S33' },
+            '4-4': { '4 hrs': 'G34', '8 hrs': 'S34' },
+            '4-5': { '': 'G35' },
+            '4-6': { 'Length': 'I36', 'Width': 'S36', 'Thickness': 'Z36' },
+            '5-1': { 'Supplier': 'I37', 'Dimension': 'O37', 'Expiry Date': 'Y37' },
+            '5-2': { '': 'G38' },
+            '5-3': { 'Supplier': 'I39', 'Expiry Date': 'T39' },
+            '5-8': { 'TDS Value': 'G56' },
+            '6-1': { '4 hrs': 'G132', '8 hrs': 'S132' },
+            # Add other parameter mappings for Line II...
+        }
+    else:
+        raise ValueError(f"Unsupported line number: {line_number}")
+    
+    return template_path, field_config, observation_cell_mapping
+
+def fill_basic_info(worksheet, audit_data, field_config):
+    """
+    Fill basic information from audit data into the Excel worksheet with formatting
+    """
+    try:
         # Fill basic information with formatting
-        if audit_data.get('lineNumber'):
-            cell_ref = field_config['line_number']['cell']
-            # Get existing text and append line number
-            existing_text = worksheet[cell_ref].value or ""
-            worksheet[cell_ref] = f"{existing_text}{audit_data['lineNumber']}"
-            apply_cell_formatting(worksheet[cell_ref], **field_config['line_number']['format'])
+        # Note: lineNumber is no longer filled in cell D3 as it's handled in templates
         
         if audit_data.get('date'):
             cell_ref = field_config['date']['cell']
@@ -166,38 +262,13 @@ def fill_basic_info(worksheet, audit_data):
         print(f"Error filling basic info: {str(e)}")
         raise
 
-def fill_observations_data(worksheet, audit_data):
+def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
     try:
         stages = audit_data.get('stages', [])
         if not stages:
             print("No stages data found for observations")
             return
-        observation_cell_mapping = {
-            '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
-            '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
-            '1-3': { '': 'G11' },
-            '2-1': { 'Supplier': 'I12', 'Lot No.': 'O12', 'Expiry Date': 'Y12' },
-            '2-3': { '4 hrs': 'G15', '8 hrs': 'S15' },
-            '3-1': { '2 hrs': 'G20', '4 hrs': 'M20', '6 hrs': 'S20', '8 hrs': 'Y20' },
-            '3-2': { '2 hrs': 'G21', '4 hrs': 'M21', '6 hrs': 'S21', '8 hrs': 'Y21' },
-            '3-3': { 'Supplier': 'I22', 'Type': 'N22', 'Lot No.': 'T22', 'Expiry Date': 'Z22' },
-            '3-4': { '': 'G23' },
-            '3-5': { '4 hrs': 'G24', '8 hrs': 'S24' },
-            '3-7': { 'Line-1': 'G28', 'Line-2': 'S28' },
-            '3-8': { 'Line-1': 'G29', 'Line-2': 'S29' },
-            '3-9': { 'Line-1': 'G30', 'Line-2': 'S30' },
-            '4-1': { 'Supplier': 'I31', 'WP': 'N31', 'Lot No.': 'S31', 'Expiry Date': 'AA31' },
-            '4-2': { '4 hrs': 'G32', '8 hrs': 'S32' },
-            '4-3': { '4 hrs': 'G33', '8 hrs': 'S33' },
-            '4-4': { '4 hrs': 'G34', '8 hrs': 'S34' },
-            '4-5': { '': 'G35' },
-            '4-6': { 'Length': 'I36', 'Width': 'S36', 'Thickness': 'Z36' },
-            '5-1': { 'Supplier': 'I37', 'Dimension': 'O37', 'Expiry Date': 'Y37' },
-            '5-2': { '': 'G38' },
-            '5-3': { 'Supplier': 'I39', 'Expiry Date': 'T39' },
-            '5-8': { 'TDS Value': 'G56' },
-            '6-1': { '4 hrs': 'G132', '8 hrs': 'S132' },
-        }
+            
         for stage in stages:
             parameters = stage.get('parameters', [])
             for parameter in parameters:
@@ -308,7 +379,9 @@ def generate_audit_report(audit_data):
         
         print("Received audit data for report generation")
         
-        template_path = 'D:\\WorkingFolder\\OneDrive - vikramsolar.com\\Desktop\\VSL Projects\\QC\\QC_Data\\Blank Audit Line-II.xlsx'
+        # Get line number and determine template configuration
+        line_number = audit_data.get('lineNumber', 'I')
+        template_path, field_config, observation_cell_mapping = get_template_config(line_number)
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Template file not found at: {template_path}")
@@ -319,13 +392,13 @@ def generate_audit_report(audit_data):
         ws = wb.active
         
         # Fill and format basic information
-        fill_basic_info(ws, audit_data)
+        fill_basic_info(ws, audit_data, field_config)
         
         # Create summary section
         create_summary_section(ws, audit_data)
         
         # Fill observation values only
-        fill_observations_data(ws, audit_data)
+        fill_observations_data(ws, audit_data, observation_cell_mapping)
         
         # Save to bytes buffer
         output = io.BytesIO()

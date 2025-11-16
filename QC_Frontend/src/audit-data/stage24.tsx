@@ -520,8 +520,8 @@ const SunSimulatorObservations = {
             )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: string, type: 'contact-block' | 'positive' | 'negative', value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-${type}`]: value };
+        const handleUpdate = (line: string, index: number, type: 'contact-block' | 'positive' | 'negative', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${index}-${type}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
@@ -532,43 +532,45 @@ const SunSimulatorObservations = {
                         <div className="text-center mb-2">
                             <span className="text-sm font-semibold text-gray-700">Sun Simulator - {line.split('-')[1]}</span>
                         </div>
-                        <div className="flex flex-col items-center gap-1 mb-2">
-                            <span className="text-xs text-gray-500">Contact Block No.</span>
-                            <div className="flex flex-col items-center gap-2">
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-contact-block`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'contact-block', value)}
-                                    placeholder=""
-                                    type="measurement"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="flex flex-col items-center gap-1">
-                                <span className="text-xs text-gray-500">Positive</span>
-                                <div className="flex flex-col items-center gap-2">
-                                    <InputComponents.TextInput
-                                        value={sampleValue[`${line}-positive`] || ''}
-                                        onChange={(value) => handleUpdate(line, 'positive', value)}
-                                        placeholder=""
-                                        type="measurement"
-                                    />
-                                    <span className="text-xs text-gray-500">mΩ</span>
+                        {[1, 2].map(index => (
+                            <div key={index} className="grid grid-cols-3 gap-2">
+                                <div className="flex flex-col items-center gap-1 mb-2">
+                                    <span className="text-xs text-gray-500">Contact Block No.</span>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <InputComponents.TextInput
+                                            value={sampleValue[`${line}-${index}-contact-block`] || ''}
+                                            onChange={(value) => handleUpdate(line, index, 'contact-block', value)}
+                                            placeholder=""
+                                            type="measurement"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-xs text-gray-500">Positive</span>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <InputComponents.TextInput
+                                            value={sampleValue[`${line}-${index}-positive`] || ''}
+                                            onChange={(value) => handleUpdate(line, index, 'positive', value)}
+                                            placeholder=""
+                                            type="measurement"
+                                        />
+                                        <span className="text-xs text-gray-500 mb-2">mΩ</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-xs text-gray-500">Negative</span>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <InputComponents.TextInput
+                                            value={sampleValue[`${line}-${index}-negative`] || ''}
+                                            onChange={(value) => handleUpdate(line, index, 'negative', value)}
+                                            placeholder=""
+                                            type="measurement"
+                                        />
+                                        <span className="text-xs text-gray-500 mb-2">mΩ</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1">
-                                <span className="text-xs text-gray-500">Negative</span>
-                                <div className="flex flex-col items-center gap-2">
-                                    <InputComponents.TextInput
-                                        value={sampleValue[`${line}-negative`] || ''}
-                                        onChange={(value) => handleUpdate(line, 'negative', value)}
-                                        placeholder=""
-                                        type="measurement"
-                                    />
-                                    <span className="text-xs text-gray-500">mΩ</span>
-                                </div>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 ))}
             </div>

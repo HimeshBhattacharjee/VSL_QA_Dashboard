@@ -50,29 +50,6 @@ export default function GelTest() {
         }
     };
 
-    const handleBackToHome = () => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: function () {
-                    sessionStorage.removeItem('editingReportIndex');
-                    sessionStorage.removeItem('editingReportData');
-                    clearFormData();
-                    navigate('/home');
-                }
-            });
-        } else {
-            sessionStorage.removeItem('editingReportIndex');
-            sessionStorage.removeItem('editingReportData');
-            clearFormData();
-            navigate('/home');
-        }
-    };
-
     useEffect(() => {
         initializeForm();
         loadSavedReports();
@@ -281,10 +258,25 @@ export default function GelTest() {
         }
 
         const report = reports[index];
+
+        // Clear any existing form data first (but preserve editing state)
+        clearFormData(false);
+
+        // Set the report name immediately
         setReportName(report.name);
+
+        // Save editing state to sessionStorage
         sessionStorage.setItem('editingReportData', JSON.stringify(report));
         sessionStorage.setItem('editingReportIndex', index.toString());
+
         setActiveTab('edit-report');
+
+        // Load the report data after a brief delay to ensure DOM is ready
+        setTimeout(() => {
+            loadReportData(report);
+            setHasUnsavedChanges(true);
+        }, 150);
+
         showAlert('info', `Now editing: ${report.name}`);
     };
 
@@ -294,11 +286,17 @@ export default function GelTest() {
             const editingIndex = sessionStorage.getItem('editingReportIndex');
 
             if (editingReportData && editingIndex !== null) {
+                // Clear any existing form data first
+                clearFormData();
+
                 setTimeout(() => {
                     const report = JSON.parse(editingReportData) as GelTestReport;
                     loadReportData(report);
                     setHasUnsavedChanges(true);
                 }, 100);
+            } else {
+                // Load regular form data if not editing a saved report
+                loadFormData();
             }
         }
     }, [activeTab]);
@@ -332,10 +330,11 @@ export default function GelTest() {
             calculateAverages();
         }, 150);
 
-        saveFormData();
+        // Save the editing state with current report name
+        saveEditingFormData(report.name);
     };
 
-    const saveFormData = () => {
+    const saveEditingFormData = (currentReportName: string) => {
         const formData: { [key: string]: string | boolean } = {};
 
         const editableCells = document.querySelectorAll('.editable');
@@ -348,15 +347,44 @@ export default function GelTest() {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
 
-        formData.reportName = reportName;
+        formData.reportName = currentReportName;
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
+    // Update the saveFormData function to handle both editing and new reports
+    const saveFormData = () => {
+        const editingReportData = sessionStorage.getItem('editingReportData');
+
+        if (editingReportData) {
+            // If editing a saved report, use the specialized function
+            saveEditingFormData(reportName);
+        } else {
+            // For new reports, use the original logic
+            const formData: { [key: string]: string | boolean } = {};
+
+            const editableCells = document.querySelectorAll('.editable');
+            editableCells.forEach((cell, index) => {
+                formData[`editable_${index}`] = cell.textContent?.trim() || '';
+            });
+
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach((checkbox, index) => {
+                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            });
+
+            formData.reportName = reportName;
+            sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
+        }
+    };
+
+    // Update the loadFormData function to handle reportName for editing state
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
+
         if (savedData) {
             const formData = JSON.parse(savedData);
 
+            // Always load reportName from saved data if it exists
             if (formData.reportName !== undefined) {
                 setReportName(formData.reportName);
             }
@@ -388,7 +416,8 @@ export default function GelTest() {
         }
     };
 
-    const clearFormData = () => {
+    // Update the clearFormData function to preserve editing state if needed
+    const clearFormData = (clearEditingState = true) => {
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach(cell => {
             cell.textContent = '';
@@ -400,9 +429,12 @@ export default function GelTest() {
             (checkbox as HTMLInputElement).checked = false;
         });
 
-        setReportName('');
-        sessionStorage.removeItem('editingReportIndex');
-        sessionStorage.removeItem('editingReportData');
+        // Only clear reportName if we're clearing editing state
+        if (clearEditingState) {
+            setReportName('');
+            sessionStorage.removeItem('editingReportIndex');
+            sessionStorage.removeItem('editingReportData');
+        }
 
         const averageCells = document.querySelectorAll('.average-cell');
         averageCells.forEach(cell => {
@@ -414,7 +446,11 @@ export default function GelTest() {
             meanCell.textContent = '0';
         }
 
-        sessionStorage.removeItem('gelTestFormData');
+        // Only clear form data if we're clearing editing state
+        if (clearEditingState) {
+            sessionStorage.removeItem('gelTestFormData');
+        }
+
         setHasUnsavedChanges(false);
     };
 
@@ -551,7 +587,7 @@ export default function GelTest() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showAlert('success', 'Excel file exported successfully using template');
+            showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
@@ -560,6 +596,7 @@ export default function GelTest() {
 
     const exportToPDF = async () => {
         try {
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
             const formData: { [key: string]: string | boolean } = {};
 
             const editableCells = document.querySelectorAll('.editable');
@@ -615,7 +652,7 @@ export default function GelTest() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showAlert('success', 'PDF file exported successfully from template');
+            showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
             showAlert('error', 'Failed to generate PDF file');
@@ -670,6 +707,7 @@ export default function GelTest() {
 
     const exportSavedReportToPDF = async (index: number) => {
         try {
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
             const reports = getSavedReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
@@ -1020,9 +1058,9 @@ export default function GelTest() {
                                             <td className="average-cell font-bold bg-gray-50">0</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={4} className="section-title font-bold bg-gray-100 text-center">Tested By</td>
-                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Reviewed By</td>
-                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Approved By</td>
+                                            <td colSpan={4} className="section-title font-bold bg-gray-100 text-center">Prepared By</td>
+                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Accepted By</td>
+                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Verified By</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={4} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>

@@ -107,9 +107,9 @@ def fill_peel_test_data(worksheet, peel_data):
                 row_offset = position
                 test_data_mapping[f'front_avg_{rep}_{position}'] = f'P{base_row + row_offset}'  # Column P for averages
             
-        #     # Average cells for back section  
+        # #     # Average cells for back section  
             for position in range(1, 17):
-                row_offset = 18 + position
+                row_offset = 17 + position
                 test_data_mapping[f'back_avg_{rep}_{position}'] = f'P{base_row + row_offset}'  # Column P for averages
         
         # # Fill test data measurements
@@ -132,67 +132,6 @@ def fill_peel_test_data(worksheet, peel_data):
         
     except Exception as e:
         print(f"Error filling peel test data: {str(e)}")
-        raise
-
-def calculate_and_fill_averages(worksheet, peel_data):
-    try:
-        form_data = peel_data.get('form_data', {})
-        
-        for rep in range(24):
-            base_row = 7 + (rep * 34)
-            
-            # Calculate and fill front section averages
-            for position in range(1, 17):
-                row_offset = position
-                start_cell = 6 + (position - 1) * 7
-                
-                sum_val = 0
-                count = 0
-                
-                # Calculate average for this position
-                for ribbon in range(7):
-                    cell_key = f'row_{rep}_cell_{start_cell + ribbon}'
-                    if cell_key in form_data and form_data[cell_key]:
-                        try:
-                            value = float(form_data[cell_key])
-                            sum_val += value
-                            count += 1
-                        except (ValueError, TypeError):
-                            continue
-                
-                avg_value = sum_val / count if count > 0 else 0
-                avg_cell = f'N{base_row + row_offset}'
-                worksheet[avg_cell] = f"{avg_value:.2f}"
-                apply_peel_cell_formatting(worksheet[avg_cell], font_size=9, bold=True, horizontal='center')
-            
-            # Calculate and fill back section averages
-            for position in range(1, 17):
-                row_offset = 18 + position
-                start_cell = 118 + (position - 1) * 7
-                
-                sum_val = 0
-                count = 0
-                
-                # Calculate average for this position
-                for ribbon in range(7):
-                    cell_key = f'row_{rep}_cell_{start_cell + ribbon}'
-                    if cell_key in form_data and form_data[cell_key]:
-                        try:
-                            value = float(form_data[cell_key])
-                            sum_val += value
-                            count += 1
-                        except (ValueError, TypeError):
-                            continue
-                
-                avg_value = sum_val / count if count > 0 else 0
-                avg_cell = f'N{base_row + row_offset}'
-                worksheet[avg_cell] = f"{avg_value:.2f}"
-                apply_peel_cell_formatting(worksheet[avg_cell], font_size=9, bold=True, horizontal='center')
-        
-        print("Averages calculated and filled successfully")
-        
-    except Exception as e:
-        print(f"Error calculating averages: {str(e)}")
         raise
 
 def apply_peel_cell_formatting(cell, font_size=9, bold=False, 
@@ -284,7 +223,6 @@ def generate_peel_report(peel_data):
         # Fill all data sections
         fill_peel_basic_info(ws, peel_data)
         fill_peel_test_data(ws, peel_data)
-        # calculate_and_fill_averages(ws, peel_data)
         
         # Save to bytes buffer
         output = io.BytesIO()

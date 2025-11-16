@@ -53,7 +53,6 @@ async def generate_audit_report_endpoint(audit_data: dict):
         print(f"Error generating audit report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
-# Add this new endpoint for gel test reports
 @app.post("/generate-gel-report")
 async def generate_gel_report_endpoint(gel_data: dict):
     try:
@@ -74,33 +73,20 @@ async def generate_gel_report_endpoint(gel_data: dict):
     
 @app.post("/generate-gel-pdf")
 async def generate_gel_pdf_endpoint(gel_data: dict):
-    """
-    Generate gel test report as PDF by first creating Excel then converting to PDF in landscape orientation
-    with reduced margins to fit content on one page
-    """
     try:
         if not gel_data:
             raise HTTPException(status_code=400, detail="No gel test data provided")
-        
-        # First generate the Excel file
         excel_output, filename = generate_gel_report(gel_data)
-        
-        # Create temporary files
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name
-        
         pdf_filename = filename.replace('.xlsx', '.pdf')
         temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        
         try:
-            # Convert Excel to PDF using win32com with landscape orientation and reduced margins
             pythoncom.CoInitialize()
-            
             excel_app = win32client.Dispatch("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
-            
             workbook = excel_app.Workbooks.Open(temp_excel_path)
             
             # Configure page setup for all worksheets to fit on one page with reduced margins
@@ -171,17 +157,10 @@ async def generate_peel_report_endpoint(peel_data: dict):
 
 @app.post("/generate-peel-pdf")
 async def generate_peel_pdf_endpoint(peel_data: dict):
-    """
-    Generate peel test report as PDF by first creating Excel then converting to PDF
-    """
     try:
         if not peel_data:
             raise HTTPException(status_code=400, detail="No peel test data provided")
-        
-        # First generate the Excel file
         excel_output, filename = generate_peel_report(peel_data)
-        
-        # Create temporary files
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name

@@ -160,9 +160,9 @@ def fill_gel_basic_info(worksheet, gel_data):
             'editable_57': 'B23', # Time
             
             # Signatures
-            'editable_68': 'C27', # Tested By
-            'editable_69': 'E27', # Reviewed By
-            'editable_70': 'J27'  # Approved By
+            'editable_68': 'C27', # Prepared By
+            'editable_69': 'E27', # Accepted By
+            'editable_70': 'J27'  # Verified By
         }
         
         # Fill basic information

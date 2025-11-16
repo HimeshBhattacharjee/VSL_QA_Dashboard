@@ -253,6 +253,7 @@ export default function QualityAudit() {
 
     const generatePDFReport = async () => {
         try {
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             console.log('Generating PDF with data:', auditData);
 
             const response = await fetch('http://localhost:8000/generate-audit-report', {
@@ -384,7 +385,7 @@ export default function QualityAudit() {
         // Set the line number context
         setLineNumber(checksheet.data.lineNumber);
 
-        showAlert('info', `Editing checksheet: ${checksheet.name}`);
+        showAlert('info', `Editing ${checksheet.name}`);
     };
 
     const deleteSavedChecksheet = (index: number) => {
@@ -466,7 +467,7 @@ export default function QualityAudit() {
                                                 <select
                                                     value={auditData.lineNumber}
                                                     onChange={(e) => handleLineChange(e.target.value)}
-                                                    className="text-sm p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
+                                                    className="text-sm p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                                 >
                                                     <option value="">Select</option>
                                                     <option value="I">I</option>
@@ -484,7 +485,7 @@ export default function QualityAudit() {
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, date: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
+                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                             />
                                         </div>
 
@@ -496,7 +497,7 @@ export default function QualityAudit() {
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, shift: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
+                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                             >
                                                 <option value="">Select Shift</option>
                                                 <option value="A">Shift-A</option>
@@ -517,7 +518,7 @@ export default function QualityAudit() {
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, productionOrderNo: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
+                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                             />
                                         </div>
 
@@ -530,7 +531,7 @@ export default function QualityAudit() {
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, moduleType: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border"
+                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                             />
                                         </div>
 
@@ -543,7 +544,7 @@ export default function QualityAudit() {
                                                     onChange={(e) =>
                                                         setAuditData({ ...auditData, customerSpecAvailable: e.target.checked })
                                                     }
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                                                    className="rounded border-gray-300 text-blue-600 hover:border-blue-500 w-5 h-5"
                                                 />
                                                 <span className="ml-2 text-sm text-gray-700">Customer Specification Available</span>
                                             </label>
@@ -554,7 +555,7 @@ export default function QualityAudit() {
                                                     onChange={(e) =>
                                                         setAuditData({ ...auditData, specificationSignedOff: e.target.checked })
                                                     }
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                                                    className="rounded border-gray-300 text-blue-600 hover:border-blue-500 w-5 h-5"
                                                 />
                                                 <span className="ml-2 text-sm text-gray-700">Specification Signed Off With Customer</span>
                                             </label>

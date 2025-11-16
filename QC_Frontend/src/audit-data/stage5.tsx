@@ -1100,6 +1100,36 @@ const TabbingStringingObservations = {
     }
 };
 
+const createGrooveLengthParameters = (lineNumber: string = 'I') => {
+    const lineConfig = LINE_DEPENDENT_CONFIG[5]?.lineMapping[lineNumber as keyof typeof LINE_DEPENDENT_CONFIG[5]['lineMapping']] ||
+        LINE_DEPENDENT_CONFIG[5]?.lineMapping['I'];
+
+    const allStringersData: Record<string, Record<string, string>> = {};
+
+    if (lineConfig && 'stringers' in lineConfig) {
+        lineConfig.stringers.forEach(stringerNumber => {
+            allStringersData[`Stringer-${stringerNumber}`] = {
+                "Unit A - Upper Half": "",
+                "Unit A - Lower Half": "",
+                "Unit B - Upper Half": "",
+                "Unit B - Lower Half": ""
+            };
+        });
+    } else {
+        // Fallback to default (Line I)
+        for (let i = 1; i <= 6; i++) {
+            allStringersData[`Stringer-${i}`] = {
+                "Unit A - Upper Half": "",
+                "Unit A - Lower Half": "",
+                "Unit B - Upper Half": "",
+                "Unit B - Lower Half": ""
+            };
+        }
+    }
+
+    return allStringersData;
+};
+
 const createCombinedStringerParameters = (lineNumber: string = 'I') => {
     const lineConfig = LINE_DEPENDENT_CONFIG[5]?.lineMapping[lineNumber as keyof typeof LINE_DEPENDENT_CONFIG[5]['lineMapping']] ||
         LINE_DEPENDENT_CONFIG[5]?.lineMapping['I'];
@@ -1382,7 +1412,7 @@ export const createTabbingStringingStage = (lineNumber: string = 'I'): StageData
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "", value: createCombinedStringerParameters(lineNumber) }
+                { timeSlot: "", value: createGrooveLengthParameters(lineNumber) }
             ],
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },

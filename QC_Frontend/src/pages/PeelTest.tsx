@@ -25,16 +25,6 @@ type GraphData = {
     min_value: number;
 };
 
-interface PeelTestReport {
-    name: string;
-    timestamp: string;
-    formData: Record<string, string>;
-    rowData: any[];
-    averages?: {
-        [key: string]: string;
-    };
-}
-
 const STORAGE_KEY = 'peelTestReports';
 const PEEL_API_BASE_URL = 'http://localhost:8000/peel';
 
@@ -60,16 +50,94 @@ export default function PeelTest() {
     const [showChart, setShowChart] = useState(false);
     const [graphData, setGraphData] = useState<GraphData[]>([]);
 
-    // Initialize with today's date
+    // Initialize with today's date and load saved state
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
-        setSelectedDate(today);
+        initializeForm();
+        loadSavedReports();
+        loadFormData();
 
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        setMonthYear(currentMonth);
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
     }, []);
 
-    // Navigation functions
+    const initializeForm = () => {
+        // Check if we have editing report data from session storage
+        const editingReportData = sessionStorage.getItem('editingPeelReportData');
+        const editingIndex = sessionStorage.getItem('editingPeelReportIndex');
+
+        if (editingReportData && editingIndex !== null) {
+            setTimeout(() => {
+                const report = JSON.parse(editingReportData) as ReportData;
+                loadReportForEditing(report);
+                setShowReportEditor(true);
+                setHasUnsavedChanges(true);
+            }, 100);
+        }
+    };
+
+    const loadFormData = () => {
+        const savedData = sessionStorage.getItem('peelTestFormData');
+        if (savedData) {
+            const formData = JSON.parse(savedData);
+
+            if (formData.selectedDate) {
+                setSelectedDate(formData.selectedDate);
+            }
+            if (formData.selectedShift) {
+                setSelectedShift(formData.selectedShift);
+            }
+            if (formData.currentEditingReport) {
+                setCurrentEditingReport(formData.currentEditingReport);
+            }
+            if (formData.activeTab) {
+                setActiveTab(formData.activeTab);
+            }
+            if (formData.tableData) {
+                setTableData(formData.tableData);
+            }
+            if (formData.formData) {
+                setFormData(formData.formData);
+            }
+            if (formData.showReportEditor) {
+                setShowReportEditor(true);
+            }
+
+            if (Object.keys(formData.tableData || {}).length > 0 || Object.keys(formData.formData || {}).length > 0) {
+                setHasUnsavedChanges(true);
+            }
+        }
+    };
+
+    const saveFormData = () => {
+        const formDataToSave = {
+            selectedDate,
+            selectedShift,
+            currentEditingReport,
+            activeTab,
+            tableData,
+            formData,
+            showReportEditor,
+            timestamp: new Date().toISOString()
+        };
+        sessionStorage.setItem('peelTestFormData', JSON.stringify(formDataToSave));
+    };
+
+    // Save form data whenever relevant states change
+    useEffect(() => {
+        saveFormData();
+    }, [selectedDate, selectedShift, currentEditingReport, activeTab, tableData, formData, showReportEditor]);
+
+    // Navigation functions with state persistence
     const handleBackToTests = () => {
         if (hasUnsavedChanges) {
             showConfirm({
@@ -94,12 +162,24 @@ export default function PeelTest() {
         setCurrentEditingReport(null);
         setFormData({});
         setTableData({});
+        setShowReportEditor(false);
+        setSelectedDate(new Date().toISOString().split('T')[0]);
+        setSelectedShift('');
+
+        sessionStorage.removeItem('editingPeelReportIndex');
+        sessionStorage.removeItem('editingPeelReportData');
+        sessionStorage.removeItem('peelTestFormData');
     };
 
     // Report management functions
     const getSavedReports = (): ReportData[] => {
         const saved = localStorage.getItem(STORAGE_KEY);
         return saved ? JSON.parse(saved) : [];
+    };
+
+    const loadSavedReports = () => {
+        const reports = getSavedReports();
+        // You might want to set this to a state variable if you need to use it in the component
     };
 
     const generateReportName = (dateString: string, shift: string) => {
@@ -157,12 +237,32 @@ export default function PeelTest() {
         }
 
         setShowReportEditor(true);
+        setHasUnsavedChanges(true);
     };
 
     const loadReportForEditing = (report: ReportData) => {
+        // Extract signature fields from formData
+        const signatureFields: Record<string, string> = {};
+        Object.keys(report.formData).forEach(key => {
+            if (key === 'preparedBy' || key === 'verifiedBy') {
+                signatureFields[key] = report.formData[key];
+            }
+        });
+
+        // Set both table data and form data (for signatures)
         setTableData(report.formData);
+        setFormData(signatureFields);
         setCurrentEditingReport(report.name);
-        setHasUnsavedChanges(false);
+        setHasUnsavedChanges(true);
+
+        // Save to session storage for persistence
+        sessionStorage.setItem('editingPeelReportData', JSON.stringify(report));
+
+        const savedReports = getSavedReports();
+        const reportIndex = savedReports.findIndex(r => r.name === report.name);
+        if (reportIndex !== -1) {
+            sessionStorage.setItem('editingPeelReportIndex', reportIndex.toString());
+        }
     };
 
     const createReportFromMongoData = (reportName: string, mongoData: any[]) => {
@@ -202,15 +302,32 @@ export default function PeelTest() {
             }
         });
 
+        // Extract signature fields if they exist in the first record
+        if (mongoData[0]) {
+            if (mongoData[0].preparedBy) {
+                newFormData['preparedBy'] = mongoData[0].preparedBy;
+            }
+            if (mongoData[0].verifiedBy) {
+                newFormData['verifiedBy'] = mongoData[0].verifiedBy;
+            }
+        }
+
         setTableData(newFormData);
+
+        // Set signature fields in formData
+        const signatureFields: Record<string, string> = {};
+        if (newFormData['preparedBy']) signatureFields['preparedBy'] = newFormData['preparedBy'];
+        if (newFormData['verifiedBy']) signatureFields['verifiedBy'] = newFormData['verifiedBy'];
+        setFormData(signatureFields);
+
         setCurrentEditingReport(reportName);
-        setHasUnsavedChanges(false);
+        setHasUnsavedChanges(true);
     };
 
     const createNewReport = (reportName: string) => {
         setTableData({});
         setCurrentEditingReport(reportName);
-        setHasUnsavedChanges(false);
+        setHasUnsavedChanges(true);
     };
 
     const handleCellChange = (rowIndex: number, cellIndex: number, value: string) => {
@@ -352,14 +469,30 @@ export default function PeelTest() {
             return;
         }
 
-        // Calculate averages for saving
+        // Calculate and save averages
         const averages: { [key: string]: string } = {};
-        // You can add average calculation logic here based on your table data
+
+        // Calculate averages for all repetitions
+        for (let rep = 0; rep < 24; rep++) {
+            // Front section averages
+            for (let position = 1; position <= 16; position++) {
+                const startCell = 6 + (position - 1) * 7;
+                const average = calculateAverage(rep, startCell, 7);
+                averages[`front_avg_${rep}_${position}`] = average;
+            }
+
+            // Back section averages  
+            for (let position = 1; position <= 16; position++) {
+                const startCell = 118 + (position - 1) * 7;
+                const average = calculateAverage(rep, startCell, 7);
+                averages[`back_avg_${rep}_${position}`] = average;
+            }
+        }
 
         const reportData: ReportData = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
-            formData: { ...tableData, ...formData },
+            formData: { ...tableData, ...formData, ...averages }, // Include averages in formData
             rowData: [],
             averages: averages
         };
@@ -385,12 +518,24 @@ export default function PeelTest() {
                 return;
             }
 
+            const averages: { [key: string]: string } = {};
+            for (let rep = 0; rep < 24; rep++) {
+                for (let position = 1; position <= 16; position++) {
+                    const frontStartCell = 6 + (position - 1) * 7;
+                    averages[`front_avg_${rep}_${position}`] = calculateAverage(rep, frontStartCell, 7);
+
+                    const backStartCell = 118 + (position - 1) * 7;
+                    averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
+                }
+            }
+
             const peelReportData = {
                 report_name: currentEditingReport,
                 timestamp: new Date().toISOString(),
-                form_data: { ...tableData, ...formData },
-                averages: {} // You can add averages calculation here if needed
+                form_data: { ...tableData, ...formData, ...averages }, // Include averages
+                averages: averages
             };
+
             console.log(peelReportData);
 
             const response = await fetch('http://localhost:8000/generate-peel-report', {
@@ -415,7 +560,7 @@ export default function PeelTest() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showAlert('success', 'Excel file exported successfully using template');
+            showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
@@ -424,17 +569,31 @@ export default function PeelTest() {
 
     const exportToPDF = async () => {
         try {
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
             if (!currentEditingReport) {
                 showAlert('error', 'Please load or create a report first');
                 return;
             }
 
+            const averages: { [key: string]: string } = {};
+            for (let rep = 0; rep < 24; rep++) {
+                for (let position = 1; position <= 16; position++) {
+                    const frontStartCell = 6 + (position - 1) * 7;
+                    averages[`front_avg_${rep}_${position}`] = calculateAverage(rep, frontStartCell, 7);
+
+                    const backStartCell = 118 + (position - 1) * 7;
+                    averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
+                }
+            }
+
             const peelReportData = {
                 report_name: currentEditingReport,
                 timestamp: new Date().toISOString(),
-                form_data: { ...tableData, ...formData },
-                averages: {} // You can add averages calculation here if needed
+                form_data: { ...tableData, ...formData, ...averages }, // Include averages
+                averages: averages
             };
+
+            console.log(peelReportData);
 
             const response = await fetch('http://localhost:8000/generate-peel-pdf', {
                 method: 'POST',
@@ -459,7 +618,7 @@ export default function PeelTest() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showAlert('success', 'PDF file exported successfully from template');
+            showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
             showAlert('error', 'Failed to generate PDF file');
@@ -514,6 +673,7 @@ export default function PeelTest() {
 
     const exportSavedReportToPDF = async (index: number) => {
         try {
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
             const reports = getSavedReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
@@ -846,16 +1006,6 @@ export default function PeelTest() {
                                     placeholder="Name"
                                     value={formData.preparedBy || ''}
                                     onChange={(e) => handleSignatureChange('preparedBy', e.target.value)}
-                                />
-                            </div>
-                            <div className="signature flex-1 text-center">
-                                <p><strong>ACCEPTED BY :</strong></p>
-                                <input
-                                    type="text"
-                                    className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
-                                    placeholder="Name"
-                                    value={formData.acceptedBy || ''}
-                                    onChange={(e) => handleSignatureChange('acceptedBy', e.target.value)}
                                 />
                             </div>
                             <div className="signature flex-1 text-center">
