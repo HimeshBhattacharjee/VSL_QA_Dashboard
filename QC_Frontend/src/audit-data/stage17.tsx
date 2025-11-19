@@ -13,8 +13,8 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     const upperValue = value.toUpperCase();
     if (upperValue === 'OFF') return 'bg-yellow-100';
     if (type === 'status') {
-        if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG') return 'bg-red-100';
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
     }
     if (type === 'date') {
         if (value) {
@@ -183,15 +183,15 @@ const AutoFramingObservations = {
                                 value={sampleValue[`${line}-supplier`] || ''}
                                 onChange={(value) => handleUpdate(line, 'supplier', value)}
                                 options={[
-                                    { value: "TNE", label: "Taihe new energy" },
-                                    { value: "YMD", label: "Yuejja Metallic (Davin)" },
-                                    { value: "ANAN", label: "Anan" },
-                                    { value: "YT", label: "YONZ TECHNOLOGY" },
-                                    { value: "JUIXIN", label: "Juixin" },
-                                    { value: "YIHUA", label: "Yihua" },
-                                    { value: "RALPRO", label: "Ralpro" },
-                                    { value: "VR", label: "Vishakha Renewables" },
-                                    { value: "NA", label: "N/A" }
+                                    { value: "Taihe new energy", label: "Taihe new energy" },
+                                    { value: "Yuejja Metallic (Davin)", label: "Yuejja Metallic (Davin)" },
+                                    { value: "Anan", label: "Anan" },
+                                    { value: "YONZ TECHNOLOGY", label: "YONZ TECHNOLOGY" },
+                                    { value: "Juixin", label: "Juixin" },
+                                    { value: "Yihua", label: "Yihua" },
+                                    { value: "Ralpro", label: "Ralpro" },
+                                    { value: "Vishakha Renewables", label: "Vishakha Renewables" },
+                                    { value: "N/A", label: "N/A" }
                                 ]}
                                 type="status"
                             />
@@ -231,10 +231,10 @@ const AutoFramingObservations = {
                                     value={sampleValue[`${line}-supplier`] || ''}
                                     onChange={(value) => handleUpdate(line, 'supplier', value)}
                                     options={[
-                                        { value: "HUITAN", label: "Huitan" },
-                                        { value: "TONSAN", label: "Tonsan (HB fuller)" },
-                                        { value: "ADARSHA", label: "Adarsha Speciality" },
-                                        { value: "NA", label: "N/A" }
+                                        { value: "Huitan", label: "Huitan" },
+                                        { value: "Tonsan (HB fuller)", label: "Tonsan (HB fuller)" },
+                                        { value: "Adarsha Speciality", label: "Adarsha Speciality" },
+                                        { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"
                                 />
@@ -334,8 +334,8 @@ const AutoFramingObservations = {
                                 value={sampleValue[`${line}-${sample}-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate(line, sample, timeSlot, value)}
                                 options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "Checked OK", label: "Checked OK" },
+                                    { value: "Checked Not OK", label: "Checked Not OK" },
                                     { value: "OFF", label: "OFF" }
                                 ]}
                                 type="status"
@@ -466,43 +466,47 @@ const AutoFramingObservations = {
             )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: string, dimension: string, value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-${dimension}`]: value };
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', dimension: string, value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}-${dimension}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
                 {lines.map(line => (
-                    <FramingSection.SingleInputSection
+                    <FramingSection.TimeBasedSection
                         key={line}
                         line={line}
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
-                        <div className="flex gap-2">
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500 mb-1">Length</span>
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-Length`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'Length', value)}
-                                    placeholder=""
-                                    type="measurement"
-                                />
-                                <span className="text-xs text-gray-500 mt-1">mm</span>
+                        {(timeSlot) => (
+                            <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+                                <div className="flex gap-2">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-xs text-gray-500 mb-1">Length</span>
+                                        <InputComponents.TextInput
+                                            value={sampleValue[`${line}-${timeSlot}-Length`] || ''}
+                                            onChange={(value) => handleUpdate(line, timeSlot, 'Length', value)}
+                                            placeholder=""
+                                            type="measurement"
+                                        />
+                                        <span className="text-xs text-gray-500 mt-1">mm</span>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-xs text-gray-500 mb-1">Width</span>
+                                        <InputComponents.TextInput
+                                            value={sampleValue[`${line}-${timeSlot}-Width`] || ''}
+                                            onChange={(value) => handleUpdate(line, timeSlot, 'Width', value)}
+                                            placeholder=""
+                                            type="measurement"
+                                        />
+                                        <span className="text-xs text-gray-500 mt-1">mm</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500 mb-1">Width</span>
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-Width`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'Width', value)}
-                                    placeholder=""
-                                    type="measurement"
-                                />
-                                <span className="text-xs text-gray-500 mt-1">mm</span>
-                            </div>
-                        </div>
-                    </FramingSection.SingleInputSection>
+                        )}
+                    </FramingSection.TimeBasedSection>
                 ))}
             </div>
         );

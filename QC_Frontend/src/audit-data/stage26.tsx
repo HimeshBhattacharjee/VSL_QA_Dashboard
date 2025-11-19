@@ -14,8 +14,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     if (upperValue === 'OFF') return 'bg-yellow-100';
     if (type === 'status') {
         if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG' || upperValue === 'FAIL') return 'bg-red-100';
-        if (upperValue === 'PASS' || upperValue === 'OK') return 'bg-green-100';
+        if (upperValue === 'FAIL') return 'bg-red-100';
     }
     if (type === 'date') {
         if (value) {

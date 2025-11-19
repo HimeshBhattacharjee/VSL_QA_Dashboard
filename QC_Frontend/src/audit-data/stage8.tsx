@@ -13,8 +13,8 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     const upperValue = value.toUpperCase();
     if (upperValue === 'OFF') return 'bg-yellow-100';
     if (type === 'status') {
-        if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG') return 'bg-red-100';
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
     }
     if (type === 'date') {
         if (value) {
@@ -28,45 +28,45 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     if (type === 'measurement' && criteria && value) {
         const numValue = parseFloat(value);
         if (isNaN(numValue)) return 'bg-white';
-        
+
         // Cell to Cell Gap: 0.8 mm to 1.8 mm for M10, 0.3 mm to 1.3 mm for M10R & G12
         if (criteria.includes('0.8 mm to 1.8 mm') || criteria.includes('0.3 mm to 1.3 mm')) {
             if (numValue >= 0.8 && numValue <= 1.8) return 'bg-white';
             if (numValue >= 0.3 && numValue <= 1.3) return 'bg-white';
             return 'bg-red-100';
         }
-        
+
         // String to String Gap: 1.5 ± 0.5 mm
         if (criteria.includes('1.5 ± 0.5 mm')) {
             if (numValue >= 1.0 && numValue <= 2.0) return 'bg-white';
             return 'bg-red-100';
         }
-        
+
         // Creep edge distance: ≥ 12 mm
         if (criteria.includes('≥ 12 mm') || criteria.includes('Gap ≥ 12 mm')) {
             if (numValue >= 12) return 'bg-white';
             return 'bg-red-100';
         }
-        
+
         // Space between portions: 15 ± 5 mm
         if (criteria.includes('15 ± 5 mm')) {
             if (numValue >= 10 && numValue <= 20) return 'bg-white';
             return 'bg-red-100';
         }
-        
+
         // Tape length: 21 ± 5 mm
         if (criteria.includes('21 ± 5 mm')) {
             if (numValue >= 16 && numValue <= 26) return 'bg-white';
             return 'bg-red-100';
         }
-        
+
         // Tape quantity: 45 ± 15
         if (criteria.includes('45 ± 15')) {
             if (numValue >= 30 && numValue <= 60) return 'bg-white';
             return 'bg-red-100';
         }
     }
-    
+
     return 'bg-white';
 };
 
@@ -176,8 +176,8 @@ const AutoTapingNLayupObservations = {
                                 value={sampleValue[`${line}-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "Checked OK", label: "Checked OK" },
+                                    { value: "Checked Not OK", label: "Checked Not OK" },
                                     { value: "OFF", label: "OFF" }
                                 ]}
                                 type="status"
@@ -195,31 +195,33 @@ const AutoTapingNLayupObservations = {
             ? Object.fromEntries(lines.map(line => [line, ""]))
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: string, value: string) => {
-            const updatedValue = { ...sampleValue, [line]: value };
+        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex justify-between gap-4">
                 {lines.map(line => (
-                    <LineSection.SingleInputSection
+                    <LineSection.TimeBasedSection
                         key={line}
                         line={line}
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
-                        <InputComponents.Select
-                            value={sampleValue[line] || ''}
-                            onChange={(value) => handleUpdate(line, value)}
-                            options={[
-                                { value: "Inside", label: "Laminate Inside" },
-                                { value: "Outside", label: "Outside RFID" },
-                                { value: "NotRequired", label: "Not required" }
-                            ]}
-                            type="status"
-                        />
-                    </LineSection.SingleInputSection>
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={[
+                                    { value: "Laminate Inside", label: "Laminate Inside" },
+                                    { value: "Outside RFID", label: "Outside RFID" },
+                                    { value: "Not Required", label: "Not Required" }
+                                ]}
+                                type="status"
+                            />
+                        )}
+                    </LineSection.TimeBasedSection>
                 ))}
             </div>
         );
@@ -254,8 +256,8 @@ const AutoTapingNLayupObservations = {
                                     options={[
                                         { value: "TERAOKA", label: "TERAOKA" },
                                         { value: "TESA", label: "TESA" },
-                                        { value: "CYBRID", label: "Cybrid" },
-                                        { value: "NA", label: "N/A" }
+                                        { value: "Cybrid", label: "Cybrid" },
+                                        { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"
                                 />

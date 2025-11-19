@@ -22,7 +22,7 @@ const RearGlassLoadingObservations = {
     },
 
     renderSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -37,13 +37,13 @@ const RearGlassLoadingObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="XS">Xinyi Solar</option>
-                    <option value="CSG">CSG Holding Co., Ltd.</option>
-                    <option value="GB">Gurjat Borosil</option>
-                    <option value="KG">Kibing Group</option>
-                    <option value="FGG">Flat Glass Group Co., Ltd</option>
-                    <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
-                    <option value="NA">N/A</option>
+                    <option value="Xinyi Solar">Xinyi Solar</option>
+                    <option value="CSG Holding Co., Ltd.">CSG Holding Co., Ltd.</option>
+                    <option value="Gurjat Borosil">Gurjat Borosil</option>
+                    <option value="Kibing Group">Kibing Group</option>
+                    <option value="Flat Glass Group Co., Ltd">Flat Glass Group Co., Ltd</option>
+                    <option value="Henan Ancai Hi-Tech Co., Ltd">Henan Ancai Hi-Tech Co., Ltd</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
@@ -90,8 +90,8 @@ const RearGlassLoadingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select Status</option>
-                <option value="4_hours">Within 4 hours</option>
-                <option value="8_hours">Within 8 hours</option>
+                <option value="Within 4 hours">Within 4 hours</option>
+                <option value="Within 8 hours">Within 8 hours</option>
                 <option value="Expired">Expired</option>
                 <option value="OFF">OFF</option>
             </select>
@@ -105,7 +105,7 @@ const RearGlassLoadingObservations = {
 
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -124,8 +124,8 @@ const RearGlassLoadingObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
@@ -144,8 +144,8 @@ const RearGlassLoadingObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>

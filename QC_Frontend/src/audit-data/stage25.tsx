@@ -6,7 +6,7 @@ const RFIDObservations = {
             if (!value) return 'bg-white';
             const upperValue = value.toUpperCase();
             if (upperValue === 'OFF') return 'bg-yellow-100';
-            if (upperValue === 'NG') return 'bg-red-100';
+            if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -18,8 +18,8 @@ const RFIDObservations = {
                     className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="OK">Checked OK</option>
-                    <option value="NG">Checked Not OK</option>
+                    <option value="Checked OK">Checked OK</option>
+                    <option value="Checked Not OK">Checked Not OK</option>
                     <option value="OFF">OFF</option>
                 </select>
             </div>

@@ -22,7 +22,7 @@ const BackSheetObservations = {
     },
 
     renderSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -37,12 +37,12 @@ const BackSheetObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
-                    <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
-                    <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
-                    <option value="CT">Cybrid Technologies Pvt. Ltd</option>
-                    <option value="CYMAX">Cymax PTE. Ltd</option>
-                    <option value="NA">N/A</option>
+                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
@@ -89,8 +89,8 @@ const BackSheetObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="4_hours">Within 4 hours</option>
-                <option value="8_hours">Within 8 hours</option>
+                <option value="Within 4 hours">Within 4 hours</option>
+                <option value="Within 8 hours">Within 8 hours</option>
                 <option value="Expired">Expired</option>
                 <option value="OFF">OFF</option>
             </select>
@@ -98,58 +98,21 @@ const BackSheetObservations = {
     },
 
     renderAestheticCondition: (props: ObservationRenderProps) => {
-        const sampleValue = typeof props.value === 'string'
-            ? { "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "", "Sample-5": "", "Sample-6": "" }
-            : props.value as Record<string, string>;
+        const isOff = (value: string) => value.toUpperCase() === 'OFF';
 
         const getBackgroundColor = (value: string) => {
-            if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (isOff(value)) return 'bg-yellow-100';
             return 'bg-white';
         };
 
         return (
-            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-200">
-                <div className="flex justify-between p-2 gap-2">
-                    {['Sample-1', 'Sample-2', 'Sample-3'].map((sample) => (
-                        <div key={sample} className="flex flex-col items-center">
-                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
-                            <select
-                                value={sampleValue[sample] || ''}
-                                onChange={(e) => {
-                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
-                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                                }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
-                            >
-                                <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
-                                <option value="OFF">OFF</option>
-                            </select>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex justify-between p-2 gap-2">
-                    {['Sample-4', 'Sample-5', 'Sample-6'].map((sample) => (
-                        <div key={sample} className="flex flex-col items-center">
-                            <span className="text-xs text-gray-500 mb-1">{sample}</span>
-                            <select
-                                value={sampleValue[sample] || ''}
-                                onChange={(e) => {
-                                    const updatedValue = { ...sampleValue, [sample]: e.target.value };
-                                    props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                                }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
-                            >
-                                <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
-                                <option value="OFF">OFF</option>
-                            </select>
-                        </div>
-                    ))}
-                </div>
+            <div className="flex flex-col space-y-1">
+                <input
+                    type="text"
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                />
             </div>
         );
     },

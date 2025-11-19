@@ -13,8 +13,8 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     const upperValue = value.toUpperCase();
     if (upperValue === 'OFF') return 'bg-yellow-100';
     if (type === 'status') {
-        if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG') return 'bg-red-100';
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
     }
     if (type === 'date') {
         if (value) {
@@ -152,8 +152,8 @@ const SunSimulatorObservations = {
                             value={sampleValue[line] || ''}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
                                 { value: "OFF", label: "OFF" }
                             ]}
                             type="status"
@@ -188,8 +188,8 @@ const SunSimulatorObservations = {
                             value={sampleValue[line] || ''}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
                                 { value: "OFF", label: "OFF" }
                             ]}
                             type="status"
@@ -460,8 +460,8 @@ const SunSimulatorObservations = {
                             value={sampleValue[line] || ''}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
                                 { value: "OFF", label: "OFF" }
                             ]}
                             type="status"
@@ -496,8 +496,8 @@ const SunSimulatorObservations = {
                             value={sampleValue[line] || ''}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
                                 { value: "OFF", label: "OFF" }
                             ]}
                             type="status"
@@ -695,5 +695,4 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
     };
 };
 
-// Keep the original export for backward compatibility
 export const sunSimulatorStage: StageData = createSunSimulatorStage('II');

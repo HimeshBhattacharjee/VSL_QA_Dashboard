@@ -3,12 +3,9 @@ import { StageData, ObservationRenderProps } from '../types/audit';
 const AutoFrontGlassObservations = {
     renderGlassStatus: (props: ObservationRenderProps) => {
         const isOff = (value: string) => value.toUpperCase() === 'OFF';
-        const isNA = (value: string) => value.toUpperCase() === 'N/A';
-        const isNG = (value: string) => value.toUpperCase() === 'NG';
 
         const getBackgroundColor = (value: string) => {
-            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
-            if (isNG(value)) return 'bg-red-100';
+            if (isOff(value)) return 'bg-yellow-100';
             return 'bg-white';
         };
 
@@ -25,7 +22,7 @@ const AutoFrontGlassObservations = {
     },
 
     renderSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -40,24 +37,20 @@ const AutoFrontGlassObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="XS">Xinyi Solar</option>
-                    <option value="CSG">CSG Holding Co., Ltd.</option>
-                    <option value="GB">Gurjat Borosil</option>
-                    <option value="KG">Kibing Group</option>
-                    <option value="FGG">Flat Glass Group Co., Ltd</option>
-                    <option value="HA">Henan Ancai Hi-Tech Co., Ltd</option>
-                    <option value="NA">N/A</option>
+                    <option value="Xinyi Solar">Xinyi Solar</option>
+                    <option value="CSG Holding Co., Ltd.">CSG Holding Co., Ltd.</option>
+                    <option value="Gurjat Borosil">Gurjat Borosil</option>
+                    <option value="Kibing Group">Kibing Group</option>
+                    <option value="Flat Glass Group Co., Ltd">Flat Glass Group Co., Ltd</option>
+                    <option value="Henan Ancai Hi-Tech Co., Ltd">Henan Ancai Hi-Tech Co., Ltd</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
     },
 
     renderExpiryDate: (props: ObservationRenderProps) => {
-        const isOff = (value: string) => value.toUpperCase() === 'OFF';
-        const isNA = (value: string) => value.toUpperCase() === 'N/A';
-
         const getBackgroundColor = (value: string) => {
-            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
             if (value) {
                 const inputDate = new Date(value);
                 const today = new Date();
@@ -90,7 +83,7 @@ const AutoFrontGlassObservations = {
 
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -109,8 +102,8 @@ const AutoFrontGlassObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
@@ -129,8 +122,8 @@ const AutoFrontGlassObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
@@ -143,7 +136,7 @@ const AutoFrontGlassObservations = {
     renderVacuumCup: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -154,8 +147,8 @@ const AutoFrontGlassObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="OK">Checked OK</option>
-                <option value="NG">Checked Not OK</option>
+                <option value="Checked OK">Checked OK</option>
+                <option value="Checked Not OK">Checked Not OK</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -170,12 +163,8 @@ const AutoFrontGlassObservations = {
             return typeof value === 'string' && value.toUpperCase() === 'OFF';
         };
 
-        const isNA = (value: string) => {
-            return typeof value === 'string' && value.toUpperCase() === 'N/A';
-        };
-
         const getBackgroundColor = (value: string) => {
-            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
+            if (isOff(value)) return 'bg-yellow-100';
             if (!value) return 'bg-white';
             return 'bg-white';
         };

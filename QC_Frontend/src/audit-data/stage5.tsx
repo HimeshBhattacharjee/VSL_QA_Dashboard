@@ -12,11 +12,9 @@ const TabbingStringingObservations = {
     renderInputText: (props: ObservationRenderProps) => {
         const isOff = (value: string) => value.toUpperCase() === 'OFF';
         const isNA = (value: string) => value.toUpperCase() === 'N/A';
-        const isNG = (value: string) => value.toUpperCase() === 'NG';
 
         const getBackgroundColor = (value: string) => {
             if (isOff(value) || isNA(value)) return 'bg-yellow-100';
-            if (isNG(value)) return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -33,7 +31,7 @@ const TabbingStringingObservations = {
     },
 
     renderINTCSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -48,17 +46,17 @@ const TabbingStringingObservations = {
                     className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="JUREN">Juren</option>
-                    <option value="SUNBY">Sunby</option>
-                    <option value="YB">YourBest</option>
-                    <option value="NA">N/A</option>
+                    <option value="Juren">Juren</option>
+                    <option value="Sunby">Sunby</option>
+                    <option value="YourBest">YourBest</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
     },
 
     renderFluxSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -73,10 +71,10 @@ const TabbingStringingObservations = {
                     className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="RC">Reality chemical</option>
-                    <option value="AS">Arbital Solutions Pvt Ltd.</option>
-                    <option value="KESTER">Kester</option>
-                    <option value="NA">N/A</option>
+                    <option value="Reality chemical">Reality chemical</option>
+                    <option value="Arbital Solutions Pvt Ltd.">Arbital Solutions Pvt Ltd.</option>
+                    <option value="Kester">Kester</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
@@ -85,7 +83,7 @@ const TabbingStringingObservations = {
     renderSelector: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -96,8 +94,8 @@ const TabbingStringingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="OK">Checked OK</option>
-                <option value="NG">Checked Not OK</option>
+                <option value="Checked OK">Checked OK</option>
+                <option value="Checked Not OK">Checked Not OK</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -659,8 +657,8 @@ const TabbingStringingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="Unit-A">Unit-A</option>
-                <option value="Unit-B">Unit-B</option>
+                <option value="A">Unit-A</option>
+                <option value="B">Unit-B</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -914,7 +912,7 @@ const TabbingStringingObservations = {
                 return (numValue >= 0.3 && numValue <= 1.8) ? 'bg-white' : 'bg-red-100';
             }
             if (paramId.includes('el-inspection')) {
-                if (value === 'NG') return 'bg-red-100';
+                if (value === 'Checked Not OK') return 'bg-red-100';
                 if (value === 'OFF') return 'bg-yellow-100';
                 return 'bg-white';
             }

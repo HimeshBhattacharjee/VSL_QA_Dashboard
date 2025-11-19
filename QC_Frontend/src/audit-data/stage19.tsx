@@ -13,8 +13,8 @@ const getBackgroundColor = (value: string, type: 'status' | 'measurement') => {
     const upperValue = value.toUpperCase();
     if (upperValue === 'OFF') return 'bg-yellow-100';
     if (type === 'status') {
-        if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG') return 'bg-red-100';
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'ESD BAND NOT USED') return 'bg-red-100';
     }
     return 'bg-white';
 };
@@ -127,8 +127,8 @@ const AutoJBSolderingObservations = {
                                 value={sampleValue[`${line}-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
-                                    { value: "OK", label: "ESD band used" },
-                                    { value: "NG", label: "ESD band not used" },
+                                    { value: "ESD band used", label: "ESD band used" },
+                                    { value: "ESD band not used", label: "ESD band not used" },
                                     { value: "OFF", label: "OFF" }
                                 ]}
                                 type="status"

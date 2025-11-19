@@ -68,14 +68,14 @@ const PreLamObservations = {
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                     className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${
-                        props.value === 'NG' ? 'bg-red-100' : 
+                        props.value === 'Checked Not OK' ? 'bg-red-100' : 
                         props.value === 'OFF' ? 'bg-yellow-100' : 
                         'bg-white'
                     }`}
                 >
                     <option value="">Select</option>
-                    <option value="OK">Checked OK</option>
-                    <option value="NG">Checked Not OK</option>
+                    <option value="Checked OK">Checked OK</option>
+                    <option value="Checked Not OK">Checked Not OK</option>
                     <option value="OFF">OFF</option>
                 </select>
             </div>

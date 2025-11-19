@@ -1,6 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
-import { useAlert } from '../context/AlertContext';
 
 export default function Header() {
     const navigate = useNavigate();
@@ -12,7 +11,6 @@ export default function Header() {
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { showAlert } = useAlert();
 
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
@@ -79,8 +77,8 @@ export default function Header() {
                 setPageSubTitle("Detailed quality metrics for Final QC process");
                 break;
             case '/quality-audit':
-                setPageTitle("Quality Audit Checksheet");
-                setPageSubTitle("Doc. No.: VSL/QAD/FM/119");
+                setPageTitle("IPQC Audit Checksheet");
+                setPageSubTitle("");
                 break;
             default:
                 setPageTitle("VSL Quality Portal");
@@ -106,7 +104,6 @@ export default function Header() {
         setUsername(null);
         setUserRole(null);
         setDropdownOpen(false);
-        showAlert('success', 'Logged out successfully!');
         navigate("/login");
     };
 

@@ -251,17 +251,17 @@ export default function QualityAudit() {
         setStageChanges(prev => new Set(prev).add(stageId));
     };
 
-    const generatePDFReport = async () => {
+    const generateExcelReport = async () => {
         try {
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            console.log('Generating PDF with data:', auditData);
+            console.log('Generating Excel with data:', auditData);
 
             const response = await fetch('http://localhost:8000/generate-audit-report', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(auditData) // Send the audit data
+                body: JSON.stringify(auditData)
             });
 
             if (!response.ok) {
@@ -289,6 +289,47 @@ export default function QualityAudit() {
         } catch (error) {
             console.error('Error generating report:', error);
             showAlert('error', 'Failed to generate audit report. Please try again.');
+        }
+    };
+
+    const generatePDFReport = async () => {
+        try {
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
+            console.log('Generating PDF with data:', auditData);
+
+            const response = await fetch('http://localhost:8000/generate-audit-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(auditData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate PDF report');
+            }
+
+            // Create blob from response and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Generate filename based on audit data
+            const filename = `Quality_Audit_Line${auditData.lineNumber}_${auditData.date.replace(/-/g, '')}_Shift${auditData.shift}.pdf`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Audit PDF report generated successfully!');
+
+        } catch (error) {
+            console.error('Error generating PDF report:', error);
+            showAlert('error', 'Failed to generate audit PDF report. Please try again.');
         }
     };
 
@@ -591,10 +632,16 @@ export default function QualityAudit() {
                                             ← Back to Basic Info
                                         </button>
                                         <button
-                                            onClick={generatePDFReport}
-                                            className="p-2 bg-green-600 text-white rounded-lg shadow-lg hover:bg-green-700 transition-colors text-sm font-semibold"
+                                            onClick={generateExcelReport}
+                                            className="p-2 bg-green-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-green-700 transition-colors text-sm font-semibold"
                                         >
-                                            Generate Audit Report
+                                            Generate Audit Excel
+                                        </button>
+                                        <button
+                                            onClick={generatePDFReport}
+                                            className="p-2 bg-red-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-red-700 transition-colors text-sm font-semibold"
+                                        >
+                                            Generate Audit PDF
                                         </button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-4">

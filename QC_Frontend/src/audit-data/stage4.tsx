@@ -3,12 +3,9 @@ import { StageData, ObservationRenderProps } from '../types/audit';
 const CellSortingObservations = {
     renderCellStatus: (props: ObservationRenderProps) => {
         const isOff = (value: string) => value.toUpperCase() === 'OFF';
-        const isNA = (value: string) => value.toUpperCase() === 'N/A';
-        const isNG = (value: string) => value.toUpperCase() === 'NG';
 
         const getBackgroundColor = (value: string) => {
-            if (isOff(value) || isNA(value)) return 'bg-yellow-100';
-            if (isNG(value)) return 'bg-red-100';
+            if (isOff(value)) return 'bg-yellow-100';
             return 'bg-white';
         };
 
@@ -25,7 +22,7 @@ const CellSortingObservations = {
     },
 
     renderSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -40,12 +37,12 @@ const CellSortingObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="AIKO">Aiko</option>
+                    <option value="Aiko">Aiko</option>
                     <option value="JTPV">JTPV</option>
-                    <option value="SNP">Solar N-Plus</option>
-                    <option value="YINGFA">Yingfa</option>
-                    <option value="SS">Solar space</option>
-                    <option value="NA">N/A</option>
+                    <option value="Solar N-Plus">Solar N-Plus</option>
+                    <option value="Yingfa">Yingfa</option>
+                    <option value="Solar space">Solar space</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
@@ -89,8 +86,8 @@ const CellSortingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="4_hrs">Used within 4 hrs</option>
-                <option value="8_hrs">Used within 8 hrs</option>
+                <option value="Used within 4 hrs">Used within 4 hrs</option>
+                <option value="Used within 8 hrs">Used within 8 hrs</option>
                 <option value="Expired">Expired</option>
                 <option value="OFF">OFF</option>
             </select>
@@ -121,7 +118,7 @@ const CellSortingObservations = {
     renderCellAppearance: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -132,8 +129,8 @@ const CellSortingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="OK">Checked OK</option>
-                <option value="NG">Checked Not OK</option>
+                <option value="Checked OK">Checked OK</option>
+                <option value="Checked Not OK">Checked Not OK</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -142,7 +139,7 @@ const CellSortingObservations = {
     renderGlovesChange: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'Not Changed') return 'bg-red-100';
+            if (value === 'Hand Gloves Not Changed') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -153,8 +150,8 @@ const CellSortingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="Changed">New Hand Gloves Used</option>
-                <option value="Not Changed">Hand Gloves Not Changed</option>
+                <option value="New Hand Gloves Used">New Hand Gloves Used</option>
+                <option value="Hand Gloves Not Changed">Hand Gloves Not Changed</option>
                 <option value="OFF">OFF</option>
             </select>
         );

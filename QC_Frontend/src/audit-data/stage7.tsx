@@ -21,9 +21,8 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
 
     // Status-based formatting
     if (type === 'status') {
-        if (upperValue === 'NA') return 'bg-yellow-100';
-        if (upperValue === 'NG') return 'bg-red-100';
-        if (upperValue === 'OK') return 'bg-green-100';
+        if (upperValue === 'N/A') return 'bg-yellow-100';
+        if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
     }
 
     // Date-based formatting
@@ -234,7 +233,7 @@ const LineSection = {
                 </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(position => (
+                {Array.from({ length: 40 }, (_, index) => index + 1).map(position => (
                     <div key={position} className="flex flex-col items-center">
                         <span className="text-xs text-gray-500 mb-1">Pos {position}</span>
                         {children.byPosition(position)}
@@ -329,10 +328,10 @@ const AutoBussingObservations = {
                                 value={sampleValue[`${line}-${label}`] || ''}
                                 onChange={(value) => handleUpdate(line, label, value)}
                                 options={[
-                                    { value: "JUREN", label: "Juren" },
-                                    { value: "SUNBY", label: "Sunby" },
-                                    { value: "YB", label: "YourBest" },
-                                    { value: "NA", label: "N/A" }
+                                    { value: "Juren", label: "Juren" },
+                                    { value: "Sunby", label: "Sunby" },
+                                    { value: "YourBest", label: "YourBest" },
+                                    { value: "N/A", label: "N/A" }
                                 ]}
                                 type="status"
                             />
@@ -505,9 +504,9 @@ const AutoBussingObservations = {
                             value={sampleValue[line] || ''}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
-                                { value: "NA", label: "N/A" }
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
+                                { value: "N/A", label: "N/A" }
                             ]}
                             type="status"
                         />
@@ -820,5 +819,4 @@ export const createAutoBussingStage = (lineNumber: string): StageData => {
     };
 };
 
-// Keep the original export for backward compatibility
 export const autoBussingStage: StageData = createAutoBussingStage('II');

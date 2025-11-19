@@ -40,11 +40,9 @@ const RearEncapsulantObservations = {
 
     renderEncapsulantStatus: (props: ObservationRenderProps) => {
         const isOff = (value: string) => value.toUpperCase() === 'OFF';
-        const isNG = (value: string) => value.toUpperCase() === 'NG';
 
         const getBackgroundColor = (value: string) => {
             if (isOff(value)) return 'bg-yellow-100';
-            if (isNG(value)) return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -61,7 +59,7 @@ const RearEncapsulantObservations = {
     },
 
     renderSupplier: (props: ObservationRenderProps) => {
-        const isNA = (value: string) => value === 'NA';
+        const isNA = (value: string) => value === 'N/A';
 
         const getBackgroundColor = (value: string) => {
             if (isNA(value)) return 'bg-yellow-100';
@@ -76,12 +74,12 @@ const RearEncapsulantObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="HFPVC">Hangzhou First PV Material Co., Ltd</option>
-                    <option value="VAFMC">Vietnam Advance Film Material Company Ltd</option>
-                    <option value="FMSC">First Material Science (Thailand) Co., Ltd</option>
-                    <option value="CT">Cybrid Technologies Pvt. Ltd</option>
-                    <option value="CYMAX">Cymax PTE. Ltd</option>
-                    <option value="NA">N/A</option>
+                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                    <option value="N/A">N/A</option>
                 </select>
             </div>
         );
@@ -128,8 +126,8 @@ const RearEncapsulantObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="4_hrs">Within 4 hours</option>
-                <option value="8_hrs">Within 8 hours</option>
+                <option value="Within 4 hours">Within 4 hours</option>
+                <option value="Within 8 hours">Within 8 hours</option>
                 <option value="Expired">Expired</option>
                 <option value="OFF">OFF</option>
             </select>
@@ -143,7 +141,7 @@ const RearEncapsulantObservations = {
 
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'NG') return 'bg-red-100';
+            if (value === 'Checked Not OK') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -162,8 +160,8 @@ const RearEncapsulantObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>
@@ -182,8 +180,8 @@ const RearEncapsulantObservations = {
                                 className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
-                                <option value="OK">Checked OK</option>
-                                <option value="NG">Checked Not OK</option>
+                                <option value="Checked OK">Checked OK</option>
+                                <option value="Checked Not OK">Checked Not OK</option>
                                 <option value="OFF">OFF</option>
                             </select>
                         </div>

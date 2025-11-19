@@ -11,7 +11,7 @@ const getLineConfiguration = (lineNumber: string): string[] => {
 const getBackgroundColor = (value: string) => {
     if (!value) return 'bg-white';
     if (value === 'OFF') return 'bg-yellow-100';
-    if (value === 'NG') return 'bg-red-100';
+    if (value === 'Checked Not OK') return 'bg-red-100';
     return 'bg-white';
 };
 
@@ -106,8 +106,8 @@ const AutoTrimmingObservations = {
                                 value={sampleValue[`${machine}-${timeSlot}`] || ''}
                                 onChange={(value) => handleUpdate(machine, timeSlot, value)}
                                 options={[
-                                    { value: "OK", label: "Checked OK" },
-                                    { value: "NG", label: "Checked Not OK" },
+                                    { value: "Checked OK", label: "Checked OK" },
+                                    { value: "Checked Not OK", label: "Checked Not OK" },
                                     { value: "OFF", label: "OFF" }
                                 ]}
                             />
@@ -144,8 +144,8 @@ const AutoTrimmingObservations = {
                             value={sampleValue[machine] || ''}
                             onChange={(value) => handleUpdate(machine, value)}
                             options={[
-                                { value: "OK", label: "Checked OK" },
-                                { value: "NG", label: "Checked Not OK" },
+                                { value: "Checked OK", label: "Checked OK" },
+                                { value: "Checked Not OK", label: "Checked Not OK" },
                                 { value: "OFF", label: "OFF" }
                             ]}
                             className="w-full"
