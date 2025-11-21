@@ -7,6 +7,7 @@ import ZoomableChart from '../components/ZoomableChart';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 interface ReportData {
+    _id?: string;
     name: string;
     timestamp: string;
     formData: Record<string, string>;
@@ -25,7 +26,6 @@ type GraphData = {
     min_value: number;
 };
 
-const STORAGE_KEY = 'peelTestReports';
 const PEEL_API_BASE_URL = 'http://localhost:8000/peel';
 
 export default function PeelTest() {
@@ -33,6 +33,7 @@ export default function PeelTest() {
     const [activeTab, setActiveTab] = useState<TabType>('edit-report');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
+    const [savedReports, setSavedReports] = useState<ReportData[]>([]);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
 
@@ -69,6 +70,83 @@ export default function PeelTest() {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
     }, []);
+
+    const apiService = {
+        // Get all reports
+        getAllReports: async (): Promise<ReportData[]> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Get report by ID
+        getReportById: async (id: string): Promise<ReportData> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Create new report
+        createReport: async (report: Omit<ReportData, '_id'>): Promise<ReportData> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to create report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Update existing report
+        updateReport: async (id: string, report: Omit<ReportData, '_id'>): Promise<ReportData> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to update report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Delete report
+        deleteReport: async (id: string): Promise<void> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
+            }
+        },
+
+        // Check if report name exists
+        checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
+            const url = `${PEEL_API_BASE_URL}/peel-test-reports/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to check report name: ${response.status} ${errorText}`);
+            }
+            const result = await response.json();
+            return result.exists;
+        },
+    };
 
     const initializeForm = () => {
         // Check if we have editing report data from session storage
@@ -171,15 +249,23 @@ export default function PeelTest() {
         sessionStorage.removeItem('peelTestFormData');
     };
 
-    // Report management functions
-    const getSavedReports = (): ReportData[] => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        return saved ? JSON.parse(saved) : [];
+    const getSavedReports = async (): Promise<ReportData[]> => {
+        try {
+            return await apiService.getAllReports();
+        } catch (error) {
+            console.error('Error fetching saved reports:', error);
+            showAlert('error', 'Failed to load saved reports');
+            return [];
+        }
     };
 
-    const loadSavedReports = () => {
-        const reports = getSavedReports();
-        // You might want to set this to a state variable if you need to use it in the component
+    const loadSavedReports = async () => {
+        try {
+            const reports = await getSavedReports();
+            setSavedReports(reports); // Set the state here
+        } catch (error) {
+            console.error('Error loading reports:', error);
+        }
     };
 
     const generateReportName = (dateString: string, shift: string) => {
@@ -214,7 +300,7 @@ export default function PeelTest() {
         }
 
         const reportName = generateReportName(selectedDate, selectedShift);
-        const savedReports = getSavedReports();
+        const savedReports = await getSavedReports(); // Add await here
         const existingLocalReport = savedReports.find(report => report.name === reportName);
 
         if (existingLocalReport) {
@@ -257,12 +343,7 @@ export default function PeelTest() {
 
         // Save to session storage for persistence
         sessionStorage.setItem('editingPeelReportData', JSON.stringify(report));
-
-        const savedReports = getSavedReports();
-        const reportIndex = savedReports.findIndex(r => r.name === report.name);
-        if (reportIndex !== -1) {
-            sessionStorage.setItem('editingPeelReportIndex', reportIndex.toString());
-        }
+        sessionStorage.setItem('editingPeelReportId', report._id!);
     };
 
     const createReportFromMongoData = (reportName: string, mongoData: any[]) => {
@@ -369,37 +450,59 @@ export default function PeelTest() {
         return value === '' || (parseFloat(value) < 1.0 && !isNaN(parseFloat(value)));
     };
 
-    const editSavedReport = (index: number) => {
-        const savedReports = getSavedReports();
-        const report = savedReports[index];
+    const editSavedReport = async (index: number) => {
+        try {
+            const reports = await apiService.getAllReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
 
-        // Parse date from report name
-        const dateShiftMatch = report.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
-        if (dateShiftMatch) {
-            const day = dateShiftMatch[1];
-            const month = dateShiftMatch[2];
-            const year = dateShiftMatch[3];
-            const shift = dateShiftMatch[4];
+            const report = reports[index];
 
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const monthIndex = monthNames.findIndex(m => m.toLowerCase() === month.toLowerCase()) + 1;
-            const formattedDate = `${year}-${monthIndex.toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
+            // Parse date from report name
+            const dateShiftMatch = report.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
+            if (dateShiftMatch) {
+                const day = dateShiftMatch[1];
+                const month = dateShiftMatch[2];
+                const year = dateShiftMatch[3];
+                const shift = dateShiftMatch[4];
 
-            setSelectedDate(formattedDate);
-            setSelectedShift(shift);
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthIndex = monthNames.findIndex(m => m.toLowerCase() === month.toLowerCase()) + 1;
+                const formattedDate = `${year}-${monthIndex.toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+                setSelectedDate(formattedDate);
+                setSelectedShift(shift);
+            }
+
+            loadReportForEditing(report);
+            setShowReportEditor(true);
+            setActiveTab('edit-report');
+            showAlert('success', 'Report loaded for editing');
+        } catch (error) {
+            console.error('Error loading report:', error);
+            showAlert('error', 'Failed to load report');
         }
-
-        loadReportForEditing(report);
-        setShowReportEditor(true);
-        setActiveTab('edit-report');
-        showAlert('success', 'Report loaded for editing');
     };
 
-    const deleteSavedReport = (index: number) => {
-        const savedReports = getSavedReports();
-        const updatedReports = savedReports.filter((_, i) => i !== index);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedReports));
-        showAlert('info', 'Report deleted successfully');
+    // Update the deleteSavedReport function
+    const deleteSavedReport = async (index: number) => {
+        try {
+            const reports = await apiService.getAllReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+            await apiService.deleteReport(report._id!);
+            await loadSavedReports();
+            showAlert('info', 'Report deleted successfully');
+        } catch (error) {
+            console.error('Error deleting report:', error);
+            showAlert('error', 'Failed to delete report');
+        }
     };
 
     // Analysis functions
@@ -462,8 +565,7 @@ export default function PeelTest() {
         }
     };
 
-    // Save report function
-    const saveReport = () => {
+    const saveReport = async () => {
         if (!currentEditingReport) {
             showAlert('error', 'Please load or create a report first');
             return;
@@ -489,26 +591,110 @@ export default function PeelTest() {
             }
         }
 
-        const reportData: ReportData = {
+        const reportData: Omit<ReportData, '_id'> = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
-            formData: { ...tableData, ...formData, ...averages }, // Include averages in formData
+            formData: { ...tableData, ...formData, ...averages },
             rowData: [],
             averages: averages
         };
 
-        const savedReports = getSavedReports();
-        const existingIndex = savedReports.findIndex(report => report.name === currentEditingReport);
+        const editingId = sessionStorage.getItem('editingPeelReportId');
 
-        if (existingIndex !== -1) {
-            savedReports[existingIndex] = reportData;
-        } else {
-            savedReports.push(reportData);
+        try {
+            if (editingId) {
+                // Editing existing report
+                const existingReport = await apiService.getReportById(editingId);
+
+                if (currentEditingReport === existingReport.name) {
+                    // Same name, update the report
+                    await apiService.updateReport(editingId, reportData);
+                    showAlert('success', 'Report updated successfully!');
+                } else {
+                    // Different name, check if name already exists
+                    const nameExists = await apiService.checkReportNameExists(currentEditingReport, editingId);
+
+                    if (nameExists) {
+                        showConfirm({
+                            title: 'Report Name Exists',
+                            message: `A report named "${currentEditingReport}" already exists. Do you want to replace it?`,
+                            type: 'warning',
+                            confirmText: 'Replace',
+                            cancelText: 'Cancel',
+                            onConfirm: async () => {
+                                // Find the existing report with this name and update it
+                                const allReports = await apiService.getAllReports();
+                                const existingReportWithSameName = allReports.find(report => report.name === currentEditingReport);
+
+                                if (existingReportWithSameName) {
+                                    await apiService.updateReport(existingReportWithSameName._id!, reportData);
+                                    showAlert('success', 'Report updated successfully!');
+                                } else {
+                                    await apiService.createReport(reportData);
+                                    showAlert('success', 'New report created successfully!');
+                                }
+
+                                sessionStorage.removeItem('editingPeelReportId');
+                                sessionStorage.removeItem('editingPeelReportData');
+                                clearFormData();
+                                loadSavedReports();
+                                setActiveTab('saved-reports');
+                            }
+                        });
+                        return;
+                    } else {
+                        // Name doesn't exist, create new report
+                        await apiService.createReport(reportData);
+                        showAlert('success', 'New report created with updated name!');
+                    }
+                }
+
+                sessionStorage.removeItem('editingPeelReportId');
+                sessionStorage.removeItem('editingPeelReportData');
+            } else {
+                // Creating new report
+                const nameExists = await apiService.checkReportNameExists(currentEditingReport);
+
+                if (nameExists) {
+                    showConfirm({
+                        title: 'Report Name Exists',
+                        message: `A report named "${currentEditingReport}" already exists. Do you want to replace it?`,
+                        type: 'warning',
+                        confirmText: 'Replace',
+                        cancelText: 'Cancel',
+                        onConfirm: async () => {
+                            // Find the existing report with this name and update it
+                            const allReports = await apiService.getAllReports();
+                            const existingReport = allReports.find(report => report.name === currentEditingReport);
+
+                            if (existingReport) {
+                                await apiService.updateReport(existingReport._id!, reportData);
+                                showAlert('success', 'Report updated successfully!');
+                            } else {
+                                await apiService.createReport(reportData);
+                                showAlert('success', 'New report created successfully!');
+                            }
+
+                            clearFormData();
+                            loadSavedReports();
+                            setActiveTab('saved-reports');
+                        }
+                    });
+                    return;
+                } else {
+                    // Name doesn't exist, create new report
+                    await apiService.createReport(reportData);
+                    showAlert('success', 'Report saved successfully!');
+                }
+            }
+
+            clearFormData();
+            loadSavedReports();
+            setActiveTab('saved-reports');
+        } catch (error) {
+            console.error('Error saving report:', error);
+            showAlert('error', 'Failed to save report');
         }
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
-        setHasUnsavedChanges(false);
-        showAlert('success', 'Report saved successfully!');
     };
 
     const exportToExcel = async () => {
@@ -627,7 +813,7 @@ export default function PeelTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = getSavedReports();
+            const reports = await getSavedReports(); // Add await here
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
@@ -674,7 +860,7 @@ export default function PeelTest() {
     const exportSavedReportToPDF = async (index: number) => {
         try {
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const reports = getSavedReports();
+            const reports = await getSavedReports(); // Add await here
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
@@ -1025,18 +1211,15 @@ export default function PeelTest() {
         </div>
     );
 
-    const renderSavedReportsTab = () => {
-        const savedReports = getSavedReports();
-        return (
-            <SavedReportsNChecksheets
-                reports={savedReports}
-                onExportExcel={exportSavedReportToExcel}
-                onExportPdf={exportSavedReportToPDF}
-                onEdit={editSavedReport}
-                onDelete={deleteSavedReport}
-            />
-        );
-    };
+    const renderSavedReportsTab = () => (
+        <SavedReportsNChecksheets
+            reports={savedReports}
+            onExportExcel={exportSavedReportToExcel}
+            onExportPdf={exportSavedReportToPDF}
+            onEdit={editSavedReport}
+            onDelete={deleteSavedReport}
+        />
+    );
 
     const renderReportAnalysisTab = () => (
         <div className="report-analysis-container bg-white rounded-lg border border-gray-200 p-2">

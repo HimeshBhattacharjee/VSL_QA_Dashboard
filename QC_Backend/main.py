@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import tempfile
 import os
@@ -12,6 +13,9 @@ from routes.qa_route import qa_router
 from routes.bGrade_route import bgrade_router
 from routes.peel_route import peel_router
 from routes.user_route import user_router
+from routes.gel_route import gel_router
+from routes.peel_test_route import peel_test_router
+from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.PeelReportGenerator import generate_peel_report
@@ -30,10 +34,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/signatures", StaticFiles(directory="signatures"), name="signatures")
 app.include_router(qa_router)
 app.include_router(bgrade_router)
 app.include_router(peel_router)
 app.include_router(user_router)
+app.include_router(gel_router)
+app.include_router(peel_test_router)
+app.include_router(ipqc_audit_router)
 
 @app.post("/generate-audit-report")
 async def generate_audit_report_endpoint(audit_data: dict):
@@ -75,27 +83,20 @@ async def generate_audit_pdf_endpoint(audit_data: dict):
             # Initialize COM for Excel
             pythoncom.CoInitialize()
             
-            # Create Excel application instance
             excel_app = win32client.Dispatch("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
             
-            # Open the Excel workbook
             workbook = excel_app.Workbooks.Open(temp_excel_path)
             
-            # Configure page setup for all worksheets to fit on one page
+            # Configure page setup for all worksheets
             for worksheet in workbook.Worksheets:
-                # Set page orientation to landscape for better fit
-                worksheet.PageSetup.Orientation = 2  # 2 = xlLandscape
-                worksheet.PageSetup.LeftMargin = 40
-                worksheet.PageSetup.RightMargin = 40
-                worksheet.PageSetup.TopMargin = 40
-                worksheet.PageSetup.BottomMargin = 40
-                worksheet.PageSetup.Zoom = False  # Disable zoom to use FitToPages
-                worksheet.PageSetup.FitToPagesWide = 1  # Fit to 1 page wide
-                worksheet.PageSetup.FitToPagesTall = 1  # Fit to 1 page tall
+                worksheet.PageSetup.Orientation = 2  # 1 = xlPortrait
+                worksheet.PageSetup.Zoom = False
+                worksheet.PageSetup.FitToPagesWide = 1
+                worksheet.PageSetup.FitToPagesTall = False  # Allow multiple pages tall
             
-            # Export to PDF with the configured page setup
+            # Export to PDF
             workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
             
             # Close workbook and quit Excel
@@ -321,6 +322,10 @@ async def root():
             "user_management": {
                 "base_path": "/user",
                 "description": "User management and authentication"
+            },
+            "gel_test_reports": {
+                "base_path": "/api/gel-test-reports",
+                "description": "Gel test reports management with MongoDB"
             },
             "audit_reports": {
                 "base_path": "/generate-audit-report",

@@ -6,6 +6,7 @@ import { useConfirmModal } from '../context/ConfirmModalContext';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 
 interface GelTestReport {
+    _id?: string;
     name: string;
     timestamp: string;
     formData: {
@@ -22,10 +23,88 @@ export default function GelTest() {
     const [savedReports, setSavedReports] = useState<GelTestReport[]>([]);
     const [reportName, setReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const STORAGE_KEY = 'gelTestReports';
+    const GEL_API_BASE_URL = 'http://localhost:8000/api/gel-test-reports';
+
+    const apiService = {
+        // Get all reports
+        getAllReports: async (): Promise<GelTestReport[]> => {
+            const response = await fetch(`${GEL_API_BASE_URL}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Get report by ID
+        getReportById: async (id: string): Promise<GelTestReport> => {
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Create new report
+        createReport: async (report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
+            const response = await fetch(`${GEL_API_BASE_URL}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to create report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Update existing report
+        updateReport: async (id: string, report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to update report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Delete report
+        deleteReport: async (id: string): Promise<void> => {
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
+            }
+        },
+
+        // Check if report name exists
+        checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
+            const url = `${GEL_API_BASE_URL}/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to check report name: ${response.status} ${errorText}`);
+            }
+            const result = await response.json();
+            return result.exists;
+        },
+    };
 
     const handleBackToTests = () => {
         if (hasUnsavedChanges) {
@@ -250,34 +329,42 @@ export default function GelTest() {
         }
     };
 
-    const editSavedReport = (index: number) => {
-        const reports = getSavedReports();
-        if (index < 0 || index >= reports.length) {
-            showAlert('error', 'Report not found');
-            return;
+    const editSavedReport = async (index: number) => {
+        try {
+            setIsLoading(true);
+            const reports = await apiService.getAllReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+
+            // Clear any existing form data first
+            clearFormData(false);
+
+            // Set the report name immediately
+            setReportName(report.name);
+
+            // Save editing state to sessionStorage
+            sessionStorage.setItem('editingReportData', JSON.stringify(report));
+            sessionStorage.setItem('editingReportId', report._id!);
+
+            setActiveTab('edit-report');
+
+            // Load the report data after a brief delay to ensure DOM is ready
+            setTimeout(() => {
+                loadReportData(report);
+                setHasUnsavedChanges(true);
+            }, 150);
+
+            showAlert('info', `Now editing: ${report.name}`);
+        } catch (error) {
+            console.error('Error loading report:', error);
+            showAlert('error', 'Failed to load report');
+        } finally {
+            setIsLoading(false);
         }
-
-        const report = reports[index];
-
-        // Clear any existing form data first (but preserve editing state)
-        clearFormData(false);
-
-        // Set the report name immediately
-        setReportName(report.name);
-
-        // Save editing state to sessionStorage
-        sessionStorage.setItem('editingReportData', JSON.stringify(report));
-        sessionStorage.setItem('editingReportIndex', index.toString());
-
-        setActiveTab('edit-report');
-
-        // Load the report data after a brief delay to ensure DOM is ready
-        setTimeout(() => {
-            loadReportData(report);
-            setHasUnsavedChanges(true);
-        }, 150);
-
-        showAlert('info', `Now editing: ${report.name}`);
     };
 
     useEffect(() => {
@@ -432,7 +519,7 @@ export default function GelTest() {
         // Only clear reportName if we're clearing editing state
         if (clearEditingState) {
             setReportName('');
-            sessionStorage.removeItem('editingReportIndex');
+            sessionStorage.removeItem('editingReportId');
             sessionStorage.removeItem('editingReportData');
         }
 
@@ -454,83 +541,172 @@ export default function GelTest() {
         setHasUnsavedChanges(false);
     };
 
-    const getSavedReports = (): GelTestReport[] => {
-        const savedReportsJSON = localStorage.getItem(STORAGE_KEY);
-        return savedReportsJSON ? JSON.parse(savedReportsJSON) : [];
+    const loadSavedReports = async () => {
+        try {
+            setIsLoading(true);
+            const reports = await apiService.getAllReports();
+            setSavedReports(reports);
+        } catch (error) {
+            console.error('Error loading reports:', error);
+            showAlert('error', 'Failed to load saved reports');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const loadSavedReports = () => {
-        const reports = getSavedReports();
-        setSavedReports(reports);
-    };
-
-    const saveReport = () => {
+    // Update the saveReport function
+    const saveReport = async () => {
         if (!reportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
 
-        // Collect current averages and mean
-        const averages: { [key: string]: string } = {};
-        const averageCells = document.querySelectorAll('.average-cell');
-        averageCells.forEach((cell, index) => {
-            averages[`average_${index}`] = cell.textContent?.trim() || '0';
-        });
+        try {
+            setIsLoading(true);
 
-        const meanCell = document.querySelector('.mean-cell');
-        averages.mean = meanCell?.textContent?.trim() || '0';
+            // Collect current averages and mean
+            const averages: { [key: string]: string } = {};
+            const averageCells = document.querySelectorAll('.average-cell');
+            averageCells.forEach((cell, index) => {
+                averages[`average_${index}`] = cell.textContent?.trim() || '0';
+            });
 
-        const reportData: GelTestReport = {
-            name: reportName,
-            timestamp: new Date().toISOString(),
-            formData: {},
-            averages: averages,
-        };
+            const meanCell = document.querySelector('.mean-cell');
+            averages.mean = meanCell?.textContent?.trim() || '0';
 
-        const editableCells = document.querySelectorAll('.editable');
-        editableCells.forEach((cell, index) => {
-            reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
-        });
+            const reportData: Omit<GelTestReport, '_id'> = {
+                name: reportName,
+                timestamp: new Date().toISOString(),
+                formData: {},
+                averages: averages,
+            };
 
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach((checkbox, index) => {
-            reportData.formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
-        });
+            const editableCells = document.querySelectorAll('.editable');
+            editableCells.forEach((cell, index) => {
+                reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
+            });
 
-        const savedReports = getSavedReports();
-        const editingIndex = sessionStorage.getItem('editingReportIndex');
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach((checkbox, index) => {
+                reportData.formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            });
 
-        if (editingIndex !== null) {
-            const index = parseInt(editingIndex);
-            const originalReport = savedReports[index];
+            const editingId = sessionStorage.getItem('editingReportId');
 
-            if (reportName === originalReport.name) {
-                savedReports[index] = reportData;
-                showAlert('success', 'Report updated successfully!');
+            if (editingId) {
+                // Editing existing report
+                const existingReport = await apiService.getReportById(editingId);
+
+                if (reportName === existingReport.name) {
+                    // Same name, update the report
+                    await apiService.updateReport(editingId, reportData);
+                    showAlert('success', 'Report updated successfully!');
+                } else {
+                    // Different name, check if name already exists
+                    const nameExists = await apiService.checkReportNameExists(reportName, editingId);
+
+                    if (nameExists) {
+                        showConfirm({
+                            title: 'Report Name Exists',
+                            message: `A report named "${reportName}" already exists. Do you want to replace it?`,
+                            type: 'warning',
+                            confirmText: 'Replace',
+                            cancelText: 'Cancel',
+                            onConfirm: async () => {
+                                // Find the existing report with this name and update it
+                                const allReports = await apiService.getAllReports();
+                                const existingReportWithSameName = allReports.find(report => report.name === reportName);
+
+                                if (existingReportWithSameName) {
+                                    await apiService.updateReport(existingReportWithSameName._id!, reportData);
+                                    showAlert('success', 'Report updated successfully!');
+                                } else {
+                                    await apiService.createReport(reportData);
+                                    showAlert('success', 'New report created successfully!');
+                                }
+
+                                sessionStorage.removeItem('editingReportId');
+                                sessionStorage.removeItem('editingReportData');
+                                clearFormData();
+                                loadSavedReports();
+                                setActiveTab('saved-reports');
+                            }
+                        });
+                        return;
+                    } else {
+                        // Name doesn't exist, create new report
+                        await apiService.createReport(reportData);
+                        showAlert('success', 'New report created with updated name!');
+                    }
+                }
+
+                sessionStorage.removeItem('editingReportId');
+                sessionStorage.removeItem('editingReportData');
             } else {
-                savedReports.push(reportData);
-                showAlert('success', 'New report created with updated name!');
+                // Creating new report
+                const nameExists = await apiService.checkReportNameExists(reportName);
+
+                if (nameExists) {
+                    showConfirm({
+                        title: 'Report Name Exists',
+                        message: `A report named "${reportName}" already exists. Do you want to replace it?`,
+                        type: 'warning',
+                        confirmText: 'Replace',
+                        cancelText: 'Cancel',
+                        onConfirm: async () => {
+                            // Find the existing report with this name and update it
+                            const allReports = await apiService.getAllReports();
+                            const existingReport = allReports.find(report => report.name === reportName);
+
+                            if (existingReport) {
+                                await apiService.updateReport(existingReport._id!, reportData);
+                                showAlert('success', 'Report updated successfully!');
+                            } else {
+                                await apiService.createReport(reportData);
+                                showAlert('success', 'New report created successfully!');
+                            }
+
+                            clearFormData();
+                            loadSavedReports();
+                            setActiveTab('saved-reports');
+                        }
+                    });
+                    return;
+                } else {
+                    // Name doesn't exist, create new report
+                    await apiService.createReport(reportData);
+                    showAlert('success', 'Report saved successfully!');
+                }
             }
 
-            sessionStorage.removeItem('editingReportIndex');
-            sessionStorage.removeItem('editingReportData');
-        } else {
-            savedReports.push(reportData);
-            showAlert('success', 'Report saved successfully!');
+            clearFormData();
+            loadSavedReports();
+            setActiveTab('saved-reports');
+        } catch (error) {
+            console.error('Error saving report:', error);
+            showAlert('error', 'Failed to save report');
+        } finally {
+            setIsLoading(false);
         }
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
-        clearFormData();
-        loadSavedReports();
-        setActiveTab('saved-reports');
     };
 
-    const deleteSavedReport = (index: number) => {
-        const savedReports = getSavedReports();
-        savedReports.splice(index, 1);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedReports));
-        loadSavedReports();
-        showAlert('info', 'Report deleted successfully');
+    // Update the deleteSavedReport function
+    const deleteSavedReport = async (index: number) => {
+        try {
+            const reports = await apiService.getAllReports();
+            if (index < 0 || index >= reports.length) {
+                showAlert('error', 'Report not found');
+                return;
+            }
+
+            const report = reports[index];
+            await apiService.deleteReport(report._id!);
+            await loadSavedReports();
+            showAlert('info', 'Report deleted successfully');
+        } catch (error) {
+            console.error('Error deleting report:', error);
+            showAlert('error', 'Failed to delete report');
+        }
     };
 
     const exportToExcel = async () => {
@@ -661,7 +837,7 @@ export default function GelTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = getSavedReports();
+            const reports = await apiService.getAllReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
@@ -708,7 +884,7 @@ export default function GelTest() {
     const exportSavedReportToPDF = async (index: number) => {
         try {
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const reports = getSavedReports();
+            const reports = await apiService.getAllReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
@@ -801,7 +977,14 @@ export default function GelTest() {
                             <span className="font-bold text-md">⇐</span> Back to Quality Tests
                         </button>
                     </div>
-
+                    {isLoading && (
+                        <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-4 rounded-lg">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                                <p className="mt-2 text-gray-700">Loading...</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex justify-center mx-4">
                         <div
                             className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}

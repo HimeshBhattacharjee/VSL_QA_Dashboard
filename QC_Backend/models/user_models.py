@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class UserCreate(BaseModel):
     name: str
@@ -17,6 +18,8 @@ class UserResponse(BaseModel):
     avatar: str
     isDefaultPassword: bool
     createdAt: str
+    signature: Optional[str] = None
+    password: str | None = None
 
 class LoginRequest(BaseModel):
     employeeId: str
@@ -28,8 +31,16 @@ class LoginResponse(BaseModel):
     employeeId: str
     role: str
     isDefaultPassword: bool
+    signature: Optional[str] = None
+
+    class Config:
+        exclude_none = True
 
 class PasswordChangeRequest(BaseModel):
     employeeId: str
     newPassword: str
     isFirstLogin: bool = False
+
+class SignatureUpdateRequest(BaseModel):
+    employeeId: str
+    signature: Optional[str] = None

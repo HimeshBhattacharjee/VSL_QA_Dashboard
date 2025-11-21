@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
+import { useAlert } from '../context/AlertContext';
 
 export default function Header() {
     const navigate = useNavigate();
@@ -8,19 +9,77 @@ export default function Header() {
     const [pageSubTitle, setPageSubTitle] = useState<string>('');
     const [username, setUsername] = useState<string | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+    const [signature, setSignature] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [file, setFile] = useState<File | null>(null);
+    const [filePreview, setFilePreview] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { showAlert } = useAlert();
 
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
         const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
         const storedUserRole = sessionStorage.getItem("userRole");
-
+        const storedEmployeeId = sessionStorage.getItem("employeeId");
         setUsername(storedUsername);
         setUserRole(storedUserRole);
+        setEmployeeId(storedEmployeeId);
         setIsLoggedIn(storedIsLoggedIn === "true");
+        if (storedIsLoggedIn === "true" && storedUsername && (!storedEmployeeId || !storedUserRole)) {
+            fetchCurrentUser();
+        } else if (storedIsLoggedIn === "true" && storedEmployeeId && storedUserRole !== 'Admin') {
+            fetchUserSignature(storedEmployeeId);
+        }
     }, [location.pathname]);
+
+    const fetchCurrentUser = async () => {
+        try {
+            // First, let's see what we have in sessionStorage
+            const storedUsername = sessionStorage.getItem("username");
+            const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
+            if (storedIsLoggedIn === "true" && storedUsername) {
+                // Fetch user by username/name since we might not have employeeId
+                const response = await fetch(`http://localhost:8000/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
+                if (response.ok) {
+                    const userData = await response.json();
+                    setUsername(userData.name);
+                    setUserRole(userData.role);
+                    setEmployeeId(userData.employeeId);
+                    setIsLoggedIn(true);
+
+                    // Also update sessionStorage
+                    sessionStorage.setItem("employeeId", userData.employeeId);
+                    sessionStorage.setItem("userRole", userData.role);
+
+                    // Fetch signature if not Admin
+                    if (userData.role !== 'Admin') {
+                        fetchUserSignature(userData.employeeId);
+                    }
+                } else {
+                    console.error('❌ Failed to fetch current user');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error fetching current user:', error);
+        }
+    };
+
+    const fetchUserSignature = async (empId: string) => {
+        try {
+            const response = await fetch(`http://localhost:8000/user/signature/${empId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setSignature(data.signature);
+            }
+        } catch (error) {
+            console.error('Error fetching signature:', error);
+        }
+    };
 
     useEffect(() => {
         switch (location.pathname) {
@@ -100,11 +159,18 @@ export default function Header() {
         sessionStorage.removeItem("isLoggedIn");
         sessionStorage.removeItem("username");
         sessionStorage.removeItem("userRole");
+        sessionStorage.removeItem("employeeId");
         setIsLoggedIn(false);
         setUsername(null);
         setUserRole(null);
+        setEmployeeId(null);
         setDropdownOpen(false);
         navigate("/login");
+    };
+
+    const handleAddSignature = () => {
+        setSignatureModalOpen(true);
+        setDropdownOpen(false);
     };
 
     const handleUserIconClick = () => {
@@ -125,21 +191,211 @@ export default function Header() {
         }
     };
 
+    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files[0]) {
+            const selectedFile = event.target.files[0];
+            // Validate file type
+            if (!selectedFile.type.startsWith('image/')) {
+                showAlert('error', 'Please select an image file (JPG, PNG, GIF)');
+                return;
+            }
+            // Validate file size (max 5MB)
+            if (selectedFile.size > 5 * 1024 * 1024) {
+                showAlert('error', 'File size must be less than 5MB');
+                return;
+            }
+            setFile(selectedFile);
+
+            // Create preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setFilePreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(selectedFile);
+        }
+    };
+
+    const uploadSignature = async () => {
+        let currentEmployeeId = employeeId || sessionStorage.getItem("employeeId");
+        if (!currentEmployeeId) {
+            const storedUsername = sessionStorage.getItem("username");
+            if (storedUsername) {
+                try {
+                    const response = await fetch(`http://localhost:8000/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
+                    if (response.ok) {
+                        const userData = await response.json();
+                        currentEmployeeId = userData.employeeId;
+                        setEmployeeId(userData.employeeId);
+                        sessionStorage.setItem("employeeId", userData.employeeId);
+                    }
+                } catch (error) {
+                    console.error('❌ Error fetching user for employeeId:', error);
+                }
+            }
+        }
+
+        if (!file || !currentEmployeeId) {
+            showAlert('error', 'Unable to identify user. Please refresh the page and try again.');
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('employeeId', currentEmployeeId);
+            formData.append('signature', file);
+            const response = await fetch('http://localhost:8000/user/signature/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const responseText = await response.text();
+            let responseData;
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                throw new Error('Invalid response from server');
+            }
+
+            if (response.ok) {
+                setSignature(responseData.signatureUrl);
+                setSignatureModalOpen(false);
+                setFile(null);
+                setFilePreview(null);
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+                showAlert('success', 'Signature uploaded successfully!');
+            } else {
+                showAlert('error', 'Failed to upload signature');
+            }
+        } catch (error) {
+            showAlert('error', 'Error uploading signature. Please check your connection and try again.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeSignature = async () => {
+        if (!employeeId) return;
+
+        try {
+            const response = await fetch(`http://localhost:8000/user/signature/remove/${employeeId}`, {
+                method: 'DELETE',
+            });
+
+            if (response.ok) {
+                setSignature(null);
+                setSignatureModalOpen(false);
+                showAlert('success', 'Signature removed successfully!');
+            } else {
+                const error = await response.json();
+                showAlert('error', `Error: ${error.detail}`);
+            }
+        } catch (error) {
+            showAlert('error', 'Error removing signature');
+        }
+    };
+
     const getAvatarColor = () => {
         switch (userRole) {
             case 'Admin':
                 return 'bg-red-600';
             case 'Operator':
                 return 'bg-blue-600';
-            case 'Reviewer':
+            case 'Supervisor':
                 return 'bg-green-600';
+            case 'Manager':
+                return 'bg-orange-600';
             default:
                 return 'bg-indigo-600';
         }
     };
 
+    // Check if user can manage signature (not Admin)
+    const canManageSignature = isLoggedIn && userRole !== 'Admin';
+
     return (
         <div className="w-full mb-5 pt-2">
+            {/* Signature Modal */}
+            {signatureModalOpen && (
+                <div className="fixed inset-0 bg-[rgba(0,0,0,0.9)] flex items-center justify-center z-50">
+                    <div className="flex flex-col items-center justify-center bg-white rounded-lg p-6 w-96 max-w-full mx-4">
+                        <h3 className="text-xl font-semibold mb-4 text-gray-800">Manage Signature</h3>
+
+                        {signature ? (
+                            <div className="flex flex-col items-center justify-center mb-4">
+                                <p className="text-sm text-gray-600 mb-2">Current Signature:</p>
+                                <img
+                                    src={`http://localhost:8000${signature}`}
+                                    alt="Signature"
+                                    className="max-w-full h-32 border border-gray-300 rounded mx-auto"
+                                />
+                                <button
+                                    onClick={removeSignature}
+                                    className="mt-2 bg-red-500 text-white py-2 px-3 cursor-pointer rounded hover:bg-red-600 transition-colors"
+                                >
+                                    Remove Signature
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="mb-4">
+                                <p className="text-sm text-center text-gray-600 mb-2">No signature uploaded</p>
+                            </div>
+                        )}
+
+                        <div className="mb-4">
+                            <label className="block text-sm text-center font-medium text-gray-700 mb-2">
+                                Upload New Signature
+                            </label>
+
+                            {/* File Preview */}
+                            {filePreview && (
+                                <div className="mb-3">
+                                    <p className="text-sm text-center text-gray-600 mb-1">Preview:</p>
+                                    <img
+                                        src={filePreview}
+                                        alt="Preview"
+                                        className="max-w-full h-32 border border-gray-300 rounded mx-auto"
+                                    />
+                                </div>
+                            )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileSelect}
+                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                            />
+                            <p className="text-xs text-center text-gray-500 mt-1">Supported formats: JPG, PNG, GIF. Max size: 5MB</p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={uploadSignature}
+                                disabled={!file || uploading}
+                                className="bg-blue-500 text-white py-2 px-3 rounded cursor-pointer hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {uploading ? 'Uploading...' : 'Upload Signature'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setSignatureModalOpen(false);
+                                    setFile(null);
+                                    setFilePreview(null);
+                                    if (fileInputRef.current) {
+                                        fileInputRef.current.value = '';
+                                    }
+                                }}
+                                className="bg-gray-500 text-white py-2 px-3 rounded cursor-pointer hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <nav className="flex justify-between items-center py-4 px-5 relative min-h-20">
                 <div className="flex items-center gap-5 flex-1">
                     <img
@@ -167,17 +423,29 @@ export default function Header() {
                                 onClick={handleUserIconClick}
                                 className={`h-10 w-10 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 text-white font-semibold transition-all duration-300 hover:scale-110 hover:border-white hover:shadow-lg hover:shadow-white/30 select-none ${getAvatarColor()}`}
                             >
-                                {username ? username.charAt(0).toUpperCase() : '?'}
+                                {username ? username.split(' ').map(word => word[0]).join('').toUpperCase() : ''}
                             </div>
                             {dropdownOpen && (
                                 <div className="absolute right-0 top-12 mt-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg py-2 border border-gray-200 animate-fade-in z-50">
                                     <div className="px-4 py-2 border-b border-gray-100">
                                         <p className="font-semibold text-sm">{username}</p>
                                         <p className="text-xs text-gray-600 capitalize">{userRole?.toLowerCase()}</p>
+                                        {signature && canManageSignature && (
+                                            <p className="text-xs text-green-600 mt-1">✓ Signature uploaded</p>
+                                        )}
                                     </div>
+                                    {/* Only show Add Signature button for non-Admin users */}
+                                    {canManageSignature && (
+                                        <button
+                                            onClick={handleAddSignature}
+                                            className="block w-full text-left px-4 py-2 cursor-pointer hover:bg-gray-100 font-medium text-sm"
+                                        >
+                                            Add Signature
+                                        </button>
+                                    )}
                                     <button
                                         onClick={handleLogout}
-                                        className="block w-full text-left px-4 py-2 hover:bg-gray-100 font-medium text-sm"
+                                        className="block w-full text-left px-4 py-2 cursor-pointer hover:bg-gray-100 font-medium text-sm"
                                     >
                                         Logout
                                     </button>

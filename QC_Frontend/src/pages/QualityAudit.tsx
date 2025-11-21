@@ -22,7 +22,13 @@ import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
 
-interface SavedChecksheet { id: string; name: string; timestamp: number; data: AuditData; }
+interface SavedChecksheet {
+    _id?: string;
+    id: string;
+    name: string;
+    timestamp: number;
+    data: AuditData;
+}
 
 const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
     return useMemo(() => {
@@ -78,14 +84,125 @@ export default function QualityAudit() {
     const [stageChanges, setStageChanges] = useState<Set<number>>(new Set());
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Load saved checksheets from localStorage on component mount
+    const IPQC_API_BASE_URL = 'http://localhost:8000/api/ipqc-audits';
+
+    const apiService = {
+        // Get all audits
+        getAllAudits: async (): Promise<any[]> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch audits: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Get audit by ID
+        getAuditById: async (id: string): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Create new audit
+        createAudit: async (audit: any): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(audit),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to create audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Update existing audit
+        updateAudit: async (id: string, audit: any): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(audit),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to update audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        // Delete audit
+        deleteAudit: async (id: string): Promise<void> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to delete audit: ${response.status} ${errorText}`);
+            }
+        },
+
+        // Search audits by filters
+        searchAuditsByFilters: async (filters: { lineNumber?: string; date?: string; shift?: string }): Promise<any[]> => {
+            const params = new URLSearchParams();
+            if (filters.lineNumber) params.append('lineNumber', filters.lineNumber);
+            if (filters.date) params.append('date', filters.date);
+            if (filters.shift) params.append('shift', filters.shift);
+
+            const response = await fetch(`${IPQC_API_BASE_URL}/search/by-filters?${params}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to search audits: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+    };
+
     useEffect(() => {
-        const saved = localStorage.getItem('qualityAuditChecksheets');
-        if (saved) {
-            setSavedChecksheets(JSON.parse(saved));
-        }
+        loadSavedChecksheets();
     }, []);
+
+    const loadSavedChecksheets = async () => {
+        try {
+            setIsLoading(true);
+            const audits = await apiService.getAllAudits();
+            console.log('Loaded audits from MongoDB:', audits); // Debug log
+
+            // Convert MongoDB audits to SavedChecksheet format
+            const checksheets = audits.map(audit => {
+                // Ensure the data structure is correct
+                if (!audit.data) {
+                    console.warn('Audit missing data field:', audit);
+                    return null;
+                }
+
+                return {
+                    _id: audit._id,
+                    id: audit._id || '', // Use MongoDB _id as id
+                    name: audit.name,
+                    timestamp: new Date(audit.timestamp).getTime(),
+                    data: audit.data
+                };
+            }).filter(Boolean) as SavedChecksheet[]; // Remove any null entries
+
+            setSavedChecksheets(checksheets);
+        } catch (error) {
+            console.error('Error loading audits:', error);
+            showAlert('error', 'Failed to load saved audits');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
 
@@ -114,44 +231,56 @@ export default function QualityAudit() {
         setAuditData(prev => ({ ...prev, lineNumber: line }));
     };
 
-    // Check if checksheet exists when line, date, or shift changes
-    // In QualityAudit.tsx, update the useEffect that sets audit data from saved checksheet
     useEffect(() => {
-        if (auditData.lineNumber && auditData.date && auditData.shift) {
-            const checksheetId = generateChecksheetId(auditData.lineNumber, auditData.date, auditData.shift);
-            const existingChecksheet = savedChecksheets.find(sheet => sheet.id === checksheetId);
+        const checkExistingChecksheet = async () => {
+            if (auditData.lineNumber && auditData.date && auditData.shift) {
+                try {
+                    const existingAudits = await apiService.searchAuditsByFilters({
+                        lineNumber: auditData.lineNumber,
+                        date: auditData.date,
+                        shift: auditData.shift
+                    });
 
-            if (existingChecksheet) {
-                // Merge the saved data with current line-dependent stages
-                const mergedData = {
-                    ...existingChecksheet.data,
-                    stages: lineDependentStages.map(stage => {
-                        const savedStage = existingChecksheet.data.stages.find(s => s.id === stage.id);
-                        if (savedStage) {
-                            return {
-                                ...stage, // Current line-dependent structure
-                                parameters: stage.parameters.map(param => {
-                                    const savedParam = savedStage.parameters.find(p => p.id === param.id);
-                                    if (savedParam) {
-                                        return {
-                                            ...param, // Current parameter structure
-                                            observations: savedParam.observations // Saved observations
-                                        };
-                                    }
-                                    return param;
-                                })
-                            };
-                        }
-                        return stage;
-                    })
-                };
-                setAuditData(mergedData);
-                setCurrentChecksheetId(checksheetId);
-            } else {
-                setCurrentChecksheetId(null);
+                    if (existingAudits.length > 0) {
+                        const existingAudit = existingAudits[0];
+                        console.log('Found existing audit:', existingAudit); // Debug log
+
+                        // Merge the saved data with current line-dependent stages
+                        const mergedData = {
+                            ...existingAudit.data,
+                            stages: lineDependentStages.map(stage => {
+                                const savedStage = existingAudit.data.stages.find(s => s.id === stage.id);
+                                if (savedStage) {
+                                    return {
+                                        ...stage, // Current line-dependent structure
+                                        parameters: stage.parameters.map(param => {
+                                            const savedParam = savedStage.parameters.find(p => p.id === param.id);
+                                            if (savedParam) {
+                                                return {
+                                                    ...param, // Current parameter structure
+                                                    observations: savedParam.observations // Saved observations
+                                                };
+                                            }
+                                            return param;
+                                        })
+                                    };
+                                }
+                                return stage;
+                            })
+                        };
+                        setAuditData(mergedData);
+                        setCurrentChecksheetId(existingAudit._id!);
+                    } else {
+                        setCurrentChecksheetId(null);
+                    }
+                } catch (error) {
+                    console.error('Error checking existing checksheet:', error);
+                }
             }
-        }
-    }, [auditData.lineNumber, auditData.date, auditData.shift, savedChecksheets, lineDependentStages]);
+        };
+
+        checkExistingChecksheet();
+    }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages]);
 
     const generateChecksheetId = (lineNumber: string, date: string, shift: string) => {
         return `checksheet-${lineNumber}-${date}-${shift}`;
@@ -161,33 +290,44 @@ export default function QualityAudit() {
         return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
     };
 
-    const saveChecksheet = () => {
+    const saveChecksheet = async () => {
         if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
             showAlert('error', 'Line number, date, and shift are required to save checksheet.');
             return;
         }
 
-        const checksheetId = generateChecksheetId(auditData.lineNumber, auditData.date, auditData.shift);
-        const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
+        try {
+            setIsLoading(true);
+            const checksheetId = generateChecksheetId(auditData.lineNumber, auditData.date, auditData.shift);
+            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
 
-        const newChecksheet: SavedChecksheet = {
-            id: checksheetId,
-            name: checksheetName,
-            timestamp: Date.now(),
-            data: { ...auditData }
-        };
+            // Create the proper structure for MongoDB
+            const checksheetData = {
+                name: checksheetName,
+                timestamp: new Date().toISOString(),
+                data: { ...auditData }  // This is the actual audit data
+            };
 
-        setSavedChecksheets(prev => {
-            const filtered = prev.filter(sheet => sheet.id !== checksheetId);
-            const updated = [newChecksheet, ...filtered];
-            localStorage.setItem('qualityAuditChecksheets', JSON.stringify(updated));
-            return updated;
-        });
+            if (currentChecksheetId) {
+                // Update existing checksheet
+                await apiService.updateAudit(currentChecksheetId, checksheetData);
+                showAlert('success', 'Checksheet updated successfully!');
+            } else {
+                // Create new checksheet
+                const result = await apiService.createAudit(checksheetData);
+                setCurrentChecksheetId(result._id!);
+                showAlert('success', 'Checksheet saved successfully!');
+            }
 
-        setCurrentChecksheetId(checksheetId);
-        setHasUnsavedChanges(false);
-        setStageChanges(new Set());
-        showAlert('success', 'Checksheet saved successfully!');
+            setHasUnsavedChanges(false);
+            setStageChanges(new Set());
+            await loadSavedChecksheets(); // Reload the list
+        } catch (error) {
+            console.error('Error saving checksheet:', error);
+            showAlert('error', 'Failed to save checksheet');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const autoSaveChecksheet = () => {
@@ -333,6 +473,100 @@ export default function QualityAudit() {
         }
     };
 
+    const exportSavedReportToExcel = async (index: number) => {
+        try {
+            const checksheet = savedChecksheets[index];
+            if (!checksheet) {
+                showAlert('error', 'Checksheet not found');
+                return;
+            }
+
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
+            console.log('Generating Excel for saved checksheet:', checksheet);
+
+            const response = await fetch('http://localhost:8000/generate-audit-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(checksheet.data)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate report');
+            }
+
+            // Create blob from response and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Generate filename based on the saved checksheet data
+            const filename = `Quality_Audit_Line${checksheet.data.lineNumber}_${checksheet.data.date.replace(/-/g, '')}_Shift${checksheet.data.shift}.xlsx`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'Excel report generated successfully!');
+
+        } catch (error) {
+            console.error('Error generating Excel report:', error);
+            showAlert('error', 'Failed to generate Excel report. Please try again.');
+        }
+    };
+
+    const exportSavedReportToPDF = async (index: number) => {
+        try {
+            const checksheet = savedChecksheets[index];
+            if (!checksheet) {
+                showAlert('error', 'Checksheet not found');
+                return;
+            }
+
+            showAlert('info', 'Please wait! Exporting PDF will take some time...');
+            console.log('Generating PDF for saved checksheet:', checksheet);
+
+            const response = await fetch('http://localhost:8000/generate-audit-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(checksheet.data)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate PDF report');
+            }
+
+            // Create blob from response and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Generate filename based on the saved checksheet data
+            const filename = `Quality_Audit_Line${checksheet.data.lineNumber}_${checksheet.data.date.replace(/-/g, '')}_Shift${checksheet.data.shift}.pdf`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('success', 'PDF report generated successfully!');
+
+        } catch (error) {
+            console.error('Error generating PDF report:', error);
+            showAlert('error', 'Failed to generate PDF report. Please try again.');
+        }
+    };
+
     const isBasicInfoComplete = () => {
         return (
             auditData.lineNumber !== '' &&
@@ -408,48 +642,54 @@ export default function QualityAudit() {
         setHasUnsavedChanges(Array.from(stageChanges).some(stageId => stageId !== selectedStageId));
     };
 
-    const previewSavedChecksheet = (index: number) => {
-        // Implement it later
-    };
+    const editSavedChecksheet = async (index: number) => {
+        try {
+            setIsLoading(true);
+            const checksheet = savedChecksheets[index];
 
-    const editSavedChecksheet = (index: number) => {
-        const checksheet = savedChecksheets[index];
+            // Reset to basic info view and load the saved data
+            setAuditData(checksheet.data);
+            setCurrentChecksheetId(checksheet._id!);
+            setActiveTab('create-edit');
+            setCurrentView('basicInfo');
+            setHasUnsavedChanges(false);
+            setStageChanges(new Set());
 
-        // Reset to basic info view and load the saved data
-        setAuditData(checksheet.data);
-        setCurrentChecksheetId(checksheet.id);
-        setActiveTab('create-edit');
-        setCurrentView('basicInfo');
-        setHasUnsavedChanges(false);
-        setStageChanges(new Set());
+            // Set the line number context
+            setLineNumber(checksheet.data.lineNumber);
 
-        // Set the line number context
-        setLineNumber(checksheet.data.lineNumber);
-
-        showAlert('info', `Editing ${checksheet.name}`);
-    };
-
-    const deleteSavedChecksheet = (index: number) => {
-        const checksheet = savedChecksheets[index];
-        setSavedChecksheets(prev => {
-            const updated = prev.filter((_, i) => i !== index);
-            localStorage.setItem('qualityAuditChecksheets', JSON.stringify(updated));
-            return updated;
-        });
-        if (currentChecksheetId === checksheet.id) {
-            setCurrentChecksheetId(null);
-            setAuditData({
-                lineNumber: '',
-                date: new Date().toISOString().split('T')[0],
-                shift: '',
-                productionOrderNo: '',
-                moduleType: '',
-                customerSpecAvailable: false,
-                specificationSignedOff: false,
-                stages: initialStages
-            });
+            showAlert('info', `Editing ${checksheet.name}`);
+        } catch (error) {
+            console.error('Error loading checksheet:', error);
+            showAlert('error', 'Failed to load checksheet');
+        } finally {
+            setIsLoading(false);
         }
-        showAlert('success', 'Checksheet deleted successfully!');
+    };
+
+    const deleteSavedChecksheet = async (index: number) => {
+        try {
+            const checksheet = savedChecksheets[index];
+            await apiService.deleteAudit(checksheet._id!);
+            await loadSavedChecksheets();
+            if (currentChecksheetId === checksheet._id) {
+                setCurrentChecksheetId(null);
+                setAuditData({
+                    lineNumber: '',
+                    date: new Date().toISOString().split('T')[0],
+                    shift: '',
+                    productionOrderNo: '',
+                    moduleType: '',
+                    customerSpecAvailable: false,
+                    specificationSignedOff: false,
+                    stages: initialStages
+                });
+            }
+            showAlert('success', 'Checksheet deleted successfully!');
+        } catch (error) {
+            console.error('Error deleting checksheet:', error);
+            showAlert('error', 'Failed to delete checksheet');
+        }
     };
 
     const stageButtons = Array.from({ length: 31 }, (_, index) => ({
@@ -463,6 +703,14 @@ export default function QualityAudit() {
         <div className="pb-4">
             <Header />
             <div className="max-w-7xl mx-4">
+                {isLoading && (
+                    <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white p-4 rounded-lg">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                            <p className="mt-2 text-gray-700">Loading...</p>
+                        </div>
+                    </div>
+                )}
                 <div className="text-center mb-6">
                     <button
                         onClick={handleBackToHome}
@@ -816,7 +1064,8 @@ export default function QualityAudit() {
                                 ...sheet,
                                 timestamp: sheet.timestamp
                             }))}
-                            onPreview={previewSavedChecksheet}
+                            onExportExcel={exportSavedReportToExcel}
+                            onExportPdf={exportSavedReportToPDF}
                             onEdit={editSavedChecksheet}
                             onDelete={deleteSavedChecksheet}
                             emptyMessage={{

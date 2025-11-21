@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Header from "../components/Header";
 import { useAlert } from '../context/AlertContext';
 
-// Move PasswordInput component outside the main component to prevent re-renders
-const PasswordInput = ({ 
-    value, 
-    onChange, 
-    placeholder, 
-    showPassword, 
-    onMouseDown, 
-    onMouseUp, 
+const PasswordInput = ({
+    value,
+    onChange,
+    placeholder,
+    showPassword,
+    onMouseDown,
+    onMouseUp,
     onMouseLeave,
     disabled = false
 }: {
@@ -78,10 +76,10 @@ export default function Login() {
     // Use useCallback for event handlers to prevent unnecessary re-renders
     const handleShowPassword = useCallback(() => setShowPassword(true), []);
     const handleHidePassword = useCallback(() => setShowPassword(false), []);
-    
+
     const handleShowNewPassword = useCallback(() => setShowNewPassword(true), []);
     const handleHideNewPassword = useCallback(() => setShowNewPassword(false), []);
-    
+
     const handleShowConfirmPassword = useCallback(() => setShowConfirmPassword(true), []);
     const handleHideConfirmPassword = useCallback(() => setShowConfirmPassword(false), []);
 
@@ -135,7 +133,11 @@ export default function Login() {
                 }
             } else {
                 const errorData = await response.json();
-                showAlert('error', errorData.detail || 'Invalid credentials');
+                if (response.status === 401 && errorData.detail === "User account is inactive") {
+                    showAlert('error', 'Your account is inactive. Please contact administrator.');
+                } else {
+                    showAlert('error', errorData.detail || 'Invalid credentials');
+                }
             }
         } catch (error) {
             console.error('Login error:', error);
@@ -297,11 +299,16 @@ export default function Login() {
 
     return (
         <>
-            <Header />
-            <div className="flex items-center justify-center">
-                <div className="w-full max-w-sm p-8 my-6 rounded-2xl bg-white/10 backdrop-blur-lg shadow-2xl text-white border border-white/20 hover:scale-101">
-                    <h1 className="text-3xl font-bold text-center mb-6">Welcome</h1>
-
+            <div className="h-screen flex items-center justify-center">
+                <div className="w-full max-w-sm p-8 rounded-2xl bg-white/10 backdrop-blur-lg shadow-2xl text-white border border-white/20 hover:scale-101">
+                    <div className="flex items-center justify-center mb-10">
+                        <img
+                            src="../LOGOS/VSL_Logo (1).png"
+                            alt="VSL Logo"
+                            className="cursor-pointer h-15 transition-all duration-300 hover:scale-105"
+                        />
+                    </div>
+                    <h1 className="text-3xl font-bold text-center mb-6">Welcome Viking</h1>
                     {isFirstLogin
                         ? renderFirstLoginForm()
                         : renderLoginForm()

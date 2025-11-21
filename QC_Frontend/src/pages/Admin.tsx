@@ -21,6 +21,7 @@ const Admin = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [newUser, setNewUser] = useState({ name: '', employeeId: '', phone: '', role: 'Operator', password: '' });
+    const [visiblePasswords, setVisiblePasswords] = useState<{ [key: string]: boolean }>({});
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const USER_API_BASE_URL = 'http://localhost:8000/user';
@@ -101,37 +102,69 @@ const Admin = () => {
 
     const toggleUserStatus = async (userId: string) => {
         try {
-            // Since we don't have a specific endpoint for status toggle, we'll update locally
-            // In a real application, you'd have a PATCH /api/users/{id} endpoint
-            setUsers(users.map(user =>
-                user.id === userId
-                    ? { ...user, status: user.status === 'Active' ? 'Inactive' : 'Active' }
-                    : user
-            ));
-            showAlert('success', 'User status updated successfully!');
+            const response = await fetch(`${USER_API_BASE_URL}/users/${userId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+
+                // Update local state
+                setUsers(users.map(user =>
+                    user.id === userId
+                        ? { ...user, status: result.newStatus }
+                        : user
+                ));
+                showAlert('success', `User status updated to ${result.newStatus}!`);
+            } else {
+                const errorData = await response.json();
+                showAlert('error', errorData.detail || 'Failed to update user status');
+                // Reload users to sync with server
+                await fetchUsers();
+            }
         } catch (error) {
             console.error('Error updating user status:', error);
             showAlert('error', 'Error updating user status');
+            await fetchUsers();
         }
     };
 
-    const deleteUser = async (userId: string) => {
-        if (!confirm('Are you sure you want to delete this user?')) {
-            return;
-        }
-        try {
-            const response = await fetch(`${USER_API_BASE_URL}/users/${userId}`, {
-                method: 'DELETE',
-            });
-            if (response.ok) {
-                setUsers(users.filter(user => user.id !== userId));
-                showAlert('success', 'User deleted successfully!');
-            } else showAlert('error', 'Failed to delete user');
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            showAlert('error', 'Error deleting user');
-        }
+    const deleteUser = (userId: string) => {
+        showConfirm({
+            title: 'Delete User',
+            message: 'Are you sure you want to delete this user? This action cannot be undone.',
+            type: 'warning',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            onConfirm: async () => {
+                try {
+                    const response = await fetch(`${USER_API_BASE_URL}/users/${userId}`, {
+                        method: 'DELETE',
+                    });
+                    if (response.ok) {
+                        setUsers(users.filter(user => user.id !== userId));
+                        showAlert('success', 'User deleted successfully!');
+                    } else {
+                        showAlert('error', 'Failed to delete user');
+                    }
+                } catch (error) {
+                    console.error('Error deleting user:', error);
+                    showAlert('error', 'Error deleting user');
+                }
+            }
+        });
     };
+
+    const togglePasswordVisibility = (userId: string) => {
+        setVisiblePasswords(prev => ({
+            ...prev,
+            [userId]: !prev[userId]
+        }));
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -240,7 +273,8 @@ const Admin = () => {
                                                         className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:border-cyan-500 text-white transition-all duration-300 cursor-pointer"
                                                     >
                                                         <option value="Operator">Operator</option>
-                                                        <option value="Reviewer">Reviewer</option>
+                                                        <option value="Supervisor">Supervisor</option>
+                                                        <option value="Manager">Manager</option>
                                                         <option value="Admin">Admin</option>
                                                     </select>
                                                 </div>
@@ -341,6 +375,9 @@ const Admin = () => {
                                                                 Phone Number
                                                             </th>
                                                             <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                                Password
+                                                            </th>
+                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Employee ID
                                                             </th>
                                                             <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
@@ -372,6 +409,31 @@ const Admin = () => {
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                                                                     {user.phone}
                                                                 </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <div className="flex items-center justify-center space-x-2">
+                                                                        <span className="text-sm text-white font-mono">
+                                                                            {visiblePasswords[user.id]
+                                                                                ? (user.password ?? 'N/A') : '•'.repeat(8)
+                                                                            }
+                                                                        </span>
+                                                                        <button
+                                                                            onClick={() => togglePasswordVisibility(user.id)}
+                                                                            className="text-gray-400 hover:text-cyan-400 transition-colors duration-200 cursor-pointer"
+                                                                            type="button"
+                                                                        >
+                                                                            {visiblePasswords[user.id] ? (
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                                                                </svg>
+                                                                            ) : (
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                                                                     {user.employeeId}
                                                                 </td>
@@ -380,7 +442,7 @@ const Admin = () => {
                                                                         ? 'bg-red-500 bg-opacity-20 text-red-100'
                                                                         : user.role === 'Operator'
                                                                             ? 'bg-blue-500 bg-opacity-20 text-blue-100'
-                                                                            : 'bg-purple-500 bg-opacity-20 text-purple-100'
+                                                                            : user.role === 'Supervisor' ? 'bg-purple-500 bg-opacity-20 text-purple-100' : 'bg-cyan-500 bg-opacity-20 text-cyan-100'
                                                                         }`}>
                                                                         {user.role}
                                                                     </span>

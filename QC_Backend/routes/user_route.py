@@ -1,13 +1,18 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from datetime import datetime
 from bson import ObjectId
-from users.user_models import (
+import os
+import base64
+from models.user_models import (
     UserCreate, UserResponse, LoginRequest, LoginResponse,
-    PasswordChangeRequest
+    PasswordChangeRequest, SignatureUpdateRequest
 )
 from users.user_db import users_collection, generate_password
 
 user_router = APIRouter(prefix="/user", tags=["User Management"])
+
+SIGNATURES_DIR = "signatures"
+os.makedirs(SIGNATURES_DIR, exist_ok=True)
 
 @user_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate):
@@ -24,6 +29,7 @@ async def create_user(user: UserCreate):
         "status": "Active",
         "avatar": avatar,
         "isDefaultPassword": True,
+        "signature": None,
         "createdAt": datetime.now().isoformat()
     }
     result = users_collection.insert_one(user_data)
@@ -32,10 +38,11 @@ async def create_user(user: UserCreate):
 
 @user_router.get("/users", response_model=list[UserResponse])
 async def get_users():
-    users = list(users_collection.find({}, {"password": 0}))
+    users = list(users_collection.find({}))
     for user in users:
         user["id"] = str(user["_id"])
-        del user["_id"]
+        if "_id" in user:
+            del user["_id"]
     return users
 
 @user_router.delete("/users/{user_id}")
@@ -58,12 +65,17 @@ async def login(login_data: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if user["status"] != "Active":
         raise HTTPException(status_code=401, detail="User account is inactive")
+    
+    # Only include signature for non-Admin users
+    signature_data = user.get("signature") if user.get("role") != "Admin" else None
+    
     return {
         "id": str(user["_id"]),
         "name": user["name"],
         "employeeId": user["employeeId"],
         "role": user["role"],
-        "isDefaultPassword": user["isDefaultPassword"]
+        "isDefaultPassword": user["isDefaultPassword"],
+        "signature": signature_data
     }
 
 @user_router.post("/auth/change-password")
@@ -94,3 +106,172 @@ async def change_password(password_data: PasswordChangeRequest):
         {"$set": update_data}
     )
     return {"message": "Password changed successfully"}
+
+@user_router.patch("/users/{user_id}/status")
+async def update_user_status(user_id: str):
+    try:
+        user = users_collection.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        new_status = "Inactive" if user["status"] == "Active" else "Active"
+        
+        users_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"status": new_status}}
+        )
+        
+        return {"message": f"User status updated to {new_status}", "newStatus": new_status}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+@user_router.post("/signature/upload")
+async def upload_signature(
+    employeeId: str = Form(...),
+    signature: UploadFile = File(...)
+):
+    try:
+        print(f"🔵 SIGNATURE UPLOAD STARTED for employee: {employeeId}")
+        print(f"📁 File: {signature.filename}, Type: {signature.content_type}")
+        
+        # Validate file type
+        if not signature.content_type or not signature.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400, 
+                detail="File must be an image (JPEG, PNG, GIF)"
+            )
+        
+        # Check if user exists
+        user = users_collection.find_one({"employeeId": employeeId})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Remove old signature file if exists
+        if user.get("signature"):
+            old_signature_path = user["signature"].lstrip('/')
+            if os.path.exists(old_signature_path):
+                os.remove(old_signature_path)
+                print(f"🗑️ Removed old signature: {old_signature_path}")
+        
+        # Generate filename
+        file_extension = os.path.splitext(signature.filename)[1]
+        if not file_extension:
+            file_extension = '.png'
+        
+        filename = f"signature_{employeeId}{file_extension}"
+        file_path = os.path.join(SIGNATURES_DIR, filename)
+        
+        print(f"💾 Saving signature to: {file_path}")
+        
+        # Read and save the file
+        contents = await signature.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+            
+        print(f"📊 File size: {len(contents)} bytes")
+        
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Update user record with signature path
+        signature_url = f"/signatures/{filename}"
+        update_result = users_collection.update_one(
+            {"employeeId": employeeId},
+            {"$set": {"signature": signature_url}}
+        )
+        
+        print(f"✅ Signature uploaded successfully: {signature_url}")
+        print(f"📊 Database update: {update_result.modified_count} documents modified")
+        
+        return {
+            "message": "Signature uploaded successfully", 
+            "signatureUrl": signature_url
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading signature: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error uploading signature: {str(e)}")
+
+@user_router.delete("/signature/remove/{employeeId}")
+async def remove_signature(employeeId: str):
+    try:
+        user = users_collection.find_one({"employeeId": employeeId})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Remove signature file if exists
+        if user.get("signature"):
+            signature_path = user["signature"].lstrip('/')
+            if os.path.exists(signature_path):
+                os.remove(signature_path)
+        
+        # Update user record
+        users_collection.update_one(
+            {"employeeId": employeeId},
+            {"$set": {"signature": None}}
+        )
+        
+        return {"message": "Signature removed successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error removing signature: {str(e)}")
+
+@user_router.get("/signature/{employeeId}")
+async def get_signature(employeeId: str):
+    user = users_collection.find_one({"employeeId": employeeId})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"signature": user.get("signature")}
+
+@user_router.get("/current-user", response_model=UserResponse)
+async def get_current_user(employeeId: str):
+    """Get current user by employeeId"""
+    try:
+        user = users_collection.find_one({"employeeId": employeeId})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Convert to response model
+        user_data = {
+            "id": str(user["_id"]),
+            "name": user["name"],
+            "employeeId": user["employeeId"],
+            "phone": user["phone"],
+            "role": user["role"],
+            "status": user["status"],
+            "avatar": user["avatar"],
+            "isDefaultPassword": user["isDefaultPassword"],
+            "createdAt": user["createdAt"],
+            "signature": user.get("signature")
+        }
+        return user_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
+
+@user_router.get("/current-user-by-name", response_model=UserResponse)
+async def get_current_user_by_name(name: str):
+    """Get current user by name"""
+    try:
+        user = users_collection.find_one({"name": name})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_data = {
+            "id": str(user["_id"]),
+            "name": user["name"],
+            "employeeId": user["employeeId"],
+            "phone": user["phone"],
+            "role": user["role"],
+            "status": user["status"],
+            "avatar": user["avatar"],
+            "isDefaultPassword": user["isDefaultPassword"],
+            "createdAt": user["createdAt"],
+            "signature": user.get("signature")
+        }
+        return user_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
