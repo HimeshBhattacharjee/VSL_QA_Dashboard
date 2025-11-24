@@ -907,11 +907,21 @@ def get_template_config(line_number):
                 'cell': 'M6',
                 'label': 'Specification Signed Off',
                 'format': {'font_size': 16, 'bold': True}
+            },
+            'audit_by': {
+                'cell': 'C402',
+                'label': 'Audit By:',
+                'format': {'font_size': 16, 'bold': True}
+            },
+            'reviewed_by': {
+                'cell': 'O402',
+                'label': 'Reviewed By:',
+                'format': {'font_size': 16, 'bold': True}
             }
         }
         # Observation mapping for Line II (adjust these based on your actual Line II template)
         observation_cell_mapping = {
-             '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
+            '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
             '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
             '1-3': { '': 'G11' },
             '2-1': { 'Supplier': 'I12', 'Lot No.': 'O12', 'Expiry Date': 'Y12' },
@@ -1991,6 +2001,18 @@ def fill_basic_info(worksheet, audit_data, field_config):
             cell = get_writable_cell(worksheet, cell_ref)
             cell.value = audit_data['moduleType']
             apply_cell_formatting(cell, **field_config['module_type']['format'])
+
+        if audit_data.get('signatures', {}).get('auditBy'):
+            cell_ref = field_config['audit_by']['cell']
+            cell = get_writable_cell(worksheet, cell_ref)
+            cell.value = audit_data['signatures']['auditBy']
+            apply_cell_formatting(cell, **field_config['audit_by']['format'])
+
+        if audit_data.get('signatures', {}).get('reviewedBy'):
+            cell_ref = field_config['reviewed_by']['cell']
+            cell = get_writable_cell(worksheet, cell_ref)
+            cell.value = audit_data['signatures']['reviewedBy']
+            apply_cell_formatting(cell, **field_config['reviewed_by']['format'])
 
         # Fill checkboxes
         customer_spec = 'Yes' if audit_data.get('customerSpecAvailable') else 'No'

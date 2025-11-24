@@ -24,10 +24,18 @@ export default function GelTest() {
     const [reportName, setReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [username, setUsername] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const GEL_API_BASE_URL = 'http://localhost:8000/api/gel-test-reports';
+
+    // Signature state
+    const [preparedBySignature, setPreparedBySignature] = useState<string>('');
+    const [acceptedBySignature, setAcceptedBySignature] = useState<string>('');
+    const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
 
     const apiService = {
         // Get all reports
@@ -105,6 +113,17 @@ export default function GelTest() {
             return result.exists;
         },
     };
+
+    // Load user info from session storage
+    useEffect(() => {
+        const storedUserRole = sessionStorage.getItem('userRole');
+        const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
+
+        setUserRole(storedUserRole);
+        setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
+    }, []);
 
     const handleBackToTests = () => {
         if (hasUnsavedChanges) {
@@ -329,6 +348,161 @@ export default function GelTest() {
         }
     };
 
+    /// Signature functions
+    const handleAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'accepted':
+                currentSignature = acceptedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
+            return;
+        }
+
+        // Check role permissions
+        if (section === 'prepared' && userRole !== 'Operator') {
+            showAlert('error', 'Only Operators can add signature to Prepared By section');
+            return;
+        }
+
+        if (section === 'accepted' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can add signature to Accepted By section');
+            return;
+        }
+
+        if (section === 'verified' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can add signature to Verified By section');
+            return;
+        }
+
+        const signatureText = `${username}`;
+
+        switch (section) {
+            case 'prepared':
+                setPreparedBySignature(signatureText);
+                break;
+            case 'accepted':
+                setAcceptedBySignature(signatureText);
+                break;
+            case 'verified':
+                setVerifiedBySignature(signatureText);
+                break;
+        }
+
+        setHasUnsavedChanges(true);
+        saveFormData();
+        showAlert('success', `Signature added to ${section} section`);
+    };
+
+    const handleRemoveSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if current user is the one who added the signature
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'accepted':
+                currentSignature = acceptedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (!currentSignature.includes(username)) {
+            showAlert('error', 'You can only remove your own signature');
+            return;
+        }
+
+        switch (section) {
+            case 'prepared':
+                setPreparedBySignature('');
+                break;
+            case 'accepted':
+                setAcceptedBySignature('');
+                break;
+            case 'verified':
+                setVerifiedBySignature('');
+                break;
+        }
+
+        setHasUnsavedChanges(true);
+        saveFormData();
+        showAlert('info', `Signature removed from ${section} section`);
+    };
+
+    // Check if remove button should be enabled for each section
+    const canRemoveSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+        if (!username) return false;
+
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'accepted':
+                currentSignature = acceptedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        return currentSignature.includes(username);
+    };
+
+    const canAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+        if (!username) return false;
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'accepted':
+                currentSignature = acceptedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            return false; // Cannot add if signature already exists
+        }
+
+        switch (section) {
+            case 'prepared':
+                return userRole === 'Operator';
+            case 'accepted':
+            case 'verified':
+                return ['Supervisor', 'Manager'].includes(userRole || '');
+            default:
+                return false;
+        }
+    };
+
     const editSavedReport = async (index: number) => {
         try {
             setIsLoading(true);
@@ -413,6 +587,17 @@ export default function GelTest() {
             }
         });
 
+        // Load signatures from form data
+        if (report.formData.preparedBySignature) {
+            setPreparedBySignature(report.formData.preparedBySignature as string);
+        }
+        if (report.formData.acceptedBySignature) {
+            setAcceptedBySignature(report.formData.acceptedBySignature as string);
+        }
+        if (report.formData.verifiedBySignature) {
+            setVerifiedBySignature(report.formData.verifiedBySignature as string);
+        }
+
         setTimeout(() => {
             calculateAverages();
         }, 150);
@@ -433,6 +618,11 @@ export default function GelTest() {
         checkboxes.forEach((checkbox, index) => {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
+
+        // Save signatures
+        formData.preparedBySignature = preparedBySignature;
+        formData.acceptedBySignature = acceptedBySignature;
+        formData.verifiedBySignature = verifiedBySignature;
 
         formData.reportName = currentReportName;
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
@@ -458,6 +648,11 @@ export default function GelTest() {
             checkboxes.forEach((checkbox, index) => {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
+
+            // Save signatures
+            formData.preparedBySignature = preparedBySignature;
+            formData.acceptedBySignature = acceptedBySignature;
+            formData.verifiedBySignature = verifiedBySignature;
 
             formData.reportName = reportName;
             sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
@@ -495,6 +690,17 @@ export default function GelTest() {
                 }
             });
 
+            // Load signatures
+            if (formData.preparedBySignature) {
+                setPreparedBySignature(formData.preparedBySignature as string);
+            }
+            if (formData.acceptedBySignature) {
+                setAcceptedBySignature(formData.acceptedBySignature as string);
+            }
+            if (formData.verifiedBySignature) {
+                setVerifiedBySignature(formData.verifiedBySignature as string);
+            }
+
             setTimeout(() => {
                 calculateAverages();
             }, 100);
@@ -515,6 +721,11 @@ export default function GelTest() {
         checkboxes.forEach(checkbox => {
             (checkbox as HTMLInputElement).checked = false;
         });
+
+        // Clear signatures
+        setPreparedBySignature('');
+        setAcceptedBySignature('');
+        setVerifiedBySignature('');
 
         // Only clear reportName if we're clearing editing state
         if (clearEditingState) {
@@ -554,7 +765,7 @@ export default function GelTest() {
         }
     };
 
-    // Update the saveReport function
+    // Update the saveReport function to include signatures
     const saveReport = async () => {
         if (!reportName.trim()) {
             showAlert('error', 'Please enter a report name');
@@ -590,6 +801,11 @@ export default function GelTest() {
             checkboxes.forEach((checkbox, index) => {
                 reportData.formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
+
+            // Include signatures in form data
+            reportData.formData.preparedBySignature = preparedBySignature;
+            reportData.formData.acceptedBySignature = acceptedBySignature;
+            reportData.formData.verifiedBySignature = verifiedBySignature;
 
             const editingId = sessionStorage.getItem('editingReportId');
 
@@ -723,6 +939,11 @@ export default function GelTest() {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
 
+            // Include signatures in export
+            formData.preparedBySignature = preparedBySignature;
+            formData.acceptedBySignature = acceptedBySignature;
+            formData.verifiedBySignature = verifiedBySignature;
+
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
@@ -784,6 +1005,11 @@ export default function GelTest() {
             checkboxes.forEach((checkbox, index) => {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
+
+            // Include signatures in export
+            formData.preparedBySignature = preparedBySignature;
+            formData.acceptedBySignature = acceptedBySignature;
+            formData.verifiedBySignature = verifiedBySignature;
 
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
@@ -1240,25 +1466,94 @@ export default function GelTest() {
                                             <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
                                             <td className="average-cell font-bold bg-gray-50">0</td>
                                         </tr>
-                                        <tr>
-                                            <td colSpan={4} className="section-title font-bold bg-gray-100 text-center">Prepared By</td>
-                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Accepted By</td>
-                                            <td colSpan={5} className="section-title font-bold bg-gray-100 text-center">Verified By</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={4} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={5} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={5} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
                                     </tbody>
                                 </table>
+                                <div className="footer flex justify-between mt-6 border-gray-300 gap-4">
+                                    <div className="signature flex-1 text-center mb-4">
+                                        <p><strong>PREPARED BY:</strong></p>
+                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
+                                            <tbody>
+                                                <tr>
+                                                    <td className="text-center relative signature-field">
+                                                        {preparedBySignature}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleAddSignature('prepared')}
+                                            disabled={!canAddSignature('prepared')}
+                                        >
+                                            Add my Signature
+                                        </button>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleRemoveSignature('prepared')}
+                                            disabled={!canRemoveSignature('prepared')}
+                                        >
+                                            Remove my Signature
+                                        </button>
+                                    </div>
+                                    <div className="signature flex-1 text-center mb-4">
+                                        <p><strong>ACCEPTED BY:</strong></p>
+                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
+                                            <tbody>
+                                                <tr>
+                                                    <td className="text-center relative signature-field">
+                                                        {acceptedBySignature}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('accepted') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleAddSignature('accepted')}
+                                            disabled={!canAddSignature('accepted')}
+                                        >
+                                            Add my Signature
+                                        </button>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('accepted') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleRemoveSignature('accepted')}
+                                            disabled={!canRemoveSignature('accepted')}
+                                        >
+                                            Remove my Signature
+                                        </button>
+                                    </div>
+                                    <div className="signature flex-1 text-center mb-4">
+                                        <p><strong>VERIFIED BY:</strong></p>
+                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
+                                            <tbody>
+                                                <tr>
+                                                    <td className="text-center relative signature-field">
+                                                        {verifiedBySignature}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleAddSignature('verified')}
+                                            disabled={!canAddSignature('verified')}
+                                        >
+                                            Add my Signature
+                                        </button>
+                                        <button
+                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => handleRemoveSignature('verified')}
+                                            disabled={!canRemoveSignature('verified')}
+                                        >
+                                            Remove my Signature
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="controlled-copy text-center text-lg text-red-500">
                                     <p>(Controlled Copy)</p>
                                 </div>
                             </div>
                         </div>
                     )}
-
                     {activeTab === 'saved-reports' && (
                         <div className="tab-content active mx-4 mt-2">
                             <SavedReportsNChecksheets

@@ -50,8 +50,8 @@ def fill_peel_basic_info(worksheet, peel_data):
         
         # Define cell mapping for basic information
         basic_info_mapping = {
-            'preparedBy': 'E415',  # Prepared By signature
-            'verifiedBy': 'N415',  # Verified By signature
+            'preparedBySignature': 'E415',  # Prepared By signature
+            'verifiedBySignature': 'N415',  # Verified By signature
         }
         
         # Fill basic information

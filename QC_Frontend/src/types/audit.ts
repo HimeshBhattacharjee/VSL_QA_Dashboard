@@ -9,6 +9,10 @@ export interface AuditData {
     customerSpecAvailable: boolean;
     specificationSignedOff: boolean;
     stages: StageData[];
+    signatures?: {
+        auditBy: string;
+        reviewedBy: string;
+    };
 }
 
 export interface StageData {

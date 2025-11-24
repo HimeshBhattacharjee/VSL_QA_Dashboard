@@ -43,6 +43,10 @@ export default function PeelTest() {
     const [showReportEditor, setShowReportEditor] = useState(false);
     const [formData, setFormData] = useState<Record<string, string>>({});
     const [tableData, setTableData] = useState<Record<string, string>>({});
+    const [preparedBySignature, setPreparedBySignature] = useState<string>('');
+    const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [username, setUsername] = useState<string | null>(null);
 
     // Analysis Tab States
     const [monthYear, setMonthYear] = useState(() => new Date().toISOString().slice(0, 7));
@@ -69,6 +73,13 @@ export default function PeelTest() {
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
+    }, []);
+
+    useEffect(() => {
+        const storedUserRole = sessionStorage.getItem('userRole');
+        const storedUsername = sessionStorage.getItem('username');
+        setUserRole(storedUserRole);
+        setUsername(storedUsername);
     }, []);
 
     const apiService = {
@@ -189,10 +200,147 @@ export default function PeelTest() {
             if (formData.showReportEditor) {
                 setShowReportEditor(true);
             }
+            // Load signatures
+            if (formData.preparedBySignature) {
+                setPreparedBySignature(formData.preparedBySignature);
+            }
+            if (formData.verifiedBySignature) {
+                setVerifiedBySignature(formData.verifiedBySignature);
+            }
 
             if (Object.keys(formData.tableData || {}).length > 0 || Object.keys(formData.formData || {}).length > 0) {
                 setHasUnsavedChanges(true);
             }
+        }
+    };
+
+    const handleAddSignature = (section: 'prepared' | 'verified') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
+            return;
+        }
+
+        // Check role permissions
+        if (section === 'prepared' && userRole !== 'Operator') {
+            showAlert('error', 'Only Operators can add signature to Prepared By section');
+            return;
+        }
+
+        if (section === 'verified' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can add signature to Verified By section');
+            return;
+        }
+
+        const signatureText = `${username}`;
+
+        switch (section) {
+            case 'prepared':
+                setPreparedBySignature(signatureText);
+                break;
+            case 'verified':
+                setVerifiedBySignature(signatureText);
+                break;
+        }
+
+        setHasUnsavedChanges(true);
+        saveFormData();
+        showAlert('success', `Signature added to ${section} section`);
+    };
+
+    const handleRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if current user is the one who added the signature
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (!currentSignature.includes(username)) {
+            showAlert('error', 'You can only remove your own signature');
+            return;
+        }
+
+        switch (section) {
+            case 'prepared':
+                setPreparedBySignature('');
+                break;
+            case 'verified':
+                setVerifiedBySignature('');
+                break;
+        }
+
+        setHasUnsavedChanges(true);
+        saveFormData();
+        showAlert('info', `Signature removed from ${section} section`);
+    };
+
+    // Check if remove button should be enabled for each section
+    const canRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!username) return false;
+
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        return currentSignature.includes(username);
+    };
+
+    const canAddSignature = (section: 'prepared' | 'verified') => {
+        if (!username) return false;
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'prepared':
+                currentSignature = preparedBySignature;
+                break;
+            case 'verified':
+                currentSignature = verifiedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            return false; // Cannot add if signature already exists
+        }
+
+        switch (section) {
+            case 'prepared':
+                return userRole === 'Operator';
+            case 'verified':
+                return ['Supervisor', 'Manager'].includes(userRole || '');
+            default:
+                return false;
         }
     };
 
@@ -205,6 +353,8 @@ export default function PeelTest() {
             tableData,
             formData,
             showReportEditor,
+            preparedBySignature,
+            verifiedBySignature,
             timestamp: new Date().toISOString()
         };
         sessionStorage.setItem('peelTestFormData', JSON.stringify(formDataToSave));
@@ -243,6 +393,9 @@ export default function PeelTest() {
         setShowReportEditor(false);
         setSelectedDate(new Date().toISOString().split('T')[0]);
         setSelectedShift('');
+        // Clear signatures
+        setPreparedBySignature('');
+        setVerifiedBySignature('');
 
         sessionStorage.removeItem('editingPeelReportIndex');
         sessionStorage.removeItem('editingPeelReportData');
@@ -330,7 +483,7 @@ export default function PeelTest() {
         // Extract signature fields from formData
         const signatureFields: Record<string, string> = {};
         Object.keys(report.formData).forEach(key => {
-            if (key === 'preparedBy' || key === 'verifiedBy') {
+            if (key === 'preparedBySignature' || key === 'verifiedBySignature') {
                 signatureFields[key] = report.formData[key];
             }
         });
@@ -338,6 +491,15 @@ export default function PeelTest() {
         // Set both table data and form data (for signatures)
         setTableData(report.formData);
         setFormData(signatureFields);
+
+        // Set signature states
+        if (report.formData.preparedBySignature) {
+            setPreparedBySignature(report.formData.preparedBySignature as string);
+        }
+        if (report.formData.verifiedBySignature) {
+            setVerifiedBySignature(report.formData.verifiedBySignature as string);
+        }
+
         setCurrentEditingReport(report.name);
         setHasUnsavedChanges(true);
 
@@ -420,15 +582,6 @@ export default function PeelTest() {
         setHasUnsavedChanges(true);
     };
 
-    const handleSignatureChange = (type: string, value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            [type]: value
-        }));
-        setHasUnsavedChanges(true);
-    };
-
-    // Calculate averages for a specific row and position
     const calculateAverage = (rowIndex: number, startCell: number, count: number): string => {
         let sum = 0;
         let validCount = 0;
@@ -594,7 +747,13 @@ export default function PeelTest() {
         const reportData: Omit<ReportData, '_id'> = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
-            formData: { ...tableData, ...formData, ...averages },
+            formData: {
+                ...tableData,
+                ...formData,
+                ...averages,
+                preparedBySignature,
+                verifiedBySignature
+            },
             rowData: [],
             averages: averages
         };
@@ -1181,28 +1340,58 @@ export default function PeelTest() {
                                 {generateTableRows()}
                             </tbody>
                         </table>
-
-                        {/* Footer Signatures */}
-                        <div className="footer flex justify-between mt-8 pt-4 border-t border-gray-300">
-                            <div className="signature flex-1 text-center">
-                                <p><strong>PREPARED BY :</strong></p>
-                                <input
-                                    type="text"
-                                    className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
-                                    placeholder="Name"
-                                    value={formData.preparedBy || ''}
-                                    onChange={(e) => handleSignatureChange('preparedBy', e.target.value)}
-                                />
+                        <div className="footer flex justify-between mt-6 border-gray-300 gap-4">
+                            <div className="signature flex-1 text-center mb-4">
+                                <p><strong>PREPARED BY:</strong></p>
+                                <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
+                                    <tbody>
+                                        <tr>
+                                            <td className="text-center relative signature-field">
+                                                {preparedBySignature}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <button
+                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                    onClick={() => handleAddSignature('prepared')}
+                                    disabled={!canAddSignature('prepared')}
+                                >
+                                    Add my Signature
+                                </button>
+                                <button
+                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                    onClick={() => handleRemoveSignature('prepared')}
+                                    disabled={!canRemoveSignature('prepared')}
+                                >
+                                    Remove my Signature
+                                </button>
                             </div>
-                            <div className="signature flex-1 text-center">
-                                <p><strong>VERIFIED BY :</strong></p>
-                                <input
-                                    type="text"
-                                    className="w-3/4 border-b border-gray-400 focus:outline-none focus:border-blue-500 text-center"
-                                    placeholder="Name"
-                                    value={formData.verifiedBy || ''}
-                                    onChange={(e) => handleSignatureChange('verifiedBy', e.target.value)}
-                                />
+                            <div className="signature flex-1 text-center mb-4">
+                                <p><strong>VERIFIED BY:</strong></p>
+                                <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
+                                    <tbody>
+                                        <tr>
+                                            <td className="text-center relative signature-field">
+                                                {verifiedBySignature}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <button
+                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                    onClick={() => handleAddSignature('verified')}
+                                    disabled={!canAddSignature('verified')}
+                                >
+                                    Add my Signature
+                                </button>
+                                <button
+                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                    onClick={() => handleRemoveSignature('verified')}
+                                    disabled={!canRemoveSignature('verified')}
+                                >
+                                    Remove my Signature
+                                </button>
                             </div>
                         </div>
                     </div>

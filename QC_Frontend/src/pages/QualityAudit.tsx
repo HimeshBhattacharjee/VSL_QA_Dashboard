@@ -85,6 +85,10 @@ export default function QualityAudit() {
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [auditBySignature, setAuditBySignature] = useState<string>('');
+    const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [username, setUsername] = useState<string | null>(null);
 
     const IPQC_API_BASE_URL = 'http://localhost:8000/api/ipqc-audits';
 
@@ -169,8 +173,177 @@ export default function QualityAudit() {
     };
 
     useEffect(() => {
+        const storedUserRole = sessionStorage.getItem('userRole');
+        const storedUsername = sessionStorage.getItem('username');
+        setUserRole(storedUserRole);
+        setUsername(storedUsername);
+    }, []);
+
+    useEffect(() => {
         loadSavedChecksheets();
     }, []);
+
+    const handleAddSignature = async (section: 'audit' | 'reviewed') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
+            return;
+        }
+
+        // Check role permissions
+        if (section === 'audit' && userRole !== 'Operator') {
+            showAlert('error', 'Only Operators can add signature to Audit By section');
+            return;
+        }
+
+        if (section === 'reviewed' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can add signature to Reviewed By section');
+            return;
+        }
+
+        const signatureText = `${username}`;
+
+        try {
+            setIsLoading(true);
+
+            // Update signature state
+            switch (section) {
+                case 'audit':
+                    setAuditBySignature(signatureText);
+                    break;
+                case 'reviewed':
+                    setReviewedBySignature(signatureText);
+                    break;
+            }
+
+            setHasUnsavedChanges(true);
+
+            // Auto-save the checksheet immediately after adding signature
+            if (auditData.lineNumber && auditData.date && auditData.shift) {
+                await saveChecksheet();
+                showAlert('success', `Signature added to ${section} section and checksheet saved!`);
+            } else {
+                showAlert('success', `Signature added to ${section} section`);
+            }
+        } catch (error) {
+            console.error('Error adding signature:', error);
+            showAlert('error', 'Failed to add signature');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRemoveSignature = async (section: 'audit' | 'reviewed') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        // Check if current user is the one who added the signature
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+
+        if (!currentSignature.includes(username)) {
+            showAlert('error', 'You can only remove your own signature');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+
+            // Remove signature state
+            switch (section) {
+                case 'audit':
+                    setAuditBySignature('');
+                    break;
+                case 'reviewed':
+                    setReviewedBySignature('');
+                    break;
+            }
+
+            setHasUnsavedChanges(true);
+
+            // Auto-save the checksheet immediately after removing signature
+            if (auditData.lineNumber && auditData.date && auditData.shift) {
+                await saveChecksheet();
+                showAlert('info', `Signature removed from ${section} section and checksheet updated!`);
+            } else {
+                showAlert('info', `Signature removed from ${section} section`);
+            }
+        } catch (error) {
+            console.error('Error removing signature:', error);
+            showAlert('error', 'Failed to remove signature');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Check if remove button should be enabled for each section
+    const canRemoveSignature = (section: 'audit' | 'reviewed') => {
+        if (!username) return false;
+
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+
+        return currentSignature.includes(username);
+    };
+
+    const canAddSignature = (section: 'audit' | 'reviewed') => {
+        if (!username) return false;
+
+        // Check if signature already exists in this section
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+
+        if (currentSignature.trim()) {
+            return false; // Cannot add if signature already exists
+        }
+
+        switch (section) {
+            case 'audit':
+                return userRole === 'Operator';
+            case 'reviewed':
+                return ['Supervisor', 'Manager'].includes(userRole || '');
+            default:
+                return false;
+        }
+    };
 
     const loadSavedChecksheets = async () => {
         try {
@@ -206,7 +379,6 @@ export default function QualityAudit() {
 
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
 
-    // Initialize audit data with line-dependent stages
     const [auditData, setAuditData] = useState<AuditData>({
         lineNumber: '',
         date: new Date().toISOString().split('T')[0],
@@ -215,7 +387,11 @@ export default function QualityAudit() {
         moduleType: '',
         customerSpecAvailable: false,
         specificationSignedOff: false,
-        stages: lineDependentStages
+        stages: lineDependentStages,
+        signatures: {
+            auditBy: '',
+            reviewedBy: ''
+        }
     });
 
     useEffect(() => {
@@ -282,10 +458,6 @@ export default function QualityAudit() {
         checkExistingChecksheet();
     }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages]);
 
-    const generateChecksheetId = (lineNumber: string, date: string, shift: string) => {
-        return `checksheet-${lineNumber}-${date}-${shift}`;
-    };
-
     const generateChecksheetName = (lineNumber: string, date: string, shift: string) => {
         return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
     };
@@ -298,14 +470,20 @@ export default function QualityAudit() {
 
         try {
             setIsLoading(true);
-            const checksheetId = generateChecksheetId(auditData.lineNumber, auditData.date, auditData.shift);
             const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
 
-            // Create the proper structure for MongoDB
+            // Create the proper structure for MongoDB with signatures
             const checksheetData = {
                 name: checksheetName,
                 timestamp: new Date().toISOString(),
-                data: { ...auditData }  // This is the actual audit data
+                data: {
+                    ...auditData,
+                    // Include signatures in the saved data
+                    signatures: {
+                        auditBy: auditBySignature,
+                        reviewedBy: reviewedBySignature,
+                    }
+                }
             };
 
             if (currentChecksheetId) {
@@ -354,8 +532,14 @@ export default function QualityAudit() {
                         moduleType: '',
                         customerSpecAvailable: false,
                         specificationSignedOff: false,
-                        stages: initialStages
+                        stages: initialStages,
+                        signatures: {
+                            auditBy: '',
+                            reviewedBy: ''
+                        }
                     });
+                    setAuditBySignature('');
+                    setReviewedBySignature('');
                     setCurrentChecksheetId(null);
                     setHasUnsavedChanges(false);
                     setStageChanges(new Set());
@@ -655,6 +839,16 @@ export default function QualityAudit() {
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
 
+            // Load signatures if they exist
+            if (checksheet.data.signatures) {
+                setAuditBySignature(checksheet.data.signatures.auditBy || '');
+                setReviewedBySignature(checksheet.data.signatures.reviewedBy || '');
+            } else {
+                // Initialize empty signatures if not present
+                setAuditBySignature('');
+                setReviewedBySignature('');
+            }
+
             // Set the line number context
             setLineNumber(checksheet.data.lineNumber);
 
@@ -682,8 +876,14 @@ export default function QualityAudit() {
                     moduleType: '',
                     customerSpecAvailable: false,
                     specificationSignedOff: false,
-                    stages: initialStages
+                    stages: initialStages,
+                    signatures: {
+                        auditBy: '',
+                        reviewedBy: ''
+                    }
                 });
+                setAuditBySignature('');
+                setReviewedBySignature('');
             }
             showAlert('success', 'Checksheet deleted successfully!');
         } catch (error) {
@@ -867,11 +1067,6 @@ export default function QualityAudit() {
                         {currentView === 'stageSelection' && (
                             <div className="flex flex-col justify-center">
                                 <div className="bg-white rounded-lg shadow-md p-6">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-2xl font-bold text-center text-gray-800 flex-1">
-                                            Select Audit Stage
-                                        </h2>
-                                    </div>
                                     <div className="flex justify-center gap-2 mb-4">
                                         <button
                                             onClick={handleBackToBasicInfo}
@@ -892,6 +1087,59 @@ export default function QualityAudit() {
                                             Generate Audit PDF
                                         </button>
                                     </div>
+
+                                    {/* Signature Section */}
+                                    <div className="flex justify-between gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                        <div className="flex-1 text-center">
+                                            <p className="font-semibold text-gray-700 mb-2">AUDIT BY:</p>
+                                            <div className="min-h-10 p-2 bg-white border border-gray-300 rounded mb-2 flex items-center justify-center">
+                                                <span className={`${auditBySignature ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                                                    {auditBySignature || 'No signature'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-center gap-2">
+                                                <button
+                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canAddSignature('audit') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => handleAddSignature('audit')}
+                                                    disabled={!canAddSignature('audit')}
+                                                >
+                                                    Add my Signature
+                                                </button>
+                                                <button
+                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canRemoveSignature('audit') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => handleRemoveSignature('audit')}
+                                                    disabled={!canRemoveSignature('audit')}
+                                                >
+                                                    Remove my Signature
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 text-center">
+                                            <p className="font-semibold text-gray-700 mb-2">REVIEWED BY:</p>
+                                            <div className="min-h-10 p-2 bg-white border border-gray-300 rounded mb-2 flex items-center justify-center">
+                                                <span className={`${reviewedBySignature ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                                                    {reviewedBySignature || 'No signature'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-center gap-2">
+                                                <button
+                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canAddSignature('reviewed') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => handleAddSignature('reviewed')}
+                                                    disabled={!canAddSignature('reviewed')}
+                                                >
+                                                    Add my Signature
+                                                </button>
+                                                <button
+                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canRemoveSignature('reviewed') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => handleRemoveSignature('reviewed')}
+                                                    disabled={!canRemoveSignature('reviewed')}
+                                                >
+                                                    Remove my Signature
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-4 gap-4">
                                         {stageButtons.map((button) => (
                                             <button

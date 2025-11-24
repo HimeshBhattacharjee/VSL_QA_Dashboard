@@ -39,11 +39,9 @@ export default function Header() {
 
     const fetchCurrentUser = async () => {
         try {
-            // First, let's see what we have in sessionStorage
             const storedUsername = sessionStorage.getItem("username");
             const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
             if (storedIsLoggedIn === "true" && storedUsername) {
-                // Fetch user by username/name since we might not have employeeId
                 const response = await fetch(`http://localhost:8000/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
                 if (response.ok) {
                     const userData = await response.json();
