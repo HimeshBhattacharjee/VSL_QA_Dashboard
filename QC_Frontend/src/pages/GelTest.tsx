@@ -26,7 +26,6 @@ export default function GelTest() {
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
-    const [employeeId, setEmployeeId] = useState<string | null>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -118,11 +117,8 @@ export default function GelTest() {
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
-        const storedEmployeeId = sessionStorage.getItem('employeeId');
-
         setUserRole(storedUserRole);
         setUsername(storedUsername);
-        setEmployeeId(storedEmployeeId);
     }, []);
 
     const handleBackToTests = () => {
@@ -249,7 +245,7 @@ export default function GelTest() {
     };
 
     const handleCheckboxChange = (e: Event) => {
-        const checkbox = e.target as HTMLInputElement;
+        e.target as HTMLInputElement;
         setHasUnsavedChanges(true);
         saveFormData();
     };
@@ -348,7 +344,6 @@ export default function GelTest() {
         }
     };
 
-    /// Signature functions
     const handleAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
         if (!username) {
             showAlert('error', 'User not logged in');
@@ -405,7 +400,13 @@ export default function GelTest() {
         }
 
         setHasUnsavedChanges(true);
-        saveFormData();
+
+        // CRITICAL FIX: Save form data immediately after state update
+        // Use setTimeout to ensure React state is updated before saving
+        setTimeout(() => {
+            saveFormData();
+        }, 0);
+
         showAlert('success', `Signature added to ${section} section`);
     };
 
@@ -434,6 +435,7 @@ export default function GelTest() {
             return;
         }
 
+        // Update state immediately
         switch (section) {
             case 'prepared':
                 setPreparedBySignature('');
@@ -447,7 +449,13 @@ export default function GelTest() {
         }
 
         setHasUnsavedChanges(true);
-        saveFormData();
+
+        // CRITICAL FIX: Save form data immediately after state update
+        // Use setTimeout to ensure React state is updated before saving
+        setTimeout(() => {
+            saveFormData();
+        }, 0);
+
         showAlert('info', `Signature removed from ${section} section`);
     };
 
@@ -541,29 +549,9 @@ export default function GelTest() {
         }
     };
 
-    useEffect(() => {
-        if (activeTab === 'edit-report') {
-            const editingReportData = sessionStorage.getItem('editingReportData');
-            const editingIndex = sessionStorage.getItem('editingReportIndex');
-
-            if (editingReportData && editingIndex !== null) {
-                // Clear any existing form data first
-                clearFormData();
-
-                setTimeout(() => {
-                    const report = JSON.parse(editingReportData) as GelTestReport;
-                    loadReportData(report);
-                    setHasUnsavedChanges(true);
-                }, 100);
-            } else {
-                // Load regular form data if not editing a saved report
-                loadFormData();
-            }
-        }
-    }, [activeTab]);
-
     const loadReportData = (report: GelTestReport) => {
         setReportName(report.name);
+
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             const key = `editable_${index}`;
@@ -587,28 +575,62 @@ export default function GelTest() {
             }
         });
 
-        // Load signatures from form data
-        if (report.formData.preparedBySignature) {
+        // CRITICAL FIX: Load signatures from the report data
+        // This ensures signatures are loaded when editing saved reports
+        if (report.formData.preparedBySignature !== undefined) {
             setPreparedBySignature(report.formData.preparedBySignature as string);
+        } else {
+            setPreparedBySignature(''); // Clear if not present
         }
-        if (report.formData.acceptedBySignature) {
+
+        if (report.formData.acceptedBySignature !== undefined) {
             setAcceptedBySignature(report.formData.acceptedBySignature as string);
+        } else {
+            setAcceptedBySignature(''); // Clear if not present
         }
-        if (report.formData.verifiedBySignature) {
+
+        if (report.formData.verifiedBySignature !== undefined) {
             setVerifiedBySignature(report.formData.verifiedBySignature as string);
+        } else {
+            setVerifiedBySignature(''); // Clear if not present
         }
 
         setTimeout(() => {
             calculateAverages();
         }, 150);
 
-        // Save the editing state with current report name
-        saveEditingFormData(report.name);
+        // CRITICAL FIX: Save the current state to sessionStorage immediately after loading
+        // This ensures that if the page is refreshed, the loaded data (including signatures) is preserved
+        setTimeout(() => {
+            saveFormData();
+        }, 200);
     };
 
-    const saveEditingFormData = (currentReportName: string) => {
+    // Update the useEffect that handles tab switching to ensure proper state loading
+    useEffect(() => {
+        if (activeTab === 'edit-report') {
+            const editingReportData = sessionStorage.getItem('editingReportData');
+
+            if (editingReportData) {
+                // Clear any existing form data first
+                clearFormData(false);
+
+                setTimeout(() => {
+                    const report = JSON.parse(editingReportData) as GelTestReport;
+                    loadReportData(report);
+                    setHasUnsavedChanges(true);
+                }, 100);
+            } else {
+                // Load regular form data if not editing a saved report
+                loadFormData();
+            }
+        }
+    }, [activeTab]);
+
+    const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
+        // Always collect editable cells and checkboxes
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             formData[`editable_${index}`] = cell.textContent?.trim() || '';
@@ -619,58 +641,29 @@ export default function GelTest() {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
 
-        // Save signatures
+        // Always save signatures
         formData.preparedBySignature = preparedBySignature;
         formData.acceptedBySignature = acceptedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
+        formData.reportName = reportName;
 
-        formData.reportName = currentReportName;
+        // Save to sessionStorage
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
-    // Update the saveFormData function to handle both editing and new reports
-    const saveFormData = () => {
-        const editingReportData = sessionStorage.getItem('editingReportData');
-
-        if (editingReportData) {
-            // If editing a saved report, use the specialized function
-            saveEditingFormData(reportName);
-        } else {
-            // For new reports, use the original logic
-            const formData: { [key: string]: string | boolean } = {};
-
-            const editableCells = document.querySelectorAll('.editable');
-            editableCells.forEach((cell, index) => {
-                formData[`editable_${index}`] = cell.textContent?.trim() || '';
-            });
-
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach((checkbox, index) => {
-                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
-            });
-
-            // Save signatures
-            formData.preparedBySignature = preparedBySignature;
-            formData.acceptedBySignature = acceptedBySignature;
-            formData.verifiedBySignature = verifiedBySignature;
-
-            formData.reportName = reportName;
-            sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
-        }
-    };
-
-    // Update the loadFormData function to handle reportName for editing state
+    // Update the loadFormData function to ensure signatures are loaded properly
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
 
         if (savedData) {
             const formData = JSON.parse(savedData);
 
-            // Always load reportName from saved data if it exists
+            // Load reportName from saved data if it exists
             if (formData.reportName !== undefined) {
                 setReportName(formData.reportName);
             }
 
+            // Load editable cells
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 const key = `editable_${index}`;
@@ -682,6 +675,7 @@ export default function GelTest() {
                 }
             });
 
+            // Load checkboxes
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 const key = `checkbox_${index}`;
@@ -690,14 +684,15 @@ export default function GelTest() {
                 }
             });
 
-            // Load signatures
-            if (formData.preparedBySignature) {
+            // CRITICAL FIX: Load signatures from form data
+            // This ensures signatures are loaded when page refreshes
+            if (formData.preparedBySignature !== undefined) {
                 setPreparedBySignature(formData.preparedBySignature as string);
             }
-            if (formData.acceptedBySignature) {
+            if (formData.acceptedBySignature !== undefined) {
                 setAcceptedBySignature(formData.acceptedBySignature as string);
             }
-            if (formData.verifiedBySignature) {
+            if (formData.verifiedBySignature !== undefined) {
                 setVerifiedBySignature(formData.verifiedBySignature as string);
             }
 

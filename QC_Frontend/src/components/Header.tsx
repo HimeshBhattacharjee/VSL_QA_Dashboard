@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { useAlert } from '../context/AlertContext';
+import { useConfirmModal } from '../context/ConfirmModalContext';
 
 export default function Header() {
     const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function Header() {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { showAlert } = useAlert();
+    const { showConfirm } = useConfirmModal();
 
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
@@ -154,16 +156,25 @@ export default function Header() {
     }, []);
 
     const handleLogout = () => {
-        sessionStorage.removeItem("isLoggedIn");
-        sessionStorage.removeItem("username");
-        sessionStorage.removeItem("userRole");
-        sessionStorage.removeItem("employeeId");
-        setIsLoggedIn(false);
-        setUsername(null);
-        setUserRole(null);
-        setEmployeeId(null);
-        setDropdownOpen(false);
-        navigate("/login");
+        showConfirm({
+            title: 'Logging Out',
+            message: 'Are you sure you want to logout?',
+            type: 'warning',
+            confirmText: 'Yes',
+            cancelText: 'No',
+            onConfirm: () => {
+                sessionStorage.removeItem("isLoggedIn");
+                sessionStorage.removeItem("username");
+                sessionStorage.removeItem("userRole");
+                sessionStorage.removeItem("employeeId");
+                setIsLoggedIn(false);
+                setUsername(null);
+                setUserRole(null);
+                setEmployeeId(null);
+                setDropdownOpen(false);
+                navigate("/login");
+            }
+        });
     };
 
     const handleAddSignature = () => {

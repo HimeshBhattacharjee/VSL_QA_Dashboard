@@ -1,6 +1,5 @@
 from pymongo import MongoClient
-from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 import os
 
 client = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017/"))
@@ -15,16 +14,19 @@ class IPQCAudit:
         self.data = data
 
     def to_dict(self):
-        return {
+        result = {
             "name": self.name,
             "timestamp": self.timestamp,
             "data": self.data
         }
+        if self._id:
+            result["_id"] = self._id
+        return result
 
     @staticmethod
     def from_dict(data: Dict[str, Any]):
         return IPQCAudit(
-            _id=str(data.get("_id")),
+            _id=str(data.get("_id")) if data.get("_id") else None,
             name=data["name"],
             timestamp=data["timestamp"],
             data=data["data"]
