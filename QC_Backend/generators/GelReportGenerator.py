@@ -160,9 +160,9 @@ def fill_gel_basic_info(worksheet, gel_data):
             'editable_57': 'B23', # Time
             
             # Signatures
-            'editable_68': 'C27', # Prepared By
-            'editable_69': 'E27', # Accepted By
-            'editable_70': 'J27'  # Verified By
+            'preparedBySignature': 'C27', # Prepared By
+            'acceptedBySignature': 'E27', # Accepted By
+            'verifiedBySignature': 'J27'  # Verified By
         }
         
         # Fill basic information
@@ -307,10 +307,7 @@ def generate_gel_report(gel_data):
         template_path = 'D:\\WorkingFolder\\OneDrive - vikramsolar.com\\Desktop\\VSL Projects\\QC\\QC_Data\\Blank Gel Content Test Report.xlsx'
         
         if not os.path.exists(template_path):
-            # Fallback template path
-            template_path = './templates/Blank Gel Content Test Report.xlsx'
-            if not os.path.exists(template_path):
-                raise FileNotFoundError(f"Gel test template file not found at: {template_path}")
+            raise FileNotFoundError(f"Gel test template file not found at: {template_path}")
         
         # Load workbook
         wb = load_workbook(template_path)

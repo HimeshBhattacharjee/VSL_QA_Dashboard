@@ -50,8 +50,8 @@ def fill_peel_basic_info(worksheet, peel_data):
         
         # Define cell mapping for basic information
         basic_info_mapping = {
-            'preparedBySignature': 'E415',  # Prepared By signature
-            'verifiedBySignature': 'N415',  # Verified By signature
+            'preparedBySignature': 'E823',  # Prepared By signature
+            'verifiedBySignature': 'N823',  # Verified By signature
         }
         
         # Fill basic information
@@ -75,7 +75,7 @@ def fill_peel_test_data(worksheet, peel_data):
         test_data_mapping = {}
         
         # Base row for each repetition (each repetition takes 34 rows)
-        for rep in range(12):
+        for rep in range(24):
             base_row = 7 + (rep * 34)  # Starting from row 7, each rep takes 34 rows
             
             # Basic info for each repetition (rowspan cells)
