@@ -1,19 +1,19 @@
 {
-  "name": "qc",
-  "version": "1.0.0",
-  "description": "",
-  "scripts": {
-    "dev": "concurrently \"npm run dev --prefix QC_Frontend\" \"cd QC_Backend && python main.py\""
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard/issues"
-  },
-  "homepage": "https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard#readme"
+    "name": "qc",
+    "version": "1.0.0",
+    "description": "",
+    "scripts": {
+        "dev": "concurrently \"npm run dev --prefix QC_Frontend\" \"cd QC_Backend && python main.py\""
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard/issues"
+    },
+    "homepage": "https://github.com/HimeshBhattacharjee/VSL_QA_Dashboard#readme"
 }

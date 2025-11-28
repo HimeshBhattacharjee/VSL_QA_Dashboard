@@ -222,6 +222,9 @@ export default function QualityAudit() {
             setIsLoading(true);
 
             // Update signature state
+            const newAuditSig = section === 'audit' ? signatureText : auditBySignature;
+            const newReviewedSig = section === 'reviewed' ? signatureText : reviewedBySignature;
+
             switch (section) {
                 case 'audit':
                     setAuditBySignature(signatureText);
@@ -233,10 +236,14 @@ export default function QualityAudit() {
 
             setHasUnsavedChanges(true);
 
-            // Auto-save the checksheet immediately after adding signature
+            // Auto-save the signatures immediately after adding signature
             if (auditData.lineNumber && auditData.date && auditData.shift) {
-                await saveChecksheet();
-                showAlert('success', `Signature added to ${section} section and checksheet saved!`);
+                // Pass explicit values to avoid React state race condition
+                await saveSignaturesImmediately({
+                    auditBy: newAuditSig,
+                    reviewedBy: newReviewedSig
+                });
+                showAlert('success', `Signature added to ${section} section and saved!`);
             } else {
                 showAlert('success', `Signature added to ${section} section`);
             }
@@ -273,6 +280,10 @@ export default function QualityAudit() {
         try {
             setIsLoading(true);
 
+            // Calculate new signature values after removal
+            const newAuditSig = section === 'audit' ? '' : auditBySignature;
+            const newReviewedSig = section === 'reviewed' ? '' : reviewedBySignature;
+
             // Remove signature state
             switch (section) {
                 case 'audit':
@@ -285,10 +296,14 @@ export default function QualityAudit() {
 
             setHasUnsavedChanges(true);
 
-            // Auto-save the checksheet immediately after removing signature
+            // Auto-save the signatures immediately after removing signature
             if (auditData.lineNumber && auditData.date && auditData.shift) {
-                await saveChecksheet();
-                showAlert('info', `Signature removed from ${section} section and checksheet updated!`);
+                // Pass explicit values to avoid React state race condition
+                await saveSignaturesImmediately({
+                    auditBy: newAuditSig,
+                    reviewedBy: newReviewedSig
+                });
+                showAlert('info', `Signature removed from ${section} section and saved!`);
             } else {
                 showAlert('info', `Signature removed from ${section} section`);
             }
@@ -511,6 +526,45 @@ export default function QualityAudit() {
     const autoSaveChecksheet = () => {
         if (auditData.lineNumber && auditData.date && auditData.shift) {
             saveChecksheet();
+        }
+    };
+
+    // Save signatures immediately to database with explicit values, avoiding React state race conditions
+    const saveSignaturesImmediately = async (signatures: { auditBy: string; reviewedBy: string }) => {
+        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
+            return;
+        }
+
+        try {
+            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
+
+            // Create the proper structure for MongoDB with explicit signature values
+            const checksheetData = {
+                name: checksheetName,
+                timestamp: new Date().toISOString(),
+                data: {
+                    ...auditData,
+                    // Use explicit passed values, not state variables
+                    signatures: {
+                        auditBy: signatures.auditBy,
+                        reviewedBy: signatures.reviewedBy,
+                    }
+                }
+            };
+
+            if (currentChecksheetId) {
+                // Update existing checksheet
+                await apiService.updateAudit(currentChecksheetId, checksheetData);
+            } else {
+                // Create new checksheet if it doesn't exist
+                const result = await apiService.createAudit(checksheetData);
+                setCurrentChecksheetId(result._id!);
+            }
+
+            setHasUnsavedChanges(false);
+            await loadSavedChecksheets(); // Reload the list
+        } catch (error) {
+            console.error('Error saving signatures:', error);
         }
     };
 
