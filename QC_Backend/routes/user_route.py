@@ -131,10 +131,6 @@ async def upload_signature(
     signature: UploadFile = File(...)
 ):
     try:
-        print(f"🔵 SIGNATURE UPLOAD STARTED for employee: {employeeId}")
-        print(f"📁 File: {signature.filename}, Type: {signature.content_type}")
-        
-        # Validate file type
         if not signature.content_type or not signature.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=400, 
@@ -151,7 +147,6 @@ async def upload_signature(
             old_signature_path = user["signature"].lstrip('/')
             if os.path.exists(old_signature_path):
                 os.remove(old_signature_path)
-                print(f"🗑️ Removed old signature: {old_signature_path}")
         
         # Generate filename
         file_extension = os.path.splitext(signature.filename)[1]
@@ -160,16 +155,9 @@ async def upload_signature(
         
         filename = f"signature_{employeeId}{file_extension}"
         file_path = os.path.join(SIGNATURES_DIR, filename)
-        
-        print(f"💾 Saving signature to: {file_path}")
-        
-        # Read and save the file
         contents = await signature.read()
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
-            
-        print(f"📊 File size: {len(contents)} bytes")
-        
         with open(file_path, "wb") as f:
             f.write(contents)
         
@@ -179,10 +167,6 @@ async def upload_signature(
             {"employeeId": employeeId},
             {"$set": {"signature": signature_url}}
         )
-        
-        print(f"✅ Signature uploaded successfully: {signature_url}")
-        print(f"📊 Database update: {update_result.modified_count} documents modified")
-        
         return {
             "message": "Signature uploaded successfully", 
             "signatureUrl": signature_url
