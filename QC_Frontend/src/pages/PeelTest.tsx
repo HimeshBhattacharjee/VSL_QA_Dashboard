@@ -643,9 +643,13 @@ export default function PeelTest() {
     };
 
     const createNewReport = (reportName: string) => {
+        sessionStorage.removeItem('editingPeelReportId');
+        sessionStorage.removeItem('editingPeelReportData');
+        sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
         setTableData({});
         setCurrentEditingReport(reportName);
         setHasUnsavedChanges(true);
+        // Ensure any previous editing session is cleared when creating a new blank report
     };
 
     const handleCellChange = (rowIndex: number, cellIndex: number, value: string) => {
