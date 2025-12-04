@@ -66,61 +66,36 @@ async def generate_audit_pdf_endpoint(audit_data: dict):
     try:
         if not audit_data:
             raise HTTPException(status_code=400, detail="No audit data provided")
-        
-        # First generate the Excel file
         excel_output, filename = generate_audit_report(audit_data)
-        
-        # Create temporary Excel file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name
-        
-        # Create PDF filename
         pdf_filename = filename.replace('.xlsx', '.pdf')
         temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        
         try:
-            # Initialize COM for Excel
             pythoncom.CoInitialize()
-            
             excel_app = win32client.Dispatch("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
-            
             workbook = excel_app.Workbooks.Open(temp_excel_path)
-            
-            # Configure page setup for all worksheets
             for worksheet in workbook.Worksheets:
-                worksheet.PageSetup.Orientation = 2  # 1 = xlPortrait
+                worksheet.PageSetup.Orientation = 2
                 worksheet.PageSetup.Zoom = False
                 worksheet.PageSetup.FitToPagesWide = 1
-                worksheet.PageSetup.FitToPagesTall = False  # Allow multiple pages tall
-            
-            # Export to PDF
-            workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
-            
-            # Close workbook and quit Excel
+                worksheet.PageSetup.FitToPagesTall = False
+            workbook.ExportAsFixedFormat(0, temp_pdf_path) # 0 = xlTypePDF
             workbook.Close()
             excel_app.Quit()
-            
-            # Read the PDF file
             with open(temp_pdf_path, 'rb') as pdf_file:
                 pdf_content = pdf_file.read()
-            
-            # Clean up COM
             pythoncom.CoUninitialize()
-            
-            return StreamingResponse(
-                io.BytesIO(pdf_content),
-                media_type='application/pdf',
+            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
                 headers={
                     'Content-Disposition': f'attachment; filename="{pdf_filename}"',
                     'Access-Control-Allow-Origin': '*',
                 }
             )
-            
         finally:
-            # Clean up temporary files
             try:
                 if os.path.exists(temp_excel_path):
                     os.unlink(temp_excel_path)
@@ -128,7 +103,6 @@ async def generate_audit_pdf_endpoint(audit_data: dict):
                     os.unlink(temp_pdf_path)
             except Exception as cleanup_error:
                 print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-                
     except Exception as e:
         print(f"Error generating audit PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
@@ -168,43 +142,28 @@ async def generate_gel_pdf_endpoint(gel_data: dict):
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
             workbook = excel_app.Workbooks.Open(temp_excel_path)
-            
-            # Configure page setup for all worksheets to fit on one page with reduced margins
             for worksheet in workbook.Worksheets:
-                # Set page orientation to landscape
                 worksheet.PageSetup.Orientation = 2  # 2 = xlLandscape, 1 = xlPortrait
                 worksheet.PageSetup.LeftMargin = 40
                 worksheet.PageSetup.RightMargin = 40
                 worksheet.PageSetup.TopMargin = 40
                 worksheet.PageSetup.BottomMargin = 40
-                worksheet.PageSetup.Zoom = False  # Disable zoom to use FitToPages
-                worksheet.PageSetup.FitToPagesWide = 1  # Fit to 1 page wide
-                worksheet.PageSetup.FitToPagesTall = 1  # Fit to 1 page tall
-            
-            # Export to PDF with the configured page setup
+                worksheet.PageSetup.Zoom = False
+                worksheet.PageSetup.FitToPagesWide = 1
+                worksheet.PageSetup.FitToPagesTall = 1
             workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
-            
             workbook.Close()
             excel_app.Quit()
-            
-            # Read the PDF file
             with open(temp_pdf_path, 'rb') as pdf_file:
                 pdf_content = pdf_file.read()
-            
-            # Clean up
             pythoncom.CoUninitialize()
-            
-            return StreamingResponse(
-                io.BytesIO(pdf_content),
-                media_type='application/pdf',
+            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
                 headers={
                     'Content-Disposition': f'attachment; filename="{pdf_filename}"',
                     'Access-Control-Allow-Origin': '*',
                 }
             )
-            
         finally:
-            # Clean up temporary files
             try:
                 if os.path.exists(temp_excel_path):
                     os.unlink(temp_excel_path)
@@ -212,7 +171,6 @@ async def generate_gel_pdf_endpoint(gel_data: dict):
                     os.unlink(temp_pdf_path)
             except Exception as cleanup_error:
                 print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-                
     except Exception as e:
         print(f"Error generating gel test PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
@@ -244,51 +202,32 @@ async def generate_peel_pdf_endpoint(peel_data: dict):
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name
-        
         pdf_filename = filename.replace('.xlsx', '.pdf')
         temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        
         try:
-            # Convert Excel to PDF using win32com
             pythoncom.CoInitialize()
-            
             excel_app = win32client.Dispatch("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
-            
             workbook = excel_app.Workbooks.Open(temp_excel_path)
-            
-            # Configure page setup for all worksheets
             for worksheet in workbook.Worksheets:
-                worksheet.PageSetup.Orientation = 1  # 1 = xlPortrait
+                worksheet.PageSetup.Orientation = 1
                 worksheet.PageSetup.Zoom = False
                 worksheet.PageSetup.FitToPagesWide = 1
-                worksheet.PageSetup.FitToPagesTall = False  # Allow multiple pages tall
-            
-            # Export to PDF
+                worksheet.PageSetup.FitToPagesTall = False
             workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
-            
             workbook.Close()
             excel_app.Quit()
-            
-            # Read the PDF file
             with open(temp_pdf_path, 'rb') as pdf_file:
                 pdf_content = pdf_file.read()
-            
-            # Clean up
             pythoncom.CoUninitialize()
-            
-            return StreamingResponse(
-                io.BytesIO(pdf_content),
-                media_type='application/pdf',
+            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
                 headers={
                     'Content-Disposition': f'attachment; filename="{pdf_filename}"',
                     'Access-Control-Allow-Origin': '*',
                 }
             )
-            
         finally:
-            # Clean up temporary files
             try:
                 if os.path.exists(temp_excel_path):
                     os.unlink(temp_excel_path)
@@ -296,7 +235,6 @@ async def generate_peel_pdf_endpoint(peel_data: dict):
                     os.unlink(temp_pdf_path)
             except Exception as cleanup_error:
                 print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-                
     except Exception as e:
         print(f"Error generating peel test PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
