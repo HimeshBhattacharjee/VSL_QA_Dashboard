@@ -1,9 +1,8 @@
 from pymongo import MongoClient
-from datetime import datetime
 from typing import Optional, List, Dict, Any
-import os
+from constants import MONGODB_URI
 
-client = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017/"))
+client = MongoClient(MONGODB_URI)
 db = client["report_management"]
 peel_test_collection = db["peel_test_reports"]
 

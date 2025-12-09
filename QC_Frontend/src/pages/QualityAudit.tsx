@@ -1013,7 +1013,6 @@ export default function QualityAudit() {
                                                     className="text-sm p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
                                                 >
                                                     <option value="">Select</option>
-                                                    <option value="I">I</option>
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>

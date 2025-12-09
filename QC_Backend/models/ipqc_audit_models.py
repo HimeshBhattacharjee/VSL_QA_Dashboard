@@ -1,8 +1,8 @@
 from pymongo import MongoClient
 from typing import Optional, Dict, Any
-import os
+from constants import MONGODB_URI
 
-client = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017/"))
+client = MongoClient(MONGODB_URI)
 db = client["report_management"]
 ipqc_audit_collection = db["ipqc_audits"]
 

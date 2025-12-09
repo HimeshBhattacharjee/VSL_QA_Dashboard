@@ -51,18 +51,10 @@ export default function Header() {
                     setUserRole(userData.role);
                     setEmployeeId(userData.employeeId);
                     setIsLoggedIn(true);
-
-                    // Also update sessionStorage
                     sessionStorage.setItem("employeeId", userData.employeeId);
                     sessionStorage.setItem("userRole", userData.role);
-
-                    // Fetch signature if not Admin
-                    if (userData.role !== 'Admin') {
-                        fetchUserSignature(userData.employeeId);
-                    }
-                } else {
-                    console.error('❌ Failed to fetch current user');
-                }
+                    if (userData.role !== 'Admin') fetchUserSignature(userData.employeeId);
+                } else console.error('❌ Failed to fetch current user');
             }
         } catch (error) {
             console.error('❌ Error fetching current user:', error);
@@ -147,9 +139,7 @@ export default function Header() {
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setDropdownOpen(false);
-            }
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setDropdownOpen(false);
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -193,33 +183,24 @@ export default function Header() {
         }
 
         const userRole = sessionStorage.getItem("userRole");
-        if (userRole === 'Admin') {
-            navigate("/admin");
-        } else {
-            navigate("/home");
-        }
+        if (userRole === 'Admin') navigate("/admin");
+        else navigate("/home");
     };
 
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             const selectedFile = event.target.files[0];
-            // Validate file type
             if (!selectedFile.type.startsWith('image/')) {
                 showAlert('error', 'Please select an image file (JPG, PNG, GIF)');
                 return;
             }
-            // Validate file size (max 5MB)
             if (selectedFile.size > 5 * 1024 * 1024) {
                 showAlert('error', 'File size must be less than 5MB');
                 return;
             }
             setFile(selectedFile);
-
-            // Create preview
             const reader = new FileReader();
-            reader.onload = (e) => {
-                setFilePreview(e.target?.result as string);
-            };
+            reader.onload = (e) => { setFilePreview(e.target?.result as string); };
             reader.readAsDataURL(selectedFile);
         }
     };
@@ -270,9 +251,7 @@ export default function Header() {
                 setSignatureModalOpen(false);
                 setFile(null);
                 setFilePreview(null);
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                }
+                if (fileInputRef.current) fileInputRef.current.value = '';
                 showAlert('success', 'Signature uploaded successfully!');
             } else {
                 showAlert('error', 'Failed to upload signature');
@@ -286,7 +265,6 @@ export default function Header() {
 
     const removeSignature = async () => {
         if (!employeeId) return;
-
         try {
             const response = await fetch(`http://localhost:8000/user/signature/remove/${employeeId}`, {
                 method: 'DELETE',
@@ -320,17 +298,14 @@ export default function Header() {
         }
     };
 
-    // Check if user can manage signature (not Admin)
     const canManageSignature = isLoggedIn && userRole !== 'Admin';
 
     return (
         <div className="w-full mb-5 pt-2">
-            {/* Signature Modal */}
             {signatureModalOpen && (
                 <div className="fixed inset-0 bg-[rgba(0,0,0,0.9)] flex items-center justify-center z-50">
                     <div className="flex flex-col items-center justify-center bg-white rounded-lg p-6 w-96 max-w-full mx-4">
                         <h3 className="text-xl font-semibold mb-4 text-gray-800">Manage Signature</h3>
-
                         {signature ? (
                             <div className="flex flex-col items-center justify-center mb-4">
                                 <p className="text-sm text-gray-600 mb-2">Current Signature:</p>
@@ -356,8 +331,6 @@ export default function Header() {
                             <label className="block text-sm text-center font-medium text-gray-700 mb-2">
                                 Upload New Signature
                             </label>
-
-                            {/* File Preview */}
                             {filePreview && (
                                 <div className="mb-3">
                                     <p className="text-sm text-center text-gray-600 mb-1">Preview:</p>
@@ -368,7 +341,6 @@ export default function Header() {
                                     />
                                 </div>
                             )}
-
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -378,7 +350,6 @@ export default function Header() {
                             />
                             <p className="text-xs text-center text-gray-500 mt-1">Supported formats: JPG, PNG, GIF. Max size: 5MB</p>
                         </div>
-
                         <div className="flex gap-2">
                             <button
                                 onClick={uploadSignature}
@@ -404,7 +375,6 @@ export default function Header() {
                     </div>
                 </div>
             )}
-
             <nav className="flex justify-between items-center py-4 px-5 relative min-h-20">
                 <div className="flex items-center gap-5 flex-1">
                     <img
@@ -443,7 +413,6 @@ export default function Header() {
                                             <p className="text-xs text-green-600 mt-1">✓ Signature uploaded</p>
                                         )}
                                     </div>
-                                    {/* Only show Add Signature button for non-Admin users */}
                                     {canManageSignature && (
                                         <button
                                             onClick={handleAddSignature}

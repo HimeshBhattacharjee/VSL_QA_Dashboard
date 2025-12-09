@@ -1,9 +1,8 @@
 from pymongo import MongoClient
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-import os
+from typing import Optional, Dict, Any
+from constants import MONGODB_URI
 
-client = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017/"))
+client = MongoClient(MONGODB_URI)
 db = client["report_management"]
 gel_test_collection = db["gel_test_reports"]
 

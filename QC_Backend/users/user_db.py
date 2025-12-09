@@ -1,9 +1,8 @@
-import os
 from pymongo import MongoClient
 from datetime import datetime
+from constants import MONGODB_URI
 
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-client = MongoClient(MONGODB_URL)
+client = MongoClient(MONGODB_URI)
 db = client["vsl_quality_portal"]
 users_collection = db["users"]
 

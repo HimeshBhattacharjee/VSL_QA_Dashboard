@@ -12,7 +12,7 @@ interface SummaryGraphProps {
 interface InspectionData {
     Date: string;
     'Total Production': string;
-    [key: string]: string; // For defect columns
+    [key: string]: string;
 }
 
 interface ChartStats {
@@ -59,15 +59,11 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         daily: 'Daily Metrics'
     };
 
-    // Function to get the actual inspection type (handles pre-lam toggle)
     const getActualInspectionType = (): 'pre-el' | 'visual' | 'lam-qc' | 'fqc' => {
-        if (type === 'pre-lam') {
-            return currentPreLamDataType;
-        }
+        if (type === 'pre-lam') return currentPreLamDataType;
         return type;
     };
 
-    // Function to get display title (handles pre-lam prefix)
     const getDisplayTitle = (): string => {
         if (type === 'pre-lam') {
             const prefix = currentPreLamDataType === 'pre-el' ? 'Pre-EL ' : 'Visual ';
@@ -76,14 +72,11 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         return periodTitles[period];
     };
 
-    // Function to get date range based on period
     const getDateRange = (period: string): { startDate: Date; endDate: Date } => {
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth();
-
         let startDate: Date, endDate: Date;
-
         switch (period) {
             case 'daily':
                 startDate = new Date(today);
@@ -110,35 +103,27 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                 startDate = new Date(currentYear, 0, 1);
                 endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
         }
-
         return { startDate, endDate };
     };
 
-    // Function to filter data for date range
     const getDataForDateRange = (data: InspectionData[], startDate: Date, endDate: Date): InspectionData[] => {
-        if (data.length === 0) {
-            return [];
-        }
+        if (data.length === 0) return [];
         return data.filter(row => {
             const rowDate = new Date(row.Date);
             return rowDate >= startDate && rowDate <= endDate;
         });
     };
 
-    // Function to calculate chart data
     const calculateChartData = (data: InspectionData[], defectColumns: string[] = []) => {
         const totalProduction = data.reduce((sum, row) => sum + (parseInt(row['Total Production']) || 0), 0);
-
         let totalRejection = 0;
         defectColumns.forEach(defect => {
             const defectSum = data.reduce((sum, row) => sum + (parseInt(row[defect]) || 0), 0);
             totalRejection += defectSum;
         });
-
         const accepted = Math.max(0, totalProduction - totalRejection);
         const rejected = totalRejection;
         const rejectionRate = totalProduction > 0 ? ((totalRejection / totalProduction) * 100).toFixed(2) + '%' : '0%';
-
         return {
             accepted,
             rejected,
@@ -148,23 +133,14 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         };
     };
 
-    // Function to update chart with actual data
     const updateChartWithData = async () => {
         if (!chartRef.current) return;
-
         setIsLoading(true);
-
         try {
-            // Get the actual inspection type (handles pre-lam toggle)
             const actualInspectionType = getActualInspectionType();
-
-            // Load data for the current inspection type
             const inspectionData = await loadInspectionData(actualInspectionType);
             const { startDate, endDate } = getDateRange(period);
-
-            // Filter data for the selected period
             const filteredData = getDataForDateRange(inspectionData.data, startDate, endDate);
-
             if (filteredData.length === 0) {
                 showNoDataChart();
                 setChartStats({
@@ -174,16 +150,9 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                 });
                 return;
             }
-
-            // Calculate chart data
             const defectColumns = inspectionData.summary.defect_columns || [];
             const chartData = calculateChartData(filteredData, defectColumns);
-
-            // Update chart
-            if (chartInstance.current) {
-                chartInstance.current.destroy();
-            }
-
+            if (chartInstance.current) chartInstance.current.destroy();
             const ctx = chartRef.current.getContext('2d');
             if (ctx) {
                 chartInstance.current = new Chart(ctx, {
@@ -222,14 +191,11 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                     }
                 });
             }
-
-            // Update stats
             setChartStats({
                 production: chartData.totalProduction,
                 rejection: chartData.totalRejection,
                 rejectionRate: chartData.rejectionRate
             });
-
         } catch (error) {
             console.error('Error updating chart with data:', error);
             showNoDataChart();
@@ -243,14 +209,9 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         }
     };
 
-    // Function to show no data chart
     const showNoDataChart = () => {
         if (!chartRef.current || !chartInstance.current) return;
-
-        if (chartInstance.current) {
-            chartInstance.current.destroy();
-        }
-
+        if (chartInstance.current) chartInstance.current.destroy();
         const ctx = chartRef.current.getContext('2d');
         if (ctx) {
             chartInstance.current = new Chart(ctx, {
@@ -285,43 +246,28 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
         }
     };
 
-    // Handle period change
     const handlePeriodChange = (newPeriod: 'yearly' | 'monthly' | 'weekly' | 'daily') => {
         setPeriod(newPeriod);
     };
 
-    // Function to toggle pre-lam data type (pre-el ↔ visual)
     const togglePreLamDataType = () => {
-        if (type === 'pre-lam') {
-            setCurrentPreLamDataType(prev => prev === 'pre-el' ? 'visual' : 'pre-el');
-        }
+        if (type === 'pre-lam') setCurrentPreLamDataType(prev => prev === 'pre-el' ? 'visual' : 'pre-el');
     };
 
-    // Initialize chart and load data
     useEffect(() => {
         updateChartWithData();
-
         return () => {
-            if (chartInstance.current) {
-                chartInstance.current.destroy();
-            }
+            if (chartInstance.current) chartInstance.current.destroy();
         };
-    }, [period, type, currentPreLamDataType]); // Added currentPreLamDataType to dependencies
+    }, [period, type, currentPreLamDataType]);
 
-    // Auto-refresh data every 30 seconds AND toggle pre-lam data type
     useEffect(() => {
         const interval = setInterval(() => {
-            if (type === 'pre-lam') {
-                // For pre-lam section, toggle between pre-el and visual data
-                togglePreLamDataType();
-            } else {
-                // For other sections, just refresh the data
-                updateChartWithData();
-            }
+            if (type === 'pre-lam') togglePreLamDataType();
+            else updateChartWithData();
         }, 30000);
-
         return () => clearInterval(interval);
-    }, [period, type]); // Only depend on period and type, not currentPreLamDataType
+    }, [period, type]);
 
     return (
         <div className={`report-section bg-white rounded-2xl p-3 shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 hover:shadow-2xl cursor-pointer min-h-[480px] flex flex-col`}>
@@ -329,7 +275,6 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                 <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
                 <p className="text-sm text-gray-600">{subtitle}</p>
             </div>
-
             <div className="period-selector flex gap-2 justify-center mb-2">
                 <select
                     className="period-dropdown px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold cursor-pointer shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:shadow-xl"
@@ -341,7 +286,6 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                     <option value="weekly">Weekly Metrics</option>
                     <option value="daily">Daily Metrics</option>
                 </select>
-
                 <button
                     className="detailed_analysis_btn bg-white text-black border border-gray-300 px-4 py-2 rounded-lg cursor-pointer text-sm font-semibold shadow-lg transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-y-1"
                     onClick={() => window.location.href = dashboardLink}
@@ -356,11 +300,9 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                         {getDisplayTitle()}
                         {isLoading && <span className="text-sm text-gray-500 ml-2">Loading...</span>}
                     </div>
-
                     <div className="selected-chart-container h-48 mb-3">
                         <canvas ref={chartRef} className="w-full h-full"></canvas>
                     </div>
-
                     <div className="chart-stats grid grid-cols-3 gap-2 text-center">
                         <div className="stat-item flex flex-col p-2 bg-white rounded-lg border border-gray-200">
                             <span className="stat-label text-xs text-gray-600 font-medium mb-1">Production:</span>

@@ -1,35 +1,17 @@
 import React, { useRef } from "react";
 import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    LineElement,
-    BarElement,
-    PointElement,
-    Title,
-    Tooltip,
-    Legend,
+    Chart as ChartJS, CategoryScale, LinearScale, LineElement,
+    BarElement, PointElement, Title, Tooltip, Legend,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import { Line, Bar } from "react-chartjs-2";
 
 ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
-    zoomPlugin
+    CategoryScale, LinearScale, PointElement, LineElement,
+    BarElement, Title, Tooltip, Legend, zoomPlugin
 );
 
-interface ZoomableChartProps {
-    chartData: any;
-    options?: any;
-    type?: 'line' | 'bar';
-}
+interface ZoomableChartProps { chartData: any; options?: any; type?: 'line' | 'bar'; }
 
 const ZoomableChart: React.FC<ZoomableChartProps> = ({ chartData, options, type = 'line' }) => {
     const chartRef = useRef<any>(null);
@@ -72,20 +54,13 @@ const ZoomableChart: React.FC<ZoomableChartProps> = ({ chartData, options, type 
     const ChartComponent = type === 'bar' ? Bar : Line;
 
     const handleResetZoom = () => {
-        if (chartRef.current) {
-            chartRef.current.resetZoom();
-        }
+        if (chartRef.current) chartRef.current.resetZoom();
     };
 
     return (
         <div className="w-3/4 mx-auto">
             <div className="h-80">
-                <ChartComponent
-                    ref={chartRef}
-                    data={chartData}
-                    options={mergedOptions}
-                    height={400}
-                />
+                <ChartComponent ref={chartRef} data={chartData} options={mergedOptions} height={400} />
             </div>
             <div className="text-center mt-4">
                 <button
