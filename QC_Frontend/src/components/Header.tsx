@@ -43,8 +43,9 @@ export default function Header() {
         try {
             const storedUsername = sessionStorage.getItem("username");
             const storedIsLoggedIn = sessionStorage.getItem("isLoggedIn");
+            const API_BASE = (import.meta.env.VITE_API_URL);
             if (storedIsLoggedIn === "true" && storedUsername) {
-                const response = await fetch(`http://localhost:8000/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
+                const response = await fetch(`${API_BASE}/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
                 if (response.ok) {
                     const userData = await response.json();
                     setUsername(userData.name);
@@ -63,7 +64,8 @@ export default function Header() {
 
     const fetchUserSignature = async (empId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/user/signature/${empId}`);
+            const API_BASE = (import.meta.env.VITE_API_URL);
+            const response = await fetch(`${API_BASE}/user/signature/${empId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSignature(data.signature);
@@ -211,7 +213,8 @@ export default function Header() {
             const storedUsername = sessionStorage.getItem("username");
             if (storedUsername) {
                 try {
-                    const response = await fetch(`http://localhost:8000/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
+                    const API_BASE = (import.meta.env.VITE_API_URL);
+                    const response = await fetch(`${API_BASE}/user/current-user-by-name?name=${encodeURIComponent(storedUsername)}`);
                     if (response.ok) {
                         const userData = await response.json();
                         currentEmployeeId = userData.employeeId;
@@ -231,10 +234,11 @@ export default function Header() {
 
         setUploading(true);
         try {
+            const API_BASE = (import.meta.env.VITE_API_URL);
             const formData = new FormData();
             formData.append('employeeId', currentEmployeeId);
             formData.append('signature', file);
-            const response = await fetch('http://localhost:8000/user/signature/upload', {
+            const response = await fetch(`${API_BASE}/user/signature/upload`, {
                 method: 'POST',
                 body: formData,
             });
@@ -266,7 +270,8 @@ export default function Header() {
     const removeSignature = async () => {
         if (!employeeId) return;
         try {
-            const response = await fetch(`http://localhost:8000/user/signature/remove/${employeeId}`, {
+            const API_BASE = (import.meta.env.VITE_API_URL);
+            const response = await fetch(`${API_BASE}/user/signature/remove/${employeeId}`, {
                 method: 'DELETE',
             });
 
@@ -310,7 +315,7 @@ export default function Header() {
                             <div className="flex flex-col items-center justify-center mb-4">
                                 <p className="text-sm text-gray-600 mb-2">Current Signature:</p>
                                 <img
-                                    src={`http://localhost:8000${signature}`}
+                                    src={`${(import.meta.env.VITE_API_URL)}${signature}`}
                                     alt="Signature"
                                     className="max-w-full h-32 border border-gray-300 rounded mx-auto"
                                 />

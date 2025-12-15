@@ -24,7 +24,7 @@ const Admin = () => {
     const [visiblePasswords, setVisiblePasswords] = useState<{ [key: string]: boolean }>({});
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const USER_API_BASE_URL = 'http://localhost:8000/user';
+    const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
 
     const fetchUsers = async () => {
         try {

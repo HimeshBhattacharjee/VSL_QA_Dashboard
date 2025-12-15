@@ -4,7 +4,7 @@ from bson import ObjectId
 from typing import List, Optional
 import json
 
-peel_test_router = APIRouter(prefix="/peel/peel-test-reports", tags=["Peel Test Reports"])
+peel_test_router = APIRouter(prefix="/api/peel/peel-test-reports", tags=["Peel Test Reports"])
 
 @peel_test_router.get("/", response_model=List[dict])
 async def get_all_peel_test_reports():

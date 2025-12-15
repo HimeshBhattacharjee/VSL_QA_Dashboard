@@ -26,7 +26,7 @@ type GraphData = {
     min_value: number;
 };
 
-const PEEL_API_BASE_URL = 'http://localhost:8000/peel';
+const PEEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/peel';
 
 export default function PeelTest() {
     const navigate = useNavigate();
@@ -963,8 +963,7 @@ export default function PeelTest() {
             };
 
             console.log(peelReportData);
-
-            const response = await fetch('http://localhost:8000/generate-peel-report', {
+            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1020,8 +1019,7 @@ export default function PeelTest() {
             };
 
             console.log(peelReportData);
-
-            const response = await fetch('http://localhost:8000/generate-peel-pdf', {
+            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1067,8 +1065,7 @@ export default function PeelTest() {
                 form_data: report.formData,
                 averages: report.averages || {}
             };
-
-            const response = await fetch('http://localhost:8000/generate-peel-report', {
+            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1114,8 +1111,7 @@ export default function PeelTest() {
                 form_data: report.formData,
                 averages: report.averages || {}
             };
-
-            const response = await fetch('http://localhost:8000/generate-peel-pdf', {
+            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

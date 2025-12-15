@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime
 from constants import MONGODB_URI
 
-peel_router = APIRouter(prefix="/peel", tags=["Peel Test Data"], responses={404: {"description": "Not found"}})
+peel_router = APIRouter(prefix="/api/peel", tags=["Peel Test Data"], responses={404: {"description": "Not found"}})
 DB_NAME = "peel_test"
 
 def get_mongodb_client():

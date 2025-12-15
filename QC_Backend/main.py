@@ -34,7 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/signatures", StaticFiles(directory="signatures"), name="signatures")
+app.mount("/api/signatures", StaticFiles(directory="signatures"), name="signatures")
 app.include_router(qa_router)
 app.include_router(bgrade_router)
 app.include_router(peel_router)
@@ -43,7 +43,7 @@ app.include_router(gel_router)
 app.include_router(peel_test_router)
 app.include_router(ipqc_audit_router)
 
-@app.post("/generate-audit-report")
+@app.post("/api/ipqc-audits/generate-audit-report")
 async def generate_audit_report_endpoint(audit_data: dict):
     try:
         if not audit_data:
@@ -61,7 +61,7 @@ async def generate_audit_report_endpoint(audit_data: dict):
         print(f"Error generating audit report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
-@app.post("/generate-audit-pdf")
+@app.post("/api/ipqc-audits/generate-audit-pdf")
 async def generate_audit_pdf_endpoint(audit_data: dict):
     try:
         if not audit_data:
@@ -107,7 +107,7 @@ async def generate_audit_pdf_endpoint(audit_data: dict):
         print(f"Error generating audit PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
-@app.post("/generate-gel-report")
+@app.post("/api/gel-test-reports/generate-gel-report")
 async def generate_gel_report_endpoint(gel_data: dict):
     try:
         if not gel_data:
@@ -125,7 +125,7 @@ async def generate_gel_report_endpoint(gel_data: dict):
         print(f"Error generating gel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
-@app.post("/generate-gel-pdf")
+@app.post("/api/gel-test-reports/generate-gel-pdf")
 async def generate_gel_pdf_endpoint(gel_data: dict):
     try:
         if not gel_data:
@@ -175,7 +175,7 @@ async def generate_gel_pdf_endpoint(gel_data: dict):
         print(f"Error generating gel test PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
-@app.post("/generate-peel-report")
+@app.post("/api/peel/generate-peel-report")
 async def generate_peel_report_endpoint(peel_data: dict):
     try:
         if not peel_data:
@@ -193,7 +193,7 @@ async def generate_peel_report_endpoint(peel_data: dict):
         print(f"Error generating peel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
-@app.post("/generate-peel-pdf")
+@app.post("/api/peel/generate-peel-pdf")
 async def generate_peel_pdf_endpoint(peel_data: dict):
     try:
         if not peel_data:

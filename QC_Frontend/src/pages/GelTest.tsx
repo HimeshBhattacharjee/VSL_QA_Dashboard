@@ -29,7 +29,7 @@ export default function GelTest() {
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const GEL_API_BASE_URL = 'http://localhost:8000/api/gel-test-reports';
+    const GEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/gel-test-reports';
 
     // Signature state
     const [preparedBySignature, setPreparedBySignature] = useState<string>('');
@@ -956,8 +956,7 @@ export default function GelTest() {
                 form_data: formData,
                 averages: averages,
             };
-
-            const response = await fetch('http://localhost:8000/generate-gel-report', {
+            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1025,8 +1024,7 @@ export default function GelTest() {
             };
 
             console.log('Generating PDF from Excel template...');
-
-            const response = await fetch('http://localhost:8000/generate-gel-pdf', {
+            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1072,8 +1070,7 @@ export default function GelTest() {
                 form_data: report.formData,
                 averages: report.averages
             };
-
-            const response = await fetch('http://localhost:8000/generate-gel-report', {
+            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1119,8 +1116,7 @@ export default function GelTest() {
                 form_data: report.formData,
                 averages: report.averages
             };
-
-            const response = await fetch('http://localhost:8000/generate-gel-pdf', {
+            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

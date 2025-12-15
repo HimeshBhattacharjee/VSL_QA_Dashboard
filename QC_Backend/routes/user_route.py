@@ -9,7 +9,7 @@ from models.user_models import (
 )
 from users.user_db import users_collection, generate_password
 
-user_router = APIRouter(prefix="/user", tags=["User Management"])
+user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
 SIGNATURES_DIR = "signatures"
 os.makedirs(SIGNATURES_DIR, exist_ok=True)

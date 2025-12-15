@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = (import.meta.env.VITE_API_URL);
 
 export interface GradeCounts {
     [key: string]: number;
@@ -62,11 +62,11 @@ export async function loadInspectionData(inspectionType: string, line: string = 
         let dataUrl, summaryUrl;
 
         if (line === 'combined') {
-            dataUrl = `${API_BASE_URL}/qa/api/combined/${inspectionType}`;
-            summaryUrl = `${API_BASE_URL}/qa/api/combined/${inspectionType}/summary`;
+            dataUrl = `${API_BASE_URL}/qa/combined/${inspectionType}`;
+            summaryUrl = `${API_BASE_URL}/qa/combined/${inspectionType}/summary`;
         } else {
-            dataUrl = `${API_BASE_URL}/qa/api/lines/${line}/${inspectionType}`;
-            summaryUrl = `${API_BASE_URL}/qa/api/lines/${line}/${inspectionType}/summary`;
+            dataUrl = `${API_BASE_URL}/qa/lines/${line}/${inspectionType}`;
+            summaryUrl = `${API_BASE_URL}/qa/lines/${line}/${inspectionType}/summary`;
         }
 
         console.log(`Fetching data from: ${dataUrl}`);
@@ -98,7 +98,7 @@ export async function loadInspectionData(inspectionType: string, line: string = 
 // UPDATED: Fetch defect analysis from API
 export async function fetchDefectAnalysis(inspectionType: string, line: string | null = null): Promise<DefectAnalysisData> {
     try {
-        let url = `${API_BASE_URL}/qa/api/analysis/defects/${inspectionType}`;
+        let url = `${API_BASE_URL}/qa/analysis/defects/${inspectionType}`;
         if (line) {
             url += `?line_number=${line}`;
         }
@@ -116,7 +116,7 @@ export async function fetchDefectAnalysis(inspectionType: string, line: string |
 // UPDATED: Fetch production statistics from API
 export async function fetchProductionStats(inspectionType: string | null = null, line: string | null = null): Promise<ProductionStats> {
     try {
-        let url = `${API_BASE_URL}/qa/api/analysis/production`;
+        let url = `${API_BASE_URL}/qa/analysis/production`;
         const params = new URLSearchParams();
 
         if (inspectionType) params.append('inspection_type', inspectionType);
@@ -139,7 +139,7 @@ export async function fetchProductionStats(inspectionType: string | null = null,
 // UPDATED: Fetch data by date range from API
 export async function fetchDateRangeData(startDate: string, endDate: string, inspectionType: string, metric: string = 'Total rejection'): Promise<DateRangeData> {
     try {
-        const url = `${API_BASE_URL}/qa/api/data/date-range?date_from=${startDate}&date_to=${endDate}&inspection_type=${inspectionType}&metric=${encodeURIComponent(metric)}`;
+        const url = `${API_BASE_URL}/qa/data/date-range?date_from=${startDate}&date_to=${endDate}&inspection_type=${inspectionType}&metric=${encodeURIComponent(metric)}`;
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -154,9 +154,8 @@ export async function fetchDateRangeData(startDate: string, endDate: string, ins
 // B-Grade Analysis specific functions
 export async function fetchGradeAnalysis(startDate: string, endDate: string): Promise<GradeAnalysisResponse> {
     try {
-        const B_GRADE_API_BASE_URL = 'http://localhost:8000/bgrade';
         const response = await fetch(
-            `${B_GRADE_API_BASE_URL}/api/aggregated/grade-analysis?start_date=${startDate}&end_date=${endDate}`
+            `${API_BASE_URL}/bgrade/aggregated/grade-analysis?start_date=${startDate}&end_date=${endDate}`
         );
         const result: GradeAnalysisResponse = await response.json();
         if (!result.success) {
@@ -170,9 +169,8 @@ export async function fetchGradeAnalysis(startDate: string, endDate: string): Pr
 
 export async function fetchDefectReasonAnalysis(startDate: string, endDate: string): Promise<DefectAnalysisResponse> {
     try {
-        const B_GRADE_API_BASE_URL = 'http://localhost:8000/bgrade';
         const response = await fetch(
-            `${B_GRADE_API_BASE_URL}/api/aggregated/defect-analysis?start_date=${startDate}&end_date=${endDate}&top_n=15`
+            `${API_BASE_URL}/bgrade/aggregated/defect-analysis?start_date=${startDate}&end_date=${endDate}&top_n=15`
         );
         const result: DefectAnalysisResponse = await response.json();
         if (!result.success) {

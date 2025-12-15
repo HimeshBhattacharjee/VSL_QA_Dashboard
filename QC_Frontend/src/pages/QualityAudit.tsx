@@ -90,7 +90,7 @@ export default function QualityAudit() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
 
-    const IPQC_API_BASE_URL = 'http://localhost:8000/api/ipqc-audits';
+    const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
 
     const apiService = {
         // Get all audits
@@ -633,8 +633,7 @@ export default function QualityAudit() {
         try {
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
             console.log('Generating Excel with data:', auditData);
-
-            const response = await fetch('http://localhost:8000/generate-audit-report', {
+            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -674,8 +673,7 @@ export default function QualityAudit() {
         try {
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
             console.log('Generating PDF with data:', auditData);
-
-            const response = await fetch('http://localhost:8000/generate-audit-pdf', {
+            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -721,8 +719,7 @@ export default function QualityAudit() {
 
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
             console.log('Generating Excel for saved checksheet:', checksheet);
-
-            const response = await fetch('http://localhost:8000/generate-audit-report', {
+            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -768,8 +765,7 @@ export default function QualityAudit() {
 
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
             console.log('Generating PDF for saved checksheet:', checksheet);
-
-            const response = await fetch('http://localhost:8000/generate-audit-pdf', {
+            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

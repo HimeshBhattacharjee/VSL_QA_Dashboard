@@ -65,7 +65,7 @@ export default function Login() {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const { showAlert } = useAlert();
-    const USER_API_BASE_URL = 'http://localhost:8000/user';
+    const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
 
     useEffect(() => {
         sessionStorage.removeItem("isLoggedIn");

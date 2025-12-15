@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from constants import MONGODB_URI
 
-bgrade_router = APIRouter(prefix="/bgrade", tags=["B-Grade Trend"])
+bgrade_router = APIRouter(prefix="/api/bgrade", tags=["B-Grade Trend"])
 
 class BMongoDBManager:
     def __init__(self, db_name="b_grade_trend"):
@@ -96,13 +96,13 @@ async def bgrade_root():
         "message": "B-Grade Trend API", 
         "status": "active",
         "endpoints": {
-            "collections": "/api/collections",
-            "collection_data": "/api/data/{collection_name}",
-            "date_range": "/api/data/date-range"
+            "collections": "/collections",
+            "collection_data": "/data/{collection_name}",
+            "date_range": "/data/date-range"
         }
     }
 
-@bgrade_router.get("/api/collections")
+@bgrade_router.get("/collections")
 async def get_bgrade_collections():
     try:
         collections = mongo_manager.get_all_collections()
@@ -114,7 +114,7 @@ async def get_bgrade_collections():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {str(e)}")
 
-@bgrade_router.get("/api/data/{collection_name}")
+@bgrade_router.get("/data/{collection_name}")
 async def get_bgrade_collection_data(
     collection_name: str,
     limit: int = Query(100, ge=1, le=1000),
@@ -133,7 +133,7 @@ async def get_bgrade_collection_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
 
-@bgrade_router.get("/api/data/date-range")
+@bgrade_router.get("/data/date-range")
 async def get_bgrade_data_by_date_range(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)")
@@ -163,7 +163,7 @@ async def bgrade_health_check():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
-@bgrade_router.get("/api/aggregated/grade-analysis")
+@bgrade_router.get("/aggregated/grade-analysis")
 async def get_aggregated_grade_analysis(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)")
@@ -231,7 +231,7 @@ async def get_aggregated_grade_analysis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in grade analysis: {str(e)}")
 
-@bgrade_router.get("/api/aggregated/defect-analysis")
+@bgrade_router.get("/aggregated/defect-analysis")
 async def get_aggregated_defect_analysis(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
@@ -323,7 +323,7 @@ async def get_total_production_count(start_date: str, end_date: str):
         total_count += count
     return total_count
 
-@bgrade_router.get("/api/aggregated/daily-trend")
+@bgrade_router.get("/aggregated/daily-trend")
 async def get_daily_trend(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),

@@ -45,7 +45,7 @@ export default function BGradeTrend() {
     const [isLoading, setIsLoading] = useState(false);
     const [hasData, setHasData] = useState(false);
 
-    const B_GRADE_API_BASE_URL = 'http://localhost:8000/bgrade';
+    const B_GRADE_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/bgrade';
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
@@ -95,7 +95,7 @@ export default function BGradeTrend() {
         try {
             if (currentAnalysisType === 'b-grade') {
                 const response = await fetch(
-                    `${B_GRADE_API_BASE_URL}/api/aggregated/grade-analysis?start_date=${startDate}&end_date=${endDate}`
+                    `${B_GRADE_API_BASE_URL}/aggregated/grade-analysis?start_date=${startDate}&end_date=${endDate}`
                 );
                 const result: GradeAnalysisResponse = await response.json();
                 if (!result.success) {
@@ -104,7 +104,7 @@ export default function BGradeTrend() {
                 processAggregatedGradeData(result);
             } else {
                 const response = await fetch(
-                    `${B_GRADE_API_BASE_URL}/api/aggregated/defect-analysis?start_date=${startDate}&end_date=${endDate}&top_n=15`
+                    `${B_GRADE_API_BASE_URL}/aggregated/defect-analysis?start_date=${startDate}&end_date=${endDate}&top_n=15`
                 );
                 const result: DefectAnalysisResponse = await response.json();
                 if (!result.success) {

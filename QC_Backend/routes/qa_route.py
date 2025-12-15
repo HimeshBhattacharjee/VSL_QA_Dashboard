@@ -6,7 +6,7 @@ from bson import json_util
 from typing import Optional
 from constants import MONGODB_URI
 
-qa_router = APIRouter(prefix="/qa", tags=["Quality Analysis"])
+qa_router = APIRouter(prefix="/api/qa", tags=["Quality Analysis"])
 
 def get_qa_database():
     try:
@@ -26,17 +26,17 @@ async def qa_root():
         "message": "Quality Analysis API",
         "version": "1.0.0",
         "endpoints": {
-            "line_data": "/api/lines/{line_number}/{inspection_type}",
-            "combined_data": "/api/combined/{inspection_type}",
-            "line_summary": "/api/lines/{line_number}/{inspection_type}/summary",
-            "combined_summary": "/api/combined/{inspection_type}/summary",
-            "defect_analysis": "/api/analysis/defects/{inspection_type}",
-            "production_stats": "/api/analysis/production",
-            "date_range_data": "/api/data/date-range"
+            "line_data": "/lines/{line_number}/{inspection_type}",
+            "combined_data": "/combined/{inspection_type}",
+            "line_summary": "/lines/{line_number}/{inspection_type}/summary",
+            "combined_summary": "/combined/{inspection_type}/summary",
+            "defect_analysis": "/analysis/defects/{inspection_type}",
+            "production_stats": "/analysis/production",
+            "date_range_data": "/data/date-range"
         }
     }
 
-@qa_router.get("/api/lines/{line_number}/{inspection_type}")
+@qa_router.get("/lines/{line_number}/{inspection_type}")
 async def get_line_data(
     line_number: int,
     inspection_type: str,
@@ -76,7 +76,7 @@ async def get_line_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
 
-@qa_router.get("/api/combined/{inspection_type}")
+@qa_router.get("/combined/{inspection_type}")
 async def get_combined_data(
     inspection_type: str,
     line_number: Optional[int] = Query(None, description="Filter by specific line"),
@@ -118,7 +118,7 @@ async def get_combined_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
 
-@qa_router.get("/api/lines/{line_number}/{inspection_type}/summary")
+@qa_router.get("/lines/{line_number}/{inspection_type}/summary")
 async def get_line_summary(line_number: int, inspection_type: str):
     try:
         db = get_qa_database()
@@ -135,7 +135,7 @@ async def get_line_summary(line_number: int, inspection_type: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching summary: {str(e)}")
 
-@qa_router.get("/api/combined/{inspection_type}/summary")
+@qa_router.get("/combined/{inspection_type}/summary")
 async def get_combined_summary(inspection_type: str):
     try:
         db = get_qa_database()
@@ -152,7 +152,7 @@ async def get_combined_summary(inspection_type: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching summary: {str(e)}")
 
-@qa_router.get("/api/analysis/defects/{inspection_type}")
+@qa_router.get("/analysis/defects/{inspection_type}")
 async def get_defect_analysis(
     inspection_type: str,
     line_number: Optional[int] = Query(None, description="Specific line (optional)"),
@@ -194,7 +194,7 @@ async def get_defect_analysis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing defects: {str(e)}")
 
-@qa_router.get("/api/analysis/production")
+@qa_router.get("/analysis/production")
 async def get_production_stats(
     inspection_type: Optional[str] = Query(None, description="Specific inspection type"),
     line_number: Optional[int] = Query(None, description="Specific line")
@@ -221,7 +221,7 @@ async def get_production_stats(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching production stats: {str(e)}")
 
-@qa_router.get("/api/data/date-range")
+@qa_router.get("/data/date-range")
 async def get_date_range_data(
     date_from: str = Query(..., description="Start date (YYYY-MM-DD)"),
     date_to: str = Query(..., description="End date (YYYY-MM-DD)"),
@@ -269,7 +269,7 @@ async def qa_health_check():
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Service unhealthy: {str(e)}")
 
-@qa_router.get("/api/collections")
+@qa_router.get("/collections")
 async def get_available_collections():
     try:
         db = get_qa_database()
