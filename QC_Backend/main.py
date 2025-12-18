@@ -47,28 +47,32 @@ app.include_router(ipqc_audit_router)
 async def generate_audit_report_endpoint(request: dict):
     try:
         audit_id = request.get("audit_id")
-        if not audit_id:
-            raise HTTPException(status_code=400, detail="audit_id is required")
+        
+        if audit_id:
+            # Saved report export - fetch from S3
+            from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
+            from bson import ObjectId
 
-        # Fetch audit metadata from MongoDB
-        from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
-        from bson import ObjectId
+            if not ObjectId.is_valid(audit_id):
+                raise HTTPException(status_code=400, detail="Invalid audit ID")
 
-        if not ObjectId.is_valid(audit_id):
-            raise HTTPException(status_code=400, detail="Invalid audit ID")
+            audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
+            if not audit:
+                raise HTTPException(status_code=404, detail="Audit not found")
 
-        audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
-        if not audit:
-            raise HTTPException(status_code=404, detail="Audit not found")
+            # Fetch data from S3
+            ipqc_audit = IPQCAudit.from_dict(audit)
+            audit_data = ipqc_audit.to_dict(include_data=True)
 
-        # Fetch data from S3
-        ipqc_audit = IPQCAudit.from_dict(audit)
-        audit_data = ipqc_audit.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        s3_data = audit_data.get("data", {})
-        report_data = s3_data.copy()
-        report_data["name"] = audit["name"]
+            # Prepare data for report generation
+            s3_data = audit_data.get("data", {})
+            report_data = s3_data.copy()
+            report_data["name"] = audit["name"]
+        else:
+            # Current report export - use data from request
+            report_data = request.copy()
+            if "audit_id" in report_data:
+                del report_data["audit_id"]
 
         output, filename = generate_audit_report(report_data)
         return StreamingResponse(
@@ -89,28 +93,32 @@ async def generate_audit_report_endpoint(request: dict):
 async def generate_audit_pdf_endpoint(request: dict):
     try:
         audit_id = request.get("audit_id")
-        if not audit_id:
-            raise HTTPException(status_code=400, detail="audit_id is required")
+        
+        if audit_id:
+            # Saved report export - fetch from S3
+            from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
+            from bson import ObjectId
 
-        # Fetch audit metadata from MongoDB
-        from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
-        from bson import ObjectId
+            if not ObjectId.is_valid(audit_id):
+                raise HTTPException(status_code=400, detail="Invalid audit ID")
 
-        if not ObjectId.is_valid(audit_id):
-            raise HTTPException(status_code=400, detail="Invalid audit ID")
+            audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
+            if not audit:
+                raise HTTPException(status_code=404, detail="Audit not found")
 
-        audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
-        if not audit:
-            raise HTTPException(status_code=404, detail="Audit not found")
+            # Fetch data from S3
+            ipqc_audit = IPQCAudit.from_dict(audit)
+            audit_data = ipqc_audit.to_dict(include_data=True)
 
-        # Fetch data from S3
-        ipqc_audit = IPQCAudit.from_dict(audit)
-        audit_data = ipqc_audit.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        s3_data = audit_data.get("data", {})
-        report_data = s3_data.copy()
-        report_data["name"] = audit["name"]
+            # Prepare data for report generation
+            s3_data = audit_data.get("data", {})
+            report_data = s3_data.copy()
+            report_data["name"] = audit["name"]
+        else:
+            # Current report export - use data from request
+            report_data = request.copy()
+            if "audit_id" in report_data:
+                del report_data["audit_id"]
 
         excel_output, filename = generate_audit_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
@@ -157,30 +165,36 @@ async def generate_audit_pdf_endpoint(request: dict):
 async def generate_gel_report_endpoint(request: dict):
     try:
         report_id = request.get("report_id")
-        if not report_id:
-            raise HTTPException(status_code=400, detail="report_id is required")
+        
+        if report_id:
+            # Saved report export - fetch from S3
+            from models.gel_test_models import gel_test_collection, GelTestReport
+            from bson import ObjectId
 
-        # Fetch report metadata from MongoDB
-        from models.gel_test_models import gel_test_collection, GelTestReport
-        from bson import ObjectId
+            if not ObjectId.is_valid(report_id):
+                raise HTTPException(status_code=400, detail="Invalid report ID")
 
-        if not ObjectId.is_valid(report_id):
-            raise HTTPException(status_code=400, detail="Invalid report ID")
+            report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
+            if not report:
+                raise HTTPException(status_code=404, detail="Report not found")
 
-        report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+            # Fetch data from S3
+            gel_report = GelTestReport.from_dict(report)
+            gel_data = gel_report.to_dict(include_data=True)
 
-        # Fetch data from S3
-        gel_report = GelTestReport.from_dict(report)
-        gel_data = gel_report.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        report_data = {
-            "form_data": gel_data.get("form_data", {}),
-            "averages": gel_data.get("averages", {}),
-            "name": report["name"]
-        }
+            # Prepare data for report generation
+            report_data = {
+                "form_data": gel_data.get("form_data", {}),
+                "averages": gel_data.get("averages", {}),
+                "name": report["name"]
+            }
+        else:
+            # Current report export - use data from request
+            report_data = {
+                "form_data": request.get("form_data", {}),
+                "averages": request.get("averages", {}),
+                "name": request.get("report_name", "Gel_Test_Report")
+            }
 
         output, filename = generate_gel_report(report_data)
         return StreamingResponse(
@@ -201,30 +215,36 @@ async def generate_gel_report_endpoint(request: dict):
 async def generate_gel_pdf_endpoint(request: dict):
     try:
         report_id = request.get("report_id")
-        if not report_id:
-            raise HTTPException(status_code=400, detail="report_id is required")
+        
+        if report_id:
+            # Saved report export - fetch from S3
+            from models.gel_test_models import gel_test_collection, GelTestReport
+            from bson import ObjectId
 
-        # Fetch report metadata from MongoDB
-        from models.gel_test_models import gel_test_collection, GelTestReport
-        from bson import ObjectId
+            if not ObjectId.is_valid(report_id):
+                raise HTTPException(status_code=400, detail="Invalid report ID")
 
-        if not ObjectId.is_valid(report_id):
-            raise HTTPException(status_code=400, detail="Invalid report ID")
+            report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
+            if not report:
+                raise HTTPException(status_code=404, detail="Report not found")
 
-        report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+            # Fetch data from S3
+            gel_report = GelTestReport.from_dict(report)
+            gel_data = gel_report.to_dict(include_data=True)
 
-        # Fetch data from S3
-        gel_report = GelTestReport.from_dict(report)
-        gel_data = gel_report.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        report_data = {
-            "form_data": gel_data.get("form_data", {}),
-            "averages": gel_data.get("averages", {}),
-            "name": report["name"]
-        }
+            # Prepare data for report generation
+            report_data = {
+                "form_data": gel_data.get("form_data", {}),
+                "averages": gel_data.get("averages", {}),
+                "name": report["name"]
+            }
+        else:
+            # Current report export - use data from request
+            report_data = {
+                "form_data": request.get("form_data", {}),
+                "averages": request.get("averages", {}),
+                "name": request.get("report_name", "Gel_Test_Report")
+            }
 
         excel_output, filename = generate_gel_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
@@ -275,31 +295,38 @@ async def generate_gel_pdf_endpoint(request: dict):
 async def generate_peel_report_endpoint(request: dict):
     try:
         report_id = request.get("report_id")
-        if not report_id:
-            raise HTTPException(status_code=400, detail="report_id is required")
+        
+        if report_id:
+            # Saved report export - fetch from S3
+            from models.peel_test_models import peel_test_collection, PeelTestReport
+            from bson import ObjectId
 
-        # Fetch report metadata from MongoDB
-        from models.peel_test_models import peel_test_collection, PeelTestReport
-        from bson import ObjectId
+            if not ObjectId.is_valid(report_id):
+                raise HTTPException(status_code=400, detail="Invalid report ID")
 
-        if not ObjectId.is_valid(report_id):
-            raise HTTPException(status_code=400, detail="Invalid report ID")
+            report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
+            if not report:
+                raise HTTPException(status_code=404, detail="Report not found")
 
-        report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+            # Fetch data from S3
+            peel_report = PeelTestReport.from_dict(report)
+            peel_data = peel_report.to_dict(include_data=True)
 
-        # Fetch data from S3
-        peel_report = PeelTestReport.from_dict(report)
-        peel_data = peel_report.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        report_data = {
-            "form_data": peel_data.get("form_data", {}),
-            "row_data": peel_data.get("row_data", []),
-            "averages": peel_data.get("averages", {}),
-            "name": report["name"]
-        }
+            # Prepare data for report generation
+            report_data = {
+                "form_data": peel_data.get("form_data", {}),
+                "row_data": peel_data.get("row_data", []),
+                "averages": peel_data.get("averages", {}),
+                "name": report["name"]
+            }
+        else:
+            # Current report export - use data from request
+            report_data = {
+                "form_data": request.get("form_data", {}),
+                "row_data": request.get("row_data", []),
+                "averages": request.get("averages", {}),
+                "name": request.get("report_name", "Peel_Test_Report")
+            }
 
         output, filename = generate_peel_report(report_data)
         return StreamingResponse(
@@ -320,31 +347,38 @@ async def generate_peel_report_endpoint(request: dict):
 async def generate_peel_pdf_endpoint(request: dict):
     try:
         report_id = request.get("report_id")
-        if not report_id:
-            raise HTTPException(status_code=400, detail="report_id is required")
+        
+        if report_id:
+            # Saved report export - fetch from S3
+            from models.peel_test_models import peel_test_collection, PeelTestReport
+            from bson import ObjectId
 
-        # Fetch report metadata from MongoDB
-        from models.peel_test_models import peel_test_collection, PeelTestReport
-        from bson import ObjectId
+            if not ObjectId.is_valid(report_id):
+                raise HTTPException(status_code=400, detail="Invalid report ID")
 
-        if not ObjectId.is_valid(report_id):
-            raise HTTPException(status_code=400, detail="Invalid report ID")
+            report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
+            if not report:
+                raise HTTPException(status_code=404, detail="Report not found")
 
-        report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+            # Fetch data from S3
+            peel_report = PeelTestReport.from_dict(report)
+            peel_data = peel_report.to_dict(include_data=True)
 
-        # Fetch data from S3
-        peel_report = PeelTestReport.from_dict(report)
-        peel_data = peel_report.to_dict(include_data=True)
-
-        # Prepare data for report generation
-        report_data = {
-            "form_data": peel_data.get("form_data", {}),
-            "row_data": peel_data.get("row_data", []),
-            "averages": peel_data.get("averages", {}),
-            "name": report["name"]
-        }
+            # Prepare data for report generation
+            report_data = {
+                "form_data": peel_data.get("form_data", {}),
+                "row_data": peel_data.get("row_data", []),
+                "averages": peel_data.get("averages", {}),
+                "name": report["name"]
+            }
+        else:
+            # Current report export - use data from request
+            report_data = {
+                "form_data": request.get("form_data", {}),
+                "row_data": request.get("row_data", []),
+                "averages": request.get("averages", {}),
+                "name": request.get("report_name", "Peel_Test_Report")
+            }
 
         excel_output, filename = generate_peel_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
