@@ -315,7 +315,7 @@ export default function Header() {
                             <div className="flex flex-col items-center justify-center mb-4">
                                 <p className="text-sm text-gray-600 mb-2">Current Signature:</p>
                                 <img
-                                    src={`${(import.meta.env.VITE_API_URL)}${signature}`}
+                                    src={signature}
                                     alt="Signature"
                                     className="max-w-full h-32 border border-gray-300 rounded mx-auto"
                                 />

@@ -137,3 +137,45 @@ class S3Service:
             return f"{AWSConfig.S3_IPQC_AUDITS}/{mongo_id}.json"
         else:
             return f"{AWSConfig.S3_BASE_PATH}/{report_type}/{mongo_id}.json"
+
+    def upload_image(self, s3_key: str, image_data: bytes, content_type: str) -> bool:
+        """Upload image data to S3"""
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=image_data,
+                ContentType=content_type
+            )
+            return True
+        except ClientError as e:
+            print(f"Error uploading image to S3: {str(e)}")
+            raise
+
+    def delete_image(self, s3_key: str) -> bool:
+        """Delete image from S3"""
+        try:
+            self.s3_client.delete_object(
+                Bucket=self.bucket_name,
+                Key=s3_key
+            )
+            return True
+        except ClientError as e:
+            print(f"Error deleting image from S3: {str(e)}")
+            raise
+
+    def get_image_url(self, s3_key: str, expiration: int = 3600) -> str:
+        """Generate a presigned URL for the image"""
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': s3_key
+                },
+                ExpiresIn=expiration
+            )
+            return url
+        except ClientError as e:
+            print(f"Error generating presigned URL: {str(e)}")
+            raise

@@ -11,9 +11,6 @@ from users.user_db import users_collection, generate_password
 
 user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
-SIGNATURES_DIR = "signatures"
-os.makedirs(SIGNATURES_DIR, exist_ok=True)
-
 @user_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate):
     existing_user = users_collection.find_one({"employeeId": user.employeeId})
@@ -134,7 +131,7 @@ async def upload_signature(
         if not signature.content_type or not signature.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=400, 
-                detail="File must be an image (JPEG, PNG, GIF)"
+                detail="File must be an image (JPEG, PNG)"
             )
         
         # Check if user exists
@@ -142,31 +139,37 @@ async def upload_signature(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Remove old signature file if exists
-        if user.get("signature"):
-            old_signature_path = user["signature"].lstrip('/')
-            if os.path.exists(old_signature_path):
-                os.remove(old_signature_path)
+        # Validate file extension
+        allowed_extensions = ['.jpg', '.jpeg', '.png']
+        file_extension = os.path.splitext(signature.filename)[1].lower()
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail="File must be JPG, JPEG, or PNG"
+            )
         
-        # Generate filename
-        file_extension = os.path.splitext(signature.filename)[1]
-        if not file_extension:
-            file_extension = '.png'
-        
-        filename = f"signature_{employeeId}{file_extension}"
-        file_path = os.path.join(SIGNATURES_DIR, filename)
+        # Read file contents
         contents = await signature.read()
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
-        with open(file_path, "wb") as f:
-            f.write(contents)
         
-        # Update user record with signature path
-        signature_url = f"/signatures/{filename}"
+        # Generate deterministic S3 key (same key for same user, overwrites existing)
+        s3_key = f"users/signatures/{employeeId}{file_extension}"
+        
+        # Upload to S3
+        from s3_service import S3Service
+        s3_service = S3Service()
+        s3_service.upload_image(s3_key, contents, signature.content_type)
+        
+        # Update user record with S3 key
         update_result = users_collection.update_one(
             {"employeeId": employeeId},
-            {"$set": {"signature": signature_url}}
+            {"$set": {"signature": s3_key}}
         )
+        
+        # Generate presigned URL for immediate use
+        signature_url = s3_service.get_image_url(s3_key)
+        
         return {
             "message": "Signature uploaded successfully", 
             "signatureUrl": signature_url
@@ -187,11 +190,11 @@ async def remove_signature(employeeId: str):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Remove signature file if exists
+        # Delete signature from S3 if exists
         if user.get("signature"):
-            signature_path = user["signature"].lstrip('/')
-            if os.path.exists(signature_path):
-                os.remove(signature_path)
+            from s3_service import S3Service
+            s3_service = S3Service()
+            s3_service.delete_image(user["signature"])
         
         # Update user record
         users_collection.update_one(
@@ -210,7 +213,14 @@ async def get_signature(employeeId: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return {"signature": user.get("signature")}
+    signature_key = user.get("signature")
+    if signature_key:
+        from s3_service import S3Service
+        s3_service = S3Service()
+        signature_url = s3_service.get_image_url(signature_key)
+        return {"signature": signature_url}
+    else:
+        return {"signature": None}
 
 @user_router.get("/current-user", response_model=UserResponse)
 async def get_current_user(employeeId: str):

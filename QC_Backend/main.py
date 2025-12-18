@@ -34,7 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/api/signatures", StaticFiles(directory="signatures"), name="signatures")
 app.include_router(qa_router)
 app.include_router(bgrade_router)
 app.include_router(peel_router)
