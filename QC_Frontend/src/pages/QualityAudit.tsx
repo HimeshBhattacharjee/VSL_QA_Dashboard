@@ -95,7 +95,7 @@ export default function QualityAudit() {
     const apiService = {
         // Get all audits
         getAllAudits: async (): Promise<any[]> => {
-            const response = await fetch(`${IPQC_API_BASE_URL}`);
+            const response = await fetch(`${IPQC_API_BASE_URL}?include_data=true`);
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch audits: ${response.status} ${errorText}`);
@@ -719,12 +719,14 @@ export default function QualityAudit() {
 
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
             console.log('Generating Excel for saved checksheet:', checksheet);
+
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(checksheet.data)
+                body: JSON.stringify({ audit_id: checksheet._id })
             });
 
             if (!response.ok) {
@@ -765,12 +767,14 @@ export default function QualityAudit() {
 
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
             console.log('Generating PDF for saved checksheet:', checksheet);
+
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(checksheet.data)
+                body: JSON.stringify({ audit_id: checksheet._id })
             });
 
             if (!response.ok) {
@@ -881,28 +885,35 @@ export default function QualityAudit() {
             setIsLoading(true);
             const checksheet = savedChecksheets[index];
 
+            // Fetch complete audit data from S3 using getAuditById
+            const fullAudit = await apiService.getAuditById(checksheet._id);
+
             // Reset to basic info view and load the saved data
-            setAuditData(checksheet.data);
-            setCurrentChecksheetId(checksheet._id!);
+            setAuditData(fullAudit.data);
+            setCurrentChecksheetId(fullAudit._id);
             setActiveTab('create-edit');
             setCurrentView('basicInfo');
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
 
             // Load signatures if they exist
-            if (checksheet.data.signatures) {
-                setAuditBySignature(checksheet.data.signatures.auditBy || '');
-                setReviewedBySignature(checksheet.data.signatures.reviewedBy || '');
+            // Robust signature loading
+            const loadedSignatures = fullAudit.data.signatures || 
+                                   fullAudit.data.data?.signatures || 
+                                   { auditBy: fullAudit.data.auditBy, reviewedBy: fullAudit.data.reviewedBy };
+
+            if (loadedSignatures) {
+                setAuditBySignature(loadedSignatures.auditBy || '');
+                setReviewedBySignature(loadedSignatures.reviewedBy || '');
             } else {
-                // Initialize empty signatures if not present
                 setAuditBySignature('');
                 setReviewedBySignature('');
             }
 
             // Set the line number context
-            setLineNumber(checksheet.data.lineNumber);
+            setLineNumber(fullAudit.data.lineNumber);
 
-            showAlert('info', `Editing ${checksheet.name}`);
+            showAlert('info', `Editing ${fullAudit.name}`);
         } catch (error) {
             console.error('Error loading checksheet:', error);
             showAlert('error', 'Failed to load checksheet');

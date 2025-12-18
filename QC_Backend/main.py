@@ -44,11 +44,33 @@ app.include_router(peel_test_router)
 app.include_router(ipqc_audit_router)
 
 @app.post("/api/ipqc-audits/generate-audit-report")
-async def generate_audit_report_endpoint(audit_data: dict):
+async def generate_audit_report_endpoint(request: dict):
     try:
-        if not audit_data:
-            raise HTTPException(status_code=400, detail="No audit data provided")
-        output, filename = generate_audit_report(audit_data)
+        audit_id = request.get("audit_id")
+        if not audit_id:
+            raise HTTPException(status_code=400, detail="audit_id is required")
+
+        # Fetch audit metadata from MongoDB
+        from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(audit_id):
+            raise HTTPException(status_code=400, detail="Invalid audit ID")
+
+        audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        # Fetch data from S3
+        ipqc_audit = IPQCAudit.from_dict(audit)
+        audit_data = ipqc_audit.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        s3_data = audit_data.get("data", {})
+        report_data = s3_data.copy()
+        report_data["name"] = audit["name"]
+
+        output, filename = generate_audit_report(report_data)
         return StreamingResponse(
             output,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -57,16 +79,40 @@ async def generate_audit_report_endpoint(audit_data: dict):
                 'Access-Control-Allow-Origin': '*',
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error generating audit report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/ipqc-audits/generate-audit-pdf")
-async def generate_audit_pdf_endpoint(audit_data: dict):
+async def generate_audit_pdf_endpoint(request: dict):
     try:
-        if not audit_data:
-            raise HTTPException(status_code=400, detail="No audit data provided")
-        excel_output, filename = generate_audit_report(audit_data)
+        audit_id = request.get("audit_id")
+        if not audit_id:
+            raise HTTPException(status_code=400, detail="audit_id is required")
+
+        # Fetch audit metadata from MongoDB
+        from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(audit_id):
+            raise HTTPException(status_code=400, detail="Invalid audit ID")
+
+        audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        # Fetch data from S3
+        ipqc_audit = IPQCAudit.from_dict(audit)
+        audit_data = ipqc_audit.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        s3_data = audit_data.get("data", {})
+        report_data = s3_data.copy()
+        report_data["name"] = audit["name"]
+
+        excel_output, filename = generate_audit_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name
@@ -108,11 +154,35 @@ async def generate_audit_pdf_endpoint(audit_data: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @app.post("/api/gel-test-reports/generate-gel-report")
-async def generate_gel_report_endpoint(gel_data: dict):
+async def generate_gel_report_endpoint(request: dict):
     try:
-        if not gel_data:
-            raise HTTPException(status_code=400, detail="No gel test data provided")
-        output, filename = generate_gel_report(gel_data)
+        report_id = request.get("report_id")
+        if not report_id:
+            raise HTTPException(status_code=400, detail="report_id is required")
+
+        # Fetch report metadata from MongoDB
+        from models.gel_test_models import gel_test_collection, GelTestReport
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID")
+
+        report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Fetch data from S3
+        gel_report = GelTestReport.from_dict(report)
+        gel_data = gel_report.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        report_data = {
+            "form_data": gel_data.get("form_data", {}),
+            "averages": gel_data.get("averages", {}),
+            "name": report["name"]
+        }
+
+        output, filename = generate_gel_report(report_data)
         return StreamingResponse(
             output,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -121,16 +191,42 @@ async def generate_gel_report_endpoint(gel_data: dict):
                 'Access-Control-Allow-Origin': '*',
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error generating gel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/gel-test-reports/generate-gel-pdf")
-async def generate_gel_pdf_endpoint(gel_data: dict):
+async def generate_gel_pdf_endpoint(request: dict):
     try:
-        if not gel_data:
-            raise HTTPException(status_code=400, detail="No gel test data provided")
-        excel_output, filename = generate_gel_report(gel_data)
+        report_id = request.get("report_id")
+        if not report_id:
+            raise HTTPException(status_code=400, detail="report_id is required")
+
+        # Fetch report metadata from MongoDB
+        from models.gel_test_models import gel_test_collection, GelTestReport
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID")
+
+        report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Fetch data from S3
+        gel_report = GelTestReport.from_dict(report)
+        gel_data = gel_report.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        report_data = {
+            "form_data": gel_data.get("form_data", {}),
+            "averages": gel_data.get("averages", {}),
+            "name": report["name"]
+        }
+
+        excel_output, filename = generate_gel_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name
@@ -176,11 +272,36 @@ async def generate_gel_pdf_endpoint(gel_data: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
-async def generate_peel_report_endpoint(peel_data: dict):
+async def generate_peel_report_endpoint(request: dict):
     try:
-        if not peel_data:
-            raise HTTPException(status_code=400, detail="No peel test data provided")
-        output, filename = generate_peel_report(peel_data)
+        report_id = request.get("report_id")
+        if not report_id:
+            raise HTTPException(status_code=400, detail="report_id is required")
+
+        # Fetch report metadata from MongoDB
+        from models.peel_test_models import peel_test_collection, PeelTestReport
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID")
+
+        report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Fetch data from S3
+        peel_report = PeelTestReport.from_dict(report)
+        peel_data = peel_report.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        report_data = {
+            "form_data": peel_data.get("form_data", {}),
+            "row_data": peel_data.get("row_data", []),
+            "averages": peel_data.get("averages", {}),
+            "name": report["name"]
+        }
+
+        output, filename = generate_peel_report(report_data)
         return StreamingResponse(
             output,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -189,16 +310,43 @@ async def generate_peel_report_endpoint(peel_data: dict):
                 'Access-Control-Allow-Origin': '*',
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error generating peel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-pdf")
-async def generate_peel_pdf_endpoint(peel_data: dict):
+async def generate_peel_pdf_endpoint(request: dict):
     try:
-        if not peel_data:
-            raise HTTPException(status_code=400, detail="No peel test data provided")
-        excel_output, filename = generate_peel_report(peel_data)
+        report_id = request.get("report_id")
+        if not report_id:
+            raise HTTPException(status_code=400, detail="report_id is required")
+
+        # Fetch report metadata from MongoDB
+        from models.peel_test_models import peel_test_collection, PeelTestReport
+        from bson import ObjectId
+
+        if not ObjectId.is_valid(report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID")
+
+        report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Fetch data from S3
+        peel_report = PeelTestReport.from_dict(report)
+        peel_data = peel_report.to_dict(include_data=True)
+
+        # Prepare data for report generation
+        report_data = {
+            "form_data": peel_data.get("form_data", {}),
+            "row_data": peel_data.get("row_data", []),
+            "averages": peel_data.get("averages", {}),
+            "name": report["name"]
+        }
+
+        excel_output, filename = generate_peel_report(report_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
             temp_excel.write(excel_output.getvalue())
             temp_excel_path = temp_excel.name

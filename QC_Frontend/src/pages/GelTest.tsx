@@ -520,27 +520,30 @@ export default function GelTest() {
                 return;
             }
 
-            const report = reports[index];
+            const reportMetadata = reports[index];
+
+            // Fetch the full report data from S3 using the report ID
+            const fullReport = await apiService.getReportById(reportMetadata._id!);
 
             // Clear any existing form data first
             clearFormData(false);
 
             // Set the report name immediately
-            setReportName(report.name);
+            setReportName(fullReport.name);
 
             // Save editing state to sessionStorage
-            sessionStorage.setItem('editingReportData', JSON.stringify(report));
-            sessionStorage.setItem('editingReportId', report._id!);
+            sessionStorage.setItem('editingReportData', JSON.stringify(fullReport));
+            sessionStorage.setItem('editingReportId', fullReport._id!);
 
             setActiveTab('edit-report');
 
             // Load the report data after a brief delay to ensure DOM is ready
             setTimeout(() => {
-                loadReportData(report);
+                loadReportData(fullReport);
                 setHasUnsavedChanges(true);
             }, 150);
 
-            showAlert('info', `Now editing: ${report.name}`);
+            showAlert('info', `Now editing: ${fullReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -1064,18 +1067,13 @@ export default function GelTest() {
 
             const report = reports[index];
 
-            const gelReportData = {
-                report_name: report.name,
-                timestamp: report.timestamp,
-                form_data: report.formData,
-                averages: report.averages
-            };
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(gelReportData),
+                body: JSON.stringify({ report_id: report._id }),
             });
 
             if (!response.ok) {
@@ -1110,18 +1108,13 @@ export default function GelTest() {
 
             const report = reports[index];
 
-            const gelReportData = {
-                report_name: report.name,
-                timestamp: report.timestamp,
-                form_data: report.formData,
-                averages: report.averages
-            };
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(gelReportData),
+                body: JSON.stringify({ report_id: report._id }),
             });
 
             if (!response.ok) {

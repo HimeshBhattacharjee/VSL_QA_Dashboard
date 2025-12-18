@@ -148,7 +148,7 @@ export default function PeelTest() {
 
         // Check if report name exists
         checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
-            const url = `${PEEL_API_BASE_URL}/peel-test-reports/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+            const url = `${PEEL_API_BASE_URL}/peel-test-reports/name/${encodeURIComponent(name)}${excludeId ? `?exclude_id=${excludeId}` : ''}`;
             const response = await fetch(url);
             if (!response.ok) {
                 const errorText = await response.text();
@@ -526,8 +526,14 @@ export default function PeelTest() {
         const existingLocalReport = savedReports.find(report => report.name === reportName);
 
         if (existingLocalReport) {
-            loadReportForEditing(existingLocalReport);
-            showAlert('success', 'Loaded locally saved report');
+            try {
+                const fullReport = await apiService.getReportById(existingLocalReport._id!);
+                loadReportForEditing(fullReport);
+                showAlert('success', 'Loaded locally saved report');
+            } catch (error) {
+                console.error('Error loading full report:', error);
+                showAlert('error', 'Failed to load report details');
+            }
         } else {
             try {
                 const mongoData = await fetchPeelData(selectedDate, selectedShift);
@@ -584,6 +590,9 @@ export default function PeelTest() {
     };
 
     const createReportFromMongoData = (reportName: string, mongoData: any[]) => {
+        sessionStorage.removeItem('editingPeelReportId');
+        sessionStorage.removeItem('editingPeelReportData');
+        sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
         const newFormData: Record<string, string> = {};
 
         mongoData.forEach((record, repIndex) => {
@@ -692,8 +701,11 @@ export default function PeelTest() {
 
             const report = reports[index];
 
+            // Fetch complete report data from S3 using getReportById
+            const fullReport = await apiService.getReportById(report._id);
+
             // Parse date from report name
-            const dateShiftMatch = report.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
+            const dateShiftMatch = fullReport.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
             if (dateShiftMatch) {
                 const day = dateShiftMatch[1];
                 const month = dateShiftMatch[2];
@@ -708,7 +720,7 @@ export default function PeelTest() {
                 setSelectedShift(shift);
             }
 
-            loadReportForEditing(report);
+            loadReportForEditing(fullReport);
             setShowReportEditor(true);
             setActiveTab('edit-report');
             showAlert('success', 'Report loaded for editing');
@@ -798,6 +810,7 @@ export default function PeelTest() {
     };
 
     const saveReport = async () => {
+        console.log('saveReport called, currentEditingReport:', currentEditingReport);
         if (!currentEditingReport) {
             showAlert('error', 'Please load or create a report first');
             return;
@@ -1059,18 +1072,13 @@ export default function PeelTest() {
 
             const report = reports[index];
 
-            const peelReportData = {
-                report_name: report.name,
-                timestamp: report.timestamp,
-                form_data: report.formData,
-                averages: report.averages || {}
-            };
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(peelReportData),
+                body: JSON.stringify({ report_id: report._id }),
             });
 
             if (!response.ok) {
@@ -1105,18 +1113,13 @@ export default function PeelTest() {
 
             const report = reports[index];
 
-            const peelReportData = {
-                report_name: report.name,
-                timestamp: report.timestamp,
-                form_data: report.formData,
-                averages: report.averages || {}
-            };
+            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(peelReportData),
+                body: JSON.stringify({ report_id: report._id }),
             });
 
             if (!response.ok) {
