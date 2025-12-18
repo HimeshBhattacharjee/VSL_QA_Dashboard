@@ -461,6 +461,19 @@ export default function QualityAudit() {
                         };
                         setAuditData(mergedData);
                         setCurrentChecksheetId(existingAudit._id!);
+
+                        // Load signatures if they exist
+                        const loadedSignatures = existingAudit.data.signatures ||
+                            existingAudit.data.data?.signatures ||
+                            { auditBy: existingAudit.data.auditBy, reviewedBy: existingAudit.data.reviewedBy };
+
+                        if (loadedSignatures) {
+                            setAuditBySignature(loadedSignatures.auditBy || '');
+                            setReviewedBySignature(loadedSignatures.reviewedBy || '');
+                        } else {
+                            setAuditBySignature('');
+                            setReviewedBySignature('');
+                        }
                     } else {
                         setCurrentChecksheetId(null);
                     }
@@ -718,9 +731,7 @@ export default function QualityAudit() {
             }
 
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            console.log('Generating Excel for saved checksheet:', checksheet);
 
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: {
@@ -766,9 +777,7 @@ export default function QualityAudit() {
             }
 
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            console.log('Generating PDF for saved checksheet:', checksheet);
 
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
                 method: 'POST',
                 headers: {
@@ -884,9 +893,13 @@ export default function QualityAudit() {
         try {
             setIsLoading(true);
             const checksheet = savedChecksheets[index];
+            if (!checksheet || !checksheet._id) {
+                showAlert('error', 'Checksheet not found');
+                return;
+            }
 
             // Fetch complete audit data from S3 using getAuditById
-            const fullAudit = await apiService.getAuditById(checksheet._id);
+            const fullAudit = await apiService.getAuditById(checksheet.id);
 
             // Reset to basic info view and load the saved data
             setAuditData(fullAudit.data);
@@ -898,9 +911,9 @@ export default function QualityAudit() {
 
             // Load signatures if they exist
             // Robust signature loading
-            const loadedSignatures = fullAudit.data.signatures || 
-                                   fullAudit.data.data?.signatures || 
-                                   { auditBy: fullAudit.data.auditBy, reviewedBy: fullAudit.data.reviewedBy };
+            const loadedSignatures = fullAudit.data.signatures ||
+                fullAudit.data.data?.signatures ||
+                { auditBy: fullAudit.data.auditBy, reviewedBy: fullAudit.data.reviewedBy };
 
             if (loadedSignatures) {
                 setAuditBySignature(loadedSignatures.auditBy || '');
