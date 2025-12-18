@@ -5,6 +5,7 @@ from openpyxl.utils import get_column_letter
 import io
 import os
 from openpyxl.cell.cell import MergedCell
+from paths import get_template_path
 
 # Helper to get the writable cell (top-left of merged range)
 def get_writable_cell(worksheet, cell_ref):
@@ -89,10 +90,8 @@ def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False,
     cell.border = thin_border
 
 def get_template_config(line_number):
-    base_path = 'D:\\WorkingFolder\\OneDrive - vikramsolar.com\\Desktop\\VSL Projects\\QC\\QC_Data\\'
-    
     if line_number == 'I':
-        template_path = os.path.join(base_path, 'Blank Audit Line-II.xlsx')
+        template_path = get_template_path('Blank Audit Line-II.xlsx')
         # Cell mapping for Line I
         field_config = {
             'date': {
@@ -875,7 +874,7 @@ def get_template_config(line_number):
             }
         }
     elif line_number == 'II':
-        template_path = os.path.join(base_path, 'Blank Audit Line-II.xlsx')
+        template_path = get_template_path('Blank Audit Line-II.xlsx')
         # Cell mapping for Line II (adjust these based on your actual Line II template)
         field_config = {
             'date': {

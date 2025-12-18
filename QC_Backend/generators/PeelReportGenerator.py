@@ -2,6 +2,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
 import io
 import os
+from paths import get_template_path
 
 def setup_peel_cell_styles(workbook):
     # Data style
@@ -205,13 +206,10 @@ def generate_peel_report(peel_data):
         print(f"Form data keys: {list(peel_data.get('form_data', {}).keys())}")
         
         # Template path
-        template_path = 'D:\\WorkingFolder\\OneDrive - vikramsolar.com\\Desktop\\VSL Projects\\QC\\QC_Data\\Blank Solar Cell Peel Strength Test Report.xlsx'
+        template_path = get_template_path('Blank Solar Cell Peel Strength Test Report.xlsx')
         
         if not os.path.exists(template_path):
-            # Fallback template path
-            template_path = './templates/Blank Peel Strength Test Report.xlsx'
-            if not os.path.exists(template_path):
-                raise FileNotFoundError(f"Peel test template file not found at: {template_path}")
+            raise FileNotFoundError(f"Peel test template file not found at: {template_path}")
         
         # Load workbook
         wb = load_workbook(template_path)
