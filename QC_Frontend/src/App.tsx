@@ -16,7 +16,6 @@ import Visual from './pages/Visual';
 import LamQC from './pages/LamQC';
 import FQC from './pages/FQC';
 import QualityAudit from './pages/QualityAudit';
-import Test from './pages/Test';
 
 function ProtectedLayout() {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
@@ -122,11 +121,6 @@ export default function App() {
                             <Route path="/quality-audit" element={
                                 <UserRoute>
                                     <QualityAudit />
-                                </UserRoute>
-                            } />
-                            <Route path="/test" element={
-                                <UserRoute>
-                                    <Test />
                                 </UserRoute>
                             } />
                         </Route>
