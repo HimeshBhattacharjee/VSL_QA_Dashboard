@@ -8,6 +8,7 @@ import os
 import io
 from win32com import client as win32client
 import pythoncom
+import threading
 from constants import SERVER_URL, PORT
 from routes.qa_route import qa_router
 from routes.bGrade_route import bgrade_router
@@ -19,6 +20,9 @@ from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.PeelReportGenerator import generate_peel_report
+from extractors.qa_extractor import main as qa_main
+from extractors.b_extractor import main as b_main
+from extractors.peel_extractor import main as peel_main
 
 app = FastAPI(
     title="Manufacturing Analytics API",
@@ -469,6 +473,37 @@ async def root():
         }
     }
 
+def run_extractors():
+    """Run all data extractors in background threads"""
+    def run_qa():
+        try:
+            qa_main()
+        except Exception as e:
+            print(f"QA extractor failed: {e}")
+    
+    def run_b():
+        try:
+            b_main()
+        except Exception as e:
+            print(f"B-grade extractor failed: {e}")
+    
+    def run_peel():
+        try:
+            peel_main()
+        except Exception as e:
+            print(f"Peel extractor failed: {e}")
+    
+    # Start extractors in separate threads
+    qa_thread = threading.Thread(target=run_qa, daemon=True)
+    b_thread = threading.Thread(target=run_b, daemon=True)
+    peel_thread = threading.Thread(target=run_peel, daemon=True)
+    
+    qa_thread.start()
+    b_thread.start()
+    peel_thread.start()
+    
+    print("Data extractors started in background threads")
+
 @app.get("/health")
 async def global_health_check():
     return {
@@ -487,4 +522,7 @@ async def global_health_check():
     }
 
 if __name__ == "__main__":
+    # Start data extractors in background
+    run_extractors()
+    # Start the server
     uvicorn.run("main:app", host=SERVER_URL, port=int(PORT), reload=True)

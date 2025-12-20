@@ -48,7 +48,12 @@ async def get_line_data(
         db = get_qa_database()
         collection_name = f"line_{line_number}_{inspection_type.lower().replace('-', '_')}_data"
         if collection_name not in db.list_collection_names():
-            raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
+            return {
+                "line_number": line_number,
+                "inspection_type": inspection_type,
+                "total_records": 0,
+                "data": []
+            }
         query = {}
         if date_from and date_to:
             try:
@@ -88,7 +93,11 @@ async def get_combined_data(
         db = get_qa_database()
         collection_name = f"combined_{inspection_type.lower().replace('-', '_')}_data"
         if collection_name not in db.list_collection_names():
-            raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
+            return {
+                "inspection_type": inspection_type,
+                "total_records": 0,
+                "data": []
+            }
         query = {}
         if line_number:
             query["Line"] = line_number
@@ -124,11 +133,11 @@ async def get_line_summary(line_number: int, inspection_type: str):
         db = get_qa_database()
         collection_name = f"line_{line_number}_{inspection_type.lower().replace('-', '_')}_summary"
         if collection_name not in db.list_collection_names():
-            raise HTTPException(status_code=404, detail=f"Summary {collection_name} not found")
+            return {}
         collection = db[collection_name]
         summary = collection.find_one({})
         if not summary:
-            raise HTTPException(status_code=404, detail="Summary not found")
+            return {}
         return serialize_doc(summary)
     except HTTPException:
         raise
@@ -141,11 +150,11 @@ async def get_combined_summary(inspection_type: str):
         db = get_qa_database()
         collection_name = f"combined_{inspection_type.lower().replace('-', '_')}_summary"
         if collection_name not in db.list_collection_names():
-            raise HTTPException(status_code=404, detail=f"Summary {collection_name} not found")
+            return {}
         collection = db[collection_name]
         summary = collection.find_one({})
         if not summary:
-            raise HTTPException(status_code=404, detail="Summary not found")
+            return {}
         return serialize_doc(summary)
     except HTTPException:
         raise
@@ -165,7 +174,7 @@ async def get_defect_analysis(
         else:
             collection_name = f"combined_{inspection_type.lower().replace('-', '_')}_data"
         if collection_name not in db.list_collection_names():
-            raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
+            return {"defects": [], "total_defects": 0}
         collection = db[collection_name]
         sample_doc = collection.find_one({})
         if not sample_doc:
