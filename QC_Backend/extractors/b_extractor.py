@@ -98,15 +98,76 @@ class BMongoDBManager:
             'created_by': self.convert_to_mongo_compatible(row.get('Created By')),
             'grade': self.convert_to_mongo_compatible(row.get('Grade.')),
             'reason': self.convert_to_mongo_compatible(row.get('Reason')),
-            'processing_date': datetime.now()
+            'processing_date': datetime.now(),
+            'data_source': 'excel_import'
         }
         return document
     
+    def create_unique_index(self, collection_name):
+        """Create unique index on key fields to prevent duplicates"""
+        collection = self.db[collection_name]
+        
+        # Define unique fields for B-grade data
+        unique_fields = [
+            ('posting_date', 1),
+            ('order_no', 1),
+            ('serial_number', 1)
+        ]
+        
+        # Check if index already exists
+        existing_indexes = collection.index_information()
+        index_name = 'unique_posting_order_serial'
+        
+        if index_name not in existing_indexes:
+            try:
+                collection.create_index(unique_fields, unique=True, name=index_name)
+                print(f"  Created unique index on collection '{collection_name}'")
+            except Exception as e:
+                print(f"  Warning: Could not create unique index: {e}")
+        else:
+            print(f"  Unique index already exists on '{collection_name}'")
+    
+    def is_duplicate_record(self, collection, document):
+        """Check if a record already exists in the collection"""
+        # Define the unique key fields for duplicate checking
+        query_filter = {
+            'posting_date': document.get('posting_date'),
+            'order_no': document.get('order_no'),
+            'serial_number': document.get('serial_number')
+        }
+        
+        # Remove None values from filter
+        query_filter = {k: v for k, v in query_filter.items() if v is not None}
+        
+        # Check if record exists
+        existing_record = collection.find_one(query_filter)
+        
+        if existing_record:
+            # Check if data has changed
+            needs_update = False
+            for key, value in document.items():
+                if key not in ['_id', 'processing_date']:  # Exclude metadata fields
+                    if key in existing_record and existing_record[key] != value:
+                        needs_update = True
+                        break
+                elif key not in existing_record:  # New field added
+                    needs_update = True
+                    break
+            
+            return True, needs_update, existing_record.get('_id')
+        
+        return False, False, None
+    
     def insert_dataframe_to_mongo(self, dataframe):
-        """Insert dataframe records into MongoDB collections"""
+        """Insert dataframe records into MongoDB collections, avoiding duplicates"""
         records_processed = 0
+        records_inserted = 0
+        records_updated = 0
+        records_skipped = 0
         collections_used = set()
         errors = []
+        
+        print("\nProcessing records (checking for duplicates)...")
         
         for index, row in dataframe.iterrows():
             try:
@@ -118,21 +179,45 @@ class BMongoDBManager:
                     continue
                 
                 collection = self.db[collection_name]
-                result = collection.insert_one(document)
                 
-                if result.inserted_id:
-                    records_processed += 1
-                    collections_used.add(collection_name)
+                # Ensure unique index exists
+                self.create_unique_index(collection_name)
+                
+                # Check for duplicates
+                is_duplicate, needs_update, existing_id = self.is_duplicate_record(collection, document)
+                
+                if is_duplicate:
+                    if needs_update:
+                        # Update existing record
+                        collection.update_one({'_id': existing_id}, {'$set': document})
+                        records_updated += 1
+                        print(f"  ✓ Row {index}: Updated existing record")
+                    else:
+                        # Skip duplicate (no changes needed)
+                        records_skipped += 1
+                        print(f"  ⚠ Row {index}: Skipped duplicate (no changes)")
+                else:
+                    # Insert new record
+                    result = collection.insert_one(document)
+                    if result.inserted_id:
+                        records_inserted += 1
+                        print(f"  ✓ Row {index}: Inserted new record")
+                
+                records_processed += 1
+                collections_used.add(collection_name)
                     
             except Exception as e:
                 error_msg = f"Error processing row {index}: {e}"
                 errors.append(error_msg)
-                print(error_msg)
+                print(f"  ✗ {error_msg}")
                 continue
         
         print(f"\nMongoDB Storage Summary:")
-        print(f"Records successfully processed: {records_processed}")
-        print(f"Collections updated/created: {list(collections_used)}")
+        print(f"Total records processed: {records_processed}")
+        print(f"New records inserted: {records_inserted}")
+        print(f"Existing records updated: {records_updated}")
+        print(f"Duplicate records skipped: {records_skipped}")
+        print(f"Collections used: {list(collections_used)}")
         
         if errors:
             print(f"\nErrors encountered: {len(errors)}")
@@ -141,7 +226,24 @@ class BMongoDBManager:
             if len(errors) > 5:
                 print(f"  ... and {len(errors) - 5} more errors")
         
-        return records_processed, collections_used, errors
+        return {
+            'total_processed': records_processed,
+            'inserted': records_inserted,
+            'updated': records_updated,
+            'skipped': records_skipped,
+            'collections': list(collections_used),
+            'errors': errors
+        }
+    
+    def clear_collection_data(self, collection_name):
+        """Clear all data from a collection (for testing/reset)"""
+        if collection_name in self.db.list_collection_names():
+            collection = self.db[collection_name]
+            count = collection.count_documents({})
+            collection.delete_many({})
+            print(f"Cleared {count} documents from '{collection_name}'")
+            return count
+        return 0
     
     def get_monthly_data(self, month_abbr, year):
         """Retrieve data for a specific month and year"""
@@ -171,6 +273,10 @@ def display_database_stats(mongo_manager, collections_list):
     print("\nCollection Statistics:")
     print("-" * 50)
     
+    if not collections_list:
+        print("No collections to display")
+        return
+    
     for collection_name in collections_list:
         count, sample_docs = mongo_manager.get_collection_stats(collection_name)
         print(f"Collection '{collection_name}': {count} documents")
@@ -180,6 +286,10 @@ def display_database_stats(mongo_manager, collections_list):
             for doc in sample_docs:
                 doc_display = doc.copy()
                 doc_display['_id'] = str(doc_display['_id'])
+                # Truncate for display
+                for key in doc_display:
+                    if isinstance(doc_display[key], str) and len(doc_display[key]) > 50:
+                        doc_display[key] = doc_display[key][:50] + "..."
                 print(f"  - {doc_display}")
         print()
 
@@ -196,24 +306,30 @@ def main():
     print("=" * 60)
     processed_df = filter_and_process_excel(file_path)
     
-    # Step 2: Store data in MongoDB
+    # Step 2: Store data in MongoDB (with duplicate checking)
     print("\n" + "=" * 60)
-    print("STEP 2: Storing Data in MongoDB")
+    print("STEP 2: Storing Data in MongoDB (with duplicate prevention)")
     print("=" * 60)
     
     mongo_manager = BMongoDBManager()
-    records_processed, collections_used, errors = mongo_manager.insert_dataframe_to_mongo(processed_df)
+    result = mongo_manager.insert_dataframe_to_mongo(processed_df)
     
     # Step 3: Display database statistics
-    display_database_stats(mongo_manager, collections_used)
+    print("\n" + "=" * 60)
+    print("STEP 3: Database Statistics")
+    print("=" * 60)
+    display_database_stats(mongo_manager, result['collections'])
     
     # Summary
     print("=" * 60)
     print("PROCESSING COMPLETE")
     print("=" * 60)
-    print(f"Total records processed: {records_processed}")
-    print(f"Collections updated: {len(collections_used)}")
-    print(f"Errors encountered: {len(errors) if errors else 0}")
+    print(f"Total records processed: {result['total_processed']}")
+    print(f"New records inserted: {result['inserted']}")
+    print(f"Existing records updated: {result['updated']}")
+    print(f"Duplicate records skipped: {result['skipped']}")
+    print(f"Collections updated: {len(result['collections'])}")
+    print(f"Errors encountered: {len(result['errors'])}")
 
 
 if __name__ == "__main__":
