@@ -1,15 +1,14 @@
-import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AlertProvider } from './context/AlertContext';
 import { ConfirmModalProvider } from './context/ConfirmModalContext';
 import { LineProvider } from './context/LineContext';
+import ProtectedLayout from './components/ProtectedLayout';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
-import QualityTests from './pages/QualityTests';
 import GelTest from './pages/GelTest';
 import PeelTest from './pages/PeelTest';
 import BGradeTrend from './pages/BGradeTrend';
-import QualityAnalysis from './pages/QualityAnalysis';
 import PreLam from './pages/PreLam';
 import PreEL from './pages/PreEL';
 import Visual from './pages/Visual';
@@ -17,10 +16,13 @@ import LamQC from './pages/LamQC';
 import FQC from './pages/FQC';
 import QualityAudit from './pages/QualityAudit';
 
-function ProtectedLayout() {
+function UserRoute({ children }: { children: React.ReactNode }) {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    const userRole = sessionStorage.getItem("userRole");
+
     if (!isLoggedIn) return <Navigate to="/login" replace />;
-    return <Outlet />;
+    if (userRole === 'Admin') return <Navigate to="/admin" replace />;
+    return <>{children}</>;
 }
 
 function AdminRoute() {
@@ -30,15 +32,6 @@ function AdminRoute() {
     if (!isLoggedIn) return <Navigate to="/login" replace />;
     if (userRole !== 'Admin') return <Navigate to="/home" replace />;
     return <Admin />;
-}
-
-function UserRoute({ children }: { children: React.ReactNode }) {
-    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
-    const userRole = sessionStorage.getItem("userRole");
-
-    if (!isLoggedIn) return <Navigate to="/login" replace />;
-    if (userRole === 'Admin') return <Navigate to="/admin" replace />;
-    return <>{children}</>;
 }
 
 function AppProviders({ children }: { children: React.ReactNode }) {
@@ -68,11 +61,6 @@ export default function App() {
                                     <Home />
                                 </UserRoute>
                             } />
-                            <Route path="/quality-tests" element={
-                                <UserRoute>
-                                    <QualityTests />
-                                </UserRoute>
-                            } />
                             <Route path="/gel-test" element={
                                 <UserRoute>
                                     <GelTest />
@@ -86,11 +74,6 @@ export default function App() {
                             <Route path="/b-grade-trend" element={
                                 <UserRoute>
                                     <BGradeTrend />
-                                </UserRoute>
-                            } />
-                            <Route path="/quality-analysis" element={
-                                <UserRoute>
-                                    <QualityAnalysis />
                                 </UserRoute>
                             } />
                             <Route path="/prelam" element={

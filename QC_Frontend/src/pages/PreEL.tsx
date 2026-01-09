@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import ZoomableChart from '../components/ZoomableChart';
 import { useAlert } from '../context/AlertContext';
 import { loadInspectionData } from '../utilities/InspectionAPIUtils';
@@ -264,7 +263,6 @@ export default function PreEL() {
 
     return (
         <div className="pb-4">
-            <Header />
             <div className="max-w-7xl mx-4">
                 <div className="text-center text-white mb-6">
                     <button

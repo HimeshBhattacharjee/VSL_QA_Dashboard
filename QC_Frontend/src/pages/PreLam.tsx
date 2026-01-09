@@ -1,14 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import SummaryGraph from '../components/SummaryGraph';
 
 export default function PreLam() {
     const navigate = useNavigate();
     const [isLoaded, setIsLoaded] = useState(false);
 
-    const handleBackToDashboard = () => {
-        navigate('/quality-analysis');
+    const handleBackToHome = () => {
+        navigate('/home');
     };
 
     useEffect(() => {
@@ -36,15 +35,14 @@ export default function PreLam() {
     ];
 
     return (
-        <div className="pb-4">
-            <Header />            
+        <div className="pb-4">        
             <div className="max-w-7xl mx-auto">
                 <div className="text-center text-white mb-6">
                     <button
-                        onClick={handleBackToDashboard}
+                        onClick={handleBackToHome}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-md">⇐</span> Back to Quality Analysis
+                        <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
                 <div className="reports-container grid grid-cols-1 md:grid-cols-2 gap-6 px-6">

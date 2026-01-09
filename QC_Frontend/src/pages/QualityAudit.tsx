@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
 import { initialStages } from '../audit-data';
 import { AuditData, StageData } from '../types/audit';
 import { useAlert } from '../context/AlertContext';
@@ -975,7 +974,6 @@ export default function QualityAudit() {
 
     return (
         <div className="pb-4">
-            <Header />
             <div className="max-w-7xl mx-4">
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">

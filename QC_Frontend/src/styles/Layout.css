@@ -1,0 +1,45 @@
+/* ============================================
+   LAYOUT STYLING - Scrollbars Only
+   (Layout structure handled by Tailwind in ProtectedLayout.tsx)
+   ============================================ */
+
+/* Scrollbar styling */
+.layout-content::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.layout-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.layout-content::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5); /* gray-400 equivalent */
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.layout-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.8); /* gray-600 equivalent */
+}
+
+/* Scrollbar for Firefox */
+.layout-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) rgba(0, 0, 0, 0.05);
+}
+
+/* Sidebar Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #e2e8f0;
+    border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #cbd5e1;
+}

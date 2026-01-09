@@ -181,15 +181,15 @@ const Admin = () => {
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500 rounded-full blur-3xl opacity-10 animate-pulse delay-500"></div>
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto">
+            <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
                 <Header />
-                <div className="flex items-center justify-center p-4">
+                <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 py-4">
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                            ? 'w-1/3 mx-4 transform hover:scale-105'
+                            ? 'w-full lg:w-1/3 lg:mx-4 transform hover:scale-105'
                             : activeTab === 'create'
                                 ? 'w-full scale-100'
-                                : 'w-1/4 scale-75 opacity-60 blur-sm'
+                                : 'w-full lg:w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
@@ -208,7 +208,7 @@ const Admin = () => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white">Create Users</h2>
+                                    <h2 className="text-xl md:text-3xl font-bold text-white">Create Users</h2>
                                 </div>
                             </div>
                             <div className={`transition-all duration-700 ${activeTab === 'create' ? 'max-h-full opacity-100 p-8' : 'max-h-0 opacity-0'
@@ -297,7 +297,7 @@ const Admin = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex justify-center space-x-4 pt-4">
+                                            <div className="flex flex-col sm:flex-row justify-center gap-4 sm:gap-4 pt-4">
                                                 <button
                                                     type="submit"
                                                     className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg cursor-pointer"
@@ -332,10 +332,10 @@ const Admin = () => {
                     </div>
                     <div
                         className={`relative transition-all duration-1000 ease-out ${activeTab === null
-                            ? 'w-1/3 mx-4 transform hover:scale-105'
+                            ? 'w-full lg:w-1/3 lg:mx-4 transform hover:scale-105'
                             : activeTab === 'manage'
                                 ? 'w-full scale-100'
-                                : 'w-1/4 scale-75 opacity-60 blur-sm'
+                                : 'w-full lg:w-1/4 scale-75 opacity-60 blur-sm'
                             }`}
                     >
                         <div
@@ -354,7 +354,7 @@ const Admin = () => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white">Manage Users</h2>
+                                    <h2 className="text-xl md:text-3xl font-bold text-white">Manage Users</h2>
                                 </div>
                             </div>
 
@@ -368,25 +368,25 @@ const Admin = () => {
                                                 <table className="w-full">
                                                     <thead className="bg-slate-900">
                                                         <tr>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 User
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Phone Number
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Password
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Employee ID
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Role
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Status
                                                             </th>
-                                                            <th className="px-6 py-4 text-center text-sm font-semibold text-gray-300 tracking-wider">
+                                                            <th className="px-2 md:px-6 py-2 md:py-4 text-center text-xs md:text-sm font-semibold text-gray-300 tracking-wider">
                                                                 Actions
                                                             </th>
                                                         </tr>
@@ -394,24 +394,24 @@ const Admin = () => {
                                                     <tbody className="bg-slate-800">
                                                         {users.map((user) => (
                                                             <tr key={user.id} className="hover:bg-slate-700 transition-colors duration-200">
-                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap">
                                                                     <div className="flex items-center">
-                                                                        <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                                                        <div className="flex-shrink-0 h-8 md:h-10 w-8 md:w-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-semibold text-xs md:text-sm">
                                                                             {user.avatar}
                                                                         </div>
-                                                                        <div className="ml-4">
-                                                                            <div className="text-sm font-medium text-white">
+                                                                        <div className="ml-2 md:ml-4">
+                                                                            <div className="text-xs md:text-sm font-medium text-white">
                                                                                 {user.name}
                                                                             </div>
                                                                         </div>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-300">
                                                                     {user.phone}
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <div className="flex items-center justify-center space-x-2">
-                                                                        <span className="text-sm text-white font-mono">
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap">
+                                                                    <div className="flex items-center justify-center space-x-1 md:space-x-2">
+                                                                        <span className="text-xs md:text-sm text-white font-mono">
                                                                             {visiblePasswords[user.id]
                                                                                 ? (user.password ?? 'N/A') : '•'.repeat(8)
                                                                             }
@@ -422,11 +422,11 @@ const Admin = () => {
                                                                             type="button"
                                                                         >
                                                                             {visiblePasswords[user.id] ? (
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                                                                                 </svg>
                                                                             ) : (
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                                                 </svg>
@@ -434,11 +434,11 @@ const Admin = () => {
                                                                         </button>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-300">
                                                                     {user.employeeId}
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin'
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap">
+                                                                    <span className={`inline-flex px-2 md:px-3 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin'
                                                                         ? 'bg-red-500 bg-opacity-20 text-red-100'
                                                                         : user.role === 'Operator'
                                                                             ? 'bg-blue-500 bg-opacity-20 text-blue-100'
@@ -447,15 +447,15 @@ const Admin = () => {
                                                                         {user.role}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.status === 'Active'
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap">
+                                                                    <span className={`inline-flex px-2 md:px-3 py-1 text-xs font-semibold rounded-full ${user.status === 'Active'
                                                                         ? 'bg-green-500 bg-opacity-20 text-green-100'
                                                                         : 'bg-red-500 bg-opacity-20 text-red-100'
                                                                         }`}>
                                                                         {user.status}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                                                                <td className="px-2 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm font-medium space-x-1 md:space-x-3">
                                                                     <button
                                                                         onClick={() => toggleUserStatus(user.id)}
                                                                         className={`${user.status === 'Active'
@@ -514,7 +514,7 @@ const Admin = () => {
                     </div>
                 </div>
                 {!activeTab && (
-                    <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 gap-6 p-15">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 gap-4 md:gap-6 p-4 md:p-8 lg:p-15">
                         <div className="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
                                 <div className="p-3 bg-cyan-500 bg-opacity-20 rounded-xl">
@@ -524,7 +524,7 @@ const Admin = () => {
                                 </div>
                                 <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-400">Total Users</p>
-                                    <p className="text-2xl font-bold text-white">{users.length}</p>
+                                    <p className="text-lg md:text-2xl font-bold text-white">{users.length}</p>
                                 </div>
                             </div>
                         </div>
@@ -538,7 +538,7 @@ const Admin = () => {
                                 </div>
                                 <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-400">Active Users</p>
-                                    <p className="text-2xl font-bold text-white">
+                                    <p className="text-lg md:text-2xl font-bold text-white">
                                         {users.filter(user => user.status === 'Active').length}
                                     </p>
                                 </div>
@@ -555,7 +555,7 @@ const Admin = () => {
                                 </div>
                                 <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-400">Operators</p>
-                                    <p className="text-2xl font-bold text-white">
+                                    <p className="text-lg md:text-2xl font-bold text-white">
                                         {users.filter(user => user.role === 'Operator').length}
                                     </p>
                                 </div>
@@ -571,7 +571,7 @@ const Admin = () => {
                                 </div>
                                 <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-400">Admins</p>
-                                    <p className="text-2xl font-bold text-white">
+                                    <p className="text-lg md:text-2xl font-bold text-white">
                                         {users.filter(user => user.role === 'Admin').length}
                                     </p>
                                 </div>

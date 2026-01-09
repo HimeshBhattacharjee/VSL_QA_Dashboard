@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ZoomableChart from '../components/ZoomableChart';
@@ -434,7 +433,7 @@ export default function PeelTest() {
     }, [selectedDate, selectedShift, currentEditingReport, activeTab, tableData, formData, showReportEditor]);
 
     // Navigation functions with state persistence
-    const handleBackToTests = () => {
+    const handleBackToHome = () => {
         if (hasUnsavedChanges) {
             showConfirm({
                 title: 'Unsaved Changes',
@@ -444,12 +443,12 @@ export default function PeelTest() {
                 cancelText: 'Stay',
                 onConfirm: () => {
                     clearFormData();
-                    navigate('/quality-tests');
+                    navigate('/home');
                 }
             });
         } else {
             clearFormData();
-            navigate('/quality-tests');
+            navigate('/home');
         }
     };
 
@@ -1682,13 +1681,12 @@ export default function PeelTest() {
 
     return (
         <div className="pb-4">
-            <Header />
             <div className="container">
                 <div className="text-center text-white mb-6">
-                    <button onClick={handleBackToTests}
+                    <button onClick={handleBackToHome}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-md">⇐</span> Back to Quality Tests
+                        <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
 

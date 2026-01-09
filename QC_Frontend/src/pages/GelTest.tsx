@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
@@ -121,7 +120,7 @@ export default function GelTest() {
         setUsername(storedUsername);
     }, []);
 
-    const handleBackToTests = () => {
+    const handleBackToHome = () => {
         if (hasUnsavedChanges) {
             showConfirm({
                 title: 'Unsaved Changes',
@@ -133,14 +132,14 @@ export default function GelTest() {
                     sessionStorage.removeItem('editingReportIndex');
                     sessionStorage.removeItem('editingReportData');
                     clearFormData();
-                    navigate('/quality-tests');
+                    navigate('/home');
                 }
             });
         } else {
             sessionStorage.removeItem('editingReportIndex');
             sessionStorage.removeItem('editingReportData');
             clearFormData();
-            navigate('/quality-tests');
+            navigate('/home');
         }
     };
 
@@ -1178,13 +1177,12 @@ export default function GelTest() {
     return (
         <>
             <div className="pb-4">
-                <Header />
                 <div className="container">
                     <div className="text-center text-white mb-6">
-                        <button onClick={handleBackToTests}
+                        <button onClick={handleBackToHome}
                             className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                         >
-                            <span className="font-bold text-md">⇐</span> Back to Quality Tests
+                            <span className="font-bold text-md">⇐</span> Back to Home
                         </button>
                     </div>
                     {isLoading && (

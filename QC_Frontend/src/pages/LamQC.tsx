@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import ZoomableChart from '../components/ZoomableChart';
 import { useAlert } from '../context/AlertContext';
 import { loadInspectionData } from '../utilities/InspectionAPIUtils';
@@ -49,8 +48,8 @@ export default function LamQC() {
     });
 
 
-    const handleBackToDashboard = () => {
-        navigate('/quality-analysis');
+    const handleBackToHome = () => {
+        navigate('/home');
     };
 
     // Initialize dates on component mount
@@ -265,14 +264,13 @@ export default function LamQC() {
 
     return (
         <div className="pb-4">
-            <Header />
             <div className="max-w-7xl mx-auto">
                 <div className="text-center text-white mb-6">
                     <button
-                        onClick={handleBackToDashboard}
+                        onClick={handleBackToHome}
                         className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
                     >
-                        <span className="font-bold text-md">⇐</span> Back to Quality Analysis
+                        <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
                 <div className="display bg-white rounded-2xl p-5 mx-5 shadow-2xl">
