@@ -2,7 +2,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import { Menu as MenuIcon } from 'lucide-react';
 
 interface HeaderProps {
     onToggleSidebar: () => void;
@@ -19,6 +18,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     const [signatureModalOpen, setSignatureModalOpen] = useState(false);
     const [signature, setSignature] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [logoRotate, setLogoRotate] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [filePreview, setFilePreview] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -78,9 +78,6 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
         }
     };
 
-    // Page titles removed from Header as per requirements.
-
-
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setDropdownOpen(false);
@@ -119,7 +116,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     const handleUserIconClick = () => {
         if (isLoggedIn) setDropdownOpen(!dropdownOpen);
     };
-    
+
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             const selectedFile = event.target.files[0];
@@ -237,11 +234,12 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     const canManageSignature = isLoggedIn && userRole !== 'Admin';
 
     return (
-        <div className="w-full h-14 bg-transparent backdrop-blur-sm sticky top-0 z-30 mb-5 border-b border-white/10">
+        <div
+            className="w-full sticky top-0 z-40 mb-5 h-16 backdrop-blur-xl bg-transparent transition-colors duration-300">
             {signatureModalOpen && (
-                <div className="fixed inset-0 bg-[rgba(0,0,0,0.9)] flex items-center justify-center z-50">
-                    <div className="flex flex-col items-center justify-center bg-white rounded-lg p-6 w-96 max-w-full mx-4 shadow-2xl">
-                        <h3 className="text-xl font-semibold mb-4 text-gray-800">Manage Signature</h3>
+                <div className="fixed inset-0 min-h-screen bg-[rgba(0,0,0,0.9)] flex items-center justify-center z-50">
+                    <div className="flex flex-col items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-lg p-6 w-96 max-w-full mx-4 shadow-2xl">
+                        <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Manage Signature</h3>
                         {signature ? (
                             <div className="flex flex-col items-center justify-center mb-4">
                                 <p className="text-sm text-gray-600 mb-2">Current Signature:</p>
@@ -268,7 +266,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                         )}
 
                         <div className="mb-4 w-full">
-                            <label className="block text-sm text-center font-medium text-gray-700 mb-2">
+                            <label className="block text-sm text-center font-medium text-gray-500 mb-2">
                                 Upload New Signature
                             </label>
                             {filePreview && (
@@ -300,14 +298,14 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                                         fileInputRef.current.value = '';
                                     }
                                 }}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                                className="px-4 py-2 text-sm text-gray-400 cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={uploadSignature}
                                 disabled={!file || uploading}
-                                className="bg-blue-600 text-white py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-all text-sm font-medium"
+                                className="bg-blue-600 text-white py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed cursor-pointer transition-all text-sm font-medium"
                             >
                                 {uploading ? 'Uploading...' : 'Save Signature'}
                             </button>
@@ -315,17 +313,36 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                     </div>
                 </div>
             )}
-
             <nav className="flex justify-between items-center h-full px-4 sm:px-6">
                 <div className="flex items-center">
-                    {/* Menu Button to Toggle Sidebar */}
                     <button
-                        onClick={onToggleSidebar}
-                        className="text-white hover:bg-white/10 p-2 rounded-full transition-colors focus:outline-none"
+                        onClick={() => {
+                            setLogoRotate((prev) => !prev);
+                            onToggleSidebar();
+                        }}
+                        className="
+                            group relative flex items-center justify-center
+                            h-11 w-11 rounded-full cursor-pointer
+                            bg-white/70 dark:bg-slate-900/60
+                            border border-slate-200/60 dark:border-slate-700/50
+                            shadow-sm hover:shadow-md
+                            transition-all duration-300
+                            hover:bg-white dark:hover:bg-slate-900/80
+                        "
                         aria-label="Toggle Sidebar"
                     >
-                        <MenuIcon className="h-6 w-6" />
+                        <img
+                            src="../LOGOS/VSL_Logo (2).png"
+                            alt="VSL Logo"
+                            className={`
+                                h-7 w-7 object-contain
+                                transition-transform duration-500 ease-out
+                                ${logoRotate ? "rotate-360" : "rotate-0"}
+                                group-hover:scale-105
+                            `}
+                        />
                     </button>
+
                 </div>
 
                 {/* Right Side: User Profile */}
@@ -334,33 +351,70 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                         <>
                             <div
                                 onClick={handleUserIconClick}
-                                className={`h-9 w-9 flex items-center justify-center rounded-full cursor-pointer border-2 border-white/80 text-white text-sm font-semibold transition-all duration-300 hover:scale-105 hover:border-white hover:shadow-lg shadow-sm select-none ${getAvatarColor()}`}
+                                className={`
+                                    group h-11 w-11 flex items-center justify-center
+                                    rounded-full cursor-pointer select-none
+                                    border border-white/60 dark:border-slate-700/60
+                                    shadow-sm hover:shadow-md
+                                    transition-all duration-300 hover:scale-[1.03]
+                                    text-white text-md font-bold tracking-wide
+                                    ${getAvatarColor()}
+                                `}
                             >
-                                {username ? username.split(' ').map(word => word[0]).join('').toUpperCase() : ''}
+                                {username ? username.split(" ").map(word => word[0]).join("").toUpperCase() : ""}
                             </div>
                             {dropdownOpen && (
-                                <div className="absolute right-0 top-12 mt-1 w-56 bg-white text-gray-800 rounded-lg shadow-xl py-1 border border-gray-100 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                                    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 rounded-t-lg">
-                                        <p className="font-semibold text-sm text-gray-900 truncate">{username}</p>
-                                        <p className="text-xs text-gray-500 capitalize">{userRole?.toLowerCase()}</p>
+                                <div
+                                    className="
+                                        absolute right-0 top-12 mt-2 w-64
+                                        rounded-2xl
+                                        border border-slate-200/70 dark:border-slate-700/60
+                                        bg-white dark:bg-slate-900
+                                        shadow-xl
+                                        animate-in fade-in slide-in-from-top-2 duration-200
+                                        overflow-hidden
+                                        z-50
+                                    "
+                                >
+                                    <div className="p-4 border-b border-slate-200/60 dark:border-slate-700/60">
+                                        <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">
+                                            {username}
+                                        </p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-300 capitalize mt-0.5">
+                                            {userRole?.toLowerCase()}
+                                        </p>
                                         {signature && canManageSignature && (
-                                            <div className="flex items-center gap-1 mt-1 text-green-600 text-[10px] font-medium">
-                                                <span>✓</span> Signature ready
+                                            <div className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full
+                                            bg-emerald-500/10 text-emerald-700 dark:text-emerald-200 text-[11px] font-semibold">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                Signature uploaded
                                             </div>
                                         )}
                                     </div>
-                                    <div className="py-1">
+                                    <div className="py-2">
                                         {canManageSignature && (
                                             <button
                                                 onClick={handleAddSignature}
-                                                className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+                                                className="
+                                                    w-full text-left px-4 py-2.5
+                                                    text-sm text-slate-700 dark:text-slate-200
+                                                    hover:bg-slate-100/70 dark:hover:bg-slate-800/70
+                                                    transition-colors cursor-pointer
+                                                "
                                             >
                                                 Manage Signature
                                             </button>
                                         )}
+
                                         <button
                                             onClick={handleLogout}
-                                            className="block w-full text-left px-4 py-2 hover:bg-red-50 text-sm text-red-600 transition-colors"
+                                            className="
+                                                w-full text-left px-4 py-2.5
+                                                text-sm font-medium
+                                                text-red-600 dark:text-red-400
+                                                hover:bg-red-50/80 dark:hover:bg-red-500/10
+                                                transition-colors cursor-pointer
+                                            "
                                         >
                                             Sign out
                                         </button>

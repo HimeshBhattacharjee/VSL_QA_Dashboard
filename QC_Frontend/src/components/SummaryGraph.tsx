@@ -32,15 +32,6 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
     const [currentPreLamDataType, setCurrentPreLamDataType] = useState<'pre-el' | 'visual'>('pre-el');
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
-
-    const sectionColors = {
-        'pre-lam': '[border-image:linear-gradient(90deg,transparent,red,transparent)_1]',
-        'lam-qc': '[border-image:linear-gradient(90deg,transparent,blue,transparent)_1]',
-        'fqc': '[border-image:linear-gradient(90deg,transparent,green,transparent)_1]',
-        'pre-el': '[border-image:linear-gradient(90deg,transparent,purple,transparent)_1]',
-        'visual': '[border-image:linear-gradient(90deg,transparent,orange,transparent)_1]',
-    };
-
     const getButtonText = () => {
         switch (type) {
             case 'pre-lam': return 'Pre-Lam';
@@ -161,9 +152,12 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                         labels: ['Accepted', 'Rejected'],
                         datasets: [{
                             data: [chartData.accepted, chartData.rejected],
-                            backgroundColor: ['#27ae60', '#e74c3c'],
+                            backgroundColor: [
+                                '#27ae60', // Light mode green
+                                '#e74c3c'  // Light mode red
+                            ],
                             borderWidth: 2,
-                            borderColor: '#ffffff'
+                            borderColor: '#ffffff dark:border-gray-700'
                         }]
                     },
                     options: {
@@ -222,7 +216,7 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                         data: [1],
                         backgroundColor: ['#95a5a6'],
                         borderWidth: 2,
-                        borderColor: '#ffffff'
+                        borderColor: '#ffffff dark:border-gray-700'
                     }]
                 },
                 options: {
@@ -270,55 +264,198 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
     }, [period, type]);
 
     return (
-        <div className={`report-section bg-white rounded-2xl p-3 shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 hover:shadow-2xl cursor-pointer min-h-[480px] flex flex-col`}>
-            <div className={`section-header text-center mb-2 pb-2 border-b-2 ${sectionColors[type]}`}>
-                <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
-                <p className="text-sm text-gray-600">{subtitle}</p>
+        <div className={`
+            report-section 
+            bg-white dark:bg-gray-900 
+            rounded-xl md:rounded-2xl 
+            p-3 md:p-4 
+            shadow-lg dark:shadow-gray-900/30 
+            transition-all duration-300 
+            hover:shadow-xl dark:hover:shadow-gray-900/50 
+            cursor-pointer 
+            min-h-[380px] md:min-h-[480px] 
+            flex flex-col
+            w-full
+        `}>
+            {/* Header */}
+            <div className={`
+                section-header 
+                text-center mb-2 md:mb-3 pb-2 md:pb-3 
+                border-b-2 
+                ${type === 'pre-el' ? '[border-image:linear-gradient(90deg,transparent,red,transparent)_1]' :
+                  '[border-image:linear-gradient(90deg,transparent,orange,transparent)_1]'}
+            `}>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800 dark:text-gray-100">
+                    {title}
+                </h2>
+                <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {subtitle}
+                </p>
             </div>
-            <div className="period-selector flex gap-2 justify-center mb-2">
+
+            {/* Controls */}
+            <div className="period-selector flex flex-col sm:flex-row gap-2 md:gap-3 justify-center mb-3 md:mb-4">
                 <select
-                    className="period-dropdown px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold cursor-pointer shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:shadow-xl"
+                    className="
+                        period-dropdown 
+                        px-3 py-2 
+                        rounded-lg 
+                        border border-gray-300 dark:border-gray-600 
+                        bg-white dark:bg-gray-800 
+                        text-sm font-medium 
+                        cursor-pointer 
+                        shadow-sm dark:shadow-gray-900/20 
+                        transition-all duration-200 
+                        focus:outline-none 
+                        hover:shadow-md dark:hover:shadow-gray-900/30
+                        text-gray-800 dark:text-gray-200
+                    "
                     value={period}
                     onChange={(e) => handlePeriodChange(e.target.value as any)}
                 >
-                    <option value="yearly">Yearly Metrics</option>
-                    <option value="monthly">Monthly Metrics</option>
-                    <option value="weekly">Weekly Metrics</option>
-                    <option value="daily">Daily Metrics</option>
+                    <option value="yearly" className="dark:bg-gray-700">Yearly Metrics</option>
+                    <option value="monthly" className="dark:bg-gray-700">Monthly Metrics</option>
+                    <option value="weekly" className="dark:bg-gray-700">Weekly Metrics</option>
+                    <option value="daily" className="dark:bg-gray-700">Daily Metrics</option>
                 </select>
                 <button
-                    className="detailed_analysis_btn bg-white text-black border border-gray-300 px-4 py-2 rounded-lg cursor-pointer text-sm font-semibold shadow-lg transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-y-1"
+                    className="
+                        detailed_analysis_btn 
+                        bg-white dark:bg-gray-800 
+                        text-gray-800 dark:text-gray-200 
+                        border border-gray-300 dark:border-gray-600 
+                        px-4 py-2 
+                        rounded-lg 
+                        cursor-pointer 
+                        text-sm font-medium 
+                        shadow-sm dark:shadow-gray-900/20 
+                        transition-all duration-200 
+                        hover:bg-gray-50 dark:hover:bg-gray-700 
+                        hover:shadow-md dark:hover:shadow-gray-900/30
+                        hover:text-blue-600 dark:hover:text-blue-400
+                        whitespace-nowrap
+                    "
                     onClick={() => window.location.href = dashboardLink}
                 >
                     Go to {getButtonText()} Analysis
                 </button>
             </div>
 
-            <div className="chart-display-container flex flex-col items-center gap-5 flex-grow">
-                <div className="selected-period-card bg-gray-50 rounded-xl p-4 border-l-4 border-green-400 w-full max-w-md shadow-lg">
-                    <div className="selected-period-title text-lg font-semibold text-gray-800 mb-3 text-center">
+            {/* Chart Container */}
+            <div className="chart-display-container flex flex-col items-center gap-3 md:gap-4 flex-grow">
+                <div className={`
+                    selected-period-card 
+                    bg-gray-50 dark:bg-gray-900 
+                    rounded-xl 
+                    p-3 md:p-4 
+                    border-l-4 
+                    ${type === 'pre-el' ? 'border-red-500' : 'border-orange-300'}
+                    w-full shadow-sm dark:shadow-gray-900/20
+                `}>
+                    <div className="
+                        selected-period-title 
+                        text-base md:text-lg 
+                        font-semibold 
+                        text-gray-800 dark:text-gray-100 
+                        mb-2 md:mb-3 
+                        text-center
+                    ">
                         {getDisplayTitle()}
-                        {isLoading && <span className="text-sm text-gray-500 ml-2">Loading...</span>}
+                        {isLoading && (
+                            <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400 ml-2">
+                                Loading...
+                            </span>
+                        )}
                     </div>
-                    <div className="selected-chart-container h-48 mb-3">
-                        <canvas ref={chartRef} className="w-full h-full"></canvas>
+                    
+                    {/* Chart Canvas */}
+                    <div className="selected-chart-container h-40 md:h-48 mb-3 md:mb-4">
+                        <canvas 
+                            ref={chartRef} 
+                            className="w-full h-full"
+                        ></canvas>
                     </div>
-                    <div className="chart-stats grid grid-cols-3 gap-2 text-center">
-                        <div className="stat-item flex flex-col p-2 bg-white rounded-lg border border-gray-200">
-                            <span className="stat-label text-xs text-gray-600 font-medium mb-1">Production:</span>
-                            <span className="stat-value production-value text-sm font-semibold text-green-600">
+                    
+                    {/* Stats */}
+                    <div className="chart-stats grid grid-cols-3 gap-1 md:gap-2 text-center">
+                        <div className="
+                            stat-item 
+                            flex flex-col 
+                            p-2 
+                            bg-white dark:bg-gray-800 
+                            rounded-lg 
+                            border border-gray-200 dark:border-gray-600
+                        ">
+                            <span className="
+                                stat-label 
+                                text-xs 
+                                text-gray-600 dark:text-gray-400 
+                                font-medium 
+                                mb-1
+                            ">
+                                Production:
+                            </span>
+                            <span className="
+                                stat-value 
+                                production-value 
+                                text-sm 
+                                font-semibold 
+                                text-green-600 dark:text-green-400
+                            ">
                                 {chartStats.production.toLocaleString()}
                             </span>
                         </div>
-                        <div className="stat-item flex flex-col p-2 bg-white rounded-lg border border-gray-200">
-                            <span className="stat-label text-xs text-gray-600 font-medium mb-1">Rejection:</span>
-                            <span className="stat-value rejection-value text-sm font-semibold text-red-600">
+                        <div className="
+                            stat-item 
+                            flex flex-col 
+                            p-2 
+                            bg-white dark:bg-gray-800 
+                            rounded-lg 
+                            border border-gray-200 dark:border-gray-600
+                        ">
+                            <span className="
+                                stat-label 
+                                text-xs 
+                                text-gray-600 dark:text-gray-400 
+                                font-medium 
+                                mb-1
+                            ">
+                                Rejection:
+                            </span>
+                            <span className="
+                                stat-value 
+                                rejection-value 
+                                text-sm 
+                                font-semibold 
+                                text-red-600 dark:text-red-400
+                            ">
                                 {chartStats.rejection.toLocaleString()}
                             </span>
                         </div>
-                        <div className="stat-item flex flex-col p-2 bg-white rounded-lg border border-gray-200">
-                            <span className="stat-label text-xs text-gray-600 font-medium mb-1">Rej. Rate:</span>
-                            <span className="stat-value rejection-percent text-sm font-semibold text-gray-600">
+                        <div className="
+                            stat-item 
+                            flex flex-col 
+                            p-2 
+                            bg-white dark:bg-gray-800 
+                            rounded-lg 
+                            border border-gray-200 dark:border-gray-600
+                        ">
+                            <span className="
+                                stat-label 
+                                text-xs 
+                                text-gray-600 dark:text-gray-400 
+                                font-medium 
+                                mb-1
+                            ">
+                                Rej. Rate:
+                            </span>
+                            <span className="
+                                stat-value 
+                                rejection-percent 
+                                text-sm 
+                                font-semibold 
+                                text-gray-600 dark:text-gray-300
+                            ">
                                 {chartStats.rejectionRate}
                             </span>
                         </div>

@@ -12,57 +12,39 @@ interface ConfirmOptions {
     onCancel?: () => void;
 }
 
-interface ConfirmModalContextType {
-    showConfirm: (options: ConfirmOptions) => void;
-}
+interface ConfirmModalContextType { showConfirm: (options: ConfirmOptions) => void; }
 
 const ConfirmModalContext = createContext<ConfirmModalContextType | undefined>(undefined);
 
-interface ConfirmModalProviderProps {
-    children: ReactNode;
-}
+interface ConfirmModalProviderProps { children: ReactNode; }
 
 export const ConfirmModalProvider: React.FC<ConfirmModalProviderProps> = ({ children }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [confirmOptions, setConfirmOptions] = useState<ConfirmOptions | null>(null);
-
     const showConfirm = (options: ConfirmOptions) => {
         setConfirmOptions(options);
         setIsVisible(true);
     };
-
     const hideConfirm = () => {
         setIsVisible(false);
         setConfirmOptions(null);
     };
-
     const handleConfirm = () => {
         confirmOptions?.onConfirm();
         hideConfirm();
     };
-
     const handleCancel = () => {
         confirmOptions?.onCancel?.();
         hideConfirm();
     };
-
     const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            handleCancel();
-        }
+        if (e.target === e.currentTarget) handleCancel();
     };
-
-    const icons = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️',
-        info: 'ℹ️'
-    };
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
 
     return (
         <ConfirmModalContext.Provider value={{ showConfirm }}>
             {children}
-
             {isVisible && confirmOptions && (
                 <div
                     className="custom-confirm-modal fixed inset-0 bg-[rgba(0,0,0,0.7)] flex items-center justify-center z-50"

@@ -16,11 +16,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         const handleResize = () => {
             const mobile = window.innerWidth < 768;
             setIsMobile(mobile);
-            if (!mobile) {
-                setIsOpen(true);
-            }
+            if (!mobile) setIsOpen(true);
         };
-
         window.addEventListener('resize', handleResize);
         handleResize();
         return () => window.removeEventListener('resize', handleResize);

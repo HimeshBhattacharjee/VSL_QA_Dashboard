@@ -1176,32 +1176,32 @@ export default function GelTest() {
 
     return (
         <>
-            <div className="pb-4">
-                <div className="container">
-                    <div className="text-center text-white mb-6">
+            <div className="pb-4 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+                <div className="container mx-auto px-2 sm:px-4 lg:px-6">
+                    <div className="text-center mb-6 pt-4">
                         <button onClick={handleBackToHome}
-                            className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                            className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-x-1"
                         >
                             <span className="font-bold text-md">⇐</span> Back to Home
                         </button>
                     </div>
                     {isLoading && (
                         <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-                            <div className="bg-white p-4 rounded-lg">
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                                <p className="mt-2 text-gray-700">Loading...</p>
+                                <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
                             </div>
                         </div>
                     )}
-                    <div className="flex justify-center mx-4">
+                    <div className="flex justify-center mx-2 sm:mx-4">
                         <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('edit-report')}
                         >
                             Edit Report
                         </div>
                         <div
-                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('saved-reports')}
                         >
                             Saved Reports
@@ -1209,335 +1209,346 @@ export default function GelTest() {
                     </div>
 
                     {activeTab === 'edit-report' && (
-                        <div className="tab-content active">
-                            <div className="save-actions flex justify-center text-center gap-4 m-2.5">
+                        <div className="tab-content active mt-2">
+                            <div className="save-actions flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 m-2.5 p-3">
                                 <input
                                     type="text"
                                     value={reportName}
                                     onChange={(e) => setReportName(e.target.value)}
-                                    className="report-name-input p-2.5 rounded-md bg-white border-b-[rgba(48,30,107)] border-b-2 w-[50%] text-center text-sm"
+                                    className="report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Enter report name"
                                 />
                                 <button
-                                    className="save-btn w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5))] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5)] dark:bg-blue-900/50 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={saveReport}
                                 >
                                     Save Report
                                 </button>
                                 <button
-                                    className="save-btn export-excel w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-excel w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] dark:bg-green-800 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToExcel}
                                 >
                                     Export as Excel
                                 </button>
                                 <button
-                                    className="save-btn export-pdf w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-pdf w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] dark:bg-red-800 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToPDF}
                                 >
                                     Export as PDF
                                 </button>
                             </div>
 
-                            <div className="test-report-container bg-white p-5 rounded-md shadow-lg mx-4">
-                                <table ref={tableRef} className="w-full border-collapse mb-5 border border-gray-300">
-                                    <tbody>
-                                        <tr>
-                                            <td colSpan={2} rowSpan={3}><img src="../LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" /></td>
-                                            <td colSpan={8} rowSpan={2} className="section-title text-3xl font-bold bg-gray-100 text-center">VIKRAM SOLAR LIMITED</td>
-                                            <td colSpan={3} rowSpan={1} className="section-title font-bold bg-gray-100 text-center">Doc. No.: VSL/QAD/FM/90</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Issue Date: 11.01.2023</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={8} className="section-title text-xl font-bold bg-gray-100 text-center">Gel Content Test Report</td>
-                                            <td colSpan={3} className="section-title font-bold bg-gray-100 text-center">Rev. No./ Date: 03/ 25.02.2025</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={10} rowSpan={3}>
-                                                <div className="allowable-limit p-2.5 bg-gray-50 border-l-4 border-l-blue-500 text-left">
-                                                    <strong className="px-2.5">Allowable Limit:</strong>
-                                                    <div className="checkbox-container flex">
-                                                        <div className="checkbox-item flex items-center mx-2">
-                                                            <label htmlFor="eva-epe-checkbox">1. Gel Content should be: 75 to 95% for EVA & EPE</label>
-                                                            <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1" />
+                            <div className="test-report-container bg-white dark:bg-gray-800 p-3 sm:p-5 rounded-md shadow-lg mx-2 sm:mx-4 mb-6">
+                                {/* Scrollable container for small screens */}
+                                <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
+                                    <table ref={tableRef} className="w-full border-collapse min-w-[800px]">
+                                        <tbody>
+                                            <tr>
+                                                <td colSpan={2} rowSpan={3} className="p-2">
+                                                    <img src="../LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" className="mx-auto" />
+                                                </td>
+                                                <td colSpan={8} rowSpan={2} className="section-title text-xl sm:text-2xl md:text-3xl font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">
+                                                    VIKRAM SOLAR LIMITED
+                                                </td>
+                                                <td colSpan={3} rowSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                                    Doc. No.: VSL/QAD/FM/90
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                                    Issue Date: 11.01.2023
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={8} className="section-title text-lg sm:text-xl md:text-2xl font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">
+                                                    Gel Content Test Report
+                                                </td>
+                                                <td colSpan={3} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                                    Rev. No./ Date: 03/ 25.02.2025
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={10} rowSpan={3}>
+                                                    <div className="allowable-limit p-2.5 bg-gray-50 dark:bg-gray-900 border-l-4 border-l-blue-500 dark:border-l-blue-400 text-left">
+                                                        <strong className="px-2.5 text-gray-800 dark:text-white">Allowable Limit:</strong>
+                                                        <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
+                                                            <div className="checkbox-item flex items-center mx-2">
+                                                                <label htmlFor="eva-epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">1. Gel Content should be: 75 to 95% for EVA & EPE</label>
+                                                                <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
+                                                            <div className="checkbox-item flex items-center mx-1.5">
+                                                                <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">2. Gel Content should be: ≥ 60% for POE</label>
+                                                                <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="checkbox-container flex">
-                                                        <div className="checkbox-item flex items-center mx-1.5">
-                                                            <label htmlFor="poe-checkbox">2. Gel Content should be: ≥ 60% for POE</label>
-                                                            <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1" />
+                                                </td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Inv. No./ Date:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">P.O. No.:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Type of Test:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={10} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Laminator Parameter</td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Laminator Details:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process Name</td>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">Lam - 1</td>
+                                                <td colSpan={3} className="p-2 text-center text-gray-800 dark:text-white">Lam - 2</td>
+                                                <td colSpan={3} className="p-2 text-center text-gray-800 dark:text-white">Lam - 3 (CP)</td>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MATERIAL INFORMATION (S)</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pumping Time (Sec)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Types:</td>
+                                                <td colSpan={2}>
+                                                    <div className="checkbox-container flex flex-col sm:flex-row justify-center items-center gap-2 p-2">
+                                                        <div className="checkbox-item flex items-center mx-1">
+                                                            <label htmlFor="eva-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EVA</label>
+                                                            <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                        </div>
+                                                        <div className="checkbox-item flex items-center mx-1">
+                                                            <label htmlFor="epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EPE</label>
+                                                            <input type="checkbox" id="epe-checkbox" name="encapsulant" value="EPE" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                        </div>
+                                                        <div className="checkbox-item flex items-center mx-1">
+                                                            <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">POE</label>
+                                                            <input type="checkbox" id="poe-checkbox" name="encapsulant" value="POE" className="ml-1 w-4 h-4 dark:accent-blue-500" />
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td colSpan={1}>Inv. No./ Date:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={1}>P.O. No.:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={1}>Type of Test:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={10} className="section-title font-bold bg-gray-100 text-center">Laminator Parameter</td>
-                                            <td colSpan={1}>Laminator Details:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Process Name</td>
-                                            <td colSpan={2}>Lam - 1</td>
-                                            <td colSpan={3}>Lam - 2</td>
-                                            <td colSpan={3}>Lam - 3 (CP)</td>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">MATERIAL INFORMATION (S)</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Pumping Time (Sec)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Encapsulant Types:</td>
-                                            <td colSpan={2}>
-                                                <div className="checkbox-container flex">
-                                                    <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="eva-checkbox">EVA</label>
-                                                        <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1" />
-                                                    </div>
-                                                    <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="epe-checkbox">EPE</label>
-                                                        <input type="checkbox" id="epe-checkbox" name="encapsulant" value="EPE" className="ml-1" />
-                                                    </div>
-                                                    <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="poe-checkbox">POE</label>
-                                                        <input type="checkbox" id="poe-checkbox" name="encapsulant" value="POE" className="ml-1" />
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Pressing/Cooling Time (Sec)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Encapsulant Supplier:</td>
-                                            <td colSpan={2}>FIRST</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Venting Time (Sec)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Category:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Lower Heating (˚C)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Batch/Lot No.:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Upper Heating (˚C)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">MFG. Date:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Upper Pressure (Kpa)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Exp. Date:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Lower Pressure (Kpa)</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 text-center">Glass Size:</td>
-                                            <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={13}><img src="../IMAGES/GelTest.jpg" width="100%" alt="Gel Test" /></td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Date, Shift, & Time</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">Workshop</td>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 text-center">Platen Position (A/B/C/D/E/F/G)</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">#1</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">#2</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">#3</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">#4</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">#5</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">Average (A/B/C/D/E/F/G)</td>
-                                            <td className="section-title font-bold bg-gray-100 text-center">Mean</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td rowSpan={7}>VSL FAB-II</td>
-                                            <td colSpan={2}>A</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                            <td rowSpan={7} className="mean-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2}>B</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} rowSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={2}>C</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2}>D</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2}>E</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500"></td>
-                                            <td colSpan={2}>F</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2}>G</td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 text-center"></td>
-                                            <td className="average-cell font-bold bg-gray-50">0</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <div className="footer flex justify-between mt-6 border-gray-300 gap-4">
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pressing/Cooling Time (Sec)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">FIRST</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting Time (Sec)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Category:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Heating (˚C)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Batch/Lot No.:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Heating (˚C)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MFG. Date:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Pressure (Kpa)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Exp. Date:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Pressure (Kpa)</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={13} className="p-2">
+                                                    <img src="../IMAGES/GelTest.jpg" alt="Gel Test" className="w-full h-auto max-h-[300px] object-contain rounded-md" />
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Date, Shift, & Time</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Workshop</td>
+                                                <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Platen Position (A/B/C/D/E/F/G)</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#1</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#2</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#3</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#4</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#5</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Average (A/B/C/D/E/F/G)</td>
+                                                <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Mean</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td rowSpan={7} className="p-2 text-center text-gray-800 dark:text-white">VSL FAB-II</td>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">A</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                                <td rowSpan={7} className="mean-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">B</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} rowSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">C</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">D</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">E</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">F</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">G</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="footer flex flex-col lg:flex-row justify-between mt-6 border-gray-300 dark:border-gray-700 gap-4">
                                     <div className="signature flex-1 text-center mb-4">
-                                        <p><strong>PREPARED BY:</strong></p>
-                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
-                                            <tbody>
-                                                <tr>
-                                                    <td className="text-center relative signature-field">
-                                                        {preparedBySignature}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleAddSignature('prepared')}
-                                            disabled={!canAddSignature('prepared')}
-                                        >
-                                            Add my Signature
-                                        </button>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleRemoveSignature('prepared')}
-                                            disabled={!canRemoveSignature('prepared')}
-                                        >
-                                            Remove my Signature
-                                        </button>
+                                        <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
+                                        <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
+                                            <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
+                                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{preparedBySignature}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleAddSignature('prepared')}
+                                                disabled={!canAddSignature('prepared')}
+                                            >
+                                                Add my Signature
+                                            </button>
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleRemoveSignature('prepared')}
+                                                disabled={!canRemoveSignature('prepared')}
+                                            >
+                                                Remove my Signature
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="signature flex-1 text-center mb-4">
-                                        <p><strong>ACCEPTED BY:</strong></p>
-                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
-                                            <tbody>
-                                                <tr>
-                                                    <td className="text-center relative signature-field">
-                                                        {acceptedBySignature}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('accepted') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleAddSignature('accepted')}
-                                            disabled={!canAddSignature('accepted')}
-                                        >
-                                            Add my Signature
-                                        </button>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('accepted') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleRemoveSignature('accepted')}
-                                            disabled={!canRemoveSignature('accepted')}
-                                        >
-                                            Remove my Signature
-                                        </button>
+                                        <p className="font-bold text-gray-800 dark:text-white mb-2">ACCEPTED BY:</p>
+                                        <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
+                                            <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
+                                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{acceptedBySignature}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('accepted') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleAddSignature('accepted')}
+                                                disabled={!canAddSignature('accepted')}
+                                            >
+                                                Add my Signature
+                                            </button>
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('accepted') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleRemoveSignature('accepted')}
+                                                disabled={!canRemoveSignature('accepted')}
+                                            >
+                                                Remove my Signature
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="signature flex-1 text-center mb-4">
-                                        <p><strong>VERIFIED BY:</strong></p>
-                                        <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
-                                            <tbody>
-                                                <tr>
-                                                    <td className="text-center relative signature-field">
-                                                        {verifiedBySignature}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleAddSignature('verified')}
-                                            disabled={!canAddSignature('verified')}
-                                        >
-                                            Add my Signature
-                                        </button>
-                                        <button
-                                            className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => handleRemoveSignature('verified')}
-                                            disabled={!canRemoveSignature('verified')}
-                                        >
-                                            Remove my Signature
-                                        </button>
+                                        <p className="font-bold text-gray-800 dark:text-white mb-2">VERIFIED BY:</p>
+                                        <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
+                                            <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
+                                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{verifiedBySignature}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleAddSignature('verified')}
+                                                disabled={!canAddSignature('verified')}
+                                            >
+                                                Add my Signature
+                                            </button>
+                                            <button
+                                                className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                                onClick={() => handleRemoveSignature('verified')}
+                                                disabled={!canRemoveSignature('verified')}
+                                            >
+                                                Remove my Signature
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="controlled-copy text-center text-lg text-red-500">
+                                <div className="controlled-copy text-center text-lg text-red-500 dark:text-red-400 mt-4">
                                     <p>(Controlled Copy)</p>
                                 </div>
                             </div>
                         </div>
                     )}
                     {activeTab === 'saved-reports' && (
-                        <div className="tab-content active mx-4 mt-2">
+                        <div className="tab-content active mx-2 sm:mx-4 mt-2">
                             <SavedReportsNChecksheets
                                 reports={savedReports}
                                 onExportExcel={exportSavedReportToExcel}

@@ -58,7 +58,7 @@ const ZoomableChart: React.FC<ZoomableChartProps> = ({ chartData, options, type 
     };
 
     return (
-        <div className="w-3/4 mx-auto">
+        <div className="w-full">
             <div className="h-80">
                 <ChartComponent ref={chartRef} data={chartData} options={mergedOptions} height={400} />
             </div>

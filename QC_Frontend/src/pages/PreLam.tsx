@@ -23,7 +23,7 @@ export default function PreLam() {
         {
             type: 'pre-el' as const,
             title: 'Pre-EL Inspection Report',
-            subtitle: 'Pre-Electrical Quality Control Metrics',
+            subtitle: 'Pre-EL Quality Control Metrics',
             dashboardLink: '/pre-el'
         },
         {
@@ -35,7 +35,7 @@ export default function PreLam() {
     ];
 
     return (
-        <div className="pb-4">        
+        <>
             <div className="max-w-7xl mx-auto">
                 <div className="text-center text-white mb-6">
                     <button
@@ -62,6 +62,6 @@ export default function PreLam() {
                 </div>
             </div>
             <div id="alert-container" className="fixed top-5 right-5 z-50 w-80"></div>
-        </div>
+        </>
     );
 }

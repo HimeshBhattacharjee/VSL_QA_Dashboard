@@ -363,66 +363,68 @@ export default function BGradeTrend() {
     };
 
     return (
-        <div className="pb-4">
-            <div className="max-w-7xl mx-auto">
-                <div className="text-center text-white mb-6">
+        <>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-6">
                     <button
                         onClick={handleBackToHome}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                        className="bg-white/20 dark:bg-gray-700/50 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-600 hover:-translate-x-1"
                     >
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
 
-                <div className="bg-white rounded-2xl p-5 mx-5 shadow-2xl">
-                    <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
-                        <div className="flex flex-col">
-                            <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 mb-1">Start Date</label>
+                <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 md:p-6 shadow-2xl transition-colors duration-300">
+                    <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-center justify-center flex-wrap">
+                        <div className="flex flex-col w-full sm:w-auto">
+                            <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Start Date</label>
                             <input
                                 type="date"
                                 id="startDate"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                             />
                         </div>
 
-                        <div className="flex flex-col">
-                            <label htmlFor="endDate" className="text-xs font-semibold text-gray-600 mb-1">End Date</label>
+                        <div className="flex flex-col w-full sm:w-auto">
+                            <label htmlFor="endDate" className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">End Date</label>
                             <input
                                 type="date"
                                 id="endDate"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                             />
                         </div>
 
-                        <button
-                            onClick={() => setActiveButton('defect')}
-                            className={`bg-white text-black rounded-lg px-5 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'defect'
-                                    ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent'
-                                    : 'border-b-2 border-b-[#667eea] hover:-translate-y-0.5'
-                                }`}
-                        >
-                            Defect Reason Analysis
-                        </button>
+                        <div className="analysis-buttons flex flex-wrap justify-center gap-2 sm:gap-3 mt-4 w-full">
+                            <button
+                                onClick={() => setActiveButton('defect')}
+                                className={`bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-4 py-2 sm:px-5 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'defect'
+                                        ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white'
+                                        : 'border-b-2 border-b-[#667eea] dark:border-gray-600 hover:-translate-y-0.5'
+                                    }`}
+                            >
+                                Defect Reason Analysis
+                            </button>
 
-                        <button
-                            onClick={() => setActiveButton('b-grade')}
-                            className={`bg-white text-black rounded-lg px-5 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'b-grade'
-                                    ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent'
-                                    : 'border-b-2 border-b-[#667eea]'
-                                }`}
-                        >
-                            B-Grade Analysis
-                        </button>
+                            <button
+                                onClick={() => setActiveButton('b-grade')}
+                                className={`bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-4 py-2 sm:px-5 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'b-grade'
+                                        ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white'
+                                        : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                                    }`}
+                            >
+                                B-Grade Analysis
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="chart-container mb-6 h-96">
+                    <div className="chart-container my-6 sm:my-8 h-64 sm:h-80 md:h-96">
                         {isLoading ? (
                             <div className="flex items-center justify-center h-full">
-                                <div className="text-gray-500 text-lg">Loading chart data...</div>
+                                <div className="text-gray-500 dark:text-gray-400 text-lg">Loading chart data...</div>
                             </div>
                         ) : hasData ? (
                             <ZoomableChart
@@ -432,30 +434,30 @@ export default function BGradeTrend() {
                             />
                         ) : (
                             <div className="flex items-center justify-center h-full">
-                                <div className="text-gray-500 text-lg">No data available for the selected criteria</div>
+                                <div className="text-gray-500 dark:text-gray-400 text-lg">No data available for the selected criteria</div>
                             </div>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="text-3xl font-bold text-gray-800 mb-2">{metrics.totalProduction}</div>
-                            <div className="text-sm text-gray-600 font-medium">Total Production</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                            <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.totalProduction.toLocaleString()}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Total Production</div>
                         </div>
 
-                        <div className="bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="text-3xl font-bold text-gray-800 mb-2">{metrics.totalDefect}</div>
-                            <div className="text-sm text-gray-600 font-medium">Total Defects</div>
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                            <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.totalDefect.toLocaleString()}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Total Defects</div>
                         </div>
 
-                        <div className="bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="text-3xl font-bold text-gray-800 mb-2">{metrics.defectRate}</div>
-                            <div className="text-sm text-gray-600 font-medium">Defect Rate (in %)</div>
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                            <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.defectRate}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Defect Rate (in %)</div>
                         </div>
                     </div>
                 </div>
             </div>
             <div id="alert-container" className="fixed top-5 right-5 z-50 w-80"></div>
-        </div>
+        </>
     );
 }

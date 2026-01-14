@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AlertProvider } from './context/AlertContext';
 import { ConfirmModalProvider } from './context/ConfirmModalContext';
 import { LineProvider } from './context/LineContext';
+import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedLayout from './components/ProtectedLayout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -39,7 +40,9 @@ function AppProviders({ children }: { children: React.ReactNode }) {
         <AlertProvider>
             <ConfirmModalProvider>
                 <LineProvider>
-                    {children}
+                    <ThemeProvider>
+                        {children}
+                    </ThemeProvider>
                 </LineProvider>
             </ConfirmModalProvider>
         </AlertProvider>
@@ -50,7 +53,7 @@ export default function App() {
     return (
         <AppProviders>
             <Router>
-                <div className="min-h-screen bg-[linear-gradient(135deg,_rgb(102,126,234)_0%,_rgb(118,75,162)_100%)]">
+                <div className="min-h-screen dark:bg-slate-800 bg-gray-100">
                     <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route path="/" element={<Navigate to="/login" replace />} />

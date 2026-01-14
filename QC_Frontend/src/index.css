@@ -125,6 +125,10 @@ td {
     text-align: center;
 }
 
+.user-table th, .user-table td {
+    border: none;
+}
+
 .checkbox-item {
     display: flex;
     align-items: center;

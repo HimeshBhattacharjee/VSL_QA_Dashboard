@@ -47,7 +47,6 @@ export default function Visual() {
         summary: { defect_columns: [] }
     });
 
-
     const handleBackToPreLamDashboard = () => {
         navigate('/prelam');
     };
@@ -217,7 +216,6 @@ export default function Visual() {
         }
     };
 
-
     const handleLineSelect = (line: '1' | '2' | '3' | '4' | 'combined') => {
         setSelectedLine(line);
     };
@@ -262,113 +260,114 @@ export default function Visual() {
     };
 
     return (
-        <div className="pb-4">
-            <div className="max-w-7xl mx-4">
-                <div className="text-center text-white mb-6">
-                    <button
-                        onClick={handleBackToPreLamDashboard}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Pre-Lam Dashboard
-                    </button>
-                </div>
-                <div className="display bg-white rounded-2xl p-5 shadow-2xl min-h-[500px]">
-                    <div className="date-selector flex flex-col md:flex-row gap-4 items-center justify-center mb-6 flex-wrap">
-                        <div className="date-input flex flex-col">
-                            <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 mb-1">Start Date</label>
-                            <input
-                                type="date"
-                                id="startDate"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
-                            />
-                        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-6">
+                <button
+                    onClick={handleBackToPreLamDashboard}
+                    className="bg-white/20 dark:bg-gray-700/50 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-600 hover:-translate-x-1"
+                >
+                    <span className="font-bold text-md">⇐</span> Back to Pre-Lam Dashboard
+                </button>
+            </div>
+            <div className="display bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 md:p-6 shadow-2xl min-h-[500px] transition-colors duration-300">
+                <div className="date-selector flex flex-col md:flex-row gap-3 sm:gap-4 items-center justify-center mb-6 flex-wrap">
+                    <div className="date-input flex flex-col w-full sm:w-auto">
+                        <label htmlFor="startDate" className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Start Date</label>
+                        <input
+                            type="date"
+                            id="startDate"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                        />
+                    </div>
 
-                        <div className="date-input flex flex-col">
-                            <label htmlFor="endDate" className="text-xs font-semibold text-gray-600 mb-1">End Date</label>
-                            <input
-                                type="date"
-                                id="endDate"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
-                            />
-                        </div>
+                    <div className="date-input flex flex-col w-full sm:w-auto">
+                        <label htmlFor="endDate" className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">End Date</label>
+                        <input
+                            type="date"
+                            id="endDate"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                        />
+                    </div>
+
+                    <div className="line-buttons flex flex-wrap justify-center gap-2 sm:gap-3 mt-4 w-full">
                         <button
-                            className={`line-1 bg-white text-black rounded-lg px-4 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '1' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent' : 'border-b-2 border-b-[#667eea]'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '1' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('1')}
                         >
                             Line - 1
                         </button>
                         <button
-                            className={`line-2 bg-white text-black rounded-lg px-4 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '2' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent' : 'border-b-2 border-b-[#667eea]'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '2' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('2')}
                         >
                             Line - 2
                         </button>
                         <button
-                            className={`line-3 bg-white text-black rounded-lg px-4 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '3' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent' : 'border-b-2 border-b-[#667eea]'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '3' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('3')}
                         >
                             Line - 3
                         </button>
                         <button
-                            className={`line-4 bg-white text-black rounded-lg px-4 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '4' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent' : 'border-b-2 border-b-[#667eea]'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '4' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('4')}
                         >
                             Line - 4
                         </button>
                         <button
-                            className={`all_lines bg-white text-black rounded-lg px-4 py-2 mt-5 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === 'combined' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent' : 'border-b-2 border-b-[#667eea]'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === 'combined' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('combined')}
                         >
                             Combined Lines
                         </button>
                     </div>
+                </div>
 
-                    <div className="chart-container mb-8 h-96">
-                        {isLoading ? (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-gray-500 text-lg">Loading chart data...</div>
-                            </div>
-                        ) : chartData && chartData.labels.length > 0 ? (
-                            <ZoomableChart
-                                chartData={chartData}
-                                options={chartOptions}
-                                type="bar"
-                            />
-                        ) : (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-gray-500 text-lg">No data available for the selected criteria</div>
-                            </div>
-                        )}
+                <div className="chart-container mb-6 sm:mb-8 h-64 sm:h-80 md:h-96">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-gray-500 dark:text-gray-400 text-lg">Loading chart data...</div>
+                        </div>
+                    ) : chartData && chartData.labels.length > 0 ? (
+                        <ZoomableChart
+                            chartData={chartData}
+                            options={chartOptions}
+                            type="bar"
+                        />
+                    ) : (
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-gray-500 dark:text-gray-400 text-lg">No data available for the selected criteria</div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="metrics-container grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="totalProduction">
+                            {metrics.totalProduction.toLocaleString()}
+                        </div>
+                        <div className="metric-label text-sm text-gray-600 dark:text-gray-300 font-medium">Total Production</div>
                     </div>
-
-                    <div className="metrics-container grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="metric-card bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="metric-value text-3xl font-bold text-gray-800 mb-2" id="totalProduction">
-                                {metrics.totalProduction.toLocaleString()}
-                            </div>
-                            <div className="metric-label text-sm text-gray-600 font-medium">Total Production</div>
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="totalRejection">
+                            {metrics.totalRejection.toLocaleString()}
                         </div>
-                        <div className="metric-card bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="metric-value text-3xl font-bold text-gray-800 mb-2" id="totalRejection">
-                                {metrics.totalRejection.toLocaleString()}
-                            </div>
-                            <div className="metric-label text-sm text-gray-600 font-medium">Total Rejections</div>
+                        <div className="metric-label text-sm text-gray-600 dark:text-gray-300 font-medium">Total Rejections</div>
+                    </div>
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="rejectionRate">
+                            {metrics.rejectionRate}
                         </div>
-                        <div className="metric-card bg-gray-50 rounded-xl p-5 text-center border-l-4 border-blue-500">
-                            <div className="metric-value text-3xl font-bold text-gray-800 mb-2" id="rejectionRate">
-                                {metrics.rejectionRate}
-                            </div>
-                            <div className="metric-label text-sm text-gray-600 font-medium">Rejection Rate (in %)</div>
-                        </div>
+                        <div className="metric-label text-sm text-gray-600 dark:text-gray-300 font-medium">Rejection Rate (in %)</div>
                     </div>
                 </div>
             </div>
