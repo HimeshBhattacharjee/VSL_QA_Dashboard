@@ -24,6 +24,7 @@ def create_initial_admin():
             "status": "Active",
             "avatar": "SA",
             "isDefaultPassword": True,
+            "theme": "light",
             "createdAt": datetime.now().isoformat()
         }
         users_collection.insert_one(initial_admin)

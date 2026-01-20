@@ -8,12 +8,8 @@ interface GelTestReport {
     _id?: string;
     name: string;
     timestamp: string;
-    formData: {
-        [key: string]: string | boolean;
-    };
-    averages: {
-        [key: string]: string;
-    };
+    formData: { [key: string]: string | boolean; };
+    averages: { [key: string]: string; };
 }
 
 export default function GelTest() {
@@ -29,14 +25,10 @@ export default function GelTest() {
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const GEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/gel-test-reports';
-
-    // Signature state
     const [preparedBySignature, setPreparedBySignature] = useState<string>('');
     const [acceptedBySignature, setAcceptedBySignature] = useState<string>('');
     const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
-
     const apiService = {
-        // Get all reports
         getAllReports: async (): Promise<GelTestReport[]> => {
             const response = await fetch(`${GEL_API_BASE_URL}`);
             if (!response.ok) {
@@ -45,8 +37,6 @@ export default function GelTest() {
             }
             return response.json();
         },
-
-        // Get report by ID
         getReportById: async (id: string): Promise<GelTestReport> => {
             const response = await fetch(`${GEL_API_BASE_URL}/${id}`);
             if (!response.ok) {
@@ -55,14 +45,10 @@ export default function GelTest() {
             }
             return response.json();
         },
-
-        // Create new report
         createReport: async (report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
             const response = await fetch(`${GEL_API_BASE_URL}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -71,14 +57,10 @@ export default function GelTest() {
             }
             return response.json();
         },
-
-        // Update existing report
         updateReport: async (id: string, report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
             const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -87,19 +69,13 @@ export default function GelTest() {
             }
             return response.json();
         },
-
-        // Delete report
         deleteReport: async (id: string): Promise<void> => {
-            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
-                method: 'DELETE',
-            });
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
             }
         },
-
-        // Check if report name exists
         checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
             const url = `${GEL_API_BASE_URL}/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
             const response = await fetch(url);
@@ -112,7 +88,6 @@ export default function GelTest() {
         },
     };
 
-    // Load user info from session storage
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
@@ -232,13 +207,9 @@ export default function GelTest() {
                 if (currentText) cell.classList.add('has-content');
             }
         };
-
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                input.blur();
-            }
+            if (e.key === 'Enter') input.blur();
         };
-
         input.addEventListener('blur', handleBlur);
         input.addEventListener('keydown', handleKeyDown);
     };
@@ -250,41 +221,28 @@ export default function GelTest() {
     };
 
     useEffect(() => {
-        if (reportName.trim() && !hasUnsavedChanges) {
-            setHasUnsavedChanges(true);
-        }
-
-        if (reportName !== '') {
-            saveFormData();
-        }
+        if (reportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
+        if (reportName !== '') saveFormData();
     }, [reportName]);
 
     const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
-        if (!oldValue.trim() && !newValue.trim()) {
-            return false;
-        }
+        if (!oldValue.trim() && !newValue.trim()) return false;
         return oldValue.trim() !== newValue.trim();
     };
 
     const calculateAverages = () => {
         const rows = document.querySelectorAll('tr');
         const dataRows: HTMLTableRowElement[] = [];
-
         rows.forEach(row => {
             const cells = row.querySelectorAll('.data-cell');
-            if (cells.length > 0) {
-                dataRows.push(row as HTMLTableRowElement);
-            }
+            if (cells.length > 0) dataRows.push(row as HTMLTableRowElement);
         });
-
         const averages: { value: number; hasPercentage: boolean; count: number }[] = [];
-
         dataRows.forEach(row => {
             const dataCells = row.querySelectorAll('.data-cell');
             let sum = 0;
             let count = 0;
             let hasPercentage = false;
-
             dataCells.forEach(cell => {
                 const value = cell.textContent?.trim() || '';
                 if (value) {
@@ -304,42 +262,26 @@ export default function GelTest() {
                     }
                 }
             });
-
             let average = 0;
-            if (count > 0) {
-                average = sum / count;
-            }
-
+            if (count > 0) average = sum / count;
             let averageDisplay = average.toFixed(2);
-            if (hasPercentage && count > 0) {
-                averageDisplay += '%';
-            }
-
+            if (hasPercentage && count > 0) averageDisplay += '%';
             averages.push({ value: average, hasPercentage, count });
-
             const averageCell = row.querySelector('.average-cell');
-            if (averageCell) {
-                averageCell.textContent = averageDisplay;
-            }
+            if (averageCell) averageCell.textContent = averageDisplay;
         });
 
         const meanCell = document.querySelector('.mean-cell');
         if (meanCell && averages.length > 0) {
             const validAverages = averages.filter(avg => avg.count > 0);
-
             if (validAverages.length > 0) {
                 const mean = validAverages.reduce((sum, avg) => sum + avg.value, 0) / validAverages.length;
                 let meanDisplay = mean.toFixed(2);
-
                 const hasAnyPercentage = validAverages.some(avg => avg.hasPercentage);
-                if (hasAnyPercentage) {
-                    meanDisplay += '%';
-                }
-
+                if (hasAnyPercentage) meanDisplay += '%';
                 meanCell.textContent = meanDisplay;
-            } else {
-                meanCell.textContent = '0';
             }
+            else meanCell.textContent = '0';
         }
     };
 
@@ -348,8 +290,6 @@ export default function GelTest() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -362,30 +302,23 @@ export default function GelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         if (currentSignature.trim()) {
             showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
             return;
         }
-
-        // Check role permissions
         if (section === 'prepared' && userRole !== 'Operator') {
             showAlert('error', 'Only Operators can add signature to Prepared By section');
             return;
         }
-
         if (section === 'accepted' && !['Supervisor', 'Manager'].includes(userRole || '')) {
             showAlert('error', 'Only Supervisors or Managers can add signature to Accepted By section');
             return;
         }
-
         if (section === 'verified' && !['Supervisor', 'Manager'].includes(userRole || '')) {
             showAlert('error', 'Only Supervisors or Managers can add signature to Verified By section');
             return;
         }
-
         const signatureText = `${username}`;
-
         switch (section) {
             case 'prepared':
                 setPreparedBySignature(signatureText);
@@ -397,15 +330,10 @@ export default function GelTest() {
                 setVerifiedBySignature(signatureText);
                 break;
         }
-
         setHasUnsavedChanges(true);
-
-        // CRITICAL FIX: Save form data immediately after state update
-        // Use setTimeout to ensure React state is updated before saving
         setTimeout(() => {
             saveFormData();
         }, 0);
-
         showAlert('success', `Signature added to ${section} section`);
     };
 
@@ -414,8 +342,6 @@ export default function GelTest() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if current user is the one who added the signature
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -428,13 +354,10 @@ export default function GelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         if (!currentSignature.includes(username)) {
             showAlert('error', 'You can only remove your own signature');
             return;
         }
-
-        // Update state immediately
         switch (section) {
             case 'prepared':
                 setPreparedBySignature('');
@@ -446,22 +369,15 @@ export default function GelTest() {
                 setVerifiedBySignature('');
                 break;
         }
-
         setHasUnsavedChanges(true);
-
-        // CRITICAL FIX: Save form data immediately after state update
-        // Use setTimeout to ensure React state is updated before saving
         setTimeout(() => {
             saveFormData();
         }, 0);
-
         showAlert('info', `Signature removed from ${section} section`);
     };
 
-    // Check if remove button should be enabled for each section
     const canRemoveSignature = (section: 'prepared' | 'accepted' | 'verified') => {
         if (!username) return false;
-
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -474,14 +390,11 @@ export default function GelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         return currentSignature.includes(username);
     };
 
     const canAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
         if (!username) return false;
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -494,11 +407,7 @@ export default function GelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
-        if (currentSignature.trim()) {
-            return false; // Cannot add if signature already exists
-        }
-
+        if (currentSignature.trim()) return false;
         switch (section) {
             case 'prepared':
                 return userRole === 'Operator';
@@ -518,30 +427,17 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const reportMetadata = reports[index];
-
-            // Fetch the full report data from S3 using the report ID
             const fullReport = await apiService.getReportById(reportMetadata._id!);
-
-            // Clear any existing form data first
             clearFormData(false);
-
-            // Set the report name immediately
             setReportName(fullReport.name);
-
-            // Save editing state to sessionStorage
             sessionStorage.setItem('editingReportData', JSON.stringify(fullReport));
             sessionStorage.setItem('editingReportId', fullReport._id!);
-
             setActiveTab('edit-report');
-
-            // Load the report data after a brief delay to ensure DOM is ready
             setTimeout(() => {
                 loadReportData(fullReport);
                 setHasUnsavedChanges(true);
             }, 150);
-
             showAlert('info', `Now editing: ${fullReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
@@ -553,77 +449,55 @@ export default function GelTest() {
 
     const loadReportData = (report: GelTestReport) => {
         setReportName(report.name);
-
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             const key = `editable_${index}`;
             if (report.formData[key] !== undefined) {
                 const value = report.formData[key] as string;
                 cell.textContent = value;
-
-                if (value.trim()) {
-                    cell.classList.add('has-content');
-                } else {
-                    cell.classList.remove('has-content');
-                }
+                if (value.trim()) cell.classList.add('has-content');
+                else cell.classList.remove('has-content');
             }
         });
-
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach((checkbox, index) => {
             const key = `checkbox_${index}`;
-            if (report.formData[key] !== undefined) {
-                (checkbox as HTMLInputElement).checked = report.formData[key] as boolean;
-            }
+            if (report.formData[key] !== undefined) (checkbox as HTMLInputElement).checked = report.formData[key] as boolean;
         });
-
-        // CRITICAL FIX: Load signatures from the report data
-        // This ensures signatures are loaded when editing saved reports
         if (report.formData.preparedBySignature !== undefined) {
             setPreparedBySignature(report.formData.preparedBySignature as string);
         } else {
-            setPreparedBySignature(''); // Clear if not present
+            setPreparedBySignature('');
         }
-
         if (report.formData.acceptedBySignature !== undefined) {
             setAcceptedBySignature(report.formData.acceptedBySignature as string);
         } else {
-            setAcceptedBySignature(''); // Clear if not present
+            setAcceptedBySignature('');
         }
-
         if (report.formData.verifiedBySignature !== undefined) {
             setVerifiedBySignature(report.formData.verifiedBySignature as string);
         } else {
-            setVerifiedBySignature(''); // Clear if not present
+            setVerifiedBySignature('');
         }
-
         setTimeout(() => {
             calculateAverages();
         }, 150);
-
-        // CRITICAL FIX: Save the current state to sessionStorage immediately after loading
-        // This ensures that if the page is refreshed, the loaded data (including signatures) is preserved
         setTimeout(() => {
             saveFormData();
         }, 200);
     };
 
-    // Update the useEffect that handles tab switching to ensure proper state loading
     useEffect(() => {
         if (activeTab === 'edit-report') {
             const editingReportData = sessionStorage.getItem('editingReportData');
-
             if (editingReportData) {
-                // Clear any existing form data first
                 clearFormData(false);
-
                 setTimeout(() => {
                     const report = JSON.parse(editingReportData) as GelTestReport;
                     loadReportData(report);
                     setHasUnsavedChanges(true);
                 }, 100);
             } else {
-                // Load regular form data if not editing a saved report
                 loadFormData();
             }
         }
@@ -631,53 +505,34 @@ export default function GelTest() {
 
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
-
-        // Always collect editable cells and checkboxes
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach((cell, index) => {
             formData[`editable_${index}`] = cell.textContent?.trim() || '';
         });
-
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach((checkbox, index) => {
             formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
         });
-
-        // Always save signatures
         formData.preparedBySignature = preparedBySignature;
         formData.acceptedBySignature = acceptedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
         formData.reportName = reportName;
-
-        // Save to sessionStorage
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
-    // Update the loadFormData function to ensure signatures are loaded properly
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
-
         if (savedData) {
             const formData = JSON.parse(savedData);
-
-            // Load reportName from saved data if it exists
-            if (formData.reportName !== undefined) {
-                setReportName(formData.reportName);
-            }
-
-            // Load editable cells
+            if (formData.reportName !== undefined) setReportName(formData.reportName);
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 const key = `editable_${index}`;
                 if (formData[key] !== undefined) {
                     cell.textContent = formData[key] as string;
-                    if ((formData[key] as string).trim()) {
-                        cell.classList.add('has-content');
-                    }
+                    if ((formData[key] as string).trim()) cell.classList.add('has-content');
                 }
             });
-
-            // Load checkboxes
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 const key = `checkbox_${index}`;
@@ -685,9 +540,6 @@ export default function GelTest() {
                     (checkbox as HTMLInputElement).checked = formData[key] as boolean;
                 }
             });
-
-            // CRITICAL FIX: Load signatures from form data
-            // This ensures signatures are loaded when page refreshes
             if (formData.preparedBySignature !== undefined) {
                 setPreparedBySignature(formData.preparedBySignature as string);
             }
@@ -697,55 +549,42 @@ export default function GelTest() {
             if (formData.verifiedBySignature !== undefined) {
                 setVerifiedBySignature(formData.verifiedBySignature as string);
             }
-
             setTimeout(() => {
                 calculateAverages();
             }, 100);
-
             setHasUnsavedChanges(true);
         }
     };
 
-    // Update the clearFormData function to preserve editing state if needed
     const clearFormData = (clearEditingState = true) => {
         const editableCells = document.querySelectorAll('.editable');
         editableCells.forEach(cell => {
             cell.textContent = '';
             cell.classList.remove('has-content');
         });
-
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(checkbox => {
             (checkbox as HTMLInputElement).checked = false;
         });
-
-        // Clear signatures
         setPreparedBySignature('');
         setAcceptedBySignature('');
         setVerifiedBySignature('');
-
-        // Only clear reportName if we're clearing editing state
         if (clearEditingState) {
             setReportName('');
             sessionStorage.removeItem('editingReportId');
             sessionStorage.removeItem('editingReportData');
         }
-
         const averageCells = document.querySelectorAll('.average-cell');
         averageCells.forEach(cell => {
             cell.textContent = '0';
         });
-
         const meanCell = document.querySelector('.mean-cell');
         if (meanCell) {
             meanCell.textContent = '0';
         }
-
-        // Only clear form data if we're clearing editing state
         if (clearEditingState) {
             sessionStorage.removeItem('gelTestFormData');
         }
-
         setHasUnsavedChanges(false);
     };
 
@@ -762,62 +601,45 @@ export default function GelTest() {
         }
     };
 
-    // Update the saveReport function to include signatures
     const saveReport = async () => {
         if (!reportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
-
         try {
             setIsLoading(true);
-
-            // Collect current averages and mean
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
                 averages[`average_${index}`] = cell.textContent?.trim() || '0';
             });
-
             const meanCell = document.querySelector('.mean-cell');
             averages.mean = meanCell?.textContent?.trim() || '0';
-
             const reportData: Omit<GelTestReport, '_id'> = {
                 name: reportName,
                 timestamp: new Date().toISOString(),
                 formData: {},
                 averages: averages,
             };
-
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
             });
-
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 reportData.formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
-
-            // Include signatures in form data
             reportData.formData.preparedBySignature = preparedBySignature;
             reportData.formData.acceptedBySignature = acceptedBySignature;
             reportData.formData.verifiedBySignature = verifiedBySignature;
-
             const editingId = sessionStorage.getItem('editingReportId');
-
             if (editingId) {
-                // Editing existing report
                 const existingReport = await apiService.getReportById(editingId);
-
                 if (reportName === existingReport.name) {
-                    // Same name, update the report
                     await apiService.updateReport(editingId, reportData);
                     showAlert('success', 'Report updated successfully!');
                 } else {
-                    // Different name, check if name already exists
                     const nameExists = await apiService.checkReportNameExists(reportName, editingId);
-
                     if (nameExists) {
                         showConfirm({
                             title: 'Report Name Exists',
@@ -826,10 +648,8 @@ export default function GelTest() {
                             confirmText: 'Replace',
                             cancelText: 'Cancel',
                             onConfirm: async () => {
-                                // Find the existing report with this name and update it
                                 const allReports = await apiService.getAllReports();
                                 const existingReportWithSameName = allReports.find(report => report.name === reportName);
-
                                 if (existingReportWithSameName) {
                                     await apiService.updateReport(existingReportWithSameName._id!, reportData);
                                     showAlert('success', 'Report updated successfully!');
@@ -837,7 +657,6 @@ export default function GelTest() {
                                     await apiService.createReport(reportData);
                                     showAlert('success', 'New report created successfully!');
                                 }
-
                                 sessionStorage.removeItem('editingReportId');
                                 sessionStorage.removeItem('editingReportData');
                                 clearFormData();
@@ -847,18 +666,14 @@ export default function GelTest() {
                         });
                         return;
                     } else {
-                        // Name doesn't exist, create new report
                         await apiService.createReport(reportData);
                         showAlert('success', 'New report created with updated name!');
                     }
                 }
-
                 sessionStorage.removeItem('editingReportId');
                 sessionStorage.removeItem('editingReportData');
             } else {
-                // Creating new report
                 const nameExists = await apiService.checkReportNameExists(reportName);
-
                 if (nameExists) {
                     showConfirm({
                         title: 'Report Name Exists',
@@ -867,10 +682,8 @@ export default function GelTest() {
                         confirmText: 'Replace',
                         cancelText: 'Cancel',
                         onConfirm: async () => {
-                            // Find the existing report with this name and update it
                             const allReports = await apiService.getAllReports();
                             const existingReport = allReports.find(report => report.name === reportName);
-
                             if (existingReport) {
                                 await apiService.updateReport(existingReport._id!, reportData);
                                 showAlert('success', 'Report updated successfully!');
@@ -878,7 +691,6 @@ export default function GelTest() {
                                 await apiService.createReport(reportData);
                                 showAlert('success', 'New report created successfully!');
                             }
-
                             clearFormData();
                             loadSavedReports();
                             setActiveTab('saved-reports');
@@ -886,12 +698,10 @@ export default function GelTest() {
                     });
                     return;
                 } else {
-                    // Name doesn't exist, create new report
                     await apiService.createReport(reportData);
                     showAlert('success', 'Report saved successfully!');
                 }
             }
-
             clearFormData();
             loadSavedReports();
             setActiveTab('saved-reports');
@@ -903,7 +713,6 @@ export default function GelTest() {
         }
     };
 
-    // Update the deleteSavedReport function
     const deleteSavedReport = async (index: number) => {
         try {
             const reports = await apiService.getAllReports();
@@ -911,7 +720,6 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
             await apiService.deleteReport(report._id!);
             await loadSavedReports();
@@ -925,33 +733,24 @@ export default function GelTest() {
     const exportToExcel = async () => {
         try {
             const formData: { [key: string]: string | boolean } = {};
-
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 formData[`editable_${index}`] = cell.textContent?.trim() || '';
             });
-
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
-
-            // Include signatures in export
             formData.preparedBySignature = preparedBySignature;
             formData.acceptedBySignature = acceptedBySignature;
             formData.verifiedBySignature = verifiedBySignature;
-
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
                 averages[`average_${index}`] = cell.textContent?.trim() || '0';
             });
-
             const meanCell = document.querySelector('.mean-cell');
-            if (meanCell) {
-                averages.mean = meanCell.textContent?.trim() || '0';
-            }
-
+            if (meanCell) averages.mean = meanCell.textContent?.trim() || '0';
             const gelReportData = {
                 report_name: reportName.trim() || 'Gel_Test_Report',
                 timestamp: new Date().toISOString(),
@@ -960,16 +759,10 @@ export default function GelTest() {
             };
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(gelReportData),
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate report');
-            }
-
+            if (!response.ok) throw new Error('Failed to generate report');
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -979,7 +772,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -991,54 +783,40 @@ export default function GelTest() {
         try {
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
             const formData: { [key: string]: string | boolean } = {};
-
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
                 formData[`editable_${index}`] = cell.textContent?.trim() || '';
             });
-
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((checkbox, index) => {
                 formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
             });
-
-            // Include signatures in export
             formData.preparedBySignature = preparedBySignature;
             formData.acceptedBySignature = acceptedBySignature;
             formData.verifiedBySignature = verifiedBySignature;
-
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
                 averages[`average_${index}`] = cell.textContent?.trim() || '0';
             });
-
             const meanCell = document.querySelector('.mean-cell');
-            if (meanCell) {
-                averages.mean = meanCell.textContent?.trim() || '0';
-            }
-
+            if (meanCell) averages.mean = meanCell.textContent?.trim() || '0';
             const gelReportData = {
                 report_name: reportName.trim() || 'Gel_Test_Report',
                 timestamp: new Date().toISOString(),
                 form_data: formData,
                 averages: averages,
             };
-
             console.log('Generating PDF from Excel template...');
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(gelReportData),
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to generate PDF: ${errorText}`);
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1048,7 +826,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
@@ -1063,22 +840,13 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
-
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: report._id }),
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate report');
-            }
-
+            if (!response.ok) throw new Error('Failed to generate report');
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1088,7 +856,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -1104,23 +871,16 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
-
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: report._id }),
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to generate PDF: ${errorText}`);
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1130,7 +890,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
@@ -1143,17 +902,14 @@ export default function GelTest() {
         editableCells.forEach(cell => {
             cell.addEventListener('click', handleEditableCellClick);
         });
-
         const dataCells = document.querySelectorAll('.data-cell');
         dataCells.forEach(cell => {
             cell.addEventListener('click', handleDataCellClick);
         });
-
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(checkbox => {
             checkbox.addEventListener('change', handleCheckboxChange);
         });
-
         return () => {
             editableCells.forEach(cell => {
                 cell.removeEventListener('click', handleEditableCellClick);
@@ -1168,19 +924,16 @@ export default function GelTest() {
     }, []);
 
     useEffect(() => {
-        if (reportName.trim() && !hasUnsavedChanges) {
-            setHasUnsavedChanges(true);
-        }
+        if (reportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
     }, [reportName]);
-
 
     return (
         <>
-            <div className="pb-4 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+            <div className="pb-1 min-h-screen duration-300">
                 <div className="container mx-auto px-2 sm:px-4 lg:px-6">
-                    <div className="text-center mb-6 pt-4">
+                    <div className="text-center mb-6">
                         <button onClick={handleBackToHome}
-                            className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-x-1"
+                            className="bg-white dark:bg-gray-800/20 text-black dark:text-white border-2 border-[#667eea] dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-x-1"
                         >
                             <span className="font-bold text-md">⇐</span> Back to Home
                         </button>
@@ -1195,13 +948,13 @@ export default function GelTest() {
                     )}
                     <div className="flex justify-center mx-2 sm:mx-4">
                         <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-400 border-b-2 border-blue-400 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('edit-report')}
                         >
                             Edit Report
                         </div>
                         <div
-                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-400 border-b-2 border-blue-400 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('saved-reports')}
                         >
                             Saved Reports
@@ -1210,7 +963,7 @@ export default function GelTest() {
 
                     {activeTab === 'edit-report' && (
                         <div className="tab-content active mt-2">
-                            <div className="save-actions flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 m-2.5 p-3">
+                            <div className="save-actions flex flex-col sm:flex-row justify-center items-center gap-3 p-3">
                                 <input
                                     type="text"
                                     value={reportName}
@@ -1219,32 +972,31 @@ export default function GelTest() {
                                     placeholder="Enter report name"
                                 />
                                 <button
-                                    className="save-btn w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5)] dark:bg-blue-900/50 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-blue-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={saveReport}
                                 >
                                     Save Report
                                 </button>
                                 <button
-                                    className="save-btn export-excel w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] dark:bg-green-800 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-excel w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToExcel}
                                 >
                                     Export as Excel
                                 </button>
                                 <button
-                                    className="save-btn export-pdf w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] dark:bg-red-800 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    className="save-btn export-pdf w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-red-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToPDF}
                                 >
                                     Export as PDF
                                 </button>
                             </div>
 
-                            <div className="test-report-container bg-white dark:bg-gray-800 p-3 sm:p-5 rounded-md shadow-lg mx-2 sm:mx-4 mb-6">
-                                {/* Scrollable container for small screens */}
+                            <div className="test-report-container bg-white dark:bg-gray-900 p-3 sm:p-5 rounded-md shadow-lg mx-2 sm:mx-4">
                                 <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
                                     <table ref={tableRef} className="w-full border-collapse min-w-[800px]">
                                         <tbody>
                                             <tr>
-                                                <td colSpan={2} rowSpan={3} className="p-2">
+                                                <td colSpan={2} rowSpan={3} className="p-2 bg-gray-100 dark:bg-gray-700">
                                                     <img src="../LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" className="mx-auto" />
                                                 </td>
                                                 <td colSpan={8} rowSpan={2} className="section-title text-xl sm:text-2xl md:text-3xl font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">
@@ -1285,34 +1037,34 @@ export default function GelTest() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Inv. No./ Date:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Inv. No./ Date:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">P.O. No.:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O. No.:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Type of Test:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={10} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Laminator Parameter</td>
-                                                <td colSpan={1} className="p-2 text-sm sm:text-base text-gray-800 dark:text-white">Laminator Details:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Laminator Details:</td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process Name</td>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">Lam - 1</td>
-                                                <td colSpan={3} className="p-2 text-center text-gray-800 dark:text-white">Lam - 2</td>
-                                                <td colSpan={3} className="p-2 text-center text-gray-800 dark:text-white">Lam - 3 (CP)</td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 1</td>
+                                                <td colSpan={3} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 2</td>
+                                                <td colSpan={3} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 3 (CP)</td>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MATERIAL INFORMATION (S)</td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pumping Time (Sec)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Types:</td>
                                                 <td colSpan={2}>
                                                     <div className="checkbox-container flex flex-col sm:flex-row justify-center items-center gap-2 p-2">
@@ -1333,51 +1085,51 @@ export default function GelTest() {
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pressing/Cooling Time (Sec)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
                                                 <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">FIRST</td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting Time (Sec)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Category:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Heating (˚C)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Batch/Lot No.:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Heating (˚C)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MFG. Date:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Pressure (Kpa)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Exp. Date:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Pressure (Kpa)</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                                 <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size:</td>
-                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={13} className="p-2">
@@ -1397,71 +1149,71 @@ export default function GelTest() {
                                                 <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Mean</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td rowSpan={7} className="p-2 text-center text-gray-800 dark:text-white">VSL FAB-II</td>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">A</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td rowSpan={7} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">VSL FAB-II</td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">A</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                                 <td rowSpan={7} className="mean-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">B</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">B</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} rowSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">C</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} rowSpan={3} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">C</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">D</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">D</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">E</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">E</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
                                                 <td colSpan={2} rowSpan={2} className="editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">F</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">F</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} className="p-2 text-center text-gray-800 dark:text-white">G</td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">G</td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td className="editable data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                                 <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             </tr>
                                         </tbody>

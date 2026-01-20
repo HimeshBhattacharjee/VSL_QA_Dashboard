@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     isDefaultPassword: bool
     createdAt: str
     signature: Optional[str] = None
+    theme: str = "light"
     password: str | None = None
 
 class LoginRequest(BaseModel):

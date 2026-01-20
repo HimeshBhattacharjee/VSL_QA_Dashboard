@@ -27,6 +27,7 @@ async def create_user(user: UserCreate):
         "avatar": avatar,
         "isDefaultPassword": True,
         "signature": None,
+        "theme": "light",
         "createdAt": datetime.now().isoformat()
     }
     result = users_collection.insert_one(user_data)
@@ -65,6 +66,7 @@ async def login(login_data: LoginRequest):
     
     # Only include signature for non-Admin users
     signature_data = user.get("signature") if user.get("role") != "Admin" else None
+    theme_value = user.get("theme", "light")
     
     return {
         "id": str(user["_id"]),
@@ -72,7 +74,8 @@ async def login(login_data: LoginRequest):
         "employeeId": user["employeeId"],
         "role": user["role"],
         "isDefaultPassword": user["isDefaultPassword"],
-        "signature": signature_data
+        "signature": signature_data,
+        "theme": theme_value
     }
 
 @user_router.post("/auth/change-password")
@@ -241,11 +244,33 @@ async def get_current_user(employeeId: str):
             "avatar": user["avatar"],
             "isDefaultPassword": user["isDefaultPassword"],
             "createdAt": user["createdAt"],
-            "signature": user.get("signature")
+            "signature": user.get("signature"),
+            "theme": user.get("theme", "light")
         }
         return user_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
+
+
+@user_router.patch("/me/theme")
+async def update_user_theme(data: dict):
+    """Update user's theme. Expects JSON: { employeeId: str, theme: 'light'|'dark' }"""
+    try:
+        employeeId = data.get("employeeId")
+        theme = data.get("theme")
+        if not employeeId or theme not in ("light", "dark"):
+            raise HTTPException(status_code=400, detail="Invalid request body")
+
+        user = users_collection.find_one({"employeeId": employeeId})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        users_collection.update_one({"employeeId": employeeId}, {"$set": {"theme": theme}})
+        return {"theme": theme}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating theme: {str(e)}")
 
 @user_router.get("/current-user-by-name", response_model=UserResponse)
 async def get_current_user_by_name(name: str):
@@ -264,7 +289,8 @@ async def get_current_user_by_name(name: str):
             "avatar": user["avatar"],
             "isDefaultPassword": user["isDefaultPassword"],
             "createdAt": user["createdAt"],
-            "signature": user.get("signature")
+            "signature": user.get("signature"),
+            "theme": user.get("theme", "light")
         }
         return user_data
     except Exception as e:

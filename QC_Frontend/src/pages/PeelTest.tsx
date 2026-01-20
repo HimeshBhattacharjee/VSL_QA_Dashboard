@@ -11,9 +11,7 @@ interface ReportData {
     timestamp: string;
     formData: Record<string, string>;
     rowData: any[];
-    averages?: {
-        [key: string]: string;
-    };
+    averages?: { [key: string]: string; };
 }
 
 type TabType = 'edit-report' | 'saved-reports' | 'report-analysis';
@@ -36,7 +34,6 @@ export default function PeelTest() {
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
 
-    // Edit Report Tab States
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [selectedShift, setSelectedShift] = useState('');
     const [showReportEditor, setShowReportEditor] = useState(false);
@@ -47,19 +44,16 @@ export default function PeelTest() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
 
-    // Analysis Tab States
     const [monthYear, setMonthYear] = useState(() => new Date().toISOString().slice(0, 7));
     const [stringer, setStringer] = useState('1');
     const [cellFace, setCellFace] = useState('');
     const [showChart, setShowChart] = useState(false);
     const [graphData, setGraphData] = useState<GraphData[]>([]);
 
-    // Initialize with today's date and load saved state
     useEffect(() => {
         initializeForm();
         loadSavedReports();
         loadFormData();
-
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (hasUnsavedChanges) {
                 e.preventDefault();
@@ -67,7 +61,6 @@ export default function PeelTest() {
                 return '';
             }
         };
-
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -82,7 +75,6 @@ export default function PeelTest() {
     }, []);
 
     const apiService = {
-        // Get all reports
         getAllReports: async (): Promise<ReportData[]> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`);
             if (!response.ok) {
@@ -91,8 +83,6 @@ export default function PeelTest() {
             }
             return response.json();
         },
-
-        // Get report by ID
         getReportById: async (id: string): Promise<ReportData> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`);
             if (!response.ok) {
@@ -101,14 +91,10 @@ export default function PeelTest() {
             }
             return response.json();
         },
-
-        // Create new report
         createReport: async (report: Omit<ReportData, '_id'>): Promise<ReportData> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -117,14 +103,10 @@ export default function PeelTest() {
             }
             return response.json();
         },
-
-        // Update existing report
         updateReport: async (id: string, report: Omit<ReportData, '_id'>): Promise<ReportData> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -133,19 +115,13 @@ export default function PeelTest() {
             }
             return response.json();
         },
-
-        // Delete report
         deleteReport: async (id: string): Promise<void> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
-                method: 'DELETE',
-            });
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
             }
         },
-
-        // Check if report name exists
         checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
             const url = `${PEEL_API_BASE_URL}/peel-test-reports/name/${encodeURIComponent(name)}${excludeId ? `?exclude_id=${excludeId}` : ''}`;
             const response = await fetch(url);
@@ -160,26 +136,19 @@ export default function PeelTest() {
 
     const PEEL_SUPPRESS_KEY = 'suppressPeelAutoRestore';
 
-    // Extract date and shift from a saved report by checking common locations
     const extractDateShiftFromReport = (report: ReportData) => {
         try {
-            // 1) If report.formData has explicit selectedDate/selectedShift keys use those
             if (report.formData?.selectedDate || report.formData?.selectedShift) {
                 return {
                     date: (report.formData?.selectedDate as string) || '',
                     shift: (report.formData?.selectedShift as string) || ''
                 };
             }
-
-            // 2) Search first rows for row_0_cell_0 (date) and row_0_cell_1 (shift)
             const dateKey = Object.keys(report.formData).find(k => /^row_\d+_cell_0$/.test(k));
             const shiftKey = Object.keys(report.formData).find(k => /^row_\d+_cell_1$/.test(k));
             const dateVal = dateKey ? (report.formData[dateKey] as string) : '';
             const shiftVal = shiftKey ? (report.formData[shiftKey] as string) : '';
             if (dateVal || shiftVal) return { date: dateVal || '', shift: shiftVal || '' };
-
-            // 3) Fall back to parsing the report name generated by generateReportName
-            // Format: Peel_Test_Report_<day>_<Mon>_<year>_Shift_<shift>
             const match = /Peel_Test_Report_(\d+)_([A-Za-z]+)_(\d+)_Shift_(\d+)/.exec(report.name);
             if (match) {
                 const day = match[1];
@@ -190,7 +159,6 @@ export default function PeelTest() {
                 const isoDate = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString().split('T')[0] : '';
                 return { date: isoDate, shift };
             }
-
             return { date: '', shift: '' };
         } catch (e) {
             console.error('Failed to extract date/shift from report', e);
@@ -199,22 +167,14 @@ export default function PeelTest() {
     };
 
     const initializeForm = () => {
-        // Check if we have editing report data from session storage
         const editingReportData = sessionStorage.getItem('editingPeelReportData');
-
         if (editingReportData) {
             try {
                 const report = JSON.parse(editingReportData) as ReportData;
-
-                // Derive date & shift from report and set them immediately so they persist across refresh
                 const { date, shift } = extractDateShiftFromReport(report);
                 if (date) setSelectedDate(date);
                 if (shift) setSelectedShift(shift);
-
-                // Tell the form loader not to overwrite date/shift while editing a report
                 sessionStorage.setItem(PEEL_SUPPRESS_KEY, 'true');
-
-                // Load the report for editing
                 loadReportForEditing(report);
                 setShowReportEditor(true);
                 setHasUnsavedChanges(true);
@@ -230,51 +190,24 @@ export default function PeelTest() {
         const editingReportData = sessionStorage.getItem('editingPeelReportData');
         if (savedData) {
             const formData = JSON.parse(savedData);
-
-            // Only restore selected date/shift when we're not actively editing a saved report
             if (!suppressRestore && !editingReportData) {
-                if (formData.selectedDate) {
-                    setSelectedDate(formData.selectedDate);
-                }
-                if (formData.selectedShift) {
-                    setSelectedShift(formData.selectedShift);
-                }
+                if (formData.selectedDate) setSelectedDate(formData.selectedDate);
+                if (formData.selectedShift) setSelectedShift(formData.selectedShift);
             }
-            // If there's an active editing report in session storage, prefer that as the source of truth
             const editingActive = !!editingReportData;
-
             if (!editingActive) {
-                if (formData.currentEditingReport) {
-                    setCurrentEditingReport(formData.currentEditingReport);
-                }
-                if (formData.activeTab) {
-                    setActiveTab(formData.activeTab);
-                }
-                if (formData.tableData) {
-                    setTableData(formData.tableData);
-                }
-                if (formData.formData) {
-                    setFormData(formData.formData);
-                }
-                if (formData.showReportEditor) {
-                    setShowReportEditor(true);
-                }
+                if (formData.currentEditingReport) setCurrentEditingReport(formData.currentEditingReport);
+                if (formData.activeTab) setActiveTab(formData.activeTab);
+                if (formData.tableData) setTableData(formData.tableData);
+                if (formData.formData) setFormData(formData.formData);
+                if (formData.showReportEditor) setShowReportEditor(true);
             } else {
-                // If an edit session is active, still restore activeTab (so UI view is preserved)
-                if (formData.activeTab) {
-                    setActiveTab(formData.activeTab);
-                }
+                if (formData.activeTab) setActiveTab(formData.activeTab);
             }
-            // Load signatures only when not actively editing another saved report (otherwise report's signatures win)
             if (!editingActive) {
-                if (formData.preparedBySignature) {
-                    setPreparedBySignature(formData.preparedBySignature);
-                }
-                if (formData.verifiedBySignature) {
-                    setVerifiedBySignature(formData.verifiedBySignature);
-                }
+                if (formData.preparedBySignature) setPreparedBySignature(formData.preparedBySignature);
+                if (formData.verifiedBySignature) setVerifiedBySignature(formData.verifiedBySignature);
             }
-
             if (Object.keys(formData.tableData || {}).length > 0 || Object.keys(formData.formData || {}).length > 0) {
                 setHasUnsavedChanges(true);
             }
@@ -286,8 +219,6 @@ export default function PeelTest() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -297,25 +228,19 @@ export default function PeelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         if (currentSignature.trim()) {
             showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
             return;
         }
-
-        // Check role permissions
         if (section === 'prepared' && userRole !== 'Operator') {
             showAlert('error', 'Only Operators can add signature to Prepared By section');
             return;
         }
-
         if (section === 'verified' && !['Supervisor', 'Manager'].includes(userRole || '')) {
             showAlert('error', 'Only Supervisors or Managers can add signature to Verified By section');
             return;
         }
-
         const signatureText = `${username}`;
-
         switch (section) {
             case 'prepared':
                 setPreparedBySignature(signatureText);
@@ -324,7 +249,6 @@ export default function PeelTest() {
                 setVerifiedBySignature(signatureText);
                 break;
         }
-
         setHasUnsavedChanges(true);
         saveFormData();
         showAlert('success', `Signature added to ${section} section`);
@@ -335,8 +259,6 @@ export default function PeelTest() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if current user is the one who added the signature
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -346,12 +268,10 @@ export default function PeelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         if (!currentSignature.includes(username)) {
             showAlert('error', 'You can only remove your own signature');
             return;
         }
-
         switch (section) {
             case 'prepared':
                 setPreparedBySignature('');
@@ -360,16 +280,13 @@ export default function PeelTest() {
                 setVerifiedBySignature('');
                 break;
         }
-
         setHasUnsavedChanges(true);
         saveFormData();
         showAlert('info', `Signature removed from ${section} section`);
     };
 
-    // Check if remove button should be enabled for each section
     const canRemoveSignature = (section: 'prepared' | 'verified') => {
         if (!username) return false;
-
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -379,14 +296,11 @@ export default function PeelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
         return currentSignature.includes(username);
     };
 
     const canAddSignature = (section: 'prepared' | 'verified') => {
         if (!username) return false;
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -396,11 +310,7 @@ export default function PeelTest() {
                 currentSignature = verifiedBySignature;
                 break;
         }
-
-        if (currentSignature.trim()) {
-            return false; // Cannot add if signature already exists
-        }
-
+        if (currentSignature.trim()) return false;
         switch (section) {
             case 'prepared':
                 return userRole === 'Operator';
@@ -427,12 +337,10 @@ export default function PeelTest() {
         sessionStorage.setItem('peelTestFormData', JSON.stringify(formDataToSave));
     };
 
-    // Save form data whenever relevant states change
     useEffect(() => {
         saveFormData();
     }, [selectedDate, selectedShift, currentEditingReport, activeTab, tableData, formData, showReportEditor]);
 
-    // Navigation functions with state persistence
     const handleBackToHome = () => {
         if (hasUnsavedChanges) {
             showConfirm({
@@ -460,10 +368,8 @@ export default function PeelTest() {
         setShowReportEditor(false);
         setSelectedDate(new Date().toISOString().split('T')[0]);
         setSelectedShift('');
-        // Clear signatures
         setPreparedBySignature('');
         setVerifiedBySignature('');
-
         sessionStorage.removeItem('editingPeelReportIndex');
         sessionStorage.removeItem('editingPeelReportData');
         sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
@@ -483,7 +389,7 @@ export default function PeelTest() {
     const loadSavedReports = async () => {
         try {
             const reports = await getSavedReports();
-            setSavedReports(reports); // Set the state here
+            setSavedReports(reports);
         } catch (error) {
             console.error('Error loading reports:', error);
         }
@@ -514,16 +420,13 @@ export default function PeelTest() {
             showAlert('error', 'Please select a date');
             return;
         }
-
         if (!selectedShift) {
             showAlert('error', 'Please select a shift');
             return;
         }
-
         const reportName = generateReportName(selectedDate, selectedShift);
-        const savedReports = await getSavedReports(); // Add await here
+        const savedReports = await getSavedReports();
         const existingLocalReport = savedReports.find(report => report.name === reportName);
-
         if (existingLocalReport) {
             try {
                 const fullReport = await apiService.getReportById(existingLocalReport._id!);
@@ -548,42 +451,25 @@ export default function PeelTest() {
                 showAlert('info', 'Created blank report');
             }
         }
-
         setShowReportEditor(true);
         setHasUnsavedChanges(true);
     };
 
     const loadReportForEditing = (report: ReportData) => {
-        // Extract signature fields from formData
         const signatureFields: Record<string, string> = {};
         Object.keys(report.formData).forEach(key => {
-            if (key === 'preparedBySignature' || key === 'verifiedBySignature') {
-                signatureFields[key] = report.formData[key];
-            }
+            if (key === 'preparedBySignature' || key === 'verifiedBySignature') signatureFields[key] = report.formData[key];
         });
-
-        // Set both table data and form data (for signatures)
         setTableData(report.formData);
         setFormData(signatureFields);
-
-        // Set signature states
-        if (report.formData.preparedBySignature) {
-            setPreparedBySignature(report.formData.preparedBySignature as string);
-        }
-        if (report.formData.verifiedBySignature) {
-            setVerifiedBySignature(report.formData.verifiedBySignature as string);
-        }
-
+        if (report.formData.preparedBySignature) setPreparedBySignature(report.formData.preparedBySignature as string);
+        if (report.formData.verifiedBySignature) setVerifiedBySignature(report.formData.verifiedBySignature as string);
         setCurrentEditingReport(report.name);
-        // Ensure the selected date/shift reflect the report being edited and prevent auto-restore from overwriting them
         const { date: reportDate, shift: reportShift } = extractDateShiftFromReport(report);
         if (reportDate) setSelectedDate(reportDate);
         if (reportShift) setSelectedShift(reportShift);
-
         sessionStorage.setItem(PEEL_SUPPRESS_KEY, 'true');
         setHasUnsavedChanges(true);
-
-        // Save to session storage for persistence
         sessionStorage.setItem('editingPeelReportData', JSON.stringify(report));
         sessionStorage.setItem('editingPeelReportId', report._id!);
     };
@@ -593,19 +479,14 @@ export default function PeelTest() {
         sessionStorage.removeItem('editingPeelReportData');
         sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
         const newFormData: Record<string, string> = {};
-
         mongoData.forEach((record, repIndex) => {
             if (repIndex >= 24) return;
-
-            // Set basic information
             newFormData[`row_${repIndex}_cell_0`] = record.Date || '';
             newFormData[`row_${repIndex}_cell_1`] = record.Shift || '';
             newFormData[`row_${repIndex}_cell_2`] = record.Stringer?.toString() || '';
             newFormData[`row_${repIndex}_cell_3`] = record.Unit || '';
             newFormData[`row_${repIndex}_cell_4`] = record.PO || '';
             newFormData[`row_${repIndex}_cell_5`] = record.Cell_Vendor || record['Cell Vendor'] || '';
-
-            // Front side data
             for (let position = 1; position <= 16; position++) {
                 for (let ribbon = 1; ribbon <= 7; ribbon++) {
                     const key = `Front_${position}_${ribbon}`;
@@ -615,8 +496,6 @@ export default function PeelTest() {
                     }
                 }
             }
-
-            // Back side data
             for (let position = 1; position <= 16; position++) {
                 for (let ribbon = 1; ribbon <= 7; ribbon++) {
                     const key = `Back_${position}_${ribbon}`;
@@ -627,25 +506,15 @@ export default function PeelTest() {
                 }
             }
         });
-
-        // Extract signature fields if they exist in the first record
         if (mongoData[0]) {
-            if (mongoData[0].preparedBy) {
-                newFormData['preparedBy'] = mongoData[0].preparedBy;
-            }
-            if (mongoData[0].verifiedBy) {
-                newFormData['verifiedBy'] = mongoData[0].verifiedBy;
-            }
+            if (mongoData[0].preparedBy) newFormData['preparedBy'] = mongoData[0].preparedBy;
+            if (mongoData[0].verifiedBy) newFormData['verifiedBy'] = mongoData[0].verifiedBy;
         }
-
         setTableData(newFormData);
-
-        // Set signature fields in formData
         const signatureFields: Record<string, string> = {};
         if (newFormData['preparedBy']) signatureFields['preparedBy'] = newFormData['preparedBy'];
         if (newFormData['verifiedBy']) signatureFields['verifiedBy'] = newFormData['verifiedBy'];
         setFormData(signatureFields);
-
         setCurrentEditingReport(reportName);
         setHasUnsavedChanges(true);
     };
@@ -657,22 +526,17 @@ export default function PeelTest() {
         setTableData({});
         setCurrentEditingReport(reportName);
         setHasUnsavedChanges(true);
-        // Ensure any previous editing session is cleared when creating a new blank report
     };
 
     const handleCellChange = (rowIndex: number, cellIndex: number, value: string) => {
         const cellId = `row_${rowIndex}_cell_${cellIndex}`;
-        setTableData(prev => ({
-            ...prev,
-            [cellId]: value
-        }));
+        setTableData(prev => ({...prev, [cellId]: value }));
         setHasUnsavedChanges(true);
     };
 
     const calculateAverage = (rowIndex: number, startCell: number, count: number): string => {
         let sum = 0;
         let validCount = 0;
-
         for (let i = 0; i < count; i++) {
             const cellId = `row_${rowIndex}_cell_${startCell + i}`;
             const value = tableData[cellId];
@@ -681,11 +545,9 @@ export default function PeelTest() {
                 validCount++;
             }
         }
-
         return validCount > 0 ? (sum / validCount).toFixed(2) : '0.00';
     };
 
-    // Check if cell should be highlighted
     const shouldHighlightCell = (value: string): boolean => {
         return value === '' || (parseFloat(value) < 1.0 && !isNaN(parseFloat(value)));
     };
@@ -697,28 +559,20 @@ export default function PeelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
-
-            // Fetch complete report data from S3 using getReportById
             const fullReport = await apiService.getReportById(report._id);
-
-            // Parse date from report name
             const dateShiftMatch = fullReport.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
             if (dateShiftMatch) {
                 const day = dateShiftMatch[1];
                 const month = dateShiftMatch[2];
                 const year = dateShiftMatch[3];
                 const shift = dateShiftMatch[4];
-
                 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 const monthIndex = monthNames.findIndex(m => m.toLowerCase() === month.toLowerCase()) + 1;
                 const formattedDate = `${year}-${monthIndex.toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
-
                 setSelectedDate(formattedDate);
                 setSelectedShift(shift);
             }
-
             loadReportForEditing(fullReport);
             setShowReportEditor(true);
             setActiveTab('edit-report');
@@ -729,7 +583,6 @@ export default function PeelTest() {
         }
     };
 
-    // Update the deleteSavedReport function
     const deleteSavedReport = async (index: number) => {
         try {
             const reports = await apiService.getAllReports();
@@ -737,7 +590,6 @@ export default function PeelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
             await apiService.deleteReport(report._id!);
             await loadSavedReports();
@@ -748,29 +600,23 @@ export default function PeelTest() {
         }
     };
 
-    // Analysis functions
     const analyzeReport = async () => {
         if (!monthYear) {
             showAlert('error', 'Please select a month and year');
             return;
         }
-
         if (!stringer) {
             showAlert('error', 'Please select a stringer');
             return;
         }
-
         if (!cellFace) {
             showAlert('error', 'Please select cell face');
             return;
         }
-
         const [year, month] = monthYear.split('-');
         const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         const monthName = monthNames[parseInt(month) - 1];
-
         setShowChart(true);
-
         try {
             const graphData = await fetchGraphData(monthName, parseInt(year), parseInt(stringer), cellFace);
             if (graphData && graphData.data && graphData.data.length > 0) {
@@ -814,27 +660,19 @@ export default function PeelTest() {
             showAlert('error', 'Please load or create a report first');
             return;
         }
-
-        // Calculate and save averages
         const averages: { [key: string]: string } = {};
-
-        // Calculate averages for all repetitions
         for (let rep = 0; rep < 24; rep++) {
-            // Front section averages
             for (let position = 1; position <= 16; position++) {
                 const startCell = 6 + (position - 1) * 7;
                 const average = calculateAverage(rep, startCell, 7);
                 averages[`front_avg_${rep}_${position}`] = average;
             }
-
-            // Back section averages  
             for (let position = 1; position <= 16; position++) {
                 const startCell = 118 + (position - 1) * 7;
                 const average = calculateAverage(rep, startCell, 7);
                 averages[`back_avg_${rep}_${position}`] = average;
             }
         }
-
         const reportData: Omit<ReportData, '_id'> = {
             name: currentEditingReport,
             timestamp: new Date().toISOString(),
@@ -848,22 +686,15 @@ export default function PeelTest() {
             rowData: [],
             averages: averages
         };
-
         const editingId = sessionStorage.getItem('editingPeelReportId');
-
         try {
             if (editingId) {
-                // Editing existing report
                 const existingReport = await apiService.getReportById(editingId);
-
                 if (currentEditingReport === existingReport.name) {
-                    // Same name, update the report
                     await apiService.updateReport(editingId, reportData);
                     showAlert('success', 'Report updated successfully!');
                 } else {
-                    // Different name, check if name already exists
                     const nameExists = await apiService.checkReportNameExists(currentEditingReport, editingId);
-
                     if (nameExists) {
                         showConfirm({
                             title: 'Report Name Exists',
@@ -872,10 +703,8 @@ export default function PeelTest() {
                             confirmText: 'Replace',
                             cancelText: 'Cancel',
                             onConfirm: async () => {
-                                // Find the existing report with this name and update it
                                 const allReports = await apiService.getAllReports();
                                 const existingReportWithSameName = allReports.find(report => report.name === currentEditingReport);
-
                                 if (existingReportWithSameName) {
                                     await apiService.updateReport(existingReportWithSameName._id!, reportData);
                                     showAlert('success', 'Report updated successfully!');
@@ -883,7 +712,6 @@ export default function PeelTest() {
                                     await apiService.createReport(reportData);
                                     showAlert('success', 'New report created successfully!');
                                 }
-
                                 sessionStorage.removeItem('editingPeelReportId');
                                 sessionStorage.removeItem('editingPeelReportData');
                                 sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
@@ -894,19 +722,15 @@ export default function PeelTest() {
                         });
                         return;
                     } else {
-                        // Name doesn't exist, create new report
                         await apiService.createReport(reportData);
                         showAlert('success', 'New report created with updated name!');
                     }
                 }
-
                 sessionStorage.removeItem('editingPeelReportId');
                 sessionStorage.removeItem('editingPeelReportData');
                 sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
             } else {
-                // Creating new report
                 const nameExists = await apiService.checkReportNameExists(currentEditingReport);
-
                 if (nameExists) {
                     showConfirm({
                         title: 'Report Name Exists',
@@ -915,10 +739,8 @@ export default function PeelTest() {
                         confirmText: 'Replace',
                         cancelText: 'Cancel',
                         onConfirm: async () => {
-                            // Find the existing report with this name and update it
                             const allReports = await apiService.getAllReports();
                             const existingReport = allReports.find(report => report.name === currentEditingReport);
-
                             if (existingReport) {
                                 await apiService.updateReport(existingReport._id!, reportData);
                                 showAlert('success', 'Report updated successfully!');
@@ -926,7 +748,6 @@ export default function PeelTest() {
                                 await apiService.createReport(reportData);
                                 showAlert('success', 'New report created successfully!');
                             }
-
                             clearFormData();
                             loadSavedReports();
                             setActiveTab('saved-reports');
@@ -934,12 +755,10 @@ export default function PeelTest() {
                     });
                     return;
                 } else {
-                    // Name doesn't exist, create new report
                     await apiService.createReport(reportData);
                     showAlert('success', 'Report saved successfully!');
                 }
             }
-
             clearFormData();
             loadSavedReports();
             setActiveTab('saved-reports');
@@ -955,7 +774,6 @@ export default function PeelTest() {
                 showAlert('error', 'Please load or create a report first');
                 return;
             }
-
             const averages: { [key: string]: string } = {};
             for (let rep = 0; rep < 24; rep++) {
                 for (let position = 1; position <= 16; position++) {
@@ -966,27 +784,21 @@ export default function PeelTest() {
                     averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
                 }
             }
-
             const peelReportData = {
                 report_name: currentEditingReport,
                 timestamp: new Date().toISOString(),
                 form_data: { ...tableData, ...formData, ...averages }, // Include averages
                 averages: averages
             };
-
             console.log(peelReportData);
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(peelReportData),
             });
-
             if (!response.ok) {
                 throw new Error('Failed to generate report');
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -996,7 +808,6 @@ export default function PeelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -1011,39 +822,31 @@ export default function PeelTest() {
                 showAlert('error', 'Please load or create a report first');
                 return;
             }
-
             const averages: { [key: string]: string } = {};
             for (let rep = 0; rep < 24; rep++) {
                 for (let position = 1; position <= 16; position++) {
                     const frontStartCell = 6 + (position - 1) * 7;
                     averages[`front_avg_${rep}_${position}`] = calculateAverage(rep, frontStartCell, 7);
-
                     const backStartCell = 118 + (position - 1) * 7;
                     averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
                 }
             }
-
             const peelReportData = {
                 report_name: currentEditingReport,
                 timestamp: new Date().toISOString(),
-                form_data: { ...tableData, ...formData, ...averages }, // Include averages
+                form_data: { ...tableData, ...formData, ...averages },
                 averages: averages
             };
-
             console.log(peelReportData);
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(peelReportData),
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to generate PDF: ${errorText}`);
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1053,7 +856,6 @@ export default function PeelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
@@ -1063,15 +865,12 @@ export default function PeelTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = await getSavedReports(); // Add await here
+            const reports = await getSavedReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
-
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
                 headers: {
@@ -1079,11 +878,9 @@ export default function PeelTest() {
                 },
                 body: JSON.stringify({ report_id: report._id }),
             });
-
             if (!response.ok) {
                 throw new Error('Failed to generate report');
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1104,28 +901,21 @@ export default function PeelTest() {
     const exportSavedReportToPDF = async (index: number) => {
         try {
             showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const reports = await getSavedReports(); // Add await here
+            const reports = await getSavedReports();
             if (index < 0 || index >= reports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-
             const report = reports[index];
-
-            // Use the new backend export endpoint that fetches data from S3
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: report._id }),
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to generate PDF: ${errorText}`);
             }
-
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1135,7 +925,6 @@ export default function PeelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'PDF file exported successfully');
         } catch (error) {
             console.error('Error generating PDF:', error);
@@ -1143,72 +932,69 @@ export default function PeelTest() {
         }
     };
 
-    // Generate table rows
     const generateTableRows = () => {
         const rows = [];
         const repetitions = 24;
-
         for (let rep = 0; rep < repetitions; rep++) {
-            // Front section header
             rows.push(
                 <tr key={`front-header-${rep}`}>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_0`] || ''}
                             onChange={(e) => handleCellChange(rep, 0, e.target.value)}
                         />
                     </td>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_1`] || ''}
                             onChange={(e) => handleCellChange(rep, 1, e.target.value)}
                         />
                     </td>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_2`] || ''}
                             onChange={(e) => handleCellChange(rep, 2, e.target.value)}
                         />
                     </td>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_3`] || ''}
                             onChange={(e) => handleCellChange(rep, 3, e.target.value)}
                         />
                     </td>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_4`] || ''}
                             onChange={(e) => handleCellChange(rep, 4, e.target.value)}
                         />
                     </td>
-                    <td rowSpan={34} className="border border-gray-300 p-1 editable rowspan-cell">
+                    <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_5`] || ''}
                             onChange={(e) => handleCellChange(rep, 5, e.target.value)}
                         />
                     </td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Front</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">1</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">2</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">3</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">4</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">5</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">6</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">7</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Avg. Value (N/mm)</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">Front</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">1</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">2</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">3</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">4</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">5</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">6</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">7</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">Avg. Value (N/mm)</td>
                 </tr>
             );
 
@@ -1219,7 +1005,7 @@ export default function PeelTest() {
 
                 rows.push(
                     <tr key={`front-data-${rep}-${i}`}>
-                        <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">{i}</td>
+                        <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">{i}</td>
                         {[0, 1, 2, 3, 4, 5, 6].map(offset => {
                             const cellIndex = startCell + offset;
                             const value = tableData[`row_${rep}_cell_${cellIndex}`] || '';
@@ -1228,18 +1014,18 @@ export default function PeelTest() {
                             return (
                                 <td
                                     key={`front-${rep}-${i}-${offset}`}
-                                    className={`border border-gray-300 p-1 ${isHighlighted ? 'bg-red-200' : ''}`}
+                                    className={`border border-gray-300 dark:border-gray-700 p-1 ${isHighlighted ? 'bg-red-200 dark:bg-red-700' : 'bg-white dark:bg-gray-800'}`}
                                 >
                                     <input
                                         type="text"
-                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                                         value={value}
                                         onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
                                     />
                                 </td>
                             );
                         })}
-                        <td className="border border-gray-300 p-1 font-semibold text-center">
+                        <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold text-center bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white">
                             {average}
                         </td>
                     </tr>
@@ -1249,15 +1035,15 @@ export default function PeelTest() {
             // Back section header
             rows.push(
                 <tr key={`back-header-${rep}`}>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Back</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">1</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">2</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">3</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">4</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">5</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">6</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">7</td>
-                    <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">Avg. Value (N/mm)</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">Back</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">1</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">2</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">3</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">4</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">5</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">6</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">7</td>
+                    <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">Avg. Value (N/mm)</td>
                 </tr>
             );
 
@@ -1268,7 +1054,7 @@ export default function PeelTest() {
 
                 rows.push(
                     <tr key={`back-data-${rep}-${i}`}>
-                        <td className="border border-gray-300 p-1 font-semibold bg-gray-100 text-center">{i}</td>
+                        <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">{i}</td>
                         {[0, 1, 2, 3, 4, 5, 6].map(offset => {
                             const cellIndex = startCell + offset;
                             const value = tableData[`row_${rep}_cell_${cellIndex}`] || '';
@@ -1277,18 +1063,18 @@ export default function PeelTest() {
                             return (
                                 <td
                                     key={`back-${rep}-${i}-${offset}`}
-                                    className={`border border-gray-300 p-1 ${isHighlighted ? 'bg-red-200' : ''}`}
+                                    className={`border border-gray-300 dark:border-gray-700 p-1 ${isHighlighted ? 'bg-red-200 dark:bg-red-700' : 'bg-white dark:bg-gray-800'}`}
                                 >
                                     <input
                                         type="text"
-                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
                                         value={value}
                                         onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
                                     />
                                 </td>
                             );
                         })}
-                        <td className="border border-gray-300 p-1 font-semibold text-center">
+                        <td className="border border-gray-300 dark:border-gray-700 p-1 font-semibold text-center bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white">
                             {average}
                         </td>
                     </tr>
@@ -1299,13 +1085,11 @@ export default function PeelTest() {
         return rows;
     };
 
-    // Render components
     const renderEditReportTab = () => (
-        <div className="">
-            {/* Date Selection */}
-            <div className="date-selector bg-gray-50 p-2 rounded-lg border border-gray-200">
-                <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
-                    <label htmlFor="date-select" className="font-semibold text-gray-700">
+        <>
+            <div className="date-selector bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex flex-row gap-2 items-center justify-center flex-wrap">
+                    <label htmlFor="date-select" className="font-semibold text-gray-700 dark:text-gray-300">
                         Select Date:
                     </label>
                     <input
@@ -1313,52 +1097,50 @@ export default function PeelTest() {
                         id="date-select"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     />
-                    <label htmlFor="shift-select" className="font-semibold text-gray-700">
+                    <label htmlFor="shift-select" className="font-semibold text-gray-700 dark:text-gray-300">
                         Select Shift:
                     </label>
                     <select
                         id="shift-select"
                         value={selectedShift}
                         onChange={(e) => setSelectedShift(e.target.value)}
-                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     >
-                        <option value="">-- Select Shift --</option>
-                        <option value="A">Shift-A</option>
-                        <option value="B">Shift-B</option>
-                        <option value="C">Shift-C</option>
+                        <option value="" className="dark:bg-gray-800">-- Select Shift --</option>
+                        <option value="A" className="dark:bg-gray-800">Shift-A</option>
+                        <option value="B" className="dark:bg-gray-800">Shift-B</option>
+                        <option value="C" className="dark:bg-gray-800">Shift-C</option>
                     </select>
                     <button
                         onClick={loadOrCreateReport}
-                        className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent text-black rounded-lg px-5 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                        className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-blue-700 dark:to-purple-700 border-transparent text-black dark:text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                     >
                         Load / Create Report
                     </button>
                 </div>
             </div>
-
-            {/* Report Info Display */}
             {showReportEditor && currentEditingReport && (
-                <div className="report-info p-2 rounded-lg">
-                    <div className="save-actions flex items-center justify-center gap-2">
-                        <p className="current-report-title text-red-600 font-bold bg-white rounded p-2">
-                            Currently editing: <span>{currentEditingReport}</span>
+                <div className="report-info py-1 rounded-lg">
+                    <div className="save-actions flex flex-col sm:flex-row items-center justify-center gap-2 flex-wrap">
+                        <p className="current-report-title text-red-600 dark:text-red-400 font-bold bg-white dark:bg-gray-800 rounded p-2 text-sm text-center w-full">
+                            Currently editing: <span className="break-all">{currentEditingReport}</span>
                         </p>
                         <button
-                            className="save-btn w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[rgb(76,0,198,0.5))] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            className="save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-blue-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                             onClick={saveReport}
                         >
                             Save Report
                         </button>
                         <button
-                            className="export-excel w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#27ae60] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            className="export-excel w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                             onClick={exportToExcel}
                         >
                             Export as Excel
                         </button>
                         <button
-                            className="export-pdf w-[15%] p-2.5 rounded-md border-b-white border-b-2 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-[#e74c3c] text-white text-sm hover:bg-white hover:text-black hover:transform hover:-translate-y-1 hover:shadow-lg"
+                            className="export-pdf w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-red-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                             onClick={exportToPDF}
                         >
                             Export as PDF
@@ -1366,133 +1148,131 @@ export default function PeelTest() {
                     </div>
                 </div>
             )}
-
-            {/* Report Editor */}
             {showReportEditor && (
-                <div className="report-editor bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="test-report-container p-6">
-                        <table className="w-full border-collapse border border-gray-300 text-sm">
-                            <thead>
-                                <tr>
-                                    <td colSpan={2} rowSpan={3} className="border border-gray-300 p-2">
-                                        <img src="/LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" />
-                                    </td>
-                                    <td colSpan={10} rowSpan={2} className="border border-gray-300 p-2 text-center text-2xl font-bold">
-                                        VIKRAM SOLAR LIMITED
-                                    </td>
-                                    <td colSpan={3} rowSpan={1} className="border border-gray-300 p-2">
-                                        Doc. No.: VSL/QAD/FM/104
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td colSpan={3} className="border border-gray-300 p-2">
-                                        Issue Date: 04.09.2024
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td colSpan={10} className="border border-gray-300 p-2 text-center text-xl font-bold">
-                                        Solar Cell Peel Strength Test Report
-                                    </td>
-                                    <td colSpan={3} className="border border-gray-300 p-2">
-                                        Rev. No./ Date: 01/ 25.09.2024
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td colSpan={15} className="border border-gray-300 p-2 bg-gray-100 text-center">
-                                        <strong>Allowable Limit: Peel strength average ≥ 1.0 N/mm</strong>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th className="border border-gray-300 p-2">Date</th>
-                                    <th className="border border-gray-300 p-2">Shift</th>
-                                    <th className="border border-gray-300 p-2">Stringer</th>
-                                    <th className="border border-gray-300 p-2">Unit</th>
-                                    <th className="border border-gray-300 p-2">PO</th>
-                                    <th className="border border-gray-300 p-2">Cell Vendor</th>
-                                    <th colSpan={8} className="border border-gray-300 p-2 text-center">
-                                        Bus Pad Position Wise Ribbon Peel Strength
-                                    </th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {generateTableRows()}
-                            </tbody>
-                        </table>
-                        <div className="footer flex justify-between mt-6 border-gray-300 gap-4">
+                <div className="report-editor bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="test-report-container p-1">
+                        <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
+                            <table className="w-full border-collapse min-w-[1200px] text-xs sm:text-sm">
+                                <thead>
+                                    <tr>
+                                        <td colSpan={2} rowSpan={3} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2">
+                                            <img src="/LOGOS/VSL_Logo (1).png" height="70" alt="VSL Logo" className="mx-auto" />
+                                        </td>
+                                        <td colSpan={10} rowSpan={2} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2 text-center text-lg sm:text-xl md:text-2xl font-bold text-gray-800 dark:text-white">
+                                            VIKRAM SOLAR LIMITED
+                                        </td>
+                                        <td colSpan={3} rowSpan={1} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2 text-gray-800 dark:text-white text-xs sm:text-sm font-bold">
+                                            Doc. No.: VSL/QAD/FM/104
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colSpan={3} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2 text-gray-800 dark:text-white text-xs sm:text-sm font-bold">
+                                            Issue Date: 04.09.2024
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colSpan={10} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2 text-center text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-white">
+                                            Solar Cell Peel Strength Test Report
+                                        </td>
+                                        <td colSpan={3} className="border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 p-2 text-gray-800 dark:text-white text-xs sm:text-sm font-bold">
+                                            Rev. No./ Date: 01/ 25.09.2024
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colSpan={15} className="border border-gray-300 dark:border-gray-700 p-2 bg-gray-100 dark:bg-gray-700 text-center text-gray-800 dark:text-white">
+                                            <strong>Allowable Limit: Peel strength average ≥ 1.0 N/mm</strong>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">Date</th>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">Shift</th>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">Stringer</th>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">Unit</th>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">PO</th>
+                                        <th className="border border-gray-300 dark:border-gray-700 p-2 text-gray-800 dark:text-white">Cell Vendor</th>
+                                        <th colSpan={8} className="border border-gray-300 dark:border-gray-700 p-2 text-center text-gray-800 dark:text-white">
+                                            Bus Pad Position Wise Ribbon Peel Strength
+                                        </th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {generateTableRows()}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="footer flex flex-col lg:flex-row justify-between mt-6 border-gray-300 dark:border-gray-700 gap-4">
                             <div className="signature flex-1 text-center mb-4">
-                                <p><strong>PREPARED BY:</strong></p>
-                                <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
-                                    <tbody>
-                                        <tr>
-                                            <td className="text-center relative signature-field">
-                                                {preparedBySignature}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <button
-                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                    onClick={() => handleAddSignature('prepared')}
-                                    disabled={!canAddSignature('prepared')}
-                                >
-                                    Add my Signature
-                                </button>
-                                <button
-                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                    onClick={() => handleRemoveSignature('prepared')}
-                                    disabled={!canRemoveSignature('prepared')}
-                                >
-                                    Remove my Signature
-                                </button>
+                                <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
+                                <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
+                                    <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
+                                        <span className="text-gray-800 dark:text-white text-lg font-semibold">{preparedBySignature}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                    <button
+                                        className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('prepared') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                        onClick={() => handleAddSignature('prepared')}
+                                        disabled={!canAddSignature('prepared')}
+                                    >
+                                        Add my Signature
+                                    </button>
+                                    <button
+                                        className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                        onClick={() => handleRemoveSignature('prepared')}
+                                        disabled={!canRemoveSignature('prepared')}
+                                    >
+                                        Remove my Signature
+                                    </button>
+                                </div>
                             </div>
                             <div className="signature flex-1 text-center mb-4">
-                                <p><strong>VERIFIED BY:</strong></p>
-                                <table className="w-full min-h-10 border-collapse mb-4 border border-gray-300">
-                                    <tbody>
-                                        <tr>
-                                            <td className="text-center relative signature-field">
-                                                {verifiedBySignature}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <button
-                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                    onClick={() => handleAddSignature('verified')}
-                                    disabled={!canAddSignature('verified')}
-                                >
-                                    Add my Signature
-                                </button>
-                                <button
-                                    className={`px-3 py-1 text-sm text-white rounded mx-1 ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
-                                    onClick={() => handleRemoveSignature('verified')}
-                                    disabled={!canRemoveSignature('verified')}
-                                >
-                                    Remove my Signature
-                                </button>
+                                <p className="font-bold text-gray-800 dark:text-white mb-2">VERIFIED BY:</p>
+                                <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
+                                    <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
+                                        <span className="text-gray-800 dark:text-white text-lg font-semibold">{verifiedBySignature}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                    <button
+                                        className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('verified') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                        onClick={() => handleAddSignature('verified')}
+                                        disabled={!canAddSignature('verified')}
+                                    >
+                                        Add my Signature
+                                    </button>
+                                    <button
+                                        className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('verified') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
+                                        onClick={() => handleRemoveSignature('verified')}
+                                        disabled={!canRemoveSignature('verified')}
+                                    >
+                                        Remove my Signature
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 
     const renderSavedReportsTab = () => (
-        <SavedReportsNChecksheets
-            reports={savedReports}
-            onExportExcel={exportSavedReportToExcel}
-            onExportPdf={exportSavedReportToPDF}
-            onEdit={editSavedReport}
-            onDelete={deleteSavedReport}
-        />
+        <div className="mt-4">
+            <SavedReportsNChecksheets
+                reports={savedReports}
+                onExportExcel={exportSavedReportToExcel}
+                onExportPdf={exportSavedReportToPDF}
+                onEdit={editSavedReport}
+                onDelete={deleteSavedReport}
+            />
+        </div>
     );
 
     const renderReportAnalysisTab = () => (
-        <div className="report-analysis-container bg-white rounded-lg border border-gray-200 p-2">
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-center flex-wrap">
-                <label htmlFor="monthYear" className="font-semibold text-gray-700">
+        <div className="report-analysis-container bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mt-4">
+            <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-center flex-wrap">
+                <label htmlFor="monthYear" className="font-semibold text-gray-700 dark:text-gray-300">
                     Month & Year:
                 </label>
                 <input
@@ -1500,9 +1280,9 @@ export default function PeelTest() {
                     id="monthYear"
                     value={monthYear}
                     onChange={(e) => setMonthYear(e.target.value)}
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 />
-                <label htmlFor="stringer-select" className="font-semibold text-gray-700">
+                <label htmlFor="stringer-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Stringer:
                 </label>
                 <input
@@ -1512,40 +1292,42 @@ export default function PeelTest() {
                     onChange={(e) => setStringer(e.target.value)}
                     min="1"
                     max="12"
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white w-20"
                 />
-                <label htmlFor="face-select" className="font-semibold text-gray-700">
+                <label htmlFor="face-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Cell Face:
                 </label>
                 <select
                     id="face-select"
                     value={cellFace}
                     onChange={(e) => setCellFace(e.target.value)}
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5"
+                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 >
-                    <option value="">-- Select --</option>
-                    <option value="front">Front</option>
-                    <option value="back">Back</option>
-                    <option value="both">Front + Back</option>
+                    <option value="" className="dark:bg-gray-800">-- Select --</option>
+                    <option value="front" className="dark:bg-gray-800">Front</option>
+                    <option value="back" className="dark:bg-gray-800">Back</option>
+                    <option value="both" className="dark:bg-gray-800">Front + Back</option>
                 </select>
                 <button
                     onClick={analyzeReport}
-                    className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] border-transparent text-black rounded-lg px-5 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                    className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-blue-700 dark:to-purple-700 border-transparent text-black dark:text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 >
                     Analyze
                 </button>
             </div>
             {showChart && graphData.length > 0 && (
-                <div className="chart-container bg-white rounded-lg p-2">
-                    <ZoomableChart
-                        chartData={prepareChartData()}
-                        options={prepareChartOptions()}
-                        type="line"
-                    />
+                <div className="chart-container bg-white dark:bg-gray-800 rounded-lg p-3 mt-4">
+                    <div className="h-64 sm:h-80 md:h-96">
+                        <ZoomableChart
+                            chartData={prepareChartData()}
+                            options={prepareChartOptions()}
+                            type="line"
+                        />
+                    </div>
                 </div>
             )}
             {showChart && graphData.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     No data available for the selected criteria. Please try different parameters.
                 </div>
             )}
@@ -1623,7 +1405,8 @@ export default function PeelTest() {
                     text: `Peel Strength Analysis - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}, Stringer ${stringer}, ${getCellFaceDisplayName(cellFace)}`,
                     font: {
                         size: 16,
-                    }
+                    },
+                    color: '#333'
                 },
                 tooltip: {
                     callbacks: {
@@ -1644,32 +1427,43 @@ export default function PeelTest() {
                     }
                 },
                 legend: {
-                    display: true
+                    display: true,
+                    labels: {
+                        color: '#333'
+                    }
                 }
             },
             scales: {
                 x: {
                     title: {
                         display: true,
-                        text: 'Day of Month'
+                        text: 'Day of Month',
+                        color: '#333'
                     },
                     grid: {
-                        display: true
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        color: '#333'
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'Peel Strength (N/mm)'
+                        text: 'Peel Strength (N/mm)',
+                        color: '#333'
                     },
                     min: 0,
                     grid: {
-                        display: true
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
                     },
                     ticks: {
                         callback: function (value: any) {
                             return value + ' N/mm';
-                        }
+                        },
+                        color: '#333'
                     }
                 }
             },
@@ -1680,38 +1474,38 @@ export default function PeelTest() {
     };
 
     return (
-        <div className="pb-4">
+        <div className="min-h-screen transition-colors duration-300">
             <div className="container">
                 <div className="text-center text-white mb-6">
                     <button onClick={handleBackToHome}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                        className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-x-1"
                     >
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
 
-                <div className="flex justify-center mx-4">
+                <div className="flex justify-center mx-2">
                     <div
-                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('edit-report')}
                     >
                         Edit Report
                     </div>
                     <div
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
                         Saved Reports
                     </div>
                     <div
-                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('report-analysis')}
                     >
                         Report Analysis
                     </div>
                 </div>
                 {/* Tab Content */}
-                <div className="tab-content mt-2 mx-4">
+                <div className="tab-content mt-2 mx-2">
                     {activeTab === 'edit-report' && renderEditReportTab()}
                     {activeTab === 'saved-reports' && renderSavedReportsTab()}
                     {activeTab === 'report-analysis' && renderReportAnalysisTab()}

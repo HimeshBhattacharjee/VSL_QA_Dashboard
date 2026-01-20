@@ -47,7 +47,7 @@ export default function SavedReportsNChecksheets({
 
     if (reports.length === 0) {
         return (
-            <div className="saved-reports-container bg-white dark:bg-gray-800 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+            <div className="saved-reports-container bg-white dark:bg-gray-900 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
                 <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
                     Saved Reports
                 </h2>
@@ -64,7 +64,7 @@ export default function SavedReportsNChecksheets({
     }
 
     return (
-        <div className="saved-reports-container bg-white dark:bg-gray-800 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+        <div className="saved-reports-container bg-white dark:bg-gray-900 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
             <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
                 Saved Reports
             </h2>

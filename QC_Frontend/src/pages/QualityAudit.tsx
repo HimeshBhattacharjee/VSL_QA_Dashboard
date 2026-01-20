@@ -973,91 +973,81 @@ export default function QualityAudit() {
     }));
 
     return (
-        <div className="pb-4">
-            <div className="max-w-7xl mx-4">
+        <div>
+            <div className="max-w-7xl mx-auto px-4">
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white p-4 rounded-lg">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                            <p className="mt-2 text-gray-700">Loading...</p>
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 dark:border-blue-400 mx-auto"></div>
+                            <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
                         </div>
                     </div>
                 )}
                 <div className="text-center mb-6">
                     <button
                         onClick={handleBackToHome}
-                        className="bg-white/20 text-white border-2 border-white px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] hover:-translate-x-1"
+                        className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
                     >
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
-
-                {/* Tab Navigation */}
                 <div className="flex justify-center mb-2">
                     <button
                         onClick={() => setActiveTab('create-edit')}
-                        className={`tab ${activeTab === 'create-edit' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'create-edit' ? 'active bg-gray-200 dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-100 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
                         Create/Edit Checksheet
                     </button>
                     <button
                         onClick={() => setActiveTab('saved-reports')}
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white text-[#667eea] border-b-[rgba(48,30,107,1)] border-b-2 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] text-white border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-gray-200 dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-100 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
                         Saved Checksheets
                     </button>
                 </div>
-
-                {/* Create/Edit Checksheet Tab */}
                 {activeTab === 'create-edit' && (
                     <div>
-                        {/* Basic Information View */}
                         {currentView === 'basicInfo' && (
                             <div className="flex flex-col justify-center">
-                                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                                    <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+                                <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-6">
+                                    <h2 className="text-xl sm:text-2xl font-bold text-center text-gray-800 dark:text-gray-200 mb-6">
                                         Basic Information
                                     </h2>
-                                    <div className="flex flex-wrap gap-6 mb-6">
-                                        {/* Report Name with Line Selector */}
+                                    <div className="flex flex-wrap items-center justify-center gap-4 mb-4">
                                         <div className="w-full">
-                                            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-                                                <span className="text-lg text-gray-800 font-medium">
+                                            <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                                                <span className="text-sm sm:text-lg text-gray-800 dark:text-gray-300 font-medium">
                                                     Inprocess Quality Audit Report - FAB - II LINE -
                                                 </span>
                                                 <select
                                                     value={auditData.lineNumber}
                                                     onChange={(e) => handleLineChange(e.target.value)}
-                                                    className="text-sm p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
+                                                    className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                 >
                                                     <option value="">Select</option>
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>
                                         </div>
-
-                                        {/* Date */}
-                                        <div className="w-full sm:w-[48%] lg:w-[23%]">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                                        <div className="w-full sm:w-[48%]">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date</label>
                                             <input
                                                 type="date"
                                                 value={auditData.date}
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, date: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
-
-                                        {/* Shift */}
-                                        <div className="w-full sm:w-[48%] lg:w-[23%]">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Shift</label>
+                                        <div className="w-full sm:w-[48%]">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shift</label>
                                             <select
                                                 value={auditData.shift}
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, shift: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             >
                                                 <option value="">Select Shift</option>
                                                 <option value="A">Shift-A</option>
@@ -1066,10 +1056,8 @@ export default function QualityAudit() {
                                                 <option value="G">Shift-G</option>
                                             </select>
                                         </div>
-
-                                        {/* Production Order No. */}
-                                        <div className="w-full sm:w-[48%] lg:w-[23%]">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <div className="w-full sm:w-[48%]">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                                 Production Order No.
                                             </label>
                                             <input
@@ -1078,25 +1066,21 @@ export default function QualityAudit() {
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, productionOrderNo: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
-
-                                        {/* Module Type as Text Input */}
-                                        <div className="w-full sm:w-[48%] lg:w-[23%]">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Module Type</label>
+                                        <div className="w-full sm:w-[48%]">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Module Type</label>
                                             <input
                                                 type="text"
                                                 value={auditData.moduleType}
                                                 onChange={(e) =>
                                                     setAuditData({ ...auditData, moduleType: e.target.value })
                                                 }
-                                                className="p-3 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 border"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
-
-                                        {/* Checkboxes */}
-                                        <div className="w-full flex flex-row justify-center gap-10 mt-4">
+                                        <div className="w-full flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-10 mt-4">
                                             <label className="flex items-center">
                                                 <input
                                                     type="checkbox"
@@ -1104,9 +1088,9 @@ export default function QualityAudit() {
                                                     onChange={(e) =>
                                                         setAuditData({ ...auditData, customerSpecAvailable: e.target.checked })
                                                     }
-                                                    className="rounded border-gray-300 text-blue-600 hover:border-blue-500 w-5 h-5"
+                                                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
                                                 />
-                                                <span className="ml-2 text-sm text-gray-700">Customer Specification Available</span>
+                                                <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Customer Specification Available</span>
                                             </label>
                                             <label className="flex items-center">
                                                 <input
@@ -1115,9 +1099,9 @@ export default function QualityAudit() {
                                                     onChange={(e) =>
                                                         setAuditData({ ...auditData, specificationSignedOff: e.target.checked })
                                                     }
-                                                    className="rounded border-gray-300 text-blue-600 hover:border-blue-500 w-5 h-5"
+                                                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
                                                 />
-                                                <span className="ml-2 text-sm text-gray-700">Specification Signed Off With Customer</span>
+                                                <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Specification Signed Off With Customer</span>
                                             </label>
                                         </div>
                                     </div>
@@ -1125,7 +1109,7 @@ export default function QualityAudit() {
                                     <div className="text-center">
                                         <button
                                             onClick={handleNextFromBasicInfo}
-                                            className="px-8 py-3 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors text-lg font-semibold"
+                                            className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm sm:text-lg font-semibold"
                                         >
                                             Next
                                         </button>
@@ -1133,51 +1117,47 @@ export default function QualityAudit() {
                                 </div>
                             </div>
                         )}
-
-                        {/* Stage Selection View */}
                         {currentView === 'stageSelection' && (
                             <div className="flex flex-col justify-center">
-                                <div className="bg-white rounded-lg shadow-md p-6">
-                                    <div className="flex justify-center gap-2 mb-4">
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+                                    <div className="flex flex-wrap justify-center gap-2 mb-4">
                                         <button
                                             onClick={handleBackToBasicInfo}
-                                            className="bg-gray-600 text-white border border-gray-600 p-2 rounded-lg cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-gray-700 hover:border-gray-700"
+                                            className="bg-gray-600 dark:bg-gray-700 text-white border border-gray-600 dark:border-gray-700 p-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-gray-700 dark:hover:bg-gray-600 hover:border-gray-700 dark:hover:border-gray-600"
                                         >
                                             ← Back to Basic Info
                                         </button>
                                         <button
                                             onClick={generateExcelReport}
-                                            className="p-2 bg-green-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-green-700 transition-colors text-sm font-semibold"
+                                            className="p-2 bg-green-600 dark:bg-green-700 text-white rounded-lg shadow-lg cursor-pointer hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-xs sm:text-sm font-semibold"
                                         >
                                             Generate Audit Excel
                                         </button>
                                         <button
                                             onClick={generatePDFReport}
-                                            className="p-2 bg-red-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-red-700 transition-colors text-sm font-semibold"
+                                            className="p-2 bg-red-600 dark:bg-red-700 text-white rounded-lg shadow-lg cursor-pointer hover:bg-red-700 dark:hover:bg-red-600 transition-colors text-xs sm:text-sm font-semibold"
                                         >
                                             Generate Audit PDF
                                         </button>
                                     </div>
-
-                                    {/* Signature Section */}
-                                    <div className="flex justify-between gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                        <div className="flex-1 text-center">
-                                            <p className="font-semibold text-gray-700 mb-2">AUDIT BY:</p>
-                                            <div className="min-h-10 p-2 bg-white border border-gray-300 rounded mb-2 flex items-center justify-center">
-                                                <span className={`${auditBySignature ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                                    <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        <div className="flex-1 text-center mb-4 md:mb-0">
+                                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-2">AUDIT BY:</p>
+                                            <div className="min-h-10 p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded mb-2 flex items-center justify-center">
+                                                <span className={`${auditBySignature ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
                                                     {auditBySignature || 'No signature'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-center gap-2">
                                                 <button
-                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canAddSignature('audit') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canAddSignature('audit') ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleAddSignature('audit')}
                                                     disabled={!canAddSignature('audit')}
                                                 >
                                                     Add my Signature
                                                 </button>
                                                 <button
-                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canRemoveSignature('audit') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canRemoveSignature('audit') ? 'bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleRemoveSignature('audit')}
                                                     disabled={!canRemoveSignature('audit')}
                                                 >
@@ -1186,22 +1166,22 @@ export default function QualityAudit() {
                                             </div>
                                         </div>
                                         <div className="flex-1 text-center">
-                                            <p className="font-semibold text-gray-700 mb-2">REVIEWED BY:</p>
-                                            <div className="min-h-10 p-2 bg-white border border-gray-300 rounded mb-2 flex items-center justify-center">
-                                                <span className={`${reviewedBySignature ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-2">REVIEWED BY:</p>
+                                            <div className="min-h-10 p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded mb-2 flex items-center justify-center">
+                                                <span className={`${reviewedBySignature ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
                                                     {reviewedBySignature || 'No signature'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-center gap-2">
                                                 <button
-                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canAddSignature('reviewed') ? 'bg-green-500 hover:bg-green-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canAddSignature('reviewed') ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleAddSignature('reviewed')}
                                                     disabled={!canAddSignature('reviewed')}
                                                 >
                                                     Add my Signature
                                                 </button>
                                                 <button
-                                                    className={`px-3 py-1 text-white rounded text-sm font-medium transition-colors ${canRemoveSignature('reviewed') ? 'bg-red-500 hover:bg-red-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`}
+                                                    className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canRemoveSignature('reviewed') ? 'bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleRemoveSignature('reviewed')}
                                                     disabled={!canRemoveSignature('reviewed')}
                                                 >
@@ -1210,23 +1190,24 @@ export default function QualityAudit() {
                                             </div>
                                         </div>
                                     </div>
-
-                                    <div className="grid grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                         {stageButtons.map((button) => (
                                             <button
                                                 key={button.id}
                                                 onClick={() => button.enabled && handleStageButtonClick(button.id)}
                                                 disabled={!button.enabled}
-                                                className={`p-6 rounded-lg transition-all duration-300 transform hover:scale-105 relative ${button.enabled
+                                                className={`p-3 sm:p-4 md:p-6 rounded-lg transition-all duration-300 transform hover:scale-105 relative ${button.enabled
                                                     ? button.hasUnsavedChanges
-                                                        ? 'bg-orange-500 text-white hover:bg-orange-600 cursor-pointer'
-                                                        : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
-                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                        ? 'bg-orange-500 dark:bg-orange-600 text-white hover:bg-orange-600 dark:hover:bg-orange-500 cursor-pointer'
+                                                        : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600 cursor-pointer'
+                                                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                                                     }`}
                                             >
-                                                {auditData.stages.find(stage => stage.id === button.id)?.name || button.label}
+                                                <span className="text-xs sm:text-sm font-medium">
+                                                    {auditData.stages.find(stage => stage.id === button.id)?.name || button.label}
+                                                </span>
                                                 {button.hasUnsavedChanges && (
-                                                    <span className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full"></span>
+                                                    <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-yellow-400 dark:bg-yellow-500 rounded-full"></span>
                                                 )}
                                             </button>
                                         ))}
@@ -1237,145 +1218,147 @@ export default function QualityAudit() {
 
                         {/* Stage Detail View */}
                         {currentView === 'stageDetail' && selectedStageId && (
-                            <div className="bg-white rounded-lg shadow-md overflow-hidden animate-fade-in">
-                                <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
-                                    <h2 className="text-xl font-semibold">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden animate-fade-in">
+                                <div className="bg-blue-600 dark:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                                    <h2 className="text-lg sm:text-xl font-semibold">
                                         {auditData.stages.find(stage => stage.id === selectedStageId)?.name || `Stage ${selectedStageId}`}
                                         {stageChanges.has(selectedStageId) && (
-                                            <span className="ml-2 text-yellow-300 text-sm">• Unsaved changes</span>
+                                            <span className="ml-2 text-yellow-300 dark:text-yellow-400 text-xs sm:text-sm">• Unsaved changes</span>
                                         )}
                                     </h2>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 self-end sm:self-auto">
                                         <button
                                             onClick={handleSaveStage}
-                                            className="bg-green-500 text-white border border-white px-4 py-2 rounded-lg cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600"
+                                            className="bg-green-500 dark:bg-green-600 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-green-600 dark:hover:bg-gray-800 dark:hover:text-green-400"
                                         >
                                             Save
                                         </button>
                                         <button
                                             onClick={handleBackToStageSelection}
-                                            className="bg-white/20 text-white border border-white px-4 py-2 rounded-lg cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600"
+                                            className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
                                         >
                                             Close
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    {auditData.stages
-                                        .find(stage => stage.id === selectedStageId)
-                                        ?.parameters.map((param) => {
-                                            // Get the saved parameter data
-                                            const savedStage = auditData.stages.find(s => s.id === selectedStageId);
-                                            const savedParam = savedStage?.parameters.find(p => p.id === param.id);
+                                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                    <div className="min-w-full inline-block align-middle">
+                                        {auditData.stages
+                                            .find(stage => stage.id === selectedStageId)
+                                            ?.parameters.map((param) => {
+                                                // Get the saved parameter data
+                                                const savedStage = auditData.stages.find(s => s.id === selectedStageId);
+                                                const savedParam = savedStage?.parameters.find(p => p.id === param.id);
 
-                                            return (
-                                                <table key={param.id} className="min-w-full border border-gray-200 rounded-lg overflow-hidden mb-2">
-                                                    <thead className="bg-gray-50">
-                                                        <tr>
-                                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                                                                Parameters
-                                                            </th>
-                                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                                                                Criteria
-                                                            </th>
-                                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                                                                Type of Inspection
-                                                            </th>
-                                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                                                                Inspection Frequency
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white">
-                                                        <tr className="bg-blue-50 font-bold">
-                                                            <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
-                                                                {param.parameters}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
-                                                                {param.criteria}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
-                                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 text-green-800' :
-                                                                    param.typeOfInspection === 'Measurements' ? 'bg-blue-100 text-blue-800' :
-                                                                        param.typeOfInspection === 'Functionality' ? 'bg-purple-100 text-purple-800' :
-                                                                            param.typeOfInspection === 'RFID Scanner' ? 'bg-cyan-100 text-cyan-800' :
-                                                                                'bg-gray-100 text-gray-800'
-                                                                    }`}>
-                                                                    {param.typeOfInspection}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-normal text-sm text-gray-900 border border-gray-200">
-                                                                {param.inspectionFrequency}
-                                                            </td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td colSpan={4} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border border-gray-200">
-                                                                Observations
-                                                            </td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td colSpan={4} className="px-6 py-4 border border-gray-200">
-                                                                <div className="flex justify-center space-x-2 w-full">
-                                                                    {param.observations.map((obs) => {
-                                                                        // Get the saved observation value
-                                                                        const savedObservation = savedParam?.observations.find(
-                                                                            o => o.timeSlot === obs.timeSlot
-                                                                        );
+                                                return (
+                                                    <div key={param.id} className="min-w-[800px] sm:min-w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden mb-2">
+                                                        <table className="w-full">
+                                                            <thead className="bg-gray-50 dark:bg-gray-900">
+                                                                <tr>
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                        Parameters
+                                                                    </th>
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                        Criteria
+                                                                    </th>
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                        Type of Inspection
+                                                                    </th>
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                        Inspection Frequency
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white dark:bg-gray-800">
+                                                                <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
+                                                                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                                                        {param.parameters}
+                                                                    </td>
+                                                                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                                                        {param.criteria}
+                                                                    </td>
+                                                                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                                                            param.typeOfInspection === 'Measurements' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
+                                                                                param.typeOfInspection === 'Functionality' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                                                                                    param.typeOfInspection === 'RFID Scanner' ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300' :
+                                                                                        'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                                                                            }`}>
+                                                                            {param.typeOfInspection}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                                                        {param.inspectionFrequency}
+                                                                    </td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td colSpan={4} className="px-4 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                                                                        Observations
+                                                                    </td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td colSpan={4} className="px-4 sm:px-6 py-3 sm:py-4 border border-gray-200 dark:border-gray-700">
+                                                                        <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 w-full">
+                                                                            {param.observations.map((obs) => {
+                                                                                // Get the saved observation value
+                                                                                const savedObservation = savedParam?.observations.find(
+                                                                                    o => o.timeSlot === obs.timeSlot
+                                                                                );
 
-                                                                        return (
-                                                                            <div
-                                                                                key={obs.timeSlot}
-                                                                                className={`flex flex-col items-center ${param.observations.length === 1 ? 'w-full' :
-                                                                                    param.observations.length === 2 ? 'w-1/2' :
-                                                                                        param.observations.length === 3 ? 'w-1/3' :
-                                                                                            'w-1/4'}`}
-                                                                            >
-                                                                                <label className="text-xs text-gray-500 mb-1">{obs.timeSlot}</label>
-                                                                                {param.renderObservation ? (
-                                                                                    param.renderObservation({
-                                                                                        stageId: selectedStageId,
-                                                                                        paramId: param.id,
-                                                                                        timeSlot: obs.timeSlot,
-                                                                                        value: savedObservation?.value || obs.value,
-                                                                                        observationData: savedObservation || obs,
-                                                                                        onUpdate: updateObservation
-                                                                                    })
-                                                                                ) : (
-                                                                                    <div className="w-full flex justify-center">
-                                                                                        {/* Handle both string and object values */}
-                                                                                        {typeof (savedObservation?.value || obs.value) === 'string' ? (
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                value={savedObservation?.value || obs.value}
-                                                                                                onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
-                                                                                                placeholder="Enter value"
-                                                                                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                                                            />
+                                                                                return (
+                                                                                    <div
+                                                                                        key={obs.timeSlot}
+                                                                                        className={`flex flex-col items-center ${param.observations.length === 1 ? 'w-full' :
+                                                                                            param.observations.length === 2 ? 'sm:w-1/2' :
+                                                                                                param.observations.length === 3 ? 'sm:w-1/3' :
+                                                                                                    'sm:w-1/4'}`}
+                                                                                    >
+                                                                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">{obs.timeSlot}</label>
+                                                                                        {param.renderObservation ? (
+                                                                                            param.renderObservation({
+                                                                                                stageId: selectedStageId,
+                                                                                                paramId: param.id,
+                                                                                                timeSlot: obs.timeSlot,
+                                                                                                value: savedObservation?.value || obs.value,
+                                                                                                observationData: savedObservation || obs,
+                                                                                                onUpdate: updateObservation
+                                                                                            })
                                                                                         ) : (
-                                                                                            <div className="text-xs text-gray-500 p-2 border border-gray-300 rounded bg-gray-50">
-                                                                                                Complex data structure - use custom renderer
+                                                                                            <div className="w-full flex justify-center">
+                                                                                                {/* Handle both string and object values */}
+                                                                                                {typeof (savedObservation?.value || obs.value) === 'string' ? (
+                                                                                                    <input
+                                                                                                        type="text"
+                                                                                                        value={savedObservation?.value || obs.value}
+                                                                                                        onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
+                                                                                                        placeholder="Enter value"
+                                                                                                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                                                                    />
+                                                                                                ) : (
+                                                                                                    <div className="text-xs text-gray-500 dark:text-gray-400 p-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-900">
+                                                                                                        Complex data structure - use custom renderer
+                                                                                                    </div>
+                                                                                                )}
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            );
-                                        })}
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </div>
                 )}
-
-                {/* Saved Checksheets Tab */}
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
                         <SavedReportsNChecksheets
@@ -1392,7 +1375,7 @@ export default function QualityAudit() {
                                 description: 'Create and save your first checksheet in the "Create/Edit Checksheet" tab.'
                             }}
                             showAdditionalInfo={(report: any) => (
-                                <p className="text-gray-600 text-sm">
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
                                     Product: {report.data.productionOrderNo} | Module: {report.data.moduleType}
                                 </p>
                             )}
@@ -1400,7 +1383,7 @@ export default function QualityAudit() {
                     </div>
                 )}
             </div>
-            <div id="alert-container" className="fixed top-5 right-5 z-50 w-80"></div>
+            <div id="alert-container" className="fixed top-5 right-5 z-50 w-80 sm:w-96"></div>
         </div>
     );
 }

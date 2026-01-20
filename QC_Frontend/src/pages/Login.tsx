@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAlert } from '../context/AlertContext';
+import { useTheme } from '../context/ThemeContext';
 
 const PasswordInput = ({
     value,
@@ -65,6 +66,7 @@ export default function Login() {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const { showAlert } = useAlert();
+    const { setTheme } = useTheme();
     const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
 
     useEffect(() => {
@@ -124,6 +126,9 @@ export default function Login() {
                     sessionStorage.setItem("isLoggedIn", "true");
                     sessionStorage.setItem("username", user.name);
                     sessionStorage.setItem("userRole", user.role);
+                    if (user.theme) {
+                        try { setTheme(user.theme, false); } catch (e) { }
+                    }
                     if (user.role === 'Admin') {
                         navigate("/admin");
                     } else {
@@ -193,6 +198,9 @@ export default function Login() {
                     sessionStorage.setItem("isLoggedIn", "true");
                     sessionStorage.setItem("username", user.name);
                     sessionStorage.setItem("userRole", user.role);
+                    if (user.theme) {
+                        try { setTheme(user.theme, false); } catch (e) { }
+                    }
 
                     if (user.role === 'Admin') {
                         navigate("/admin");

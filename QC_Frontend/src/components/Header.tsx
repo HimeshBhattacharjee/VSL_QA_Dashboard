@@ -1,7 +1,23 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+
+function ThemeToggle() {
+    const { theme, toggleTheme } = useTheme();
+    return (
+        <button
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title="Toggle theme"
+            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-colors"
+        >
+            {theme === 'light' ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-blue-300" />}
+        </button>
+    );
+}
 
 interface HeaderProps {
     onToggleSidebar: () => void;
@@ -25,6 +41,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
+    const { setTheme } = useTheme();
 
     useEffect(() => {
         const storedUsername = sessionStorage.getItem("username");
@@ -57,6 +74,9 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                     setIsLoggedIn(true);
                     sessionStorage.setItem("employeeId", userData.employeeId);
                     sessionStorage.setItem("userRole", userData.role);
+                    if (userData.theme) {
+                        try { setTheme(userData.theme, false); } catch (e) { }
+                    }
                     if (userData.role !== 'Admin') fetchUserSignature(userData.employeeId);
                 } else console.error('❌ Failed to fetch current user');
             }
@@ -103,7 +123,13 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                 setUserRole(null);
                 setEmployeeId(null);
                 setDropdownOpen(false);
-                navigate("/login");
+                    // revert to local preference (if any) on logout
+                    try {
+                        const stored = localStorage.getItem('theme');
+                        const localPref = (stored === 'dark' || stored === 'light') ? stored : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                        setTheme(localPref as 'light' | 'dark', false);
+                    } catch (e) { }
+                    navigate("/login");
             }
         });
     };
@@ -347,6 +373,14 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
 
                 {/* Right Side: User Profile */}
                 <div className="flex items-center justify-end relative" ref={dropdownRef}>
+                    {/* Theme toggle */}
+                    <div className="mr-3">
+                        {/* useTheme provides theme and setter */}
+                        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                        {/* @ts-ignore */}
+                        { /* @ts-ignore to keep TS happy if types differ */ }
+                        <ThemeToggle />
+                    </div>
                     {isLoggedIn ? (
                         <>
                             <div
