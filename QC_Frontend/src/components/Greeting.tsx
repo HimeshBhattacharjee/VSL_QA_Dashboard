@@ -10,7 +10,7 @@ const Greeting: React.FC = () => {
 
     return (
         <div className="text-center">
-            <div className="greeting text-5xl font-bold text-slate-900 dark:text-gray-100 text-shadow-md">
+            <div className="greeting text-3xl md:text-4xl font-bold text-slate-900 dark:text-gray-100 text-shadow-md">
                 {getGreeting()}, Viking!
             </div>
         </div>

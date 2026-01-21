@@ -261,7 +261,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
 
     return (
         <div
-            className="w-full sticky top-0 z-40 mb-5 h-16 backdrop-blur-xl bg-transparent transition-colors duration-300">
+            className="w-full sticky top-0 z-40 h-16 backdrop-blur-xl bg-transparent transition-colors duration-300">
             {signatureModalOpen && (
                 <div className="fixed inset-0 min-h-screen bg-[rgba(0,0,0,0.9)] flex items-center justify-center z-50">
                     <div className="flex flex-col items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-lg p-6 w-96 max-w-full mx-4 shadow-2xl">

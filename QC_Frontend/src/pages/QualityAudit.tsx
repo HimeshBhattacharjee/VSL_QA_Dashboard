@@ -974,7 +974,7 @@ export default function QualityAudit() {
 
     return (
         <div>
-            <div className="max-w-7xl mx-auto px-4">
+            <div className="max-w-7xl mx-auto">
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
@@ -986,7 +986,7 @@ export default function QualityAudit() {
                 <div className="text-center mb-6">
                     <button
                         onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
+                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
                     >
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
@@ -994,13 +994,13 @@ export default function QualityAudit() {
                 <div className="flex justify-center mb-2">
                     <button
                         onClick={() => setActiveTab('create-edit')}
-                        className={`tab ${activeTab === 'create-edit' ? 'active bg-gray-200 dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-100 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
                         Create/Edit Checksheet
                     </button>
                     <button
                         onClick={() => setActiveTab('saved-reports')}
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-gray-200 dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-100 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
                         Saved Checksheets
                     </button>
@@ -1119,8 +1119,8 @@ export default function QualityAudit() {
                         )}
                         {currentView === 'stageSelection' && (
                             <div className="flex flex-col justify-center">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
-                                    <div className="flex flex-wrap justify-center gap-2 mb-4">
+                                <div className="bg-transparent dark:bg-gray-800 rounded-lg">
+                                    <div className="flex flex-wrap justify-center gap-2 mb-2">
                                         <button
                                             onClick={handleBackToBasicInfo}
                                             className="bg-gray-600 dark:bg-gray-700 text-white border border-gray-600 dark:border-gray-700 p-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-gray-700 dark:hover:bg-gray-600 hover:border-gray-700 dark:hover:border-gray-600"
@@ -1215,10 +1215,8 @@ export default function QualityAudit() {
                                 </div>
                             </div>
                         )}
-
-                        {/* Stage Detail View */}
                         {currentView === 'stageDetail' && selectedStageId && (
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden animate-fade-in">
+                            <div className="bg-transparent dark:bg-gray-800 rounded-lg overflow-hidden animate-fade-in">
                                 <div className="bg-blue-600 dark:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                     <h2 className="text-lg sm:text-xl font-semibold">
                                         {auditData.stages.find(stage => stage.id === selectedStageId)?.name || `Stage ${selectedStageId}`}
@@ -1247,10 +1245,8 @@ export default function QualityAudit() {
                                         {auditData.stages
                                             .find(stage => stage.id === selectedStageId)
                                             ?.parameters.map((param) => {
-                                                // Get the saved parameter data
                                                 const savedStage = auditData.stages.find(s => s.id === selectedStageId);
                                                 const savedParam = savedStage?.parameters.find(p => p.id === param.id);
-
                                                 return (
                                                     <div key={param.id} className="min-w-[800px] sm:min-w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden mb-2">
                                                         <table className="w-full">

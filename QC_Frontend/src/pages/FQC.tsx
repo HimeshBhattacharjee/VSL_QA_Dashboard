@@ -260,11 +260,11 @@ export default function FQC() {
     };
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
             <div className="text-center mb-6">
                 <button
                     onClick={handleBackToHome}
-                    className="bg-white/20 dark:bg-gray-700/50 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-600 hover:-translate-x-1"
+                    className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
                 >
                     <span className="font-bold text-md">⇐</span> Back to Home
                 </button>

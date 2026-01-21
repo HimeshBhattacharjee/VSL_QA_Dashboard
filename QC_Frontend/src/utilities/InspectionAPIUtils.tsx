@@ -47,7 +47,6 @@ export interface DateRangeData {
     [key: string]: any;
 }
 
-// Enhanced error handling function
 const handleApiError = (error: any, context: string) => {
     console.error(`Error in ${context}:`, error);
     if (error instanceof Error) {
@@ -56,11 +55,9 @@ const handleApiError = (error: any, context: string) => {
     throw new Error(`${context}: Unknown error occurred`);
 };
 
-// UPDATED: Load data from API instead of JSON files
 export async function loadInspectionData(inspectionType: string, line: string = 'combined'): Promise<InspectionDataResponse> {
     try {
         let dataUrl, summaryUrl;
-
         if (line === 'combined') {
             dataUrl = `${API_BASE_URL}/qa/combined/${inspectionType}`;
             summaryUrl = `${API_BASE_URL}/qa/combined/${inspectionType}/summary`;
@@ -95,7 +92,6 @@ export async function loadInspectionData(inspectionType: string, line: string = 
     }
 }
 
-// UPDATED: Fetch defect analysis from API
 export async function fetchDefectAnalysis(inspectionType: string, line: string | null = null): Promise<DefectAnalysisData> {
     try {
         let url = `${API_BASE_URL}/qa/analysis/defects/${inspectionType}`;
@@ -113,7 +109,6 @@ export async function fetchDefectAnalysis(inspectionType: string, line: string |
     }
 }
 
-// UPDATED: Fetch production statistics from API
 export async function fetchProductionStats(inspectionType: string | null = null, line: string | null = null): Promise<ProductionStats> {
     try {
         let url = `${API_BASE_URL}/qa/analysis/production`;
@@ -136,7 +131,6 @@ export async function fetchProductionStats(inspectionType: string | null = null,
     }
 }
 
-// UPDATED: Fetch data by date range from API
 export async function fetchDateRangeData(startDate: string, endDate: string, inspectionType: string, metric: string = 'Total rejection'): Promise<DateRangeData> {
     try {
         const url = `${API_BASE_URL}/qa/data/date-range?date_from=${startDate}&date_to=${endDate}&inspection_type=${inspectionType}&metric=${encodeURIComponent(metric)}`;
@@ -151,7 +145,6 @@ export async function fetchDateRangeData(startDate: string, endDate: string, ins
     }
 }
 
-// B-Grade Analysis specific functions
 export async function fetchGradeAnalysis(startDate: string, endDate: string): Promise<GradeAnalysisResponse> {
     try {
         const response = await fetch(

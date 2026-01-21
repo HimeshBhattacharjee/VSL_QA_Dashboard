@@ -1258,7 +1258,7 @@ export default function PeelTest() {
     );
 
     const renderSavedReportsTab = () => (
-        <div className="mt-4">
+        <>
             <SavedReportsNChecksheets
                 reports={savedReports}
                 onExportExcel={exportSavedReportToExcel}
@@ -1266,11 +1266,11 @@ export default function PeelTest() {
                 onEdit={editSavedReport}
                 onDelete={deleteSavedReport}
             />
-        </div>
+        </>
     );
 
     const renderReportAnalysisTab = () => (
-        <div className="report-analysis-container bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mt-4">
+        <div className="report-analysis-container bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
             <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-center flex-wrap">
                 <label htmlFor="monthYear" className="font-semibold text-gray-700 dark:text-gray-300">
                     Month & Year:
@@ -1474,43 +1474,43 @@ export default function PeelTest() {
     };
 
     return (
-        <div className="min-h-screen transition-colors duration-300">
+        <>
             <div className="container">
-                <div className="text-center text-white mb-6">
-                    <button onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-white border-2 border-white dark:border-gray-600 px-4 py-2 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-[#667eea] dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-x-1"
+                <div className="text-center mb-6">
+                    <button
+                        onClick={handleBackToHome}
+                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
                     >
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
-
-                <div className="flex justify-center mx-2">
+                <div className="flex justify-center mb-2">
                     <div
-                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('edit-report')}
                     >
                         Edit Report
                     </div>
                     <div
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
                         Saved Reports
                     </div>
                     <div
-                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-800 text-[#667eea] dark:text-blue-400 border-b-2 border-[rgba(48,30,107,1)] dark:border-blue-500 translate-y--0.5' : 'bg-[rgba(255,255,255,0.2)] dark:bg-gray-800/20 text-white border-none translate-none'} py-3 px-2 sm:py-4 sm:px-4 rounded-tr-xl rounded-tl-xl text-center text-sm sm:text-base cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('report-analysis')}
                     >
                         Report Analysis
                     </div>
                 </div>
                 {/* Tab Content */}
-                <div className="tab-content mt-2 mx-2">
+                <div className="tab-content">
                     {activeTab === 'edit-report' && renderEditReportTab()}
                     {activeTab === 'saved-reports' && renderSavedReportsTab()}
                     {activeTab === 'report-analysis' && renderReportAnalysisTab()}
                 </div>
             </div>
-        </div >
+        </>
     );
 }
