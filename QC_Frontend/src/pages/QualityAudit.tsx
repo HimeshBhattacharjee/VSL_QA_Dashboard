@@ -48,10 +48,8 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
             if (stage.id === 26) return createSafetyTestStage(lineNumber);
             const stageConfig = LINE_DEPENDENT_CONFIG[stage.id as keyof typeof LINE_DEPENDENT_CONFIG];
             if (!stageConfig) return stage;
-
             const lineOptions = stageConfig.lineMapping[lineNumber];
             if (!lineOptions || !Array.isArray(lineOptions)) return stage;
-
             return {
                 ...stage,
                 parameters: stage.parameters.map(param => {
@@ -88,11 +86,8 @@ export default function QualityAudit() {
     const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
-
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
-
     const apiService = {
-        // Get all audits
         getAllAudits: async (): Promise<any[]> => {
             const response = await fetch(`${IPQC_API_BASE_URL}?include_data=true`);
             if (!response.ok) {
@@ -102,7 +97,6 @@ export default function QualityAudit() {
             return response.json();
         },
 
-        // Get audit by ID
         getAuditById: async (id: string): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`);
             if (!response.ok) {
@@ -112,7 +106,6 @@ export default function QualityAudit() {
             return response.json();
         },
 
-        // Create new audit
         createAudit: async (audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}`, {
                 method: 'POST',
@@ -128,7 +121,6 @@ export default function QualityAudit() {
             return response.json();
         },
 
-        // Update existing audit
         updateAudit: async (id: string, audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
                 method: 'PUT',
@@ -144,7 +136,6 @@ export default function QualityAudit() {
             return response.json();
         },
 
-        // Delete audit
         deleteAudit: async (id: string): Promise<void> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
                 method: 'DELETE',
@@ -155,7 +146,6 @@ export default function QualityAudit() {
             }
         },
 
-        // Search audits by filters
         searchAuditsByFilters: async (filters: { lineNumber?: string; date?: string; shift?: string }): Promise<any[]> => {
             const params = new URLSearchParams();
             if (filters.lineNumber) params.append('lineNumber', filters.lineNumber);
@@ -187,8 +177,6 @@ export default function QualityAudit() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -204,7 +192,6 @@ export default function QualityAudit() {
             return;
         }
 
-        // Check role permissions
         if (section === 'audit' && userRole !== 'Operator') {
             showAlert('error', 'Only Operators can add signature to Audit By section');
             return;
@@ -219,11 +206,8 @@ export default function QualityAudit() {
 
         try {
             setIsLoading(true);
-
-            // Update signature state
             const newAuditSig = section === 'audit' ? signatureText : auditBySignature;
             const newReviewedSig = section === 'reviewed' ? signatureText : reviewedBySignature;
-
             switch (section) {
                 case 'audit':
                     setAuditBySignature(signatureText);
@@ -232,12 +216,8 @@ export default function QualityAudit() {
                     setReviewedBySignature(signatureText);
                     break;
             }
-
             setHasUnsavedChanges(true);
-
-            // Auto-save the signatures immediately after adding signature
             if (auditData.lineNumber && auditData.date && auditData.shift) {
-                // Pass explicit values to avoid React state race condition
                 await saveSignaturesImmediately({
                     auditBy: newAuditSig,
                     reviewedBy: newReviewedSig
@@ -259,8 +239,6 @@ export default function QualityAudit() {
             showAlert('error', 'User not logged in');
             return;
         }
-
-        // Check if current user is the one who added the signature
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -270,20 +248,14 @@ export default function QualityAudit() {
                 currentSignature = reviewedBySignature;
                 break;
         }
-
         if (!currentSignature.includes(username)) {
             showAlert('error', 'You can only remove your own signature');
             return;
         }
-
         try {
             setIsLoading(true);
-
-            // Calculate new signature values after removal
             const newAuditSig = section === 'audit' ? '' : auditBySignature;
             const newReviewedSig = section === 'reviewed' ? '' : reviewedBySignature;
-
-            // Remove signature state
             switch (section) {
                 case 'audit':
                     setAuditBySignature('');
@@ -292,12 +264,8 @@ export default function QualityAudit() {
                     setReviewedBySignature('');
                     break;
             }
-
             setHasUnsavedChanges(true);
-
-            // Auto-save the signatures immediately after removing signature
             if (auditData.lineNumber && auditData.date && auditData.shift) {
-                // Pass explicit values to avoid React state race condition
                 await saveSignaturesImmediately({
                     auditBy: newAuditSig,
                     reviewedBy: newReviewedSig
@@ -314,10 +282,8 @@ export default function QualityAudit() {
         }
     };
 
-    // Check if remove button should be enabled for each section
     const canRemoveSignature = (section: 'audit' | 'reviewed') => {
         if (!username) return false;
-
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -327,14 +293,11 @@ export default function QualityAudit() {
                 currentSignature = reviewedBySignature;
                 break;
         }
-
         return currentSignature.includes(username);
     };
 
     const canAddSignature = (section: 'audit' | 'reviewed') => {
         if (!username) return false;
-
-        // Check if signature already exists in this section
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -344,11 +307,9 @@ export default function QualityAudit() {
                 currentSignature = reviewedBySignature;
                 break;
         }
-
         if (currentSignature.trim()) {
-            return false; // Cannot add if signature already exists
+            return false;
         }
-
         switch (section) {
             case 'audit':
                 return userRole === 'Operator';
@@ -363,25 +324,20 @@ export default function QualityAudit() {
         try {
             setIsLoading(true);
             const audits = await apiService.getAllAudits();
-            console.log('Loaded audits from MongoDB:', audits); // Debug log
-
-            // Convert MongoDB audits to SavedChecksheet format
+            console.log('Loaded audits from MongoDB:', audits);
             const checksheets = audits.map(audit => {
-                // Ensure the data structure is correct
                 if (!audit.data) {
                     console.warn('Audit missing data field:', audit);
                     return null;
                 }
-
                 return {
                     _id: audit._id,
-                    id: audit._id || '', // Use MongoDB _id as id
+                    id: audit._id || '',
                     name: audit.name,
                     timestamp: new Date(audit.timestamp).getTime(),
                     data: audit.data
                 };
-            }).filter(Boolean) as SavedChecksheet[]; // Remove any null entries
-
+            }).filter(Boolean) as SavedChecksheet[];
             setSavedChecksheets(checksheets);
         } catch (error) {
             console.error('Error loading audits:', error);
@@ -402,20 +358,13 @@ export default function QualityAudit() {
         customerSpecAvailable: false,
         specificationSignedOff: false,
         stages: lineDependentStages,
-        signatures: {
-            auditBy: '',
-            reviewedBy: ''
-        }
+        signatures: { auditBy: '', reviewedBy: '' }
     });
 
     useEffect(() => {
-        setAuditData(prev => ({
-            ...prev,
-            stages: lineDependentStages
-        }));
+        setAuditData(prev => ({ ...prev, stages: lineDependentStages }));
     }, [lineDependentStages]);
 
-    // Update your handleLineChange function
     const handleLineChange = (line: string) => {
         setLineNumber(line);
         setAuditData(prev => ({ ...prev, lineNumber: line }));
@@ -433,23 +382,18 @@ export default function QualityAudit() {
 
                     if (existingAudits.length > 0) {
                         const existingAudit = existingAudits[0];
-                        console.log('Found existing audit:', existingAudit); // Debug log
-
-                        // Merge the saved data with current line-dependent stages
+                        console.log('Found existing audit:', existingAudit);
                         const mergedData = {
                             ...existingAudit.data,
                             stages: lineDependentStages.map(stage => {
                                 const savedStage = existingAudit.data.stages.find(s => s.id === stage.id);
                                 if (savedStage) {
                                     return {
-                                        ...stage, // Current line-dependent structure
+                                        ...stage,
                                         parameters: stage.parameters.map(param => {
                                             const savedParam = savedStage.parameters.find(p => p.id === param.id);
                                             if (savedParam) {
-                                                return {
-                                                    ...param, // Current parameter structure
-                                                    observations: savedParam.observations // Saved observations
-                                                };
+                                                return { ...param, observations: savedParam.observations };
                                             }
                                             return param;
                                         })
@@ -460,8 +404,6 @@ export default function QualityAudit() {
                         };
                         setAuditData(mergedData);
                         setCurrentChecksheetId(existingAudit._id!);
-
-                        // Load signatures if they exist
                         const loadedSignatures = existingAudit.data.signatures ||
                             existingAudit.data.data?.signatures ||
                             { auditBy: existingAudit.data.auditBy, reviewedBy: existingAudit.data.reviewedBy };
@@ -498,35 +440,25 @@ export default function QualityAudit() {
         try {
             setIsLoading(true);
             const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
-
-            // Create the proper structure for MongoDB with signatures
             const checksheetData = {
                 name: checksheetName,
                 timestamp: new Date().toISOString(),
                 data: {
                     ...auditData,
-                    // Include signatures in the saved data
-                    signatures: {
-                        auditBy: auditBySignature,
-                        reviewedBy: reviewedBySignature,
-                    }
+                    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
                 }
             };
-
             if (currentChecksheetId) {
-                // Update existing checksheet
                 await apiService.updateAudit(currentChecksheetId, checksheetData);
                 showAlert('success', 'Checksheet updated successfully!');
             } else {
-                // Create new checksheet
                 const result = await apiService.createAudit(checksheetData);
                 setCurrentChecksheetId(result._id!);
                 showAlert('success', 'Checksheet saved successfully!');
             }
-
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
-            await loadSavedChecksheets(); // Reload the list
+            await loadSavedChecksheets();
         } catch (error) {
             console.error('Error saving checksheet:', error);
             showAlert('error', 'Failed to save checksheet');
@@ -541,7 +473,6 @@ export default function QualityAudit() {
         }
     };
 
-    // Save signatures immediately to database with explicit values, avoiding React state race conditions
     const saveSignaturesImmediately = async (signatures: { auditBy: string; reviewedBy: string }) => {
         if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
             return;
@@ -549,18 +480,12 @@ export default function QualityAudit() {
 
         try {
             const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
-
-            // Create the proper structure for MongoDB with explicit signature values
             const checksheetData = {
                 name: checksheetName,
                 timestamp: new Date().toISOString(),
                 data: {
                     ...auditData,
-                    // Use explicit passed values, not state variables
-                    signatures: {
-                        auditBy: signatures.auditBy,
-                        reviewedBy: signatures.reviewedBy,
-                    }
+                    signatures: { auditBy: signatures.auditBy, reviewedBy: signatures.reviewedBy }
                 }
             };
 
@@ -1025,6 +950,7 @@ export default function QualityAudit() {
                                                     className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                 >
                                                     <option value="">Select</option>
+                                                    <option value="I">I</option>
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>

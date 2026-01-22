@@ -156,7 +156,7 @@ export const LINE_DEPENDENT_CONFIG: { [stageId: number]: { parameters: string[];
         }
     },
     24: {
-        parameters: ['24-1', '24-2', '24-3', '24-4', '24-5', '24-6', '24-7', '24-8', '24-9'],
+        parameters: ['24-1', '24-2', '24-3', '24-4', '24-5', '24-6', '24-7', '24-8', '24-9', '24-10'],
         lineMapping: {
             'I': ['Line-1', 'Line-2'],
             'II': ['Line-3', 'Line-4']

@@ -448,7 +448,7 @@ const AutoFramingObservations = {
                                     type="measurement"
                                 />
                                 <span className="text-xs text-gray-500 mt-1">
-                                    {props.paramId.includes('coating-thickness') ? 'μn' : 'mm'}
+                                    {props.paramId.includes('coating-thickness') ? 'μm' : 'mm'}
                                 </span>
                             </div>
                         )}
@@ -653,7 +653,7 @@ export const createAutoFramingStage = (lineNumber: string): StageData => {
             {
                 id: "17-12-coating-thickness",
                 parameters: "Anodizing coating thickness",
-                criteria: "≥ 15 μn",
+                criteria: "≥ 15 μm",
                 typeOfInspection: "Measurements",
                 inspectionFrequency: "Every 4 hours",
                 observations: [

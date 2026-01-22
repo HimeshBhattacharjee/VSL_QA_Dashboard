@@ -128,6 +128,40 @@ const InputComponents = {
 };
 
 const SunSimulatorObservations = {
+    renderSupplier: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(lines.map(line => [line, ""]))
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, value: string) => {
+            const updatedValue = { ...sampleValue, [line]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.SingleInputSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        <div className="flex flex-col items-center gap-2">
+                            <InputComponents.TextInput
+                                value={sampleValue[line] || ''}
+                                onChange={(value) => handleUpdate(line, value)}
+                                placeholder=""
+                                type="status"
+                            />
+                        </div>
+                    </LineSection.SingleInputSection>
+                ))}
+            </div>
+        );
+    },
+
     renderHardwareCleaning: (props: ObservationRenderProps & { lineNumber?: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
@@ -585,6 +619,18 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
         parameters: [
             {
                 id: "24-1",
+                parameters: "Sun Simulator Supplier Name",
+                criteria: "Supplier",
+                typeOfInspection: "Aesthetics",
+                inspectionFrequency: "Every shift",
+                observations: [
+                    { timeSlot: "", value: "" }
+                ],
+                renderObservation: (props: ObservationRenderProps) =>
+                    SunSimulatorObservations.renderSupplier({ ...props, lineNumber })
+            },
+            {
+                id: "24-2",
                 parameters: "Cleaning of Sun Simulator Hardware parts",
                 criteria: "Aesthetics check",
                 typeOfInspection: "Aesthetics",
@@ -596,7 +642,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderHardwareCleaning({ ...props, lineNumber })
             },
             {
-                id: "24-2",
+                id: "24-3",
                 parameters: "Presence of black cover in Sun Simulator",
                 criteria: "Aesthetics check",
                 typeOfInspection: "Aesthetics",
@@ -608,7 +654,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderBlackCover({ ...props, lineNumber })
             },
             {
-                id: "24-3",
+                id: "24-4",
                 parameters: "Room Temp",
                 criteria: "25± 2°C",
                 typeOfInspection: "Aesthetics",
@@ -620,7 +666,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderRoomTemp({ ...props, lineNumber })
             },
             {
-                id: "24-4",
+                id: "24-5",
                 parameters: "Humidity",
                 criteria: "50-80%",
                 typeOfInspection: "Aesthetics",
@@ -632,7 +678,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderHumidity({ ...props, lineNumber })
             },
             {
-                id: "24-5",
+                id: "24-6",
                 parameters: "Irradiance",
                 criteria: "1000W/M²",
                 typeOfInspection: "Aesthetics",
@@ -644,7 +690,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderIrradiance({ ...props, lineNumber })
             },
             {
-                id: "24-6",
+                id: "24-7",
                 parameters: "Calibration Data",
                 criteria: "Each sun simulator calibrated every 2 hours using valid second reference PV module. Calibration performed at 25 ± 2 ˚C room temperature and 25 ± 2 ˚C reference PV module temperature. Calibration Limit of Pmax, Voc and Isc ± 0.2%",
                 typeOfInspection: "Aesthetics",
@@ -656,7 +702,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderCalibrationData({ ...props, lineNumber })
             },
             {
-                id: "24-7",
+                id: "24-8",
                 parameters: "Current Sorting",
                 criteria: "Current binning as per customer requirement",
                 typeOfInspection: "Aesthetics",
@@ -668,7 +714,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderCurrentSorting({ ...props, lineNumber })
             },
             {
-                id: "24-8",
+                id: "24-9",
                 parameters: "Module binning as per Wp",
                 criteria: "As per production Order",
                 typeOfInspection: "Aesthetics",
@@ -680,7 +726,7 @@ export const createSunSimulatorStage = (lineNumber: string): StageData => {
                     SunSimulatorObservations.renderModuleBinning({ ...props, lineNumber })
             },
             {
-                id: "24-9",
+                id: "24-10",
                 parameters: "Contact block verification by measuring the resistance",
                 criteria: "Resistance of the contact block ≤20 mΩ",
                 typeOfInspection: "Functionality",

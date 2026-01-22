@@ -91,7 +91,7 @@ def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False,
 
 def get_template_config(line_number):
     if line_number == 'I':
-        template_path = get_template_path('Blank Audit Line-II.xlsx')
+        template_path = get_template_path('Blank Audit Line-I.xlsx')
         # Cell mapping for Line I
         field_config = {
             'date': {
@@ -125,7 +125,6 @@ def get_template_config(line_number):
                 'format': {'font_size': 16, 'bold': True}
             }
         }
-        # Observation mapping for Line I
         observation_cell_mapping = {
             '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
             '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
@@ -875,7 +874,6 @@ def get_template_config(line_number):
         }
     elif line_number == 'II':
         template_path = get_template_path('Blank Audit Line-II.xlsx')
-        # Cell mapping for Line II (adjust these based on your actual Line II template)
         field_config = {
             'date': {
                 'cell': 'C5', 
@@ -908,17 +906,16 @@ def get_template_config(line_number):
                 'format': {'font_size': 16, 'bold': True}
             },
             'audit_by': {
-                'cell': 'C402',
+                'cell': 'C405',
                 'label': 'Audit By:',
                 'format': {'font_size': 16, 'bold': True}
             },
             'reviewed_by': {
-                'cell': 'O402',
+                'cell': 'O405',
                 'label': 'Reviewed By:',
                 'format': {'font_size': 16, 'bold': True}
             }
         }
-        # Observation mapping for Line II (adjust these based on your actual Line II template)
         observation_cell_mapping = {
             '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
             '1-2': { '4 hrs': 'G10', '8 hrs': 'S10' },
@@ -963,25 +960,26 @@ def get_template_config(line_number):
             '16-4': { '4 hours': 'G258', '8 hours': 'S258' },
             '16-5': { '4 hours': 'G259', '8 hours': 'S259' },
             '16-6': { '4 hours': 'G260', '8 hours': 'S260' },
-            '25-1': { '4 hrs': 'G364', '8 hrs': 'S364' },
-            '25-2': { '4 hrs': 'G365', '8 hrs': 'S365' },
-            '28-1': { '4 hrs': 'G379', '8 hrs': 'S379' },
-            '29-2': { '2 hours': 'G385', '4 hours': 'M385', '6 hours': 'S385', '8 hours': 'Y385' },
-            '30-1': { '4 hrs': 'G386', '8 hrs': 'S386' },
-            '30-2': { '4 hrs': 'G387', '8 hrs': 'S387' },
-            '31-1': { 'Observation - 1': 'G389', 'Observation - 2': 'M389', 'Observation - 3': 'S389', 'Observation - 4': 'Y389' },
-            '31-2': { 'Observation - 1': 'G390', 'Observation - 2': 'M390', 'Observation - 3': 'S390', 'Observation - 4': 'Y390' },
-            '31-3': { 'Observation - 1': 'G391', 'Observation - 2': 'M391', 'Observation - 3': 'S391', 'Observation - 4': 'Y391' },
-            '31-4': { 'Observation - 1': 'G392', 'Observation - 2': 'M392', 'Observation - 3': 'S392', 'Observation - 4': 'Y392' },
-            '31-5': { 'Observation - 1': 'G393', 'Observation - 2': 'M393', 'Observation - 3': 'S393', 'Observation - 4': 'Y393' },
-            '31-6': { 'Observation - 1': 'G394', 'Observation - 2': 'M394', 'Observation - 3': 'S394', 'Observation - 4': 'Y394' },
-            '31-7': { 'Observation - 1': 'G395', 'Observation - 2': 'M395', 'Observation - 3': 'S395', 'Observation - 4': 'Y395' },
-            '31-8': { 'Observation - 1': 'G396', 'Observation - 2': 'M396', 'Observation - 3': 'S396', 'Observation - 4': 'Y396' },
-            '31-9': { 'Observation - 1': 'G397', 'Observation - 2': 'M397', 'Observation - 3': 'S397', 'Observation - 4': 'Y397' },
-            '31-10': { 'Observation - 1': 'G398', 'Observation - 2': 'M398', 'Observation - 3': 'S398', 'Observation - 4': 'Y398' },
-            '31-11': { 'Observation - 1': 'G399', 'Observation - 2': 'M399', 'Observation - 3': 'S399', 'Observation - 4': 'Y399' },
-            '31-12': { 'Observation - 1': 'G400', 'Observation - 2': 'M400', 'Observation - 3': 'S400', 'Observation - 4': 'Y400' },
-            '31-13': { 'Observation - 1': 'G401', 'Observation - 2': 'M401', 'Observation - 3': 'S401', 'Observation - 4': 'Y401' },
+            '25-1': { '4 hrs': 'G366', '8 hrs': 'S366' },
+            '25-2': { '4 hrs': 'G367', '8 hrs': 'S367' },
+            '28-1': { '4 hrs': 'G381', '8 hrs': 'S381' },
+            '29-2': { '2 hours': 'G387', '4 hours': 'M387', '6 hours': 'S387', '8 hours': 'Y387' },
+            '30-1': { '4 hrs': 'G388', '8 hrs': 'S388' },
+            '30-2': { '4 hrs': 'G389', '8 hrs': 'S389' },
+            '31-1': { 'Observation - 1 (HU No.)': 'H391', 'Observation - 2 (HU No.)': 'N391', 'Observation - 3 (HU No.)': 'T391', 'Observation - 4 (HU No.)': 'Z391' },
+            '31-2': { 'Observation - 1': 'G392', 'Observation - 2': 'M392', 'Observation - 3': 'S392', 'Observation - 4': 'Y392' },
+            '31-3': { 'Observation - 1': 'G393', 'Observation - 2': 'M393', 'Observation - 3': 'S393', 'Observation - 4': 'Y393' },
+            '31-4': { 'Observation - 1': 'G394', 'Observation - 2': 'M394', 'Observation - 3': 'S394', 'Observation - 4': 'Y394' },
+            '31-5': { 'Observation - 1': 'G395', 'Observation - 2': 'M395', 'Observation - 3': 'S395', 'Observation - 4': 'Y395' },
+            '31-6': { 'Observation - 1': 'G396', 'Observation - 2': 'M396', 'Observation - 3': 'S396', 'Observation - 4': 'Y396' },
+            '31-7': { 'Observation - 1': 'G397', 'Observation - 2': 'M397', 'Observation - 3': 'S397', 'Observation - 4': 'Y397' },
+            '31-8': { 'Observation - 1': 'G398', 'Observation - 2': 'M398', 'Observation - 3': 'S398', 'Observation - 4': 'Y398' },
+            '31-9': { 'Observation - 1': 'G399', 'Observation - 2': 'M399', 'Observation - 3': 'S399', 'Observation - 4': 'Y399' },
+            '31-10': { 'Observation - 1': 'G400', 'Observation - 2': 'M400', 'Observation - 3': 'S400', 'Observation - 4': 'Y400' },
+            '31-11': { 'Observation - 1': 'G401', 'Observation - 2': 'M401', 'Observation - 3': 'S401', 'Observation - 4': 'Y401' },
+            '31-12': { 'Observation - 1': 'G402', 'Observation - 2': 'M402', 'Observation - 3': 'S402', 'Observation - 4': 'Y402' },
+            '31-13': { 'Observation - 1': 'G403', 'Observation - 2': 'M403', 'Observation - 3': 'S403', 'Observation - 4': 'Y403' },
+            '31-14': { 'Observation - 1': 'G404', 'Observation - 2': 'M404', 'Observation - 3': 'S404', 'Observation - 4': 'Y404' },
             '2-2': {
                 '4 hrs': {
                     'Sample-1': 'G14', 'Sample-2': 'I14', 'Sample-3': 'K14', 
@@ -1728,7 +1726,7 @@ def get_template_config(line_number):
                 'Line-3-supplier': 'I261', 'Line-4-supplier': 'I275'
             },
             '17-2': {
-                'Line-3-supplier': 'I262', 'Line-3-type': 'S262', 'Line-3-exp': 'Y62',
+                'Line-3-supplier': 'I262', 'Line-3-type': 'S262', 'Line-3-exp': 'Y262',
                 'Line-4-supplier': 'I276', 'Line-4-type': 'S276', 'Line-4-exp': 'Y276'
             },
             '17-3': {
@@ -1887,82 +1885,85 @@ def get_template_config(line_number):
                 }
             },
             '24-1': {
-                'Line-3': 'G338', 'Line-4': 'G351'
+                'Line-3': 'G338', 'Line-4': 'G352'
             },
             '24-2': {
-                'Line-3': 'G339', 'Line-4': 'G352'
+                'Line-3': 'G339', 'Line-4': 'G353'
             },
             '24-3': {
-                'Line-3-2hrs': 'G340', 'Line-3-4hrs': 'M340', 'Line-3-6hrs': 'S340', 'Line-3-8hrs': 'Y340',
-                'Line-4-2hrs': 'G353', 'Line-4-4hrs': 'M353', 'Line-4-6hrs': 'S353', 'Line-4-8hrs': 'Y353'
+                'Line-3': 'G340', 'Line-4': 'G354'
             },
             '24-4': {
                 'Line-3-2hrs': 'G341', 'Line-3-4hrs': 'M341', 'Line-3-6hrs': 'S341', 'Line-3-8hrs': 'Y341',
-                'Line-4-2hrs': 'G354', 'Line-4-4hrs': 'M354', 'Line-4-6hrs': 'S354', 'Line-4-8hrs': 'Y354'
+                'Line-4-2hrs': 'G355', 'Line-4-4hrs': 'M355', 'Line-4-6hrs': 'S355', 'Line-4-8hrs': 'Y355'
             },
             '24-5': {
-                'Line-3': 'G342', 'Line-4': 'G355'
+                'Line-3-2hrs': 'G342', 'Line-3-4hrs': 'M342', 'Line-3-6hrs': 'S342', 'Line-3-8hrs': 'Y342',
+                'Line-4-2hrs': 'G356', 'Line-4-4hrs': 'M356', 'Line-4-6hrs': 'S356', 'Line-4-8hrs': 'Y356'
             },
             '24-6': {
-                'Line-3-2hrs-calibrationTime': 'G344', 'Line-3-2hrs-moduleId': 'L344', 'Line-3-2hrs-pmax': 'Q344',
-                'Line-3-2hrs-voc': 'S344', 'Line-3-2hrs-isc': 'V344', 'Line-3-2hrs-moduleTemp': 'Y344', 'Line-3-2hrs-roomTemp': 'AB344',
-                'Line-3-4hrs-calibrationTime': 'G345', 'Line-3-4hrs-moduleId': 'L345', 'Line-3-4hrs-pmax': 'Q345',
-                'Line-3-4hrs-voc': 'S345', 'Line-3-4hrs-isc': 'V345', 'Line-3-4hrs-moduleTemp': 'Y345', 'Line-3-4hrs-roomTemp': 'AB345',
-                'Line-3-6hrs-calibrationTime': 'G346', 'Line-3-6hrs-moduleId': 'L346', 'Line-3-6hrs-pmax': 'Q346',
-                'Line-3-6hrs-voc': 'S346', 'Line-3-6hrs-isc': 'V346', 'Line-3-6hrs-moduleTemp': 'Y346', 'Line-3-6hrs-roomTemp': 'AB346',
-                'Line-3-8hrs-calibrationTime': 'G347', 'Line-3-8hrs-moduleId': 'L347', 'Line-3-8hrs-pmax': 'Q347',
-                'Line-3-8hrs-voc': 'S347', 'Line-3-8hrs-isc': 'V347', 'Line-3-8hrs-moduleTemp': 'Y347', 'Line-3-8hrs-roomTemp': 'AB347',
-                'Line-4-2hrs-calibrationTime': 'G357', 'Line-4-2hrs-moduleId': 'L357', 'Line-4-2hrs-pmax': 'Q357',
-                'Line-4-2hrs-voc': 'S357', 'Line-4-2hrs-isc': 'V357', 'Line-4-2hrs-moduleTemp': 'Y357', 'Line-4-2hrs-roomTemp': 'AB357',
-                'Line-4-4hrs-calibrationTime': 'G358', 'Line-4-4hrs-moduleId': 'L358', 'Line-4-4hrs-pmax': 'Q358',
-                'Line-4-4hrs-voc': 'S358', 'Line-4-4hrs-isc': 'V358', 'Line-4-4hrs-moduleTemp': 'Y358', 'Line-4-4hrs-roomTemp': 'AB358',
-                'Line-4-6hrs-calibrationTime': 'G359', 'Line-4-6hrs-moduleId': 'L359', 'Line-4-6hrs-pmax': 'Q359',
-                'Line-4-6hrs-voc': 'S359', 'Line-4-6hrs-isc': 'V359', 'Line-4-6hrs-moduleTemp': 'Y359', 'Line-4-6hrs-roomTemp': 'AB359',
-                'Line-4-8hrs-calibrationTime': 'G360', 'Line-4-8hrs-moduleId': 'L360', 'Line-4-8hrs-pmax': 'Q360',
-                'Line-4-8hrs-voc': 'S360', 'Line-4-8hrs-isc': 'V360', 'Line-4-8hrs-moduleTemp': 'Y360', 'Line-4-8hrs-roomTemp': 'AB360'
+                'Line-3': 'G343', 'Line-4': 'G357'
             },
             '24-7': {
-                'Line-3': 'G348', 'Line-4': 'G361'
+                'Line-3-2hrs-calibrationTime': 'G345', 'Line-3-2hrs-moduleId': 'L345', 'Line-3-2hrs-pmax': 'Q345',
+                'Line-3-2hrs-voc': 'S345', 'Line-3-2hrs-isc': 'V345', 'Line-3-2hrs-moduleTemp': 'Y345', 'Line-3-2hrs-roomTemp': 'AB345',
+                'Line-3-4hrs-calibrationTime': 'G346', 'Line-3-4hrs-moduleId': 'L346', 'Line-3-4hrs-pmax': 'Q346',
+                'Line-3-4hrs-voc': 'S346', 'Line-3-4hrs-isc': 'V346', 'Line-3-4hrs-moduleTemp': 'Y346', 'Line-3-4hrs-roomTemp': 'AB346',
+                'Line-3-6hrs-calibrationTime': 'G347', 'Line-3-6hrs-moduleId': 'L347', 'Line-3-6hrs-pmax': 'Q347',
+                'Line-3-6hrs-voc': 'S347', 'Line-3-6hrs-isc': 'V347', 'Line-3-6hrs-moduleTemp': 'Y347', 'Line-3-6hrs-roomTemp': 'AB347',
+                'Line-3-8hrs-calibrationTime': 'G348', 'Line-3-8hrs-moduleId': 'L348', 'Line-3-8hrs-pmax': 'Q348',
+                'Line-3-8hrs-voc': 'S348', 'Line-3-8hrs-isc': 'V348', 'Line-3-8hrs-moduleTemp': 'Y348', 'Line-3-8hrs-roomTemp': 'AB348',
+                'Line-4-2hrs-calibrationTime': 'G359', 'Line-4-2hrs-moduleId': 'L359', 'Line-4-2hrs-pmax': 'Q359',
+                'Line-4-2hrs-voc': 'S359', 'Line-4-2hrs-isc': 'V359', 'Line-4-2hrs-moduleTemp': 'Y359', 'Line-4-2hrs-roomTemp': 'AB359',
+                'Line-4-4hrs-calibrationTime': 'G360', 'Line-4-4hrs-moduleId': 'L360', 'Line-4-4hrs-pmax': 'Q360',
+                'Line-4-4hrs-voc': 'S360', 'Line-4-4hrs-isc': 'V360', 'Line-4-4hrs-moduleTemp': 'Y360', 'Line-4-4hrs-roomTemp': 'AB360',
+                'Line-4-6hrs-calibrationTime': 'G361', 'Line-4-6hrs-moduleId': 'L361', 'Line-4-6hrs-pmax': 'Q361',
+                'Line-4-6hrs-voc': 'S361', 'Line-4-6hrs-isc': 'V361', 'Line-4-6hrs-moduleTemp': 'Y361', 'Line-4-6hrs-roomTemp': 'AB361',
+                'Line-4-8hrs-calibrationTime': 'G362', 'Line-4-8hrs-moduleId': 'L362', 'Line-4-8hrs-pmax': 'Q362',
+                'Line-4-8hrs-voc': 'S362', 'Line-4-8hrs-isc': 'V362', 'Line-4-8hrs-moduleTemp': 'Y362', 'Line-4-8hrs-roomTemp': 'AB362'
             },
             '24-8': {
-                'Line-3': 'G349', 'Line-4': 'G362'
+                'Line-3': 'G349', 'Line-4': 'G363'
             },
             '24-9': {
-                'Line-3-1-contact-block': 'J350', 'Line-3-1-positive': 'N350', 'Line-3-1-negative': 'R350',
-                'Line-4-1-contact-block': 'J363', 'Line-4-1-positive': 'N363', 'Line-4-1-negative': 'R363',
-                'Line-3-2-contact-block': 'V350', 'Line-3-2-positive': 'Z350', 'Line-3-2-negative': 'AD350',
-                'Line-4-2-contact-block': 'V363', 'Line-4-2-positive': 'Z363', 'Line-4-2-negative': 'AD363'
+                'Line-3': 'G350', 'Line-4': 'G364'
+            },
+            '24-10': {
+                'Line-3-1-contact-block': 'J351', 'Line-3-1-positive': 'N351', 'Line-3-1-negative': 'R351',
+                'Line-4-1-contact-block': 'J365', 'Line-4-1-positive': 'N365', 'Line-4-1-negative': 'R365',
+                'Line-3-2-contact-block': 'V351', 'Line-3-2-positive': 'Z351', 'Line-3-2-negative': 'AD351',
+                'Line-4-2-contact-block': 'V365', 'Line-4-2-positive': 'Z365', 'Line-4-2-negative': 'AD365'
             },
             '26-1': {
-                'Line-3-4hrs': 'G367', 'Line-3-8hrs': 'S367',
-                'Line-4-4hrs': 'G370', 'Line-4-8hrs': 'S370'
-            },
-            '26-2': {
-                'Line-3-4hrs': 'G368', 'Line-3-8hrs': 'S368',
-                'Line-4-4hrs': 'G371', 'Line-4-8hrs': 'S371'
-            },
-            '26-3': {
                 'Line-3-4hrs': 'G369', 'Line-3-8hrs': 'S369',
                 'Line-4-4hrs': 'G372', 'Line-4-8hrs': 'S372'
             },
+            '26-2': {
+                'Line-3-4hrs': 'G370', 'Line-3-8hrs': 'S370',
+                'Line-4-4hrs': 'G373', 'Line-4-8hrs': 'S373'
+            },
+            '26-3': {
+                'Line-3-4hrs': 'G371', 'Line-3-8hrs': 'S371',
+                'Line-4-4hrs': 'G374', 'Line-4-8hrs': 'S374'
+            },
             '27-1': {
                 'Line-3': {
-                    'Sample-1': 'G374', 'Sample-2': 'G375', 'Sample-3': 'G376', 'Sample-4': 'G377', 'Sample-5': 'G378',
-                    'Sample-6': 'M374', 'Sample-7': 'M375', 'Sample-8': 'M376', 'Sample-9': 'M377', 'Sample-10': 'M378'
+                    'Sample-1': 'G376', 'Sample-2': 'G377', 'Sample-3': 'G378', 'Sample-4': 'G379', 'Sample-5': 'G380',
+                    'Sample-6': 'M376', 'Sample-7': 'M377', 'Sample-8': 'M378', 'Sample-9': 'M379', 'Sample-10': 'M380'
                 },
                 'Line-4': {
-                    'Sample-1': 'S374', 'Sample-2': 'S375', 'Sample-3': 'S376', 'Sample-4': 'S377', 'Sample-5': 'S378',
-                    'Sample-6': 'Y374', 'Sample-7': 'Y375', 'Sample-8': 'Y376', 'Sample-9': 'Y377', 'Sample-10': 'Y378'
+                    'Sample-1': 'S376', 'Sample-2': 'S377', 'Sample-3': 'S378', 'Sample-4': 'S379', 'Sample-5': 'S380',
+                    'Sample-6': 'Y376', 'Sample-7': 'Y377', 'Sample-8': 'Y378', 'Sample-9': 'Y379', 'Sample-10': 'Y380'
                 }
             },
             '29-1': {
                 'Line-3': {
-                    'Sample-1': 'G380', 'Sample-2': 'G381', 'Sample-3': 'G382', 'Sample-4': 'G383', 'Sample-5': 'G384',
-                    'Sample-6': 'M380', 'Sample-7': 'M381', 'Sample-8': 'M382', 'Sample-9': 'M383', 'Sample-10': 'M384'
+                    'Sample-1': 'G382', 'Sample-2': 'G383', 'Sample-3': 'G384', 'Sample-4': 'G385', 'Sample-5': 'G386',
+                    'Sample-6': 'M382', 'Sample-7': 'M383', 'Sample-8': 'M384', 'Sample-9': 'M385', 'Sample-10': 'M386'
                 },
                 'Line-4': {
-                    'Sample-1': 'S380', 'Sample-2': 'S381', 'Sample-3': 'S382', 'Sample-4': 'S383', 'Sample-5': 'S384',
-                    'Sample-6': 'Y380', 'Sample-7': 'Y381', 'Sample-8': 'Y382', 'Sample-9': 'Y383', 'Sample-10': 'Y384'
+                    'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
+                    'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
                 }
             }
         }
@@ -1972,9 +1973,6 @@ def get_template_config(line_number):
     return template_path, field_config, observation_cell_mapping
 
 def fill_basic_info(worksheet, audit_data, field_config):
-    """
-    Fill basic information from audit data into the Excel worksheet with formatting
-    """
     try:
         if audit_data.get('date'):
             cell_ref = field_config['date']['cell']
@@ -2013,7 +2011,6 @@ def fill_basic_info(worksheet, audit_data, field_config):
             cell.value = audit_data['signatures']['reviewedBy']
             apply_cell_formatting(cell, **field_config['reviewed_by']['format'])
 
-        # Fill checkboxes
         customer_spec = 'Yes' if audit_data.get('customerSpecAvailable') else 'No'
         spec_signed = 'Yes' if audit_data.get('specificationSignedOff') else 'No'
 
@@ -2135,7 +2132,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                             # JB measurements
                             handle_jb_measurements(worksheet, param_id, value, param_mapping)
                         
-                        elif param_id in ['20-3', '24-6', '24-9']:
+                        elif param_id in ['20-3', '24-6', '24-9', '24-10']:
                             # Complex measurement parameters
                             handle_complex_measurements(worksheet, param_id, value, param_mapping)
                         

@@ -163,8 +163,7 @@ const CellSortingObservations = {
         const getBackgroundColor = (value: string) => {
             if (isOff(value)) return 'bg-yellow-100';
             if (!value) return 'bg-white';
-            const numValue = parseFloat(value);
-            if (isNaN(numValue)) return 'bg-white';
+            return 'bg-white';
         };
 
         return (
