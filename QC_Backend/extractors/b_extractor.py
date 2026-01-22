@@ -4,7 +4,7 @@ import warnings
 from pymongo import MongoClient
 from datetime import datetime, time
 from constants import MONGODB_URI
-from paths import get_reference_file_path
+from paths import get_reference_file_key, download_from_s3
 
 warnings.filterwarnings('ignore')
 
@@ -298,7 +298,8 @@ def main():
     """Main function to execute the data processing and storage pipeline"""
     
     # File path to the Excel file
-    file_path = get_reference_file_path("UD Report_Sep-25.XLSX")
+    file_key = get_reference_file_key("UD Report_Sep-25.XLSX")
+    file_path = download_from_s3(file_key)
     
     # Step 1: Process the Excel file
     print("=" * 60)

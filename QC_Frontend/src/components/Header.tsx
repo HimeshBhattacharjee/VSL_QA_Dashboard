@@ -12,9 +12,9 @@ function ThemeToggle() {
             onClick={toggleTheme}
             aria-label="Toggle theme"
             title="Toggle theme"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-colors"
+            className="cursor-pointer h-9 w-9 rounded-full flex items-center justify-center bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 shadow-md"
         >
-            {theme === 'light' ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-blue-300" />}
+            {theme === 'light' ? <Sun className="w-5 h-5 text-yellow-500 fill-yellow-500" /> : <Moon className="w-5 h-5 text-blue-300 fill-blue-300" />}
         </button>
     );
 }

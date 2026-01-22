@@ -179,3 +179,8 @@ class S3Service:
         except ClientError as e:
             print(f"Error generating presigned URL: {str(e)}")
             raise
+    
+def get_s3_client():
+    """Get S3 client instance"""
+    service = S3Service()
+    return service.s3_client

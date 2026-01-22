@@ -1,7 +1,7 @@
 import pandas as pd
 import pymongo
 from datetime import datetime
-from paths import get_reference_file_path
+from paths import get_reference_file_key, download_from_s3
 from constants import MONGODB_URI
 
 # ============================================
@@ -10,8 +10,14 @@ from constants import MONGODB_URI
 
 print("Starting data extraction from Excel files...")
 
-file_path_1 = get_reference_file_path("Rejection Report Fab-II,L-I September-2025.xlsx")
-file_path_2 = get_reference_file_path("Rejection Report Fab-II,L-II September-2025.xlsx")
+# file_path_1 = get_reference_file_path("Rejection Report Fab-II,L-I September-2025.xlsx")
+# file_path_2 = get_reference_file_path("Rejection Report Fab-II,L-II September-2025.xlsx")
+
+file_key_1 = get_reference_file_key("Rejection Report Fab-II,L-I September-2025.xlsx")
+file_key_2 = get_reference_file_key("Rejection Report Fab-II,L-II September-2025.xlsx")
+
+file_path_1 = download_from_s3(file_key_1)
+file_path_2 = download_from_s3(file_key_2)
 
 all_lines_data = {}
 

@@ -2,7 +2,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
 import io
 import os
-from paths import get_template_path
+from paths import get_template_key, download_from_s3
 
 def setup_gel_cell_styles(workbook):
     # Data style
@@ -305,10 +305,8 @@ def generate_gel_report(gel_data):
         print(f"Averages keys: {list(gel_data.get('averages', {}).keys())}")
         
         # Template path
-        template_path = get_template_path('Blank Gel Content Test Report.xlsx')
-        
-        if not os.path.exists(template_path):
-            raise FileNotFoundError(f"Gel test template file not found at: {template_path}")
+        template_key = get_template_key('Blank Gel Content Test Report.xlsx')
+        template_path = download_from_s3(template_key)
         
         # Load workbook
         wb = load_workbook(template_path)

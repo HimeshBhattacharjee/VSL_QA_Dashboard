@@ -6,7 +6,7 @@ from fuzzywuzzy import fuzz, process
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
 from constants import MONGODB_URI
-from paths import get_qc_data_path
+from paths import get_qc_data_key, download_folder_from_s3
 
 class FuzzyFolderMatcher:
     """Fuzzy matching for folder and file names"""
@@ -486,14 +486,10 @@ def main():
     """Main function to run the peel test data extraction pipeline"""
     
     # Define root path for peel test data
-    root_path = get_qc_data_path("Auto Peel Test Result")
+    s3_prefix = get_qc_data_key("Auto Peel Test Result")
+    root_path = download_folder_from_s3(s3_prefix)
     
-    # Check if path exists
-    if not os.path.exists(root_path):
-        print(f"Path {root_path} does not exist!")
-        return
-    
-    print(f"Found path: {root_path}")
+    print(f"Downloaded to: {root_path}")
     
     # Step 1: Extract data from folder structure
     df = create_structured_dataframe(root_path)
