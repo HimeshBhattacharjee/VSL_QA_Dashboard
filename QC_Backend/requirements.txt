@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pywin32
+pymongo
+boto3
+openpyxl
+pandas
+numpy
+fuzzywuzzy
+pydantic
+python-dotenv
