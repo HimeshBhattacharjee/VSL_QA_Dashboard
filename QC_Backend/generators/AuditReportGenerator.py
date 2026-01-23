@@ -1,27 +1,19 @@
 from openpyxl import load_workbook
 from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle, numbers)
 from openpyxl.utils import get_column_letter
-
 import io
-import os
 from openpyxl.cell.cell import MergedCell
 from paths import get_template_key, download_from_s3
 
-# Helper to get the writable cell (top-left of merged range)
 def get_writable_cell(worksheet, cell_ref):
     cell = worksheet[cell_ref]
     if isinstance(cell, MergedCell):
-        # Find the merged range this cell belongs to
         for merged_range in worksheet.merged_cells.ranges:
             if cell.coordinate in merged_range:
-                # Return the top-left cell of the merged range
                 return worksheet[merged_range.coord.split(":")[0]]
     return cell
 
 def setup_cell_styles(workbook):
-    """Create and register custom named styles"""
-    
-    # Header style
     header_style = NamedStyle(name="header_style")
     header_style.font = Font(name='Arial', size=18, bold=True, color='FFFFFF')
     header_style.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
@@ -32,8 +24,6 @@ def setup_cell_styles(workbook):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
-    
-    # Data style
     data_style = NamedStyle(name="data_style")
     data_style.font = Font(name='Arial', size=16)
     data_style.alignment = Alignment(horizontal='center', vertical='center')
@@ -43,8 +33,6 @@ def setup_cell_styles(workbook):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
-    
-    # Important data style
     important_style = NamedStyle(name="important_style")
     important_style.font = Font(name='Arial', size=16, bold=True, color='000000')
     important_style.alignment = Alignment(horizontal='center', vertical='center')
@@ -54,33 +42,22 @@ def setup_cell_styles(workbook):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
-    
-    # Add styles to workbook
     for style in [header_style, data_style, important_style]:
         if style.name not in workbook.named_styles:
             workbook.add_named_style(style)
 
-def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False, 
-                         text_color='000000', horizontal='center', vertical='center'):
-    """
-    Apply comprehensive formatting to a cell
-    """
-    # Font settings
+def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False, text_color='000000', horizontal='center', vertical='center'):
     cell.font = Font(
         name='Calibri',
         size=font_size,
         bold=bold,
         color=text_color
     )
-    
-    # Alignment
     cell.alignment = Alignment(
         horizontal=horizontal,
         vertical=vertical,
         wrap_text=True
     )
-    
-    # Border
     thin_border = Border(
         left=Side(style='thin'),
         right=Side(style='thin'),
@@ -93,7 +70,6 @@ def get_template_config(line_number):
     if line_number == 'I':
         template_key = get_template_key('Blank Audit Line-I.xlsx')
         template_path = download_from_s3(template_key)
-        # Cell mapping for Line I
         field_config = {
             'date': {
                 'cell': 'C5', 
@@ -147,9 +123,9 @@ def get_template_config(line_number):
             '3-3': { 'Supplier': 'I22', 'Type': 'N22', 'Lot No.': 'T22', 'Expiry Date': 'Z22' },
             '3-4': { '': 'G23' },
             '3-5': { '4 hrs': 'G24', '8 hrs': 'S24' },
-            '3-7': { 'Line-3': 'G28', 'Line-4': 'S28' },
-            '3-8': { 'Line-3': 'G29', 'Line-4': 'S29' },
-            '3-9': { 'Line-3': 'G30', 'Line-4': 'S30' },
+            '3-7': { 'Line-1': 'G28', 'Line-2': 'S28' },
+            '3-8': { 'Line-1': 'G29', 'Line-2': 'S29' },
+            '3-9': { 'Line-1': 'G30', 'Line-2': 'S30' },
             '4-1': { 'Supplier': 'I31', 'WP': 'N31', 'Lot No.': 'S31', 'Expiry Date': 'AA31' },
             '4-2': { '4 hrs': 'G32', '8 hrs': 'S32' },
             '4-3': { '4 hrs': 'G33', '8 hrs': 'S33' },
@@ -211,26 +187,26 @@ def get_template_config(line_number):
                 }
             },
             '2-4': {
-                'Line-3': {
+                'Line-1': {
                     'Sample-1': 'G17', 'Sample-2': 'J17', 'Sample-3': 'M17', 'Sample-4': 'P17'
                 },
-                'Line-4': {
+                'Line-2': {
                     'Sample-1': 'S17', 'Sample-2': 'V17', 'Sample-3': 'Y17', 'Sample-4': 'AB17'
                 }
             },
             '2-5': {
-                'Line-3': {
+                'Line-1': {
                     'Sample-1': 'G18', 'Sample-2': 'J18', 'Sample-3': 'M18', 'Sample-4': 'P18'
                 },
-                'Line-4': {
+                'Line-2': {
                     'Sample-1': 'S18', 'Sample-2': 'V18', 'Sample-3': 'Y18', 'Sample-4': 'AB18'
                 }
             },
             '2-6': {
-                'Line-3': {
+                'Line-1': {
                     'Sample-1': 'G19', 'Sample-2': 'J19', 'Sample-3': 'M19', 'Sample-4': 'P19'
                 },
-                'Line-4': {
+                'Line-2': {
                     'Sample-1': 'S19', 'Sample-2': 'V19', 'Sample-3': 'Y19', 'Sample-4': 'AB19'
                 }
             },
@@ -2285,7 +2261,6 @@ def get_template_config(line_number):
         }
     else:
         raise ValueError(f"Unsupported line number: {line_number}")
-    
     return template_path, field_config, observation_cell_mapping
 
 def fill_basic_info(worksheet, audit_data, field_config):
@@ -2365,8 +2340,6 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                     for observation in observations:
                         time_slot = observation.get('timeSlot', '')
                         value = observation.get('value', '')
-                        
-                        # Handle different parameter types based on their structure
                         if param_id in ['2-2', '3-6', '9-5', '11-2']:
                             # Sample-based parameters (Sample-1, Sample-2, etc.)
                             handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping)
@@ -2474,12 +2447,10 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                                 print(f"Filled observation {value} for parameter {param_id} at {time_slot} in cell {cell_ref}")
         
         print("Observations data filled successfully")
-        
     except Exception as e:
         print(f"Error filling observations data: {str(e)}")
         raise
 
-# Helper functions for different parameter types
 def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping):
     """Handle parameters with Sample-1, Sample-2, etc. structure"""
     if isinstance(value, dict):
@@ -2572,7 +2543,6 @@ def handle_peel_strength_parameter(worksheet, value, param_mapping):
     if isinstance(value, dict):
         for stringer_key, stringer_value in value.items():
             if stringer_key in param_mapping:
-                # Handle frontUnit and backUnit
                 if 'frontUnit' in param_mapping[stringer_key]:
                     cell_ref = param_mapping[stringer_key]['frontUnit']
                     cell = get_writable_cell(worksheet, cell_ref)
@@ -2584,8 +2554,6 @@ def handle_peel_strength_parameter(worksheet, value, param_mapping):
                     cell = get_writable_cell(worksheet, cell_ref)
                     cell.value = stringer_value.get('backUnit', '')
                     apply_cell_formatting(cell, font_size=16, horizontal='center')
-
-                # Handle frontSide measurements
                 front_side = stringer_value.get('frontSide', {})
                 for pos_key, pos_value in front_side.items():
                     if pos_key in param_mapping[stringer_key].get('frontSide', {}):
@@ -2593,8 +2561,6 @@ def handle_peel_strength_parameter(worksheet, value, param_mapping):
                         cell = get_writable_cell(worksheet, cell_ref)
                         cell.value = pos_value
                         apply_cell_formatting(cell, font_size=16, horizontal='center')
-
-                # Handle backSide measurements
                 back_side = stringer_value.get('backSide', {})
                 for pos_key, pos_value in back_side.items():
                     if pos_key in param_mapping[stringer_key].get('backSide', {}):
