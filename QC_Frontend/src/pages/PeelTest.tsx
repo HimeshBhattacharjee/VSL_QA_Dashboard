@@ -774,6 +774,7 @@ export default function PeelTest() {
                 showAlert('error', 'Please load or create a report first');
                 return;
             }
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const averages: { [key: string]: string } = {};
             for (let rep = 0; rep < 24; rep++) {
                 for (let position = 1; position <= 16; position++) {
@@ -815,54 +816,6 @@ export default function PeelTest() {
         }
     };
 
-    const exportToPDF = async () => {
-        try {
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            if (!currentEditingReport) {
-                showAlert('error', 'Please load or create a report first');
-                return;
-            }
-            const averages: { [key: string]: string } = {};
-            for (let rep = 0; rep < 24; rep++) {
-                for (let position = 1; position <= 16; position++) {
-                    const frontStartCell = 6 + (position - 1) * 7;
-                    averages[`front_avg_${rep}_${position}`] = calculateAverage(rep, frontStartCell, 7);
-                    const backStartCell = 118 + (position - 1) * 7;
-                    averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
-                }
-            }
-            const peelReportData = {
-                report_name: currentEditingReport,
-                timestamp: new Date().toISOString(),
-                form_data: { ...tableData, ...formData, ...averages },
-                averages: averages
-            };
-            console.log(peelReportData);
-            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(peelReportData),
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to generate PDF: ${errorText}`);
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${currentEditingReport}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            showAlert('success', 'PDF file exported successfully');
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            showAlert('error', 'Failed to generate PDF file');
-        }
-    };
-
     const exportSavedReportToExcel = async (index: number) => {
         try {
             const reports = await getSavedReports();
@@ -870,6 +823,7 @@ export default function PeelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const report = reports[index];
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
@@ -895,40 +849,6 @@ export default function PeelTest() {
         } catch (error) {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
-        }
-    };
-
-    const exportSavedReportToPDF = async (index: number) => {
-        try {
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const reports = await getSavedReports();
-            if (index < 0 || index >= reports.length) {
-                showAlert('error', 'Report not found');
-                return;
-            }
-            const report = reports[index];
-            const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ report_id: report._id }),
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to generate PDF: ${errorText}`);
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${report.name}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            showAlert('success', 'PDF file exported successfully');
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            showAlert('error', 'Failed to generate PDF file');
         }
     };
 
@@ -1139,12 +1059,6 @@ export default function PeelTest() {
                         >
                             Export as Excel
                         </button>
-                        <button
-                            className="export-pdf w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-red-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                            onClick={exportToPDF}
-                        >
-                            Export as PDF
-                        </button>
                     </div>
                 </div>
             )}
@@ -1262,7 +1176,6 @@ export default function PeelTest() {
             <SavedReportsNChecksheets
                 reports={savedReports}
                 onExportExcel={exportSavedReportToExcel}
-                onExportPdf={exportSavedReportToPDF}
                 onEdit={editSavedReport}
                 onDelete={deleteSavedReport}
             />

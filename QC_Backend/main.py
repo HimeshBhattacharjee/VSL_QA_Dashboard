@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-import tempfile
-import os
-import io
-from win32com import client as win32client
-import pythoncom
+import datetime
 import threading
 from constants import SERVER_URL, PORT
 from routes.qa_route import qa_router
@@ -92,78 +88,6 @@ async def generate_audit_report_endpoint(request: dict):
         print(f"Error generating audit report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
-@app.post("/api/ipqc-audits/generate-audit-pdf")
-async def generate_audit_pdf_endpoint(request: dict):
-    try:
-        audit_id = request.get("audit_id")
-        
-        if audit_id:
-            # Saved report export - fetch from S3
-            from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
-            from bson import ObjectId
-
-            if not ObjectId.is_valid(audit_id):
-                raise HTTPException(status_code=400, detail="Invalid audit ID")
-
-            audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
-            if not audit:
-                raise HTTPException(status_code=404, detail="Audit not found")
-
-            # Fetch data from S3
-            ipqc_audit = IPQCAudit.from_dict(audit)
-            audit_data = ipqc_audit.to_dict(include_data=True)
-
-            # Prepare data for report generation
-            s3_data = audit_data.get("data", {})
-            report_data = s3_data.copy()
-            report_data["name"] = audit["name"]
-        else:
-            # Current report export - use data from request
-            report_data = request.copy()
-            if "audit_id" in report_data:
-                del report_data["audit_id"]
-
-        excel_output, filename = generate_audit_report(report_data)
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
-            temp_excel.write(excel_output.getvalue())
-            temp_excel_path = temp_excel.name
-        pdf_filename = filename.replace('.xlsx', '.pdf')
-        temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        try:
-            pythoncom.CoInitialize()
-            excel_app = win32client.Dispatch("Excel.Application")
-            excel_app.Visible = False
-            excel_app.DisplayAlerts = False
-            workbook = excel_app.Workbooks.Open(temp_excel_path)
-            for worksheet in workbook.Worksheets:
-                worksheet.PageSetup.Orientation = 2
-                worksheet.PageSetup.Zoom = False
-                worksheet.PageSetup.FitToPagesWide = 1
-                worksheet.PageSetup.FitToPagesTall = False
-            workbook.ExportAsFixedFormat(0, temp_pdf_path) # 0 = xlTypePDF
-            workbook.Close()
-            excel_app.Quit()
-            with open(temp_pdf_path, 'rb') as pdf_file:
-                pdf_content = pdf_file.read()
-            pythoncom.CoUninitialize()
-            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{pdf_filename}"',
-                    'Access-Control-Allow-Origin': '*',
-                }
-            )
-        finally:
-            try:
-                if os.path.exists(temp_excel_path):
-                    os.unlink(temp_excel_path)
-                if os.path.exists(temp_pdf_path):
-                    os.unlink(temp_pdf_path)
-            except Exception as cleanup_error:
-                print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-    except Exception as e:
-        print(f"Error generating audit PDF: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
-
 @app.post("/api/gel-test-reports/generate-gel-report")
 async def generate_gel_report_endpoint(request: dict):
     try:
@@ -213,86 +137,6 @@ async def generate_gel_report_endpoint(request: dict):
     except Exception as e:
         print(f"Error generating gel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
-    
-@app.post("/api/gel-test-reports/generate-gel-pdf")
-async def generate_gel_pdf_endpoint(request: dict):
-    try:
-        report_id = request.get("report_id")
-        
-        if report_id:
-            # Saved report export - fetch from S3
-            from models.gel_test_models import gel_test_collection, GelTestReport
-            from bson import ObjectId
-
-            if not ObjectId.is_valid(report_id):
-                raise HTTPException(status_code=400, detail="Invalid report ID")
-
-            report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
-            if not report:
-                raise HTTPException(status_code=404, detail="Report not found")
-
-            # Fetch data from S3
-            gel_report = GelTestReport.from_dict(report)
-            gel_data = gel_report.to_dict(include_data=True)
-
-            # Prepare data for report generation
-            report_data = {
-                "form_data": gel_data.get("form_data", {}),
-                "averages": gel_data.get("averages", {}),
-                "name": report["name"]
-            }
-        else:
-            # Current report export - use data from request
-            report_data = {
-                "form_data": request.get("form_data", {}),
-                "averages": request.get("averages", {}),
-                "name": request.get("report_name", "Gel_Test_Report")
-            }
-
-        excel_output, filename = generate_gel_report(report_data)
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
-            temp_excel.write(excel_output.getvalue())
-            temp_excel_path = temp_excel.name
-        pdf_filename = filename.replace('.xlsx', '.pdf')
-        temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        try:
-            pythoncom.CoInitialize()
-            excel_app = win32client.Dispatch("Excel.Application")
-            excel_app.Visible = False
-            excel_app.DisplayAlerts = False
-            workbook = excel_app.Workbooks.Open(temp_excel_path)
-            for worksheet in workbook.Worksheets:
-                worksheet.PageSetup.Orientation = 2  # 2 = xlLandscape, 1 = xlPortrait
-                worksheet.PageSetup.LeftMargin = 40
-                worksheet.PageSetup.RightMargin = 40
-                worksheet.PageSetup.TopMargin = 40
-                worksheet.PageSetup.BottomMargin = 40
-                worksheet.PageSetup.Zoom = False
-                worksheet.PageSetup.FitToPagesWide = 1
-                worksheet.PageSetup.FitToPagesTall = 1
-            workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
-            workbook.Close()
-            excel_app.Quit()
-            with open(temp_pdf_path, 'rb') as pdf_file:
-                pdf_content = pdf_file.read()
-            pythoncom.CoUninitialize()
-            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{pdf_filename}"',
-                    'Access-Control-Allow-Origin': '*',
-                }
-            )
-        finally:
-            try:
-                if os.path.exists(temp_excel_path):
-                    os.unlink(temp_excel_path)
-                if os.path.exists(temp_pdf_path):
-                    os.unlink(temp_pdf_path)
-            except Exception as cleanup_error:
-                print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-    except Exception as e:
-        print(f"Error generating gel test PDF: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
 async def generate_peel_report_endpoint(request: dict):
@@ -346,84 +190,6 @@ async def generate_peel_report_endpoint(request: dict):
         print(f"Error generating peel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
-@app.post("/api/peel/generate-peel-pdf")
-async def generate_peel_pdf_endpoint(request: dict):
-    try:
-        report_id = request.get("report_id")
-        
-        if report_id:
-            # Saved report export - fetch from S3
-            from models.peel_test_models import peel_test_collection, PeelTestReport
-            from bson import ObjectId
-
-            if not ObjectId.is_valid(report_id):
-                raise HTTPException(status_code=400, detail="Invalid report ID")
-
-            report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
-            if not report:
-                raise HTTPException(status_code=404, detail="Report not found")
-
-            # Fetch data from S3
-            peel_report = PeelTestReport.from_dict(report)
-            peel_data = peel_report.to_dict(include_data=True)
-
-            # Prepare data for report generation
-            report_data = {
-                "form_data": peel_data.get("form_data", {}),
-                "row_data": peel_data.get("row_data", []),
-                "averages": peel_data.get("averages", {}),
-                "name": report["name"]
-            }
-        else:
-            # Current report export - use data from request
-            report_data = {
-                "form_data": request.get("form_data", {}),
-                "row_data": request.get("row_data", []),
-                "averages": request.get("averages", {}),
-                "name": request.get("report_name", "Peel_Test_Report")
-            }
-
-        excel_output, filename = generate_peel_report(report_data)
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
-            temp_excel.write(excel_output.getvalue())
-            temp_excel_path = temp_excel.name
-        pdf_filename = filename.replace('.xlsx', '.pdf')
-        temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-        try:
-            pythoncom.CoInitialize()
-            excel_app = win32client.Dispatch("Excel.Application")
-            excel_app.Visible = False
-            excel_app.DisplayAlerts = False
-            workbook = excel_app.Workbooks.Open(temp_excel_path)
-            for worksheet in workbook.Worksheets:
-                worksheet.PageSetup.Orientation = 1
-                worksheet.PageSetup.Zoom = False
-                worksheet.PageSetup.FitToPagesWide = 1
-                worksheet.PageSetup.FitToPagesTall = False
-            workbook.ExportAsFixedFormat(0, temp_pdf_path)  # 0 = xlTypePDF
-            workbook.Close()
-            excel_app.Quit()
-            with open(temp_pdf_path, 'rb') as pdf_file:
-                pdf_content = pdf_file.read()
-            pythoncom.CoUninitialize()
-            return StreamingResponse(io.BytesIO(pdf_content), media_type='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{pdf_filename}"',
-                    'Access-Control-Allow-Origin': '*',
-                }
-            )
-        finally:
-            try:
-                if os.path.exists(temp_excel_path):
-                    os.unlink(temp_excel_path)
-                if os.path.exists(temp_pdf_path):
-                    os.unlink(temp_pdf_path)
-            except Exception as cleanup_error:
-                print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
-    except Exception as e:
-        print(f"Error generating peel test PDF: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
-
 @app.get("/")
 async def root():
     return {
@@ -453,10 +219,6 @@ async def root():
             "audit_reports": {
                 "base_path": "/generate-audit-report",
                 "description": "Generate audit reports"
-            },
-            "audit_pdf_reports": {
-                "base_path": "/generate-audit-pdf",
-                "description": "Generate audit PDF reports"
             },
             "gel_test_reports": {
                 "base_path": "/generate-gel-report",
@@ -493,7 +255,6 @@ def run_extractors():
         except Exception as e:
             print(f"Peel extractor failed: {e}")
     
-    # Start extractors in separate threads
     qa_thread = threading.Thread(target=run_qa, daemon=True)
     b_thread = threading.Thread(target=run_b, daemon=True)
     peel_thread = threading.Thread(target=run_peel, daemon=True)
@@ -506,9 +267,11 @@ def run_extractors():
 
 @app.get("/health")
 async def global_health_check():
-    return {
+    health_status = {
         "status": "all_services_running",
-        "timestamp": "2024-01-01T00:00:00Z",
+        "timestamp": datetime.now().isoformat(),
+        "platform": "Linux",
+        "templates_source": "AWS S3",
         "services": {
             "quality_analysis": "available",
             "b_grade_trend": "available",
@@ -520,9 +283,8 @@ async def global_health_check():
             "peel_test_reports": "available"
         }
     }
+    return health_status
 
 if __name__ == "__main__":
-    # Start data extractors in background
-    run_extractors()
-    # Start the server
+    run_extractors()    
     uvicorn.run("main:app", host=SERVER_URL, port=int(PORT), reload=True)

@@ -10,7 +10,6 @@ export interface SavedReport {
 interface SavedReportsProps {
     reports: SavedReport[];
     onExportExcel: (index: number) => void;
-    onExportPdf: (index: number) => void;
     onEdit: (index: number) => void;
     onDelete: (index: number) => void;
     emptyMessage?: {
@@ -24,7 +23,6 @@ interface SavedReportsProps {
 export default function SavedReportsNChecksheets({
     reports,
     onExportExcel,
-    onExportPdf,
     onEdit,
     onDelete,
     emptyMessage = {
@@ -98,18 +96,6 @@ export default function SavedReportsNChecksheets({
                                     <img 
                                         src="/IMAGES/Excel.svg" 
                                         alt="Excel" 
-                                        className="w-4 h-4 md:w-5 md:h-5 filter brightness-0 invert dark:brightness-0 dark:invert"
-                                    />
-                                </button>
-                                <button
-                                    className="pdf-export-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 dark:bg-blue-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-red-500 dark:hover:bg-red-600 hover:scale-105 active:scale-95 flex items-center justify-center min-w-[36px] md:min-w-[44px]"
-                                    onClick={() => onExportPdf(index)}
-                                    title="Export to PDF"
-                                    aria-label="Export to PDF"
-                                >
-                                    <img 
-                                        src="/IMAGES/PDF.svg" 
-                                        alt="PDF" 
                                         className="w-4 h-4 md:w-5 md:h-5 filter brightness-0 invert dark:brightness-0 dark:invert"
                                     />
                                 </button>

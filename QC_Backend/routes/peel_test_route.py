@@ -127,18 +127,6 @@ async def create_peel_test_report(report_data: dict):
             "averages": report_data.get("averages", {}),
             "s3_key": peel_report.s3_key
         }
-        inserted_id = result.inserted_id
-
-        # Return the created report with ID
-        return {
-            "_id": str(inserted_id),
-            "name": peel_report.name,
-            "timestamp": peel_report.timestamp,
-            "formData": report_data["formData"],
-            "rowData": report_data.get("rowData", []),
-            "averages": report_data.get("averages", {}),
-            "s3_key": peel_report.s3_key
-        }
 
     except HTTPException:
         raise

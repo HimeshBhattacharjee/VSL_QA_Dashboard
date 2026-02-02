@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-pywin32
 pymongo
 boto3
 openpyxl

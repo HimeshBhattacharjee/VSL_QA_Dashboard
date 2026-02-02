@@ -1,7 +1,6 @@
 from openpyxl import load_workbook
 from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
 import io
-import os
 from paths import get_template_key, download_from_s3
 
 def setup_gel_cell_styles(workbook):

@@ -606,46 +606,6 @@ export default function QualityAudit() {
         }
     };
 
-    const generatePDFReport = async () => {
-        try {
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            console.log('Generating PDF with data:', auditData);
-            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(auditData)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate PDF report');
-            }
-
-            // Create blob from response and trigger download
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-
-            // Generate filename based on audit data
-            const filename = `Quality_Audit_Line${auditData.lineNumber}_${auditData.date.replace(/-/g, '')}_Shift${auditData.shift}.pdf`;
-            a.download = filename;
-
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            showAlert('success', 'Audit PDF report generated successfully!');
-
-        } catch (error) {
-            console.error('Error generating PDF report:', error);
-            showAlert('error', 'Failed to generate audit PDF report. Please try again.');
-        }
-    };
-
     const exportSavedReportToExcel = async (index: number) => {
         try {
             const checksheet = savedChecksheets[index];
@@ -689,52 +649,6 @@ export default function QualityAudit() {
         } catch (error) {
             console.error('Error generating Excel report:', error);
             showAlert('error', 'Failed to generate Excel report. Please try again.');
-        }
-    };
-
-    const exportSavedReportToPDF = async (index: number) => {
-        try {
-            const checksheet = savedChecksheets[index];
-            if (!checksheet) {
-                showAlert('error', 'Checksheet not found');
-                return;
-            }
-
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-
-            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-pdf`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ audit_id: checksheet._id })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate PDF report');
-            }
-
-            // Create blob from response and trigger download
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-
-            // Generate filename based on the saved checksheet data
-            const filename = `Quality_Audit_Line${checksheet.data.lineNumber}_${checksheet.data.date.replace(/-/g, '')}_Shift${checksheet.data.shift}.pdf`;
-            a.download = filename;
-
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            showAlert('success', 'PDF report generated successfully!');
-
-        } catch (error) {
-            console.error('Error generating PDF report:', error);
-            showAlert('error', 'Failed to generate PDF report. Please try again.');
         }
     };
 
@@ -1059,12 +973,6 @@ export default function QualityAudit() {
                                         >
                                             Generate Audit Excel
                                         </button>
-                                        <button
-                                            onClick={generatePDFReport}
-                                            className="p-2 bg-red-600 dark:bg-red-700 text-white rounded-lg shadow-lg cursor-pointer hover:bg-red-700 dark:hover:bg-red-600 transition-colors text-xs sm:text-sm font-semibold"
-                                        >
-                                            Generate Audit PDF
-                                        </button>
                                     </div>
                                     <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                                         <div className="flex-1 text-center mb-4 md:mb-0">
@@ -1289,7 +1197,6 @@ export default function QualityAudit() {
                                 timestamp: sheet.timestamp
                             }))}
                             onExportExcel={exportSavedReportToExcel}
-                            onExportPdf={exportSavedReportToPDF}
                             onEdit={editSavedChecksheet}
                             onDelete={deleteSavedChecksheet}
                             emptyMessage={{

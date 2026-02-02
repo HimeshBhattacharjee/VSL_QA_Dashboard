@@ -732,6 +732,7 @@ export default function GelTest() {
 
     const exportToExcel = async () => {
         try {
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const formData: { [key: string]: string | boolean } = {};
             const editableCells = document.querySelectorAll('.editable');
             editableCells.forEach((cell, index) => {
@@ -779,60 +780,6 @@ export default function GelTest() {
         }
     };
 
-    const exportToPDF = async () => {
-        try {
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const formData: { [key: string]: string | boolean } = {};
-            const editableCells = document.querySelectorAll('.editable');
-            editableCells.forEach((cell, index) => {
-                formData[`editable_${index}`] = cell.textContent?.trim() || '';
-            });
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach((checkbox, index) => {
-                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
-            });
-            formData.preparedBySignature = preparedBySignature;
-            formData.acceptedBySignature = acceptedBySignature;
-            formData.verifiedBySignature = verifiedBySignature;
-            const averages: { [key: string]: string } = {};
-            const averageCells = document.querySelectorAll('.average-cell');
-            averageCells.forEach((cell, index) => {
-                averages[`average_${index}`] = cell.textContent?.trim() || '0';
-            });
-            const meanCell = document.querySelector('.mean-cell');
-            if (meanCell) averages.mean = meanCell.textContent?.trim() || '0';
-            const gelReportData = {
-                report_name: reportName.trim() || 'Gel_Test_Report',
-                timestamp: new Date().toISOString(),
-                form_data: formData,
-                averages: averages,
-            };
-            console.log('Generating PDF from Excel template...');
-            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(gelReportData),
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to generate PDF: ${errorText}`);
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${reportName.trim() || 'Gel_Test_Report'}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            showAlert('success', 'PDF file exported successfully');
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            showAlert('error', 'Failed to generate PDF file');
-        }
-    };
-
     const exportSavedReportToExcel = async (index: number) => {
         try {
             const reports = await apiService.getAllReports();
@@ -840,6 +787,7 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const report = reports[index];
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
@@ -860,40 +808,6 @@ export default function GelTest() {
         } catch (error) {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
-        }
-    };
-
-    const exportSavedReportToPDF = async (index: number) => {
-        try {
-            showAlert('info', 'Please wait! Exporting PDF will take some time...');
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
-                showAlert('error', 'Report not found');
-                return;
-            }
-            const report = reports[index];
-            const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ report_id: report._id }),
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to generate PDF: ${errorText}`);
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${report.name}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            showAlert('success', 'PDF file exported successfully');
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            showAlert('error', 'Failed to generate PDF file');
         }
     };
 
@@ -981,12 +895,6 @@ export default function GelTest() {
                                 onClick={exportToExcel}
                             >
                                 Export as Excel
-                            </button>
-                            <button
-                                className="save-btn export-pdf w-full sm:w-[15%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-red-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                onClick={exportToPDF}
-                            >
-                                Export as PDF
                             </button>
                         </div>
                         <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg">
@@ -1302,7 +1210,6 @@ export default function GelTest() {
                         <SavedReportsNChecksheets
                             reports={savedReports}
                             onExportExcel={exportSavedReportToExcel}
-                            onExportPdf={exportSavedReportToPDF}
                             onEdit={editSavedReport}
                             onDelete={deleteSavedReport}
                         />
