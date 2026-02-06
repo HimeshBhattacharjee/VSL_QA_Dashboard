@@ -1,10 +1,10 @@
 from pymongo import MongoClient
 from typing import Optional, Dict, Any
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_REPORTS
 from s3_service import S3Service
 
 client = MongoClient(MONGODB_URI)
-db = client["report_management"]
+db = client[MONGODB_DB_NAME_REPORTS]
 gel_test_collection = db["gel_test_reports"]
 
 class GelTestReport:

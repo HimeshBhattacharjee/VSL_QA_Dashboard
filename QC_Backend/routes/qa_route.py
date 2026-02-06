@@ -4,14 +4,14 @@ from datetime import datetime
 import json
 from bson import json_util
 from typing import Optional
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_QUALITY_ANALYSIS
 
 qa_router = APIRouter(prefix="/api/qa", tags=["Quality Analysis"])
 
 def get_qa_database():
     try:
         client = MongoClient(MONGODB_URI)
-        db = client["quality_analysis"]
+        db = client[MONGODB_DB_NAME_QUALITY_ANALYSIS]
         client.admin.command('ping')
         return db
     except Exception as e:

@@ -256,12 +256,12 @@ def run_extractors():
             print(f"Peel extractor failed: {e}")
     
     qa_thread = threading.Thread(target=run_qa, daemon=True)
-    b_thread = threading.Thread(target=run_b, daemon=True)
     peel_thread = threading.Thread(target=run_peel, daemon=True)
+    b_thread = threading.Thread(target=run_b, daemon=True)
     
     qa_thread.start()
-    b_thread.start()
     peel_thread.start()
+    b_thread.start()
     
     print("Data extractors started in background threads")
 

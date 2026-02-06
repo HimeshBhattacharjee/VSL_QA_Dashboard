@@ -3,12 +3,14 @@ from pymongo import MongoClient
 from datetime import datetime, time
 import pandas as pd
 import numpy as np
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_B_GRADE
 
 bgrade_router = APIRouter(prefix="/api/bgrade", tags=["B-Grade Trend"])
 
 class BMongoDBManager:
-    def __init__(self, db_name="b_grade_trend"):
+    def __init__(self, db_name=None):
+        if db_name is None:
+            db_name = MONGODB_DB_NAME_B_GRADE
         self.client = MongoClient(MONGODB_URI)
         self.db = self.client[db_name]
     

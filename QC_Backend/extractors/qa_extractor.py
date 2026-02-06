@@ -2,7 +2,7 @@ import pandas as pd
 import pymongo
 from datetime import datetime
 from paths import get_reference_file_key, download_from_s3
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_QUALITY_ANALYSIS
 
 # ============================================
 # PART 1: DATA EXTRACTION FROM EXCEL FILES
@@ -548,8 +548,8 @@ def create_quality_analysis_database(all_lines_data, combined_datasets):
         client.admin.command('ping')
         print("✓ Successfully connected to MongoDB")
         
-        db = client["quality_analysis"]
-        print("✓ Using database: quality_analysis")
+        db = client[MONGODB_DB_NAME_QUALITY_ANALYSIS]
+        print(f"✓ Using database: {MONGODB_DB_NAME_QUALITY_ANALYSIS}")
     except Exception as e:
         print(f"✗ Error connecting to MongoDB: {e}")
         return None

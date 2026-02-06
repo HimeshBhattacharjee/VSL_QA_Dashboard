@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from pymongo import MongoClient
 from datetime import datetime, time
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_B_GRADE
 from paths import get_reference_file_key, download_from_s3
 
 warnings.filterwarnings('ignore')
@@ -44,7 +44,9 @@ def filter_and_process_excel(file_path):
 class BMongoDBManager:
     """MongoDB manager for storing and retrieving B-grade data"""
     
-    def __init__(self, db_name="b_grade_trend"):
+    def __init__(self, db_name=None):
+        if db_name is None:
+            db_name = MONGODB_DB_NAME_B_GRADE
         self.client = MongoClient(MONGODB_URI)
         self.db = self.client[db_name]
     

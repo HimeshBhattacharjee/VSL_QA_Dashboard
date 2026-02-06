@@ -5,7 +5,7 @@ from datetime import datetime
 from fuzzywuzzy import fuzz, process
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_PEEL_TEST
 from paths import get_qc_data_key, download_folder_from_s3
 
 class FuzzyFolderMatcher:
@@ -331,8 +331,10 @@ def ensure_collection_index(collection):
         print(f"  Warning: Unexpected error while creating index: {e}")
 
 
-def store_in_mongodb(df, mongo_client, db_name='peel_test'):
+def store_in_mongodb(df, mongo_client, db_name=None):
     """Store DataFrame data in MongoDB"""
+    if db_name is None:
+        db_name = MONGODB_DB_NAME_PEEL_TEST
     if df.empty:
         print("No data to store in MongoDB")
         return
@@ -436,8 +438,10 @@ def store_in_mongodb(df, mongo_client, db_name='peel_test'):
     print(f"{'='*60}")
 
 
-def list_mongodb_collections(mongo_client, db_name='peel_test'):
+def list_mongodb_collections(mongo_client, db_name=None):
     """List all collections in the database"""
+    if db_name is None:
+        db_name = MONGODB_DB_NAME_PEEL_TEST
     try:
         db = mongo_client[db_name]
         collections = db.list_collection_names()
@@ -457,8 +461,10 @@ def list_mongodb_collections(mongo_client, db_name='peel_test'):
         return []
 
 
-def query_mongodb_example(mongo_client, db_name='peel_test', collection_name='jan_2024'):
+def query_mongodb_example(mongo_client, db_name=None, collection_name='jan_2024'):
     """Query MongoDB for example data"""
+    if db_name is None:
+        db_name = MONGODB_DB_NAME_PEEL_TEST
     try:
         db = mongo_client[db_name]
         
@@ -504,10 +510,10 @@ def main():
         
         if mongo_client:
             # Step 3: Store data in MongoDB
-            store_in_mongodb(df, mongo_client, db_name='peel_test')
+            store_in_mongodb(df, mongo_client)
             
             # Step 4: List collections
-            list_mongodb_collections(mongo_client, db_name='peel_test')
+            list_mongodb_collections(mongo_client)
             
             # Step 5: Close connection
             mongo_client.close()

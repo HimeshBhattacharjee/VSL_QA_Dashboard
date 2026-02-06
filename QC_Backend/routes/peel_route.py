@@ -3,10 +3,9 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from typing import Optional
 from datetime import datetime
-from constants import MONGODB_URI
+from constants import MONGODB_URI, MONGODB_DB_NAME_PEEL_TEST
 
 peel_router = APIRouter(prefix="/api/peel", tags=["Peel Test Data"], responses={404: {"description": "Not found"}})
-DB_NAME = "peel_test"
 
 def get_mongodb_client():
     try:
@@ -46,12 +45,12 @@ async def peel_root():
 async def peel_health_check():
     try:
         client = get_mongodb_client()
-        db = client[DB_NAME]
+        db = client[MONGODB_DB_NAME_PEEL_TEST]
         collections = db.list_collection_names()
         client.close()        
         return {
             "status": "healthy",
-            "database": DB_NAME,
+            "database": MONGODB_DB_NAME_PEEL_TEST,
             "collections_count": len(collections),
             "timestamp": datetime.now().isoformat()
         }
@@ -66,7 +65,7 @@ async def peel_health_check():
 async def get_collections():
     try:
         client = get_mongodb_client()
-        db = client[DB_NAME]
+        db = client[MONGODB_DB_NAME_PEEL_TEST]
         collections = db.list_collection_names()        
         collection_info = []
         for col in collections:
@@ -95,7 +94,7 @@ async def get_peel_data(
 ):
     try:
         client = get_mongodb_client()
-        db = client[DB_NAME]
+        db = client[MONGODB_DB_NAME_PEEL_TEST]
         query_filter = {}
         if date:
             query_filter['Date'] = date
@@ -143,7 +142,7 @@ async def get_data_by_date_and_shift(date: str, shift: str):
         if shift not in ['A', 'B', 'C']:
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
         client = get_mongodb_client()
-        db = client[DB_NAME]
+        db = client[MONGODB_DB_NAME_PEEL_TEST]
         collection_name = get_collection_name(date)
         if collection_name not in db.list_collection_names():
             client.close()
@@ -193,7 +192,7 @@ async def get_graph_data(
         
         collection_name = f"{month}_{year}"
         client = get_mongodb_client()
-        db = client[DB_NAME]
+        db = client[MONGODB_DB_NAME_PEEL_TEST]
         
         if collection_name not in db.list_collection_names():
             client.close()
