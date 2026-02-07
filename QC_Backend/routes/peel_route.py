@@ -3,7 +3,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from typing import Optional
 from datetime import datetime
-from constants import MONGODB_URI, MONGODB_DB_NAME_PEEL_TEST
+from constants import MONGODB_URI, MONGODB_DB_NAME
 
 peel_router = APIRouter(prefix="/api/peel", tags=["Peel Test Data"], responses={404: {"description": "Not found"}})
 
@@ -22,7 +22,7 @@ def get_collection_name(date_str):
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         month_name = date_obj.strftime('%b').lower()
         year = date_obj.strftime('%Y')
-        return f"{month_name}_{year}"
+        return f"peel_{month_name}_{year}"
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
@@ -45,12 +45,12 @@ async def peel_root():
 async def peel_health_check():
     try:
         client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME_PEEL_TEST]
+        db = client[MONGODB_DB_NAME]
         collections = db.list_collection_names()
         client.close()        
         return {
             "status": "healthy",
-            "database": MONGODB_DB_NAME_PEEL_TEST,
+            "database": MONGODB_DB_NAME,
             "collections_count": len(collections),
             "timestamp": datetime.now().isoformat()
         }
@@ -65,7 +65,7 @@ async def peel_health_check():
 async def get_collections():
     try:
         client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME_PEEL_TEST]
+        db = client[MONGODB_DB_NAME]
         collections = db.list_collection_names()        
         collection_info = []
         for col in collections:
@@ -94,7 +94,7 @@ async def get_peel_data(
 ):
     try:
         client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME_PEEL_TEST]
+        db = client[MONGODB_DB_NAME]
         query_filter = {}
         if date:
             query_filter['Date'] = date
@@ -142,7 +142,7 @@ async def get_data_by_date_and_shift(date: str, shift: str):
         if shift not in ['A', 'B', 'C']:
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
         client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME_PEEL_TEST]
+        db = client[MONGODB_DB_NAME]
         collection_name = get_collection_name(date)
         if collection_name not in db.list_collection_names():
             client.close()
@@ -190,9 +190,9 @@ async def get_graph_data(
         if cell_face not in ['front', 'back', 'both']:
             raise HTTPException(status_code=400, detail="Cell face must be 'front', 'back', or 'both'")
         
-        collection_name = f"{month}_{year}"
+        collection_name = f"peel_{month}_{year}"
         client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME_PEEL_TEST]
+        db = client[MONGODB_DB_NAME]
         
         if collection_name not in db.list_collection_names():
             client.close()

@@ -3,14 +3,14 @@ from pymongo import MongoClient
 from datetime import datetime, time
 import pandas as pd
 import numpy as np
-from constants import MONGODB_URI, MONGODB_DB_NAME_B_GRADE
+from constants import MONGODB_URI, MONGODB_DB_NAME
 
 bgrade_router = APIRouter(prefix="/api/bgrade", tags=["B-Grade Trend"])
 
 class BMongoDBManager:
     def __init__(self, db_name=None):
         if db_name is None:
-            db_name = MONGODB_DB_NAME_B_GRADE
+            db_name = MONGODB_DB_NAME
         self.client = MongoClient(MONGODB_URI)
         self.db = self.client[db_name]
     
@@ -49,7 +49,7 @@ class BMongoDBManager:
         
         month_abbr = date_obj.strftime('%b').lower()
         year = date_obj.year
-        return f"{month_abbr}_{year}"
+        return f"b_grade_{month_abbr}_{year}"
     
     def get_all_collections(self):
         return self.db.list_collection_names()

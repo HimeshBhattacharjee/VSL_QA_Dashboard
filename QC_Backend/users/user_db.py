@@ -1,9 +1,9 @@
 from pymongo import MongoClient
 from datetime import datetime
-from constants import MONGODB_URI, MONGODB_DB_NAME_USERS
+from constants import MONGODB_URI, MONGODB_DB_NAME
 
 client = MongoClient(MONGODB_URI)
-db = client[MONGODB_DB_NAME_USERS]
+db = client[MONGODB_DB_NAME]
 users_collection = db["users"]
 
 def generate_password(name: str, employee_id: str, phone: str) -> str:

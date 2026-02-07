@@ -5,7 +5,7 @@ from datetime import datetime
 from fuzzywuzzy import fuzz, process
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
-from constants import MONGODB_URI, MONGODB_DB_NAME_PEEL_TEST
+from constants import MONGODB_URI, MONGODB_DB_NAME
 from paths import get_qc_data_key, download_folder_from_s3
 
 class FuzzyFolderMatcher:
@@ -289,11 +289,11 @@ def connect_to_mongodb(connection_string):
 
 
 def get_collection_name(date_str):
-    """Generate MongoDB collection name from date"""
+    """Generate MongoDB collection name from date (format: peel_month_year)"""
     date_obj = datetime.strptime(date_str, '%Y-%m-%d')
     month_name = date_obj.strftime('%b').lower()
     year = date_obj.strftime('%Y')
-    return f"{month_name}_{year}"
+    return f"peel_{month_name}_{year}"
 
 
 def ensure_collection_index(collection):
@@ -334,7 +334,7 @@ def ensure_collection_index(collection):
 def store_in_mongodb(df, mongo_client, db_name=None):
     """Store DataFrame data in MongoDB"""
     if db_name is None:
-        db_name = MONGODB_DB_NAME_PEEL_TEST
+        db_name = MONGODB_DB_NAME
     if df.empty:
         print("No data to store in MongoDB")
         return
@@ -441,7 +441,7 @@ def store_in_mongodb(df, mongo_client, db_name=None):
 def list_mongodb_collections(mongo_client, db_name=None):
     """List all collections in the database"""
     if db_name is None:
-        db_name = MONGODB_DB_NAME_PEEL_TEST
+        db_name = MONGODB_DB_NAME
     try:
         db = mongo_client[db_name]
         collections = db.list_collection_names()
@@ -461,10 +461,10 @@ def list_mongodb_collections(mongo_client, db_name=None):
         return []
 
 
-def query_mongodb_example(mongo_client, db_name=None, collection_name='jan_2024'):
+def query_mongodb_example(mongo_client, db_name=None, collection_name='peel_jan_2024'):
     """Query MongoDB for example data"""
     if db_name is None:
-        db_name = MONGODB_DB_NAME_PEEL_TEST
+        db_name = MONGODB_DB_NAME
     try:
         db = mongo_client[db_name]
         

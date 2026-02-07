@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from pymongo import MongoClient
 from datetime import datetime, time
-from constants import MONGODB_URI, MONGODB_DB_NAME_B_GRADE
+from constants import MONGODB_URI, MONGODB_DB_NAME
 from paths import get_reference_file_key, download_from_s3
 
 warnings.filterwarnings('ignore')
@@ -46,7 +46,7 @@ class BMongoDBManager:
     
     def __init__(self, db_name=None):
         if db_name is None:
-            db_name = MONGODB_DB_NAME_B_GRADE
+            db_name = MONGODB_DB_NAME
         self.client = MongoClient(MONGODB_URI)
         self.db = self.client[db_name]
     
@@ -70,7 +70,7 @@ class BMongoDBManager:
             return str(obj)
     
     def get_collection_name(self, date_str):
-        """Generate collection name based on date (format: month_year)"""
+        """Generate collection name based on date (format: b_grade_month_year)"""
         try:
             if isinstance(date_str, datetime):
                 date_obj = date_str
@@ -87,7 +87,7 @@ class BMongoDBManager:
         
         month_abbr = date_obj.strftime('%b').lower()
         year = date_obj.year
-        return f"{month_abbr}_{year}"
+        return f"b_grade_{month_abbr}_{year}"
     
     def prepare_document(self, row):
         """Prepare a MongoDB document from a dataframe row"""

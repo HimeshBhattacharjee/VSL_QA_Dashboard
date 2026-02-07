@@ -1,10 +1,10 @@
 from pymongo import MongoClient
 from typing import Optional, Dict, Any
-from constants import MONGODB_URI, MONGODB_DB_NAME_REPORTS
+from constants import MONGODB_URI, MONGODB_DB_NAME
 from s3_service import S3Service
 
 client = MongoClient(MONGODB_URI)
-db = client[MONGODB_DB_NAME_REPORTS]
+db = client[MONGODB_DB_NAME]
 ipqc_audit_collection = db["ipqc_audits"]
 
 class IPQCAudit:
