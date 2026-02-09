@@ -8,3 +8,4 @@ numpy
 fuzzywuzzy
 pydantic
 python-dotenv
+python-multipart
