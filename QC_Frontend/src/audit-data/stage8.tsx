@@ -71,7 +71,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
 };
 
 const LineSection = {
-    TimeBasedSection: ({ line, value, onUpdate, children }: {
+    TimeBasedSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -94,7 +94,7 @@ const LineSection = {
         </div>
     ),
 
-    SingleInputSection: ({ line, value, onUpdate, children }: {
+    SingleInputSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;

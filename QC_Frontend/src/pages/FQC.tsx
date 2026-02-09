@@ -42,7 +42,7 @@ export default function FQC() {
     const [isLoading, setIsLoading] = useState(false);
 
     // Initialize inspection datasets state
-    const [fqcDataset, setFqcDataset] = useState<InspectionDataset>({
+    const [_fqcDataset, setFqcDataset] = useState<InspectionDataset>({
         data: [],
         summary: { defect_columns: [] }
     });

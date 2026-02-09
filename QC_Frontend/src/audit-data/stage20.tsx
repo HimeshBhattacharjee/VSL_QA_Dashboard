@@ -36,7 +36,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
 };
 
 const LineSection = {
-    TimeBasedSection: <T extends AllTimeSlots>({ line, value, onUpdate, children, timeSlots }: {
+    TimeBasedSection: <T extends AllTimeSlots>({ line, value: _value, onUpdate: _onUpdate, children, timeSlots }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -58,7 +58,7 @@ const LineSection = {
         </div>
     ),
 
-    SingleInputSection: ({ line, value, onUpdate, children }: {
+    SingleInputSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;

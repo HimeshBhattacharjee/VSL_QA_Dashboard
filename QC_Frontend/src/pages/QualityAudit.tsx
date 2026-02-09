@@ -386,12 +386,12 @@ export default function QualityAudit() {
                         const mergedData = {
                             ...existingAudit.data,
                             stages: lineDependentStages.map(stage => {
-                                const savedStage = existingAudit.data.stages.find(s => s.id === stage.id);
+                                const savedStage = existingAudit.data.stages.find((s: StageData) => s.id === stage.id);
                                 if (savedStage) {
                                     return {
                                         ...stage,
                                         parameters: stage.parameters.map(param => {
-                                            const savedParam = savedStage.parameters.find(p => p.id === param.id);
+                                            const savedParam = savedStage.parameters.find((p: any) => p.id === param.id);
                                             if (savedParam) {
                                                 return { ...param, observations: savedParam.observations };
                                             }
@@ -1160,7 +1160,7 @@ export default function QualityAudit() {
                                                                                                 {typeof (savedObservation?.value || obs.value) === 'string' ? (
                                                                                                     <input
                                                                                                         type="text"
-                                                                                                        value={savedObservation?.value || obs.value}
+                                                                                                        value={(savedObservation?.value || obs.value) as string}
                                                                                                         onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
                                                                                                         placeholder="Enter value"
                                                                                                         className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"

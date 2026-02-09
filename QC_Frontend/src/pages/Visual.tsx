@@ -42,7 +42,7 @@ export default function Visual() {
     const [isLoading, setIsLoading] = useState(false);
 
     // Initialize inspection datasets state
-    const [visualDataset, setVisualDataset] = useState<InspectionDataset>({
+    const [_visualDataset, setVisualDataset] = useState<InspectionDataset>({
         data: [],
         summary: { defect_columns: [] }
     });

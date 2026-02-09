@@ -42,7 +42,7 @@ export default function LamQC() {
     const [isLoading, setIsLoading] = useState(false);
 
     // Initialize inspection datasets state
-    const [lamQcDataset, setLamQcDataset] = useState<InspectionDataset>({
+    const [_lamQcDataset, setLamQcDataset] = useState<InspectionDataset>({
         data: [],
         summary: { defect_columns: [] }
     });

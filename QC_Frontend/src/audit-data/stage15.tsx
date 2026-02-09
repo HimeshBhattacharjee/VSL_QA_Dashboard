@@ -16,7 +16,7 @@ const getBackgroundColor = (value: string) => {
 };
 
 const TrimmingSection = {
-    TimeBasedSection: ({ machine, value, onUpdate, children }: {
+    TimeBasedSection: ({ machine, value: _value, onUpdate: _onUpdate, children }: {
         machine: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -39,7 +39,7 @@ const TrimmingSection = {
         </div>
     ),
 
-    SingleInputSection: ({ machine, value, onUpdate, children }: {
+    SingleInputSection: ({ machine, value: _value, onUpdate: _onUpdate, children }: {
         machine: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;

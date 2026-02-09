@@ -150,7 +150,7 @@ const TabbingStringingObservations = {
     renderStringerSection: (props: ObservationRenderProps) => {
         const stringerData = props.value as Record<string, string>;
 
-        const getBackgroundColorForValue = (value: string, key: string) => {
+        const getBackgroundColorForValue = (value: string, _key: string) => {
             const isOff = value.toUpperCase() === 'OFF';
             if (isOff) return 'bg-yellow-100';
             if (!value) return 'bg-white';

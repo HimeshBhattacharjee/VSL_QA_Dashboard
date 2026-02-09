@@ -63,8 +63,9 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
     const [isLowerOffMode, setIsLowerOffMode] = useState(false);
 
     useEffect(() => {
-        if (props.value && typeof props.value === 'object') {
-            setLocalData(prev => ({ ...prev, ...props.value }));
+        if (props.value && typeof props.value === 'object' && !Array.isArray(props.value)) {
+            const valueObj = props.value as Record<string, any>;
+            setLocalData(prev => ({ ...prev, ...valueObj }));
         }
     }, [props.value]);
 

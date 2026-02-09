@@ -560,6 +560,10 @@ export default function PeelTest() {
                 return;
             }
             const report = reports[index];
+            if (!report._id) {
+                showAlert('error', 'Report ID not found');
+                return;
+            }
             const fullReport = await apiService.getReportById(report._id);
             const dateShiftMatch = fullReport.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
             if (dateShiftMatch) {

@@ -40,7 +40,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
 };
 
 const LineSection = {
-    TimeBasedSection: ({ line, value, onUpdate, children }: {
+    TimeBasedSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -63,7 +63,7 @@ const LineSection = {
         </div>
     ),
 
-    SingleInputSection: ({ line, value, onUpdate, children }: {
+    SingleInputSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -77,7 +77,7 @@ const LineSection = {
         </div>
     ),
 
-    BusRibbonStatusSection: ({ line, value, onUpdate, children }: {
+    BusRibbonStatusSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -108,7 +108,7 @@ const LineSection = {
         </div>
     ),
 
-    SolderingTimeSection: ({ line, value, onUpdate, children }: {
+    SolderingTimeSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -147,7 +147,7 @@ const LineSection = {
         </div>
     ),
 
-    SolderingTraceSection: ({ line, value, onUpdate, children }: {
+    SolderingTraceSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -174,7 +174,7 @@ const LineSection = {
         </div>
     ),
 
-    BusBarCutLength: ({ line, value, onUpdate, children }: {
+    BusBarCutLength: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -205,7 +205,7 @@ const LineSection = {
         </div>
     ),
 
-    PeelStrengthSection: ({ line, value, onUpdate, children }: {
+    PeelStrengthSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;

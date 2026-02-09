@@ -42,7 +42,7 @@ export default function PreEL() {
     const [isLoading, setIsLoading] = useState(false);
 
     // Initialize inspection datasets state
-    const [preELDataset, setPreELDataset] = useState<InspectionDataset>({
+    const [_preELDataset, setPreELDataset] = useState<InspectionDataset>({
         data: [],
         summary: { defect_columns: [] }
     });

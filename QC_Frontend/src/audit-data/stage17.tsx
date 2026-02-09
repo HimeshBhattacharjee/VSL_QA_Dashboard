@@ -29,7 +29,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
 };
 
 const FramingSection = {
-    TimeBasedSection: ({ line, value, onUpdate, children }: {
+    TimeBasedSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -52,7 +52,7 @@ const FramingSection = {
         </div>
     ),
 
-    SingleInputSection: ({ line, value, onUpdate, children }: {
+    SingleInputSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
@@ -66,7 +66,7 @@ const FramingSection = {
         </div>
     ),
 
-    SampleBasedSection: ({ line, value, onUpdate, children }: {
+    SampleBasedSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
