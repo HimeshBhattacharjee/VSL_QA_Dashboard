@@ -3,7 +3,7 @@ import os
 load_dotenv()
 
 SERVER_URL = '0.0.0.0'
-PORT = '8000'
+PORT = os.getenv('PORT')
 MONGODB_URI = os.getenv('MONGODB_URI')
 
 MONGODB_DB_NAME = os.getenv('MONGODB_DB_NAME')
