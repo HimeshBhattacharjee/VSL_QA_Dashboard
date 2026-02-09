@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 import datetime
 import threading
+import os
 from constants import SERVER_URL, PORT
 from routes.qa_route import qa_router
 from routes.bGrade_route import bgrade_router
@@ -26,9 +26,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+cors_env = os.getenv("CORS_ORIGINS", "")
+if cors_env:
+    parsed_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+else:
+    parsed_origins = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=parsed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,7 +85,6 @@ async def generate_audit_report_endpoint(request: dict):
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={
                 'Content-Disposition': f'attachment; filename="{filename}"',
-                'Access-Control-Allow-Origin': '*',
             }
         )
     except HTTPException:
@@ -129,7 +134,6 @@ async def generate_gel_report_endpoint(request: dict):
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={
                 'Content-Disposition': f'attachment; filename="{filename}"',
-                'Access-Control-Allow-Origin': '*',
             }
         )
     except HTTPException:
@@ -181,7 +185,6 @@ async def generate_peel_report_endpoint(request: dict):
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={
                 'Content-Disposition': f'attachment; filename="{filename}"',
-                'Access-Control-Allow-Origin': '*',
             }
         )
     except HTTPException:
