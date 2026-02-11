@@ -1,4 +1,4 @@
-import os
+import io
 import pandas as pd
 import re
 from datetime import datetime
@@ -6,7 +6,8 @@ from fuzzywuzzy import fuzz, process
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
 from constants import MONGODB_URI, MONGODB_DB_NAME
-from paths import get_qc_data_key, download_folder_from_s3
+from paths import get_qc_data_key
+from s3_service import S3Service
 
 class FuzzyFolderMatcher:
     """Fuzzy matching for folder and file names"""
@@ -23,36 +24,43 @@ class FuzzyFolderMatcher:
             return best_match
         return None
     
-    def find_files_fuzzy(self, folder_path, target_filename):
-        """Find files using fuzzy matching in a folder"""
-        if not os.path.exists(folder_path):
+    def find_files_fuzzy(self, files, target_filename):
+        """Find files using fuzzy matching from a list of file names"""
+        if not files:
             return None
-        
-        files = os.listdir(folder_path)
         
         # Exact match check
         if target_filename in files:
-            return os.path.join(folder_path, target_filename)
+            return target_filename
         
         # Fuzzy match
         best_match = self.find_best_match(target_filename, files)
         if best_match:
             print(f"  Fuzzy match: '{target_filename}' -> '{best_match}'")
-            return os.path.join(folder_path, best_match)
+            return best_match
         
         # Check without extensions
         for file in files:
-            name_without_ext = os.path.splitext(file)[0]
+            name_without_ext = file.split('.')[0]
             if fuzz.token_sort_ratio(target_filename, name_without_ext) >= self.threshold:
-                return os.path.join(folder_path, file)
+                return file
         
         return None
 
 
-def extract_data_from_excel(file_path, sheet_type):
-    """Extract peel test data from Excel files"""
+def extract_data_from_excel(file_ref, sheet_type, s3_service=None):
+    """Extract peel test data from Excel files (local path or S3 key)"""
     try:
-        df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
+        if s3_service and isinstance(file_ref, str) and '/' in file_ref and not file_ref.startswith('/'):
+            # S3 key - read from S3
+            response = s3_service.s3_client.get_object(
+                Bucket=s3_service.bucket_name,
+                Key=file_ref
+            )
+            df = pd.read_excel(io.BytesIO(response['Body'].read()), sheet_name='Sheet1', header=None)
+        else:
+            # Local file path
+            df = pd.read_excel(file_ref, sheet_name='Sheet1', header=None)
         
         # Find start of data (where 'No.' appears)
         data_start_row = None
@@ -91,14 +99,15 @@ def extract_data_from_excel(file_path, sheet_type):
         return data_dict
     
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+        print(f"Error reading file: {e}")
         return {}
 
 
-def parse_folder_structure(root_path):
-    """Parse folder structure to extract peel test data"""
+def parse_folder_structure(s3_prefix):
+    """Parse S3 folder structure to extract peel test data"""
     all_data = []
     matcher = FuzzyFolderMatcher(threshold=75)
+    s3_service = S3Service()
     
     # Regular expressions for folder name patterns
     month_year_patterns = [
@@ -143,20 +152,48 @@ def parse_folder_structure(root_path):
                 return int(match.group(1)), match.group(2).upper()
         return None, None
     
-    # Walk through directory structure
-    for root, dirs, files in os.walk(root_path):
-        current_path = os.path.relpath(root, root_path)
-        path_parts = current_path.split(os.sep)
+    # Build virtual folder structure from S3
+    folder_structure = {}  # key -> (month, date, shift, stringer_unit, files)
+    
+    try:
+        paginator = s3_service.s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=s3_service.bucket_name, Prefix=s3_prefix)
         
-        if current_path == '.':
-            continue
+        for page in pages:
+            if 'Contents' not in page:
+                continue
+            
+            for obj in page['Contents']:
+                key = obj['Key']
+                if key.endswith('/'):
+                    continue
+                
+                # Get relative path after prefix
+                relative = key[len(s3_prefix):].lstrip('/')
+                parts = relative.split('/')
+                
+                if len(parts) >= 5:
+                    month_year = parts[0]
+                    date = parts[1]
+                    shift = parts[2]
+                    stringer_unit = parts[3]
+                    filename = parts[4]
+                    
+                    folder_key = (month_year, date, shift, stringer_unit)
+                    if folder_key not in folder_structure:
+                        folder_structure[folder_key] = {'files': {}, 's3_keys': {}}
+                    
+                    folder_structure[folder_key]['files'][filename] = filename
+                    folder_structure[folder_key]['s3_keys'][filename] = key
         
-        # Check if we have a valid 4-level folder structure
-        if len(path_parts) >= 4:
-            month_year_folder = path_parts[0]
-            date_folder = path_parts[1]
-            shift_folder = path_parts[2]
-            stringer_unit_folder = path_parts[3]
+        # Process each folder like os.walk would
+        for folder_key, folder_data in folder_structure.items():
+            month_year_folder = folder_key[0]
+            date_folder = folder_key[1]
+            shift_folder = folder_key[2]
+            stringer_unit_folder = folder_key[3]
+            files = list(folder_data['files'].keys())
+            root = f"{s3_prefix}/{'/'.join(folder_key)}"
             
             # Validate folder structure patterns
             valid_structure = (
@@ -192,18 +229,20 @@ def parse_folder_structure(root_path):
                         continue
                     
                     # Find FRONT and BACK Excel files
-                    front_file = matcher.find_files_fuzzy(root, 'FRONT')
-                    back_file = matcher.find_files_fuzzy(root, 'BACK')
+                    front_filename = matcher.find_files_fuzzy(files, 'FRONT')
+                    back_filename = matcher.find_files_fuzzy(files, 'BACK')
                     
-                    if not front_file:
-                        front_file = matcher.find_files_fuzzy(root, 'FRONT.xlsx')
-                    if not back_file:
-                        back_file = matcher.find_files_fuzzy(root, 'BACK.xlsx')
+                    if not front_filename:
+                        front_filename = matcher.find_files_fuzzy(files, 'FRONT.xlsx')
+                    if not back_filename:
+                        back_filename = matcher.find_files_fuzzy(files, 'BACK.xlsx')
                     
                     # Process files if both are found
-                    if front_file and back_file:
-                        front_data = extract_data_from_excel(front_file, 'Front')
-                        back_data = extract_data_from_excel(back_file, 'Back')
+                    if front_filename and back_filename:
+                        front_key = folder_data['s3_keys'][front_filename]
+                        back_key = folder_data['s3_keys'][back_filename]
+                        front_data = extract_data_from_excel(front_key, 'Front', s3_service)
+                        back_data = extract_data_from_excel(back_key, 'Back', s3_service)
                         
                         if front_data and back_data:
                             # Create record
@@ -223,13 +262,16 @@ def parse_folder_structure(root_path):
                     else:
                         print(f"  Could not find both Excel files in: {root}")
     
+    except Exception as e:
+        print(f"Error listing S3 objects: {e}")
+    
     return all_data
 
 
-def create_structured_dataframe(root_path):
+def create_structured_dataframe(s3_prefix):
     """Create a structured DataFrame from the extracted data"""
     print("Starting data extraction...")
-    data_records = parse_folder_structure(root_path)
+    data_records = parse_folder_structure(s3_prefix)
     
     if not data_records:
         print("No data found!")
@@ -491,14 +533,13 @@ def query_mongodb_example(mongo_client, db_name=None, collection_name='peel_jan_
 def main():
     """Main function to run the peel test data extraction pipeline"""
     
-    # Define root path for peel test data
+    # Define S3 prefix for peel test data
     s3_prefix = get_qc_data_key("Auto Peel Test Result")
-    root_path = download_folder_from_s3(s3_prefix)
     
-    print(f"Downloaded to: {root_path}")
+    print(f"Reading from S3 prefix: {s3_prefix}")
     
-    # Step 1: Extract data from folder structure
-    df = create_structured_dataframe(root_path)
+    # Step 1: Extract data from S3 folder structure
+    df = create_structured_dataframe(s3_prefix)
     
     if not df.empty:
         print(f"\nDataFrame shape: {df.shape}")

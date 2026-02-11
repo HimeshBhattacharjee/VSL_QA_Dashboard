@@ -127,7 +127,7 @@ class BMongoDBManager:
             except Exception as e:
                 print(f"  Warning: Could not create unique index: {e}")
         else:
-            print(f"  Unique index already exists on '{collection_name}'")
+            pass
     
     def is_duplicate_record(self, collection, document):
         """Check if a record already exists in the collection"""
@@ -193,17 +193,14 @@ class BMongoDBManager:
                         # Update existing record
                         collection.update_one({'_id': existing_id}, {'$set': document})
                         records_updated += 1
-                        print(f"  ✓ Row {index}: Updated existing record")
                     else:
                         # Skip duplicate (no changes needed)
                         records_skipped += 1
-                        print(f"  ⚠ Row {index}: Skipped duplicate (no changes)")
                 else:
                     # Insert new record
                     result = collection.insert_one(document)
                     if result.inserted_id:
                         records_inserted += 1
-                        print(f"  ✓ Row {index}: Inserted new record")
                 
                 records_processed += 1
                 collections_used.add(collection_name)
