@@ -9,3 +9,4 @@ fuzzywuzzy
 pydantic
 python-dotenv
 python-multipart
+xlrd>=2.0.1
