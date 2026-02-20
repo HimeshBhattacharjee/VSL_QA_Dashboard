@@ -8,7 +8,10 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import GelTest from './pages/GelTest';
+import AdhesionTest from './pages/AdhesionTest';
 import PeelTest from './pages/PeelTest';
+import RoTTest from './pages/RoTTest';
+import WetLeakageTest from './pages/WetLeakageTest';
 import BGradeTrend from './pages/BGradeTrend';
 import PreLam from './pages/PreLam';
 import PreEL from './pages/PreEL';
@@ -69,9 +72,24 @@ export default function App() {
                                     <GelTest />
                                 </UserRoute>
                             } />
+                            <Route path="/adhesion-test" element={
+                                <UserRoute>
+                                    <AdhesionTest />
+                                </UserRoute>
+                            } />
                             <Route path="/peel-test" element={
                                 <UserRoute>
                                     <PeelTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/rot-test" element={
+                                <UserRoute>
+                                    <RoTTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/wet-leakage-test" element={
+                                <UserRoute>
+                                    <WetLeakageTest />
                                 </UserRoute>
                             } />
                             <Route path="/b-grade-trend" element={
