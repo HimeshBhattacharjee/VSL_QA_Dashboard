@@ -12,10 +12,14 @@ from routes.peel_route import peel_router
 from routes.user_route import user_router
 from routes.gel_route import gel_router
 from routes.peel_test_route import peel_test_router
+from routes.rot_route import rot_router
+from routes.wet_leakage_route import wet_leakage_router
 from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.PeelReportGenerator import generate_peel_report
+from generators.RoTReportGenerator import generate_rot_report
+from generators.WetLeakageReportGenerator import generate_wet_leakage_report
 from extractors.qa_extractor import main as qa_main
 from extractors.b_extractor import main as b_main
 from extractors.peel_extractor import main as peel_main
@@ -46,6 +50,8 @@ app.include_router(peel_router)
 app.include_router(user_router)
 app.include_router(gel_router)
 app.include_router(peel_test_router)
+app.include_router(rot_router)
+app.include_router(wet_leakage_router)
 app.include_router(ipqc_audit_router)
 
 @app.post("/api/ipqc-audits/generate-audit-report")
@@ -193,6 +199,50 @@ async def generate_peel_report_endpoint(request: dict):
         print(f"Error generating peel test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
+@app.post("/api/rot-test-reports/generate-rot-report")
+async def generate_rot_report_endpoint(request: dict):
+    try:
+        report_data = {
+            "form_data": request.get("form_data", {}),
+            "entries": request.get("entries", []),
+            "name": request.get("report_name", "RoT_Test_Report")
+        }
+        output, filename = generate_rot_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating RoT test report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+    
+@app.post("/api/wet-leakage-test-reports/generate-wet-leakage-report")
+async def generate_wet_leakage_report_endpoint(request: dict):
+    try:
+        report_data = {
+            "form_data": request.get("form_data", {}),
+            "entries": request.get("entries", []),
+            "name": request.get("report_name", "Wet_Leakage_Test_Report")
+        }
+        output, filename = generate_wet_leakage_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating Wet Leakage test report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
 @app.get("/")
 async def root():
     return {
@@ -230,6 +280,14 @@ async def root():
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
                 "description": "Generate peel test reports"
+            },
+            "rot_test_reports": {
+                "base_path": "/api/rot-test-reports",
+                "description": "Robustness of Termination test reports management with MongoDB"
+            },
+            "rot_report_generation": {
+                "base_path": "/generate-rot-report",
+                "description": "Generate RoT test reports"
             }
         },
         "documentation": {
