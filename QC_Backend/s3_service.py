@@ -119,6 +119,8 @@ class S3Service:
 
         if report_type == 'gel':
             return f"{AWSConfig.S3_GEL_REPORTS}/{filename}"
+        elif report_type == 'adhesion':
+            return f"{AWSConfig.S3_ADHESION_REPORTS}/{filename}"
         elif report_type == 'peel':
             return f"{AWSConfig.S3_PEEL_REPORTS}/{filename}"
         elif report_type == 'ipqc-audit':
@@ -131,6 +133,8 @@ class S3Service:
         """Generate a fixed S3 key using MongoDB _id - never changes"""
         if report_type == 'gel':
             return f"{AWSConfig.S3_GEL_REPORTS}/{mongo_id}.json"
+        elif report_type == 'adhesion':
+            return f"{AWSConfig.S3_ADHESION_REPORTS}/{mongo_id}.json"
         elif report_type == 'peel':
             return f"{AWSConfig.S3_PEEL_REPORTS}/{mongo_id}.json"
         elif report_type == 'ipqc-audit':

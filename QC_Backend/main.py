@@ -11,12 +11,14 @@ from routes.bGrade_route import bgrade_router
 from routes.peel_route import peel_router
 from routes.user_route import user_router
 from routes.gel_route import gel_router
+from routes.adhesion_route import adhesion_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
 from routes.wet_leakage_route import wet_leakage_router
 from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
+from generators.AdhesionReportGenerator import generate_adhesion_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
 from generators.WetLeakageReportGenerator import generate_wet_leakage_report
@@ -49,6 +51,7 @@ app.include_router(bgrade_router)
 app.include_router(peel_router)
 app.include_router(user_router)
 app.include_router(gel_router)
+app.include_router(adhesion_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
 app.include_router(wet_leakage_router)
@@ -146,6 +149,55 @@ async def generate_gel_report_endpoint(request: dict):
         raise
     except Exception as e:
         print(f"Error generating gel test report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+    
+@app.post("/api/adhesion-test-reports/generate-adhesion-report")
+async def generate_adhesion_report_endpoint(request: dict):
+    try:
+        report_id = request.get("report_id")
+        
+        if report_id:
+            # Saved report export - fetch from S3
+            from models.adhesion_test_models import adhesion_test_collection, AdhesionTestReport
+            from bson import ObjectId
+
+            if not ObjectId.is_valid(report_id):
+                raise HTTPException(status_code=400, detail="Invalid report ID")
+
+            report = adhesion_test_collection.find_one({"_id": ObjectId(report_id)})
+            if not report:
+                raise HTTPException(status_code=404, detail="Report not found")
+
+            # Fetch data from S3
+            adhesion_report = AdhesionTestReport.from_dict(report)
+            adhesion_data = adhesion_report.to_dict(include_data=True)
+
+            # Prepare data for report generation
+            report_data = {
+                "form_data": adhesion_data.get("form_data", {}),
+                "averages": adhesion_data.get("averages", {}),
+                "name": report["name"]
+            }
+        else:
+            # Current report export - use data from request
+            report_data = {
+                "form_data": request.get("form_data", {}),
+                "averages": request.get("averages", {}),
+                "name": request.get("report_name", "Adhesion_Test_Report")
+            }
+
+        output, filename = generate_adhesion_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating adhesion test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
@@ -277,6 +329,14 @@ async def root():
                 "base_path": "/generate-gel-report",
                 "description": "Generate gel test reports"
             },
+            "adhesion_test_reports": {
+                "base_path": "/api/adhesion-test-reports",
+                "description": "Adhesion test reports management with MongoDB"
+            },
+            "adhesion_report_generation": {
+                "base_path": "/generate-adhesion-report",
+                "description": "Generate adhesion test reports"
+            },
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
                 "description": "Generate peel test reports"
@@ -341,6 +401,7 @@ async def global_health_check():
             "audit_reports": "available",
             "audit_pdf_reports": "available",
             "gel_test_reports": "available",
+            "adhesion_test_reports": "available",
             "peel_test_reports": "available"
         }
     }

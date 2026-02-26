@@ -10,6 +10,7 @@ class AWSConfig:
     S3_BUCKET_ARN = os.getenv('S3_BUCKET_ARN')
     S3_BASE_PATH = "reports"
     S3_GEL_REPORTS = f"{S3_BASE_PATH}/gel"
+    S3_ADHESION_REPORTS = f"{S3_BASE_PATH}/adhesion"
     S3_PEEL_REPORTS = f"{S3_BASE_PATH}/peel"
     S3_IPQC_AUDITS = f"{S3_BASE_PATH}/ipqc"
 
