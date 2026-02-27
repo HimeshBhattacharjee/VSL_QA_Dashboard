@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
+import TestHeading from '../components/TestHeading';
 
 interface AdhesionTestReport {
     _id?: string;
@@ -907,7 +908,6 @@ export default function AdhesionTest() {
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
-
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
@@ -916,7 +916,10 @@ export default function AdhesionTest() {
                         </div>
                     </div>
                 )}
-
+                <TestHeading
+                    heading="Adhesion Test"
+                    criteria="Glass to Encapsulant ≥ 60N/cm & Backsheet to Encapsulant ≥ 40N/cm"
+                />
                 <div className="flex justify-center mb-2">
                     <div
                         className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}

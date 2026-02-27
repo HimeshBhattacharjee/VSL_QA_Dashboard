@@ -10,9 +10,6 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 
 print("Starting data extraction from Excel files...")
 
-# file_path_1 = get_reference_file_path("Rejection Report Fab-II,L-I September-2025.xlsx")
-# file_path_2 = get_reference_file_path("Rejection Report Fab-II,L-II September-2025.xlsx")
-
 file_key_1 = get_reference_file_key("Rejection Report Fab-II,L-I September-2025.xlsx")
 file_key_2 = get_reference_file_key("Rejection Report Fab-II,L-II September-2025.xlsx")
 

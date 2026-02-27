@@ -5,9 +5,9 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
-rot_entries_collection = db["rot_daily_entries"]
-rot_entries_collection.create_index([("date", ASCENDING)], unique=True)
-rot_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+ssh_entries_collection = db["ssh_daily_entries"]
+ssh_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
+ssh_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -29,26 +29,37 @@ class _InMemoryCollection:
 
     def update_one(self, filt, update, upsert=False):
         date_key = filt.get("date")
-        doc = self._store.get(date_key)
+        shift = filt.get("shift")
+        composite_key = f"{date_key}_{shift}" if date_key and shift else date_key
+        doc = self._store.get(composite_key)
         if doc:
             set_doc = update.get("$set", {})
             doc.update(set_doc)
-            self._store[date_key] = doc
+            self._store[composite_key] = doc
             class R: upserted_id = None
             return R()
         else:
             if upsert:
                 set_doc = update.get("$set", {})
-                self._store[date_key] = set_doc
-                class R: upserted_id = date_key
+                set_doc["date"] = date_key
+                set_doc["shift"] = shift
+                self._store[composite_key] = set_doc
+                class R: upserted_id = composite_key
                 return R()
             class R: upserted_id = None
             return R()
 
     def find_one(self, filt):
         date_key = filt.get("date")
-        if date_key:
-            return self._store.get(date_key)
+        shift = filt.get("shift")
+        if date_key and shift:
+            composite_key = f"{date_key}_{shift}"
+            return self._store.get(composite_key)
+        if date_key and not shift:
+            for key, value in self._store.items():
+                if key.startswith(f"{date_key}_"):
+                    return value
+            return None
         for v in self._store.values():
             match = True
             for k, val in filt.items():
@@ -65,7 +76,15 @@ class _InMemoryCollection:
         for v in self._store.values():
             match = True
             for k, val in filt.items():
-                if v.get(k) != val:
+                if k == "date" and val:
+                    if v.get("date") != val:
+                        match = False
+                        break
+                elif k == "shift" and val:
+                    if v.get("shift") != val:
+                        match = False
+                        break
+                elif v.get(k) != val:
                     match = False
                     break
             if match:
@@ -74,10 +93,13 @@ class _InMemoryCollection:
 
     def delete_one(self, filt):
         date_key = filt.get("date")
-        if date_key and date_key in self._store:
-            del self._store[date_key]
-            class R: deleted_count = 1
-            return R()
+        shift = filt.get("shift")
+        if date_key and shift:
+            composite_key = f"{date_key}_{shift}"
+            if composite_key in self._store:
+                del self._store[composite_key]
+                class R: deleted_count = 1
+                return R()
         class R: deleted_count = 0
         return R()
 
@@ -85,15 +107,19 @@ try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory rot_entries_collection for testing")
-    rot_entries_collection = _InMemoryCollection()
-class RoTDailyEntry:
+    print("Warning: MongoDB not configured; using in-memory ssh_entries_collection for testing")
+    ssh_entries_collection = _InMemoryCollection()
+
+class SSHDailyEntry:
     @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
         try:
             raw_date = entry_data.get("date")
             if not raw_date:
                 raise ValueError("Missing date in entry_data")
+            shift = entry_data.get("shift")
+            if not shift:
+                raise ValueError("Missing shift in entry_data")
             date_key = str(raw_date).split('T')[0]
             try:
                 date_obj = datetime.strptime(date_key, "%Y-%m-%d")
@@ -107,45 +133,54 @@ class RoTDailyEntry:
             entry_data["updated_at"] = datetime.now().isoformat()
             if "_id" in entry_data:
                 del entry_data["_id"]
-            result = rot_entries_collection.update_one(
-                {"date": entry_data["date"]},
+            result = ssh_entries_collection.update_one(
+                {"date": entry_data["date"], "shift": shift},
                 {"$set": entry_data},
                 upsert=True
             )
             if result.upserted_id:
                 return str(result.upserted_id)
-            existing = rot_entries_collection.find_one({"date": entry_data["date"]})
-            return str(existing["_id"]) if existing else None
+            existing = ssh_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
+            return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
             print(f"Error in create: {str(e)}")
             raise
     
     @staticmethod
-    def get_by_date(date: str) -> Optional[Dict[str, Any]]:
+    def get_by_date_and_shift(date: str, shift: str) -> Optional[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            return rot_entries_collection.find_one({"date": date_key})
+            return ssh_entries_collection.find_one({"date": date_key, "shift": shift})
         except Exception as e:
-            print(f"Error in get_by_date: {str(e)}")
+            print(f"Error in get_by_date_and_shift: {str(e)}")
             return None
+    
+    @staticmethod
+    def get_all_for_date(date: str) -> List[Dict[str, Any]]:
+        try:
+            date_key = str(date).split('T')[0]
+            cursor = ssh_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
+            return list(cursor)
+        except Exception as e:
+            print(f"Error in get_all_for_date: {str(e)}")
+            return []
     
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
         try:
-            cursor = rot_entries_collection.find(
+            cursor = ssh_entries_collection.find(
                 {"year": year, "month": month}
-            ).sort("date", ASCENDING)
-            
+            ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
         except Exception as e:
             print(f"Error in get_month_entries: {str(e)}")
             return []
     
     @staticmethod
-    def delete_by_date(date: str) -> bool:
+    def delete_by_date_and_shift(date: str, shift: str) -> bool:
         try:
-            result = rot_entries_collection.delete_one({"date": date})
+            result = ssh_entries_collection.delete_one({"date": date, "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
-            print(f"Error in delete_by_date: {str(e)}")
+            print(f"Error in delete_by_date_and_shift: {str(e)}")
             return False

@@ -5,15 +5,10 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
-
-# Collections
 wet_leakage_entries_collection = db["wet_leakage_daily_entries"]
-
-# Create indexes for fast queries
 wet_leakage_entries_collection.create_index([("date", ASCENDING)], unique=True)
 wet_leakage_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
-# If MongoDB config isn't available, provide a lightweight in-memory fallback
 class _InMemoryCursor:
     def __init__(self, items):
         self._items = items
@@ -28,17 +23,15 @@ class _InMemoryCursor:
 
 class _InMemoryCollection:
     def __init__(self):
-        self._store = {}  # key by date
+        self._store = {}
 
     def create_index(self, *args, **kwargs):
         return None
 
     def update_one(self, filt, update, upsert=False):
-        # Expect filter like {"date": "YYYY-MM-DD"}
         date_key = filt.get("date")
         doc = self._store.get(date_key)
         if doc:
-            # apply $set
             set_doc = update.get("$set", {})
             doc.update(set_doc)
             self._store[date_key] = doc
@@ -54,11 +47,9 @@ class _InMemoryCollection:
             return R()
 
     def find_one(self, filt):
-        # simple date find
         date_key = filt.get("date")
         if date_key:
             return self._store.get(date_key)
-        # fallback: search by _id etc
         for v in self._store.values():
             match = True
             for k, val in filt.items():
@@ -91,8 +82,6 @@ class _InMemoryCollection:
         class R: deleted_count = 0
         return R()
 
-
-# If environment variables for MongoDB are missing, switch to in-memory collection
 try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
@@ -103,9 +92,7 @@ except Exception:
 class WetLeakageDailyEntry:
     @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
-        """Create a new daily entry"""
         try:
-            # Normalize date strings to YYYY-MM-DD and extract year/month
             raw_date = entry_data.get("date")
             if not raw_date:
                 raise ValueError("Missing date in entry_data")
@@ -114,40 +101,29 @@ class WetLeakageDailyEntry:
                 date_obj = datetime.strptime(date_key, "%Y-%m-%d")
             except Exception:
                 date_obj = datetime.fromisoformat(date_key)
-
             entry_data["date"] = date_obj.strftime("%Y-%m-%d")
-            # ensure testingDate also normalized
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
             entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
-            
-            # Remove _id if present to avoid duplicate key errors
             if "_id" in entry_data:
                 del entry_data["_id"]
-            
-            # Upsert by date (one entry per day)
             result = wet_leakage_entries_collection.update_one(
                 {"date": entry_data["date"]},
                 {"$set": entry_data},
                 upsert=True
             )
-            
             if result.upserted_id:
                 return str(result.upserted_id)
-            
-            # If updated, get the existing document's ID
             existing = wet_leakage_entries_collection.find_one({"date": entry_data["date"]})
             return str(existing["_id"]) if existing else None
-            
         except Exception as e:
             print(f"Error in create: {str(e)}")
             raise
     
     @staticmethod
     def get_by_date(date: str) -> Optional[Dict[str, Any]]:
-        """Get entry by date"""
         try:
             date_key = str(date).split('T')[0]
             return wet_leakage_entries_collection.find_one({"date": date_key})
@@ -157,12 +133,10 @@ class WetLeakageDailyEntry:
     
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
-        """Get all entries for a specific month"""
         try:
             cursor = wet_leakage_entries_collection.find(
                 {"year": year, "month": month}
             ).sort("date", ASCENDING)
-            
             return list(cursor)
         except Exception as e:
             print(f"Error in get_month_entries: {str(e)}")
@@ -170,7 +144,6 @@ class WetLeakageDailyEntry:
     
     @staticmethod
     def delete_by_date(date: str) -> bool:
-        """Delete entry by date"""
         try:
             result = wet_leakage_entries_collection.delete_one({"date": date})
             return result.deleted_count > 0

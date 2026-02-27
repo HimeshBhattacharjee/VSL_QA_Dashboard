@@ -4,6 +4,7 @@ import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ZoomableChart from '../components/ZoomableChart';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
+import TestHeading from '../components/TestHeading';
 
 interface ReportData {
     _id?: string;
@@ -1401,6 +1402,10 @@ export default function PeelTest() {
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
+                <TestHeading
+                    heading="Solar Cell Peel Strength Test"
+                    criteria="Peel strength average ≥ 1.0 N/mm"
+                />
                 <div className="flex justify-center mb-2">
                     <div
                         className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}

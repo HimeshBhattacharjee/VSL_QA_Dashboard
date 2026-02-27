@@ -12,6 +12,7 @@ from routes.peel_route import peel_router
 from routes.user_route import user_router
 from routes.gel_route import gel_router
 from routes.adhesion_route import adhesion_router
+from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
 from routes.wet_leakage_route import wet_leakage_router
@@ -19,6 +20,7 @@ from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.AdhesionReportGenerator import generate_adhesion_report
+from generators.SSHReportGenerator import generate_ssh_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
 from generators.WetLeakageReportGenerator import generate_wet_leakage_report
@@ -52,6 +54,7 @@ app.include_router(peel_router)
 app.include_router(user_router)
 app.include_router(gel_router)
 app.include_router(adhesion_router)
+app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
 app.include_router(wet_leakage_router)
@@ -198,6 +201,30 @@ async def generate_adhesion_report_endpoint(request: dict):
         raise
     except Exception as e:
         print(f"Error generating adhesion test report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
+@app.post("/api/ssh-test-reports/generate-ssh-report")
+async def generate_ssh_report_endpoint(request: dict):
+    try:
+        report_data = {
+            "form_data": request.get("form_data", {}),
+            "entries": request.get("entries", []),
+            "name": request.get("report_name", "SSH_Test_Report"),
+            "year": request.get("year", datetime.now().year),
+            "month": request.get("month", datetime.now().month)
+        }
+        output, filename = generate_ssh_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating SSH test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")

@@ -46,7 +46,6 @@ class BMongoDBManager:
             except:
                 print(f"Warning: Could not parse date: {date_str}")
                 return None
-        
         month_abbr = date_obj.strftime('%b').lower()
         year = date_obj.year
         return f"b_grade_{month_abbr}_{year}"
@@ -75,10 +74,7 @@ class BMongoDBManager:
             start_dt = datetime.fromisoformat(start_date) if 'T' in start_date else datetime.strptime(start_date, '%Y-%m-%d')
             end_dt = datetime.fromisoformat(end_date) if 'T' in end_date else datetime.strptime(end_date, '%Y-%m-%d')
             query = {
-                "posting_date": {
-                    "$gte": start_dt,
-                    "$lte": end_dt
-                }
+                "posting_date": { "$gte": start_dt, "$lte": end_dt }
             }
             cursor = collection.find(query)
             for doc in cursor:
@@ -171,7 +167,6 @@ async def get_aggregated_grade_analysis(
     end_date: str = Query(..., description="End date (YYYY-MM-DD)")
 ):
     try:
-        # Use MongoDB aggregation for efficient data processing
         pipeline = [
             {
                 "$match": {
@@ -195,16 +190,12 @@ async def get_aggregated_grade_analysis(
                 }
             }
         ]
-        
         aggregated_data = []
         total_production = 0
-        
         for collection_name in mongo_manager.get_all_collections():
             collection = mongo_manager.db[collection_name]
             result = list(collection.aggregate(pipeline))
             aggregated_data.extend(result)
-            
-            # Get total count for this collection in date range
             total_count = collection.count_documents({
                 "posting_date": {
                     "$gte": datetime.strptime(start_date, '%Y-%m-%d'),
@@ -212,8 +203,6 @@ async def get_aggregated_grade_analysis(
                 }
             })
             total_production += total_count
-        
-        # Process aggregated results
         grade_counts = {'O': 0, 'E': 0, 'D': 0, 'B': 0}
         for item in aggregated_data:
             grade = item.get('grade', 'UNKNOWN')
@@ -229,7 +218,6 @@ async def get_aggregated_grade_analysis(
             "total_defects": grade_counts['B'],
             "defect_rate": round((grade_counts['B'] / total_production * 100), 2) if total_production > 0 else 0
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in grade analysis: {str(e)}")
 
@@ -240,7 +228,6 @@ async def get_aggregated_defect_analysis(
     top_n: int = Query(10, description="Top N defect reasons to return")
 ):
     try:
-        # Aggregation pipeline for defect reasons
         pipeline = [
             {
                 "$match": {
@@ -271,16 +258,12 @@ async def get_aggregated_defect_analysis(
                 }
             }
         ]
-        
         aggregated_data = []
         total_b_grade = 0
-        
         for collection_name in mongo_manager.get_all_collections():
             collection = mongo_manager.db[collection_name]
             result = list(collection.aggregate(pipeline))
             aggregated_data.extend(result)
-            
-            # Get total B-grade count for this collection
             b_grade_count = collection.count_documents({
                 "posting_date": {
                     "$gte": datetime.strptime(start_date, '%Y-%m-%d'),
@@ -289,16 +272,11 @@ async def get_aggregated_defect_analysis(
                 "grade": "B"
             })
             total_b_grade += b_grade_count
-        
-        # Merge results from different collections
         reason_counts = {}
         for item in aggregated_data:
             reason = item.get('reason', 'UNKNOWN')
             reason_counts[reason] = reason_counts.get(reason, 0) + item['count']
-        
-        # Sort by count and limit to top_n
         sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
-        
         return {
             "success": True,
             "start_date": start_date,
@@ -307,11 +285,9 @@ async def get_aggregated_defect_analysis(
             "total_b_grade": total_b_grade,
             "total_production": await get_total_production_count(start_date, end_date)
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in defect analysis: {str(e)}")
 
-# Helper function to get total production count
 async def get_total_production_count(start_date: str, end_date: str):
     total_count = 0
     for collection_name in mongo_manager.get_all_collections():
@@ -385,12 +361,10 @@ async def get_daily_trend(
             collection = mongo_manager.db[collection_name]
             result = list(collection.aggregate(pipeline))
             daily_data.extend(result)
-        
         return {
             "success": True,
             "analysis_type": analysis_type,
             "daily_data": daily_data
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching daily trend: {str(e)}")

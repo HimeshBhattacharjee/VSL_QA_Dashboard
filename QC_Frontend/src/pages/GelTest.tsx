@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
+import TestHeading from '../components/TestHeading';
 
 interface GelTestReport {
     _id?: string;
@@ -860,6 +861,10 @@ export default function GelTest() {
                         </div>
                     </div>
                 )}
+                <TestHeading
+                    heading="Gel Content Test"
+                    criteria="Gel Content should be 75 to 95% for EVA and EPE and ≥ 60% for POE"
+                />
                 <div className="flex justify-center mb-2">
                     <div
                         className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}

@@ -14,7 +14,6 @@ def setup_rot_cell_styles(workbook):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
-    
     header_style = NamedStyle(name="rot_header_style")
     header_style.font = Font(name='Calibri', size=11, bold=True)
     header_style.fill = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
@@ -25,7 +24,6 @@ def setup_rot_cell_styles(workbook):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
-    
     for style in [data_style, header_style]:
         if style.name not in workbook.named_styles:
             workbook.add_named_style(style)
@@ -91,9 +89,7 @@ def fill_rot_test_data(worksheet, entries):
                     bottom=Side(style='thin')
                 )
                 cell.border = thin_border
-        
         print(f"Filled {min(len(sorted_entries), max_rows)} test data rows successfully")
-        
     except Exception as e:
         print(f"Error filling RoT test data: {str(e)}")
         raise
@@ -116,7 +112,6 @@ def fill_rot_signatures(worksheet, form_data):
             worksheet['J38'].font = Font(name='Calibri', size=11, bold=True)
             worksheet['J38'].alignment = Alignment(horizontal='center', vertical='center')
         print("RoT signatures filled successfully")
-        
     except Exception as e:
         print(f"Error filling RoT signatures: {str(e)}")
         raise

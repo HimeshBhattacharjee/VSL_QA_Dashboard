@@ -1,5 +1,5 @@
 from openpyxl import load_workbook
-from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle, numbers)
+from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
 from openpyxl.utils import get_column_letter
 import io
 from openpyxl.cell.cell import MergedCell

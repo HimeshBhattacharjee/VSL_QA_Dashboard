@@ -38,6 +38,7 @@ const MENU_ITEMS: MenuItem[] = [
         children: [
             { id: 'gel-test', label: 'Gel Test', path: '/gel-test' },
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
+            { id: 'ssh-test', label: 'Sealant Shore Hardness Test', path: '/ssh-test' },
             { id: 'peel-test', label: 'Peel Test', path: '/peel-test' },
             { id: 'rot-test', label: 'Robustness of Termination Test', path: '/rot-test' },
             { id: 'wet-leakage-test', label: 'Wet Leakage Test', path: '/wet-leakage-test' },

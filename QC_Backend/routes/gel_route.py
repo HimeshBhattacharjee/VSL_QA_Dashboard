@@ -8,16 +8,11 @@ gel_router = APIRouter(prefix="/api/gel-test-reports", tags=["Gel Test Reports"]
 
 @gel_router.get("/", response_model=List[dict])
 async def get_all_gel_test_reports(include_data: bool = Query(False, description="Include full report data from S3")):
-    """Get all gel test reports"""
     try:
         reports = list(gel_test_collection.find().sort("timestamp", -1))
         converted_reports = []
-
         for report in reports:
-            # Create GelTestReport instance
             gel_report = GelTestReport.from_dict(report)
-
-            # Get data from S3 if requested
             if include_data:
                 report_data = gel_report.to_dict(include_data=True)
                 converted_report = {
@@ -37,27 +32,20 @@ async def get_all_gel_test_reports(include_data: bool = Query(False, description
                 }
 
             converted_reports.append(converted_report)
-
         return converted_reports
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch reports: {str(e)}")
 
 @gel_router.get("/{report_id}")
 async def get_gel_test_report(report_id: str):
-    """Get a specific gel test report by ID (always includes data)"""
     try:
         if not ObjectId.is_valid(report_id):
             raise HTTPException(status_code=400, detail="Invalid report ID")
-
         report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
-
-        # Create GelTestReport instance and get data from S3
         gel_report = GelTestReport.from_dict(report)
         report_data = gel_report.to_dict(include_data=True)
-
-        # Convert to frontend format
         response_data = {
             "_id": str(report["_id"]),
             "name": report["name"],
@@ -66,7 +54,6 @@ async def get_gel_test_report(report_id: str):
             "averages": report_data.get("averages", {}),
             "s3_key": report["s3_key"]
         }
-
         return response_data
     except HTTPException:
         raise

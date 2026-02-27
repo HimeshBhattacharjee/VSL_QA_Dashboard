@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import GelTest from './pages/GelTest';
 import AdhesionTest from './pages/AdhesionTest';
+import SSHTest from './pages/SSHTest';
 import PeelTest from './pages/PeelTest';
 import RoTTest from './pages/RoTTest';
 import WetLeakageTest from './pages/WetLeakageTest';
@@ -75,6 +76,11 @@ export default function App() {
                             <Route path="/adhesion-test" element={
                                 <UserRoute>
                                     <AdhesionTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/ssh-test" element={
+                                <UserRoute>
+                                    <SSHTest />
                                 </UserRoute>
                             } />
                             <Route path="/peel-test" element={
