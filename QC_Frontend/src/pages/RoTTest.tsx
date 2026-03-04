@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import TestHeading from '../components/TestHeading';
 import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Trash2, Save, X, BarChart3, Percent, Target, TrendingUp } from 'lucide-react';
 
 interface DailyEntry {
@@ -648,7 +649,6 @@ export default function RoTTest() {
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
-                {/* Loading Overlay */}
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
@@ -657,13 +657,14 @@ export default function RoTTest() {
                         </div>
                     </div>
                 )}
+                <TestHeading
+                    heading="Robustness of Terminations Test"
+                    criteria="Get a weight of 5 kgs (40 N) in case of IEC and 15 kgs (156 N) in case of UL for all types of module. Tie the cables of the JB with the weight and hang it for 1 minute in 5 different directions."
+                />
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Left Panel - Daily Input */}
                         <div className="lg:col-span-7 space-y-6">
-                            {/* Calendar Section */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                {/* Month/Year Navigation */}
                                 <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6">
                                     <div className="flex gap-1 items-center">
                                         <button
@@ -728,8 +729,6 @@ export default function RoTTest() {
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Calendar Grid */}
                                 <div className="grid grid-cols-7 gap-2 mb-2">
                                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                                         <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2">
@@ -740,8 +739,6 @@ export default function RoTTest() {
                                 <div className="grid grid-cols-7 gap-2">
                                     {renderCalendarDays()}
                                 </div>
-
-                                {/* Legend */}
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import TestHeading from '../components/TestHeading';
 import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Trash2, Save, X, BarChart3, Percent, Target, TrendingUp } from 'lucide-react';
 
 interface DailyEntry {
@@ -679,7 +680,6 @@ export default function WetLeakageTest() {
                         <span className="font-bold text-md">⇐</span> Back to Home
                     </button>
                 </div>
-                {/* Loading Overlay */}
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
@@ -688,6 +688,10 @@ export default function WetLeakageTest() {
                         </div>
                     </div>
                 )}
+                <TestHeading
+                    heading="Wet Leakage Test"
+                    criteria="Recipe: Apply 1500 V for 120 seconds; Passing Criteria: IR > 40MΩ /m2"
+                />
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Left Panel - Daily Input */}

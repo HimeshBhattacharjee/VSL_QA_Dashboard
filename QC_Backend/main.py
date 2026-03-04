@@ -210,8 +210,6 @@ async def generate_ssh_report_endpoint(request: dict):
             "form_data": request.get("form_data", {}),
             "entries": request.get("entries", []),
             "name": request.get("report_name", "SSH_Test_Report"),
-            "year": request.get("year", datetime.now().year),
-            "month": request.get("month", datetime.now().month)
         }
         output, filename = generate_ssh_report(report_data)
         return StreamingResponse(

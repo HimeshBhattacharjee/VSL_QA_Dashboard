@@ -14,13 +14,13 @@ interface DailyEntry {
     testingDate: string;
     shift: 'A' | 'B' | 'C';
     po: string;
-    moduleType: string;
-    moduleSerial: string;
-    jbSupplier: string;
+    line: string;
     sealantSupplier: string;
-    backsheetSupplier: string;
+    sealantExpDate: string;
+    sampleTakingTime: string;
+    sampleTestingTime: string;
     result: 'Pass' | 'Fail' | '';
-    testDoneBy: string;
+    checkedBy: string;
     remarks?: string;
     [key: string]: string | boolean | undefined;
 }
@@ -277,13 +277,13 @@ export default function SSHTest() {
                 testingDate: selectedDate,
                 shift: shift,
                 po: '',
-                moduleType: '',
-                moduleSerial: '',
-                jbSupplier: '',
+                line: '',
                 sealantSupplier: '',
-                backsheetSupplier: '',
+                sealantExpDate: '',
+                sampleTakingTime: '',
+                sampleTestingTime: '',
                 result: '',
-                testDoneBy: username || '',
+                checkedBy: username || '',
                 remarks: ''
             });
             setIsEditing(false);
@@ -873,11 +873,8 @@ export default function SSHTest() {
 
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Left Panel - Daily Input */}
                         <div className="lg:col-span-7 space-y-6">
-                            {/* Calendar Section */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                {/* Month/Year Navigation */}
                                 <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6">
                                     <div className="flex gap-1 items-center">
                                         <button
@@ -942,8 +939,6 @@ export default function SSHTest() {
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Calendar Grid */}
                                 <div className="grid grid-cols-7 gap-2 mb-2">
                                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                                         <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2">
@@ -954,20 +949,18 @@ export default function SSHTest() {
                                 <div className="grid grid-cols-7 gap-2">
                                     {renderCalendarDays()}
                                 </div>
-
-                                {/* Legend */}
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">All Pass</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Pass</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Has Fail</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Fail</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-yellow-200 border border-yellow-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Partial</span>
+                                        <div className="w-4 h-4 rounded bg-gray-200 border border-gray-500"></div>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">No Entry</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="flex items-center gap-1">
@@ -985,8 +978,6 @@ export default function SSHTest() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Entry Form */}
                             {currentEntry && selectedShift && (
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                     <div className="flex items-center justify-between mb-4">
@@ -1016,7 +1007,6 @@ export default function SSHTest() {
                                             </button>
                                         </div>
                                     </div>
-
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
@@ -1046,39 +1036,15 @@ export default function SSHTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Module Type <span className="text-red-500">*</span>
+                                                    Line <span className="text-red-500">*</span>
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={currentEntry.moduleType}
-                                                    onChange={(e) => handleInputChange('moduleType', e.target.value)}
+                                                    value={currentEntry.line}
+                                                    onChange={(e) => handleInputChange('line', e.target.value)}
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter module type"
+                                                    placeholder="Enter line"
                                                     required
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Module Serial No.
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.moduleSerial}
-                                                    onChange={(e) => handleInputChange('moduleSerial', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter serial number"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    JB Supplier
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.jbSupplier}
-                                                    onChange={(e) => handleInputChange('jbSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter JB supplier"
                                                 />
                                             </div>
                                             <div>
@@ -1095,14 +1061,38 @@ export default function SSHTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Backsheet Supplier
+                                                    Sealant Expiry Date
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={currentEntry.backsheetSupplier}
-                                                    onChange={(e) => handleInputChange('backsheetSupplier', e.target.value)}
+                                                    value={currentEntry.sealantExpDate}
+                                                    onChange={(e) => handleInputChange('sealantExpDate', e.target.value)}
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter supplier"
+                                                    placeholder="Enter sealant expiry date"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sample Taking Time
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.sampleTakingTime}
+                                                    onChange={(e) => handleInputChange('sampleTakingTime', e.target.value)}
+                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter sample taking time"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sample Testing Time
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.sampleTestingTime}
+                                                    onChange={(e) => handleInputChange('sampleTestingTime', e.target.value)}
+                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter sample testing time"
                                                 />
                                             </div>
                                             <div>
@@ -1122,14 +1112,14 @@ export default function SSHTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Test Done By
+                                                    Checked By
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={currentEntry.testDoneBy}
-                                                    onChange={(e) => handleInputChange('testDoneBy', e.target.value)}
+                                                    value={currentEntry.checkedBy}
+                                                    onChange={(e) => handleInputChange('checkedBy', e.target.value)}
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter tester name"
+                                                    placeholder="Enter checker name"
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
