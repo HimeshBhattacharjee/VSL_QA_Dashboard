@@ -17,7 +17,7 @@ export default function AdhesionTest() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
     const [savedReports, setSavedReports] = useState<AdhesionTestReport[]>([]);
-    const [reportName, setReportName] = useState('');
+    const [adhesionReportName, setAdhesionReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -220,9 +220,9 @@ export default function AdhesionTest() {
     };
 
     useEffect(() => {
-        if (reportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-        if (reportName !== '') saveFormData();
-    }, [reportName]);
+        if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
+        if (adhesionReportName !== '') saveFormData();
+    }, [adhesionReportName]);
 
     const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
         if (!oldValue.trim() && !newValue.trim()) return false;
@@ -441,7 +441,7 @@ export default function AdhesionTest() {
             const reportMetadata = reports[index];
             const fullReport = await apiService.getReportById(reportMetadata._id!);
             clearFormData(false);
-            setReportName(fullReport.name);
+            setAdhesionReportName(fullReport.name);
             sessionStorage.setItem('editingReportData', JSON.stringify(fullReport));
             sessionStorage.setItem('editingReportId', fullReport._id!);
             setActiveTab('edit-report');
@@ -459,11 +459,11 @@ export default function AdhesionTest() {
     };
 
     const loadReportData = (report: AdhesionTestReport) => {
-        setReportName(report.name);
+        setAdhesionReportName(report.name);
 
-        const editableCells = document.querySelectorAll('.editable');
+        const editableCells = document.querySelectorAll('.adhesion-editable');
         editableCells.forEach((cell, index) => {
-            const key = `editable_${index}`;
+            const key = `adhesion_editable_${index}`;
             if (report.formData[key] !== undefined) {
                 const value = report.formData[key] as string;
                 cell.textContent = value;
@@ -472,9 +472,9 @@ export default function AdhesionTest() {
             }
         });
 
-        const dataCells = document.querySelectorAll('.data-cell');
+        const dataCells = document.querySelectorAll('.adhesion-data-cell');
         dataCells.forEach((cell, index) => {
-            const key = `data_${index}`;
+            const key = `adhesion_data_${index}`;
             if (report.formData[key] !== undefined) {
                 const value = report.formData[key] as string;
                 cell.textContent = value;
@@ -523,19 +523,19 @@ export default function AdhesionTest() {
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
-        const editableCells = document.querySelectorAll('.editable');
+        const editableCells = document.querySelectorAll('.adhesion-editable');
         editableCells.forEach((cell, index) => {
-            formData[`editable_${index}`] = cell.textContent?.trim() || '';
+            formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
         });
 
-        const dataCells = document.querySelectorAll('.data-cell');
+        const dataCells = document.querySelectorAll('.adhesion-data-cell');
         dataCells.forEach((cell, index) => {
-            formData[`data_${index}`] = cell.textContent?.trim() || '';
+            formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
         });
 
         formData.preparedBySignature = preparedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
-        formData.reportName = reportName;
+        formData.reportName = adhesionReportName;
 
         sessionStorage.setItem('adhesionTestFormData', JSON.stringify(formData));
     };
@@ -545,20 +545,20 @@ export default function AdhesionTest() {
         if (savedData) {
             const formData = JSON.parse(savedData);
 
-            if (formData.reportName !== undefined) setReportName(formData.reportName);
+            if (formData.reportName !== undefined) setAdhesionReportName(formData.reportName);
 
-            const editableCells = document.querySelectorAll('.editable');
+            const editableCells = document.querySelectorAll('.adhesion-editable');
             editableCells.forEach((cell, index) => {
-                const key = `editable_${index}`;
+                const key = `adhesion_editable_${index}`;
                 if (formData[key] !== undefined) {
                     cell.textContent = formData[key] as string;
                     if ((formData[key] as string).trim()) cell.classList.add('has-content');
                 }
             });
 
-            const dataCells = document.querySelectorAll('.data-cell');
+            const dataCells = document.querySelectorAll('.adhesion-data-cell');
             dataCells.forEach((cell, index) => {
-                const key = `data_${index}`;
+                const key = `adhesion_data_${index}`;
                 if (formData[key] !== undefined) {
                     cell.textContent = formData[key] as string;
                     if ((formData[key] as string).trim()) cell.classList.add('has-content');
@@ -581,13 +581,13 @@ export default function AdhesionTest() {
     };
 
     const clearFormData = (clearEditingState = true) => {
-        const editableCells = document.querySelectorAll('.editable');
+        const editableCells = document.querySelectorAll('.adhesion-editable');
         editableCells.forEach(cell => {
             cell.textContent = '';
             cell.classList.remove('has-content');
         });
 
-        const dataCells = document.querySelectorAll('.data-cell');
+        const dataCells = document.querySelectorAll('.adhesion-data-cell');
         dataCells.forEach(cell => {
             cell.textContent = '';
             cell.classList.remove('has-content');
@@ -597,7 +597,7 @@ export default function AdhesionTest() {
         setVerifiedBySignature('');
 
         if (clearEditingState) {
-            setReportName('');
+            setAdhesionReportName('');
             sessionStorage.removeItem('editingReportId');
             sessionStorage.removeItem('editingReportData');
         }
@@ -629,7 +629,7 @@ export default function AdhesionTest() {
     };
 
     const saveReport = async () => {
-        if (!reportName.trim()) {
+        if (!adhesionReportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
@@ -652,20 +652,20 @@ export default function AdhesionTest() {
             averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '0';
 
             const reportData: Omit<AdhesionTestReport, '_id'> = {
-                name: reportName,
+                name: adhesionReportName,
                 timestamp: new Date().toISOString(),
                 formData: {},
                 averages: averages,
             };
 
-            const editableCells = document.querySelectorAll('.editable');
+            const editableCells = document.querySelectorAll('.adhesion-editable');
             editableCells.forEach((cell, index) => {
-                reportData.formData[`editable_${index}`] = cell.textContent?.trim() || '';
+                reportData.formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
             });
 
-            const dataCells = document.querySelectorAll('.data-cell');
+            const dataCells = document.querySelectorAll('.adhesion-data-cell');
             dataCells.forEach((cell, index) => {
-                reportData.formData[`data_${index}`] = cell.textContent?.trim() || '';
+                reportData.formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
             });
 
             reportData.formData.preparedBySignature = preparedBySignature;
@@ -675,21 +675,21 @@ export default function AdhesionTest() {
 
             if (editingId) {
                 const existingReport = await apiService.getReportById(editingId);
-                if (reportName === existingReport.name) {
+                if (adhesionReportName === existingReport.name) {
                     await apiService.updateReport(editingId, reportData);
                     showAlert('success', 'Report updated successfully!');
                 } else {
-                    const nameExists = await apiService.checkReportNameExists(reportName, editingId);
+                    const nameExists = await apiService.checkReportNameExists(adhesionReportName, editingId);
                     if (nameExists) {
                         showConfirm({
                             title: 'Report Name Exists',
-                            message: `A report named "${reportName}" already exists. Do you want to replace it?`,
+                            message: `A report named "${adhesionReportName}" already exists. Do you want to replace it?`,
                             type: 'warning',
                             confirmText: 'Replace',
                             cancelText: 'Cancel',
                             onConfirm: async () => {
                                 const allReports = await apiService.getAllReports();
-                                const existingReportWithSameName = allReports.find(report => report.name === reportName);
+                                const existingReportWithSameName = allReports.find(report => report.name === adhesionReportName);
                                 if (existingReportWithSameName) {
                                     await apiService.updateReport(existingReportWithSameName._id!, reportData);
                                     showAlert('success', 'Report updated successfully!');
@@ -713,17 +713,17 @@ export default function AdhesionTest() {
                 sessionStorage.removeItem('editingReportId');
                 sessionStorage.removeItem('editingReportData');
             } else {
-                const nameExists = await apiService.checkReportNameExists(reportName);
+                const nameExists = await apiService.checkReportNameExists(adhesionReportName);
                 if (nameExists) {
                     showConfirm({
                         title: 'Report Name Exists',
-                        message: `A report named "${reportName}" already exists. Do you want to replace it?`,
+                        message: `A report named "${adhesionReportName}" already exists. Do you want to replace it?`,
                         type: 'warning',
                         confirmText: 'Replace',
                         cancelText: 'Cancel',
                         onConfirm: async () => {
                             const allReports = await apiService.getAllReports();
-                            const existingReport = allReports.find(report => report.name === reportName);
+                            const existingReport = allReports.find(report => report.name === adhesionReportName);
                             if (existingReport) {
                                 await apiService.updateReport(existingReport._id!, reportData);
                                 showAlert('success', 'Report updated successfully!');
@@ -777,14 +777,14 @@ export default function AdhesionTest() {
 
             const formData: { [key: string]: string | boolean } = {};
 
-            const editableCells = document.querySelectorAll('.editable');
+            const editableCells = document.querySelectorAll('.adhesion-editable');
             editableCells.forEach((cell, index) => {
-                formData[`editable_${index}`] = cell.textContent?.trim() || '';
+                formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
             });
 
-            const dataCells = document.querySelectorAll('.data-cell');
+            const dataCells = document.querySelectorAll('.adhesion-data-cell');
             dataCells.forEach((cell, index) => {
-                formData[`data_${index}`] = cell.textContent?.trim() || '';
+                formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
             });
 
             formData.preparedBySignature = preparedBySignature;
@@ -805,7 +805,7 @@ export default function AdhesionTest() {
             averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '0';
 
             const adhesionReportData = {
-                report_name: reportName.trim() || 'Adhesion_Test_Report',
+                report_name: adhesionReportName.trim() || 'Adhesion_Test_Report',
                 timestamp: new Date().toISOString(),
                 form_data: formData,
                 averages: averages,
@@ -823,7 +823,7 @@ export default function AdhesionTest() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${reportName.trim() || 'Adhesion_Test_Report'}.xlsx`;
+            a.download = `${adhesionReportName.trim() || 'Adhesion_Test_Report'}.xlsx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -873,12 +873,12 @@ export default function AdhesionTest() {
     };
 
     useEffect(() => {
-        const editableCells = document.querySelectorAll('.editable:not(.data-cell)');
+        const editableCells = document.querySelectorAll('.adhesion-editable:not(.adhesion-data-cell)');
         editableCells.forEach(cell => {
             cell.addEventListener('click', handleEditableCellClick);
         });
 
-        const dataCells = document.querySelectorAll('.data-cell');
+        const dataCells = document.querySelectorAll('.adhesion-data-cell');
         dataCells.forEach(cell => {
             cell.addEventListener('click', handleDataCellClick);
         });
@@ -894,13 +894,13 @@ export default function AdhesionTest() {
     }, []);
 
     useEffect(() => {
-        if (reportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-    }, [reportName]);
+        if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
+    }, [adhesionReportName]);
 
     return (
         <>
             <div className="container mx-auto">
-                <div className="text-center mb-6">
+                <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}
                         className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
@@ -940,9 +940,9 @@ export default function AdhesionTest() {
                         <div className="save-actions flex flex-col sm:flex-row justify-center items-center gap-3.5">
                             <input
                                 type="text"
-                                value={reportName}
-                                onChange={(e) => setReportName(e.target.value)}
-                                className="report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={adhesionReportName}
+                                onChange={(e) => setAdhesionReportName(e.target.value)}
+                                className="adhesion-report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter report name"
                             />
                             <button
@@ -1118,10 +1118,10 @@ export default function AdhesionTest() {
                                         {[1, 2, 3, 4, 5].map(pos => (
                                             <tr key={pos}>
                                                 <td className="p-2 text-center bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-bold">{pos}</td>
-                                                <td colSpan={3} className="editable data-cell front-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={3} className="editable data-cell front-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={3} className="editable data-cell back-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={4} className="editable data-cell back-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={3} className="editable adhesion-data-cell front-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={3} className="editable adhesion-data-cell front-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={3} className="editable adhesion-data-cell back-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                                <td colSpan={4} className="editable adhesion-data-cell back-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
                                             </tr>
                                         ))}
                                         <tr>

@@ -672,7 +672,7 @@ export default function WetLeakageTest() {
     return (
         <>
             <div className="container mx-auto">
-                <div className="text-center mb-6">
+                <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}
                         className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"

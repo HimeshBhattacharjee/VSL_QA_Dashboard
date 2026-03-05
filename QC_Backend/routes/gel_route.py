@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, Query
 from models.gel_test_models import gel_test_collection, GelTestReport
 from bson import ObjectId
 from typing import List, Optional
-import json
 
 gel_router = APIRouter(prefix="/api/gel-test-reports", tags=["Gel Test Reports"])
 

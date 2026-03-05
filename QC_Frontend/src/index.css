@@ -8,7 +8,7 @@
     }
 }
 
-.editable {
+.adhesion-editable, .gel-editable {
     position: relative;
     min-height: 20px;
     cursor: text;
@@ -16,11 +16,11 @@
     transition: border-color 0.2s ease;
 }
 
-.editable:hover {
+.adhesion-editable:hover, .gel-editable:hover {
     border-color: #3498db;
 }
 
-.data-cell {
+.adhesion-data-cell, .gel-data-cell {
     text-align: center;
 }
 

@@ -5,7 +5,7 @@ from paths import get_template_key, download_from_s3
 
 def setup_gel_cell_styles(workbook):
     data_style = NamedStyle(name="gel_data_style")
-    data_style.font = Font(name='Arial', size=11)
+    data_style.font = Font(name='Calibri', size=11)
     data_style.alignment = Alignment(horizontal='center', vertical='center')
     data_style.border = Border(
         left=Side(style='thin'),
@@ -14,7 +14,7 @@ def setup_gel_cell_styles(workbook):
         bottom=Side(style='thin')
     )
     header_style = NamedStyle(name="gel_header_style")
-    header_style.font = Font(name='Arial', size=11, bold=True)
+    header_style.font = Font(name='Calibri', size=11, bold=True)
     header_style.fill = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
     header_style.alignment = Alignment(horizontal='center', vertical='center')
     header_style.border = Border(
@@ -24,7 +24,7 @@ def setup_gel_cell_styles(workbook):
         bottom=Side(style='thin')
     )
     multiline_style = NamedStyle(name="multiline_style")
-    multiline_style.font = Font(name='Arial', size=11)
+    multiline_style.font = Font(name='Calibri', size=11)
     multiline_style.alignment = Alignment(vertical='top', wrap_text=True)
     for style in [data_style, header_style, multiline_style]:
         if style.name not in workbook.named_styles:
@@ -37,14 +37,15 @@ def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
         checkbox_1 = form_data.get('checkbox_1', False)
         eva_epe_symbol = "✓" if checkbox_0 else "✕"
         poe_symbol = "✓" if checkbox_1 else "✕"
-        allowable_limit_text = (
-            f"Allowable Limit:     1. Gel Content should be: 75 to 95% for EVA & EPE {eva_epe_symbol}\n"
-            f"                                2. Gel Content should be: ≥ 60% for POE {poe_symbol}"
-        )
-        worksheet['B5'] = allowable_limit_text
-        worksheet['B5'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        worksheet['B5'].font = Font(name='Arial', size=11)
-        print("Allowable limit with checkboxes filled successfully in cell B5")
+        allowable_limit_EVA = (f"1. Gel Content should be: 75 to 95% for EVA & EPE {eva_epe_symbol}")
+        worksheet['B6'] = allowable_limit_EVA
+        worksheet['B6'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        worksheet['B6'].font = Font(name='Calibri', size=11, bold=True)
+        allowable_limit_POE = (f"2. Gel Content should be: ≥ 60% for POE {poe_symbol}")
+        worksheet['B7'] = allowable_limit_POE
+        worksheet['B7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        worksheet['B7'].font = Font(name='Calibri', size=11, bold=True)
+        print("Allowable limit with checkboxes filled successfully in cell B6 and B7")
     except Exception as e:
         print(f"Error filling allowable limit with checkboxes: {str(e)}")
         raise
@@ -61,7 +62,7 @@ def fill_encapsulant_types_with_checkboxes(worksheet, gel_data):
         encapsulant_text = f"EVA {eva_symbol}           EPE {epe_symbol}           POE {poe_symbol}"
         worksheet['I10'] = encapsulant_text
         worksheet['I10'].alignment = Alignment(horizontal='center', vertical='center')
-        worksheet['I10'].font = Font(name='Arial', size=11)
+        worksheet['I10'].font = Font(name='Calibri', size=11)
         print("Encapsulant types with checkboxes filled successfully in cell I10")
     except Exception as e:
         print(f"Error filling encapsulant types with checkboxes: {str(e)}")
@@ -71,42 +72,53 @@ def fill_gel_basic_info(worksheet, gel_data):
     try:
         form_data = gel_data.get('form_data', {})
         basic_info_mapping = {
-            'editable_0': 'I5',
-            'editable_1': 'J6',
-            'editable_2': 'J7',
-            'editable_3': 'I8',
-            'editable_4': 'C10',
-            'editable_5': 'D10',
-            'editable_6': 'E10',
-            'editable_7': 'C11',
-            'editable_8': 'D11',
-            'editable_9': 'E11',
-            'editable_10': 'C12',
-            'editable_11': 'D12',
-            'editable_12': 'E12',
-            'editable_14': 'C13',
-            'editable_15': 'D13',
-            'editable_16': 'E13',
-            'editable_18': 'C14',
-            'editable_19': 'D14',
-            'editable_20': 'E14',
-            'editable_22': 'C15',
-            'editable_23': 'D15',
-            'editable_24': 'E15',
-            'editable_26': 'C16',
-            'editable_27': 'D16',
-            'editable_28': 'E16',
-            'editable_13': 'I12',
-            'editable_17': 'I13',
-            'editable_21': 'I14',
-            'editable_25': 'I15',
-            'editable_29': 'I16',
-            'editable_30': 'B19',
-            'editable_41': 'B21',
-            'editable_57': 'B23',
+            'gel_editable_0': 'I5',
+            'gel_editable_1': 'I6',
+            'gel_editable_2': 'I7',
+            'gel_editable_3': 'I8',
+            'gel_editable_4': 'C10',
+            'gel_editable_5': 'D10',
+            'gel_editable_6': 'E10',
+            'gel_editable_7': 'C11',
+            'gel_editable_8': 'D11',
+            'gel_editable_9': 'E11',
+            'gel_editable_10': 'C12',
+            'gel_editable_11': 'D12',
+            'gel_editable_12': 'E12',
+            'gel_editable_13': 'I12',
+            'gel_editable_14': 'J12',
+            'gel_editable_15': 'K12',
+            'gel_editable_16': 'L12',
+            'gel_editable_17': 'C13',
+            'gel_editable_18': 'D13',
+            'gel_editable_19': 'E13',
+            'gel_editable_20': 'I13',
+            'gel_editable_21': 'J13',
+            'gel_editable_22': 'K13',
+            'gel_editable_23': 'L13',
+            'gel_editable_24': 'C14',
+            'gel_editable_25': 'D14',
+            'gel_editable_26': 'E14',
+            'gel_editable_27': 'I14',
+            'gel_editable_28': 'J14',
+            'gel_editable_29': 'K14',
+            'gel_editable_30': 'L14',
+            'gel_editable_31': 'C15',
+            'gel_editable_32': 'D15',
+            'gel_editable_33': 'E15',
+            'gel_editable_34': 'I15',
+            'gel_editable_35': 'J15',
+            'gel_editable_36': 'K15',
+            'gel_editable_37': 'L15',
+            'gel_editable_38': 'C16',
+            'gel_editable_39': 'D16',
+            'gel_editable_40': 'E16',
+            'gel_editable_41': 'I16',
+            'gel_editable_42': 'B19',
+            'gel_editable_53': 'B21',
+            'gel_editable_69': 'B23',
             'preparedBySignature': 'C27',
-            'acceptedBySignature': 'E27',
-            'verifiedBySignature': 'J27'
+            'acceptedBySignature': 'H27'
         }
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
@@ -124,13 +136,13 @@ def fill_gel_test_data(worksheet, gel_data):
         form_data = gel_data.get('form_data', {})
         averages = gel_data.get('averages', {})
         test_data_mapping = {
-            'editable_31': 'E19', 'editable_32': 'F19', 'editable_33': 'G19', 'editable_34': 'H19', 'editable_35': 'I19', 
-            'editable_36': 'E20', 'editable_37': 'F20', 'editable_38': 'G20', 'editable_39': 'H20', 'editable_40': 'I20',
-            'editable_42': 'E21', 'editable_43': 'F21', 'editable_44': 'G21', 'editable_45': 'H21', 'editable_46': 'I21',
-            'editable_47': 'E22', 'editable_48': 'F22', 'editable_49': 'G22', 'editable_50': 'H22', 'editable_51': 'I22',
-            'editable_52': 'E23', 'editable_53': 'F23', 'editable_54': 'G23', 'editable_55': 'H23', 'editable_56': 'I23',
-            'editable_58': 'E24', 'editable_59': 'F24', 'editable_60': 'G24', 'editable_61': 'H24', 'editable_62': 'I24',
-            'editable_63': 'E25', 'editable_64': 'F25', 'editable_65': 'G25', 'editable_66': 'H25', 'editable_67': 'I25'
+            'gel_editable_43': 'E19', 'gel_editable_44': 'F19', 'gel_editable_45': 'G19', 'gel_editable_46': 'H19', 'gel_editable_47': 'I19', 
+            'gel_editable_48': 'E20', 'gel_editable_49': 'F20', 'gel_editable_50': 'G20', 'gel_editable_51': 'H20', 'gel_editable_52': 'I20',
+            'gel_editable_54': 'E21', 'gel_editable_55': 'F21', 'gel_editable_56': 'G21', 'gel_editable_57': 'H21', 'gel_editable_58': 'I21',
+            'gel_editable_59': 'E22', 'gel_editable_60': 'F22', 'gel_editable_61': 'G22', 'gel_editable_62': 'H22', 'gel_editable_63': 'I22',
+            'gel_editable_64': 'E23', 'gel_editable_65': 'F23', 'gel_editable_66': 'G23', 'gel_editable_67': 'H23', 'gel_editable_68': 'I23',
+            'gel_editable_70': 'E24', 'gel_editable_71': 'F24', 'gel_editable_72': 'G24', 'gel_editable_73': 'H24', 'gel_editable_74': 'I24',
+            'gel_editable_75': 'E25', 'gel_editable_76': 'F25', 'gel_editable_77': 'G25', 'gel_editable_78': 'H25', 'gel_editable_79': 'I25'
         }
         for field, cell_ref in test_data_mapping.items():
             if field in form_data and form_data[field]:
@@ -150,9 +162,9 @@ def fill_gel_test_data(worksheet, gel_data):
                 worksheet[cell_ref] = averages[field]
                 apply_gel_cell_formatting(worksheet[cell_ref], font_size=11, bold=True, horizontal='center')
         if 'mean' in averages and averages['mean']:
-            worksheet.merge_cells('K19:K25')
-            worksheet['K19'] = averages['mean']
-            apply_gel_cell_formatting(worksheet['K19'], font_size=11, bold=True, horizontal='center', vertical='center')
+            worksheet.merge_cells('L19:L25')
+            worksheet['L19'] = averages['mean']
+            apply_gel_cell_formatting(worksheet['L19'], font_size=11, bold=True, horizontal='center', vertical='center')
         print("Gel test data filled successfully")
     except Exception as e:
         print(f"Error filling gel test data: {str(e)}")
@@ -162,7 +174,7 @@ def apply_gel_cell_formatting(cell, font_size=11, bold=False,
                              text_color='000000', horizontal='center', vertical='center',
                              is_checkbox=False, wrap_text=True):
     cell.font = Font(
-        name='Arial',
+        name='Calibri',
         size=font_size,
         bold=bold,
         color=text_color

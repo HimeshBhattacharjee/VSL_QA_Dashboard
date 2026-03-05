@@ -15,7 +15,7 @@ def get_writable_cell(worksheet, cell_ref):
 
 def setup_cell_styles(workbook):
     header_style = NamedStyle(name="header_style")
-    header_style.font = Font(name='Arial', size=18, bold=True, color='FFFFFF')
+    header_style.font = Font(name='Calibri', size=18, bold=True, color='FFFFFF')
     header_style.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
     header_style.alignment = Alignment(horizontal='center', vertical='center')
     header_style.border = Border(
@@ -25,7 +25,7 @@ def setup_cell_styles(workbook):
         bottom=Side(style='thin')
     )
     data_style = NamedStyle(name="data_style")
-    data_style.font = Font(name='Arial', size=16)
+    data_style.font = Font(name='Calibri', size=16)
     data_style.alignment = Alignment(horizontal='center', vertical='center')
     data_style.border = Border(
         left=Side(style='thin'),
@@ -34,7 +34,7 @@ def setup_cell_styles(workbook):
         bottom=Side(style='thin')
     )
     important_style = NamedStyle(name="important_style")
-    important_style.font = Font(name='Arial', size=16, bold=True, color='000000')
+    important_style.font = Font(name='Calibri', size=16, bold=True, color='000000')
     important_style.alignment = Alignment(horizontal='center', vertical='center')
     important_style.border = Border(
         left=Side(style='thin'),
