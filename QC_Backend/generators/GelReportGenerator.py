@@ -1,34 +1,7 @@
 from openpyxl import load_workbook
-from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
+from openpyxl.styles import Alignment
 import io
 from paths import get_template_key, download_from_s3
-
-def setup_gel_cell_styles(workbook):
-    data_style = NamedStyle(name="gel_data_style")
-    data_style.font = Font(name='Calibri', size=11)
-    data_style.alignment = Alignment(horizontal='center', vertical='center')
-    data_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    header_style = NamedStyle(name="gel_header_style")
-    header_style.font = Font(name='Calibri', size=11, bold=True)
-    header_style.fill = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
-    header_style.alignment = Alignment(horizontal='center', vertical='center')
-    header_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    multiline_style = NamedStyle(name="multiline_style")
-    multiline_style.font = Font(name='Calibri', size=11)
-    multiline_style.alignment = Alignment(vertical='top', wrap_text=True)
-    for style in [data_style, header_style, multiline_style]:
-        if style.name not in workbook.named_styles:
-            workbook.add_named_style(style)
 
 def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
     try:
@@ -40,11 +13,9 @@ def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
         allowable_limit_EVA = (f"1. Gel Content should be: 75 to 95% for EVA & EPE {eva_epe_symbol}")
         worksheet['B6'] = allowable_limit_EVA
         worksheet['B6'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        worksheet['B6'].font = Font(name='Calibri', size=11, bold=True)
         allowable_limit_POE = (f"2. Gel Content should be: ≥ 60% for POE {poe_symbol}")
         worksheet['B7'] = allowable_limit_POE
         worksheet['B7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        worksheet['B7'].font = Font(name='Calibri', size=11, bold=True)
         print("Allowable limit with checkboxes filled successfully in cell B6 and B7")
     except Exception as e:
         print(f"Error filling allowable limit with checkboxes: {str(e)}")
@@ -62,7 +33,6 @@ def fill_encapsulant_types_with_checkboxes(worksheet, gel_data):
         encapsulant_text = f"EVA {eva_symbol}           EPE {epe_symbol}           POE {poe_symbol}"
         worksheet['I10'] = encapsulant_text
         worksheet['I10'].alignment = Alignment(horizontal='center', vertical='center')
-        worksheet['I10'].font = Font(name='Calibri', size=11)
         print("Encapsulant types with checkboxes filled successfully in cell I10")
     except Exception as e:
         print(f"Error filling encapsulant types with checkboxes: {str(e)}")
@@ -123,7 +93,6 @@ def fill_gel_basic_info(worksheet, gel_data):
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
-                apply_gel_cell_formatting(worksheet[cell_ref], font_size=11, horizontal='center')
         fill_allowable_limit_with_checkboxes(worksheet, gel_data)
         fill_encapsulant_types_with_checkboxes(worksheet, gel_data)
         print("Basic gel test information filled successfully")
@@ -147,7 +116,6 @@ def fill_gel_test_data(worksheet, gel_data):
         for field, cell_ref in test_data_mapping.items():
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
-                apply_gel_cell_formatting(worksheet[cell_ref], font_size=11, horizontal='center')
         averages_mapping = {
             'average_0': 'J19',
             'average_1': 'J20',
@@ -160,37 +128,13 @@ def fill_gel_test_data(worksheet, gel_data):
         for field, cell_ref in averages_mapping.items():
             if field in averages and averages[field]:
                 worksheet[cell_ref] = averages[field]
-                apply_gel_cell_formatting(worksheet[cell_ref], font_size=11, bold=True, horizontal='center')
         if 'mean' in averages and averages['mean']:
             worksheet.merge_cells('L19:L25')
             worksheet['L19'] = averages['mean']
-            apply_gel_cell_formatting(worksheet['L19'], font_size=11, bold=True, horizontal='center', vertical='center')
         print("Gel test data filled successfully")
     except Exception as e:
         print(f"Error filling gel test data: {str(e)}")
         raise
-
-def apply_gel_cell_formatting(cell, font_size=11, bold=False, 
-                             text_color='000000', horizontal='center', vertical='center',
-                             is_checkbox=False, wrap_text=True):
-    cell.font = Font(
-        name='Calibri',
-        size=font_size,
-        bold=bold,
-        color=text_color
-    )
-    cell.alignment = Alignment(
-        horizontal=horizontal,
-        vertical=vertical,
-        wrap_text=wrap_text
-    )
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    cell.border = thin_border
 
 def generate_gel_filename(gel_data):
     report_name = gel_data.get('report_name', 'Gel_Test_Report')
@@ -214,11 +158,8 @@ def generate_gel_report(gel_data):
         template_path = download_from_s3(template_key)
         wb = load_workbook(template_path)
         ws = wb.active
-        setup_gel_cell_styles(wb)
         fill_gel_basic_info(ws, gel_data)
         fill_gel_test_data(ws, gel_data)
-        ws.row_dimensions[5].height = 40
-        ws.row_dimensions[10].height = 25
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)

@@ -102,38 +102,61 @@ async def get_monthly_stats(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
-    """Get statistics for a specific month - always returns 200 with default stats if no data"""
+    """Get statistics for a specific month - counting lines not shifts"""
     try:
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Get all entries for the month
         entries = SSHDailyEntry.get_month_entries(year, month)
         
-        # Calculate stats (each shift counts as a separate entry)
-        total_possible_entries = days_in_month * 3  # 3 shifts per day
-        filled_entries = len(entries)
-        pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-        fail_count = sum(1 for e in entries if e.get("result") == "Fail")
+        # Calculate stats based on lines, not shifts
+        total_possible_entries = days_in_month * 3 * 2  # 3 shifts * 2 lines per day
+        filled_entries = 0
+        pass_count = 0
+        fail_count = 0
         
-        # Calculate completion rate based on possible entries (3 per day)
-        completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
-        
-        # Also calculate per-shift stats
+        # Initialize shift stats with lines
         shift_stats = {
-            "A": {"filled": 0, "pass": 0, "fail": 0},
-            "B": {"filled": 0, "pass": 0, "fail": 0},
-            "C": {"filled": 0, "pass": 0, "fail": 0}
+            "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
         }
         
         for entry in entries:
             shift = entry.get("shift")
-            result = entry.get("result")
+            lines = entry.get("lines", {})
+            
             if shift in shift_stats:
-                shift_stats[shift]["filled"] += 1
-                if result == "Pass":
-                    shift_stats[shift]["pass"] += 1
-                elif result == "Fail":
-                    shift_stats[shift]["fail"] += 1
+                # Process line 1
+                line1 = lines.get("1", {})
+                if line1.get("result"):
+                    filled_entries += 1
+                    shift_stats[shift]["filled"] += 1
+                    shift_stats[shift]["lines"]["1"] += 1
+                    
+                    if line1["result"] == "Pass":
+                        pass_count += 1
+                        shift_stats[shift]["pass"] += 1
+                    elif line1["result"] == "Fail":
+                        fail_count += 1
+                        shift_stats[shift]["fail"] += 1
+                
+                # Process line 2
+                line2 = lines.get("2", {})
+                if line2.get("result"):
+                    filled_entries += 1
+                    shift_stats[shift]["filled"] += 1
+                    shift_stats[shift]["lines"]["2"] += 1
+                    
+                    if line2["result"] == "Pass":
+                        pass_count += 1
+                        shift_stats[shift]["pass"] += 1
+                    elif line2["result"] == "Fail":
+                        fail_count += 1
+                        shift_stats[shift]["fail"] += 1
+        
+        # Calculate completion rate based on lines
+        completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
         
         return {
             "success": True,
@@ -150,19 +173,20 @@ async def get_monthly_stats(
     except Exception as e:
         # Return default stats on error
         days_in_month = calendar.monthrange(year, month)[1]
+        total_possible_entries = days_in_month * 3 * 2
         return {
             "success": False,
             "data": {
                 "totalDays": days_in_month,
-                "totalPossibleEntries": days_in_month * 3,
+                "totalPossibleEntries": total_possible_entries,
                 "filledEntries": 0,
                 "completionRate": 0,
                 "passCount": 0,
                 "failCount": 0,
                 "shiftStats": {
-                    "A": {"filled": 0, "pass": 0, "fail": 0},
-                    "B": {"filled": 0, "pass": 0, "fail": 0},
-                    "C": {"filled": 0, "pass": 0, "fail": 0}
+                    "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+                    "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+                    "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
                 }
             },
             "error": str(e)
@@ -170,10 +194,10 @@ async def get_monthly_stats(
 
 @ssh_router.post("/entries")
 async def create_entry(entry: dict):
-    """Create or update a daily entry for a specific shift"""
+    """Create or update a daily entry for a specific shift with two lines"""
     try:
         # Validate required fields
-        required_fields = ["date", "testingDate", "moduleType", "result", "shift"]
+        required_fields = ["date", "testingDate", "shift", "checkedBy", "lines"]
         for field in required_fields:
             if field not in entry or not entry[field]:
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
@@ -182,19 +206,28 @@ async def create_entry(entry: dict):
         if entry["shift"] not in ["A", "B", "C"]:
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
         
+        # Validate lines structure
+        if not isinstance(entry["lines"], dict) or "1" not in entry["lines"] or "2" not in entry["lines"]:
+            raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
+        
+        if not entry.get("po"):
+            raise HTTPException(status_code=400, detail="PO number is required")
+
+        for line_num, line_data in entry["lines"].items():
+            if not line_data.get("result"):
+                raise HTTPException(status_code=400, detail=f"Line {line_num} missing Result")
+            if line_data["result"] not in ["Pass", "Fail", ""]:
+                raise HTTPException(status_code=400, detail=f"Invalid result for line {line_num}")
+        
         # Normalize and extract year/month from date
         raw_date = entry.get("date")
-        if not raw_date:
-            raise HTTPException(status_code=400, detail="Missing required field: date")
         date_key = str(raw_date).split('T')[0]
         try:
             date_obj = datetime.strptime(date_key, "%Y-%m-%d")
         except Exception:
-            # Try fromisoformat fallback
             date_obj = datetime.fromisoformat(date_key)
 
         entry["date"] = date_obj.strftime("%Y-%m-%d")
-        # ensure testingDate matches normalized date
         entry["testingDate"] = entry.get("testingDate") and str(entry.get("testingDate")).split('T')[0] or entry["date"]
         entry["year"] = date_obj.year
         entry["month"] = date_obj.month
@@ -210,46 +243,12 @@ async def create_entry(entry: dict):
         # Get the saved entry
         saved_entry = SSHDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
         
-        # Get updated stats for the month
-        entries = SSHDailyEntry.get_month_entries(date_obj.year, date_obj.month)
-        days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
-        total_possible_entries = days_in_month * 3
-        filled_entries = len(entries)
-        pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-        fail_count = sum(1 for e in entries if e.get("result") == "Fail")
-        completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
-        
-        # Calculate per-shift stats
-        shift_stats = {
-            "A": {"filled": 0, "pass": 0, "fail": 0},
-            "B": {"filled": 0, "pass": 0, "fail": 0},
-            "C": {"filled": 0, "pass": 0, "fail": 0}
-        }
-        
-        for e in entries:
-            shift = e.get("shift")
-            result = e.get("result")
-            if shift in shift_stats:
-                shift_stats[shift]["filled"] += 1
-                if result == "Pass":
-                    shift_stats[shift]["pass"] += 1
-                elif result == "Fail":
-                    shift_stats[shift]["fail"] += 1
-        
+        # Return the saved entry without recalculating stats
         return {
             "success": True,
             "message": "Entry saved successfully",
             "data": {
-                "entry": serialize_doc(saved_entry),
-                "stats": {
-                    "totalDays": days_in_month,
-                    "totalPossibleEntries": total_possible_entries,
-                    "filledEntries": filled_entries,
-                    "completionRate": completion_rate,
-                    "passCount": pass_count,
-                    "failCount": fail_count,
-                    "shiftStats": shift_stats
-                }
+                "entry": serialize_doc(saved_entry)
             }
         }
     except HTTPException:
@@ -271,73 +270,15 @@ async def delete_entry(date: str, shift: str):
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        year = entry.get("year")
-        month = entry.get("month")
-        
         # Delete the entry
         deleted = SSHDailyEntry.delete_by_date_and_shift(date_key, shift)
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        # Get updated stats for the month
-        if year and month:
-            entries = SSHDailyEntry.get_month_entries(year, month)
-            days_in_month = calendar.monthrange(year, month)[1]
-            total_possible_entries = days_in_month * 3
-            filled_entries = len(entries)
-            pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-            fail_count = sum(1 for e in entries if e.get("result") == "Fail")
-            completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
-            
-            # Calculate per-shift stats
-            shift_stats = {
-                "A": {"filled": 0, "pass": 0, "fail": 0},
-                "B": {"filled": 0, "pass": 0, "fail": 0},
-                "C": {"filled": 0, "pass": 0, "fail": 0}
-            }
-            
-            for e in entries:
-                s = e.get("shift")
-                result = e.get("result")
-                if s in shift_stats:
-                    shift_stats[s]["filled"] += 1
-                    if result == "Pass":
-                        shift_stats[s]["pass"] += 1
-                    elif result == "Fail":
-                        shift_stats[s]["fail"] += 1
-            
-            stats = {
-                "totalDays": days_in_month,
-                "totalPossibleEntries": total_possible_entries,
-                "filledEntries": filled_entries,
-                "completionRate": completion_rate,
-                "passCount": pass_count,
-                "failCount": fail_count,
-                "shiftStats": shift_stats
-            }
-        else:
-            # If we couldn't get year/month, return default stats for current month
-            today = datetime.now()
-            days_in_month = calendar.monthrange(today.year, today.month)[1]
-            stats = {
-                "totalDays": days_in_month,
-                "totalPossibleEntries": days_in_month * 3,
-                "filledEntries": 0,
-                "completionRate": 0,
-                "passCount": 0,
-                "failCount": 0,
-                "shiftStats": {
-                    "A": {"filled": 0, "pass": 0, "fail": 0},
-                    "B": {"filled": 0, "pass": 0, "fail": 0},
-                    "C": {"filled": 0, "pass": 0, "fail": 0}
-                }
-            }
-        
         return {
             "success": True,
-            "message": "Entry deleted successfully",
-            "data": {"stats": stats}
+            "message": "Entry deleted successfully"
         }
     except HTTPException:
         raise

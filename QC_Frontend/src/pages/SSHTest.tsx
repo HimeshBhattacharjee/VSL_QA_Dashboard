@@ -9,20 +9,27 @@ import {
     Circle, CircleDot, CircleOff
 } from 'lucide-react';
 
-interface DailyEntry {
-    date: string;
-    testingDate: string;
-    shift: 'A' | 'B' | 'C';
-    po: string;
-    line: string;
+interface LineEntry {
+    line?: string; // Add line field for Excel export
     sealantSupplier: string;
     sealantExpDate: string;
     sampleTakingTime: string;
     sampleTestingTime: string;
     result: 'Pass' | 'Fail' | '';
-    checkedBy: string;
     remarks?: string;
-    [key: string]: string | boolean | undefined;
+}
+
+interface DailyEntry {
+    date: string;
+    testingDate: string;
+    shift: 'A' | 'B' | 'C';
+    checkedBy: string;
+    po: string;
+    lines: {
+        '1': LineEntry;
+        '2': LineEntry;
+    };
+    [key: string]: any;
 }
 
 interface DateEntries {
@@ -33,6 +40,18 @@ interface DateEntries {
     };
 }
 
+interface ShiftLineStats {
+    '1': number;
+    '2': number;
+}
+
+interface ShiftStats {
+    filled: number;
+    pass: number;
+    fail: number;
+    lines: ShiftLineStats;
+}
+
 interface MonthlyStats {
     totalDays: number;
     totalPossibleEntries: number;
@@ -41,9 +60,9 @@ interface MonthlyStats {
     passCount: number;
     failCount: number;
     shiftStats: {
-        A: { filled: number; pass: number; fail: number };
-        B: { filled: number; pass: number; fail: number };
-        C: { filled: number; pass: number; fail: number };
+        A: ShiftStats;
+        B: ShiftStats;
+        C: ShiftStats;
     };
 }
 
@@ -52,6 +71,29 @@ interface SignatureData {
     reviewedBy: string;
     approvedBy: string;
 }
+
+// Default empty shift stats with lines
+const defaultShiftStats: ShiftStats = {
+    filled: 0,
+    pass: 0,
+    fail: 0,
+    lines: { '1': 0, '2': 0 }
+};
+
+// Default monthly stats
+const defaultMonthlyStats: MonthlyStats = {
+    totalDays: 0,
+    totalPossibleEntries: 0,
+    filledEntries: 0,
+    completionRate: 0,
+    passCount: 0,
+    failCount: 0,
+    shiftStats: {
+        A: { ...defaultShiftStats },
+        B: { ...defaultShiftStats },
+        C: { ...defaultShiftStats }
+    }
+};
 
 export default function SSHTest() {
     const navigate = useNavigate();
@@ -67,19 +109,7 @@ export default function SSHTest() {
     const [isEditing, setIsEditing] = useState(false);
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
     const [monthlyEntries, setMonthlyEntries] = useState<Map<string, DailyEntry>>(new Map());
-    const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>({
-        totalDays: 0,
-        totalPossibleEntries: 0,
-        filledEntries: 0,
-        completionRate: 0,
-        passCount: 0,
-        failCount: 0,
-        shiftStats: {
-            A: { filled: 0, pass: 0, fail: 0 },
-            B: { filled: 0, pass: 0, fail: 0 },
-            C: { filled: 0, pass: 0, fail: 0 }
-        }
-    });
+    const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>(defaultMonthlyStats);
     const [signatures, setSignatures] = useState<SignatureData>(() => {
         const saved = localStorage.getItem('sshSignatures');
         return saved ? JSON.parse(saved) : {
@@ -115,6 +145,28 @@ export default function SSHTest() {
         setUsername(storedUsername);
     }, []);
 
+    const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
+        line: lineNum, // Add line number for Excel export
+        sealantSupplier: '',
+        sealantExpDate: '',
+        sampleTakingTime: '',
+        sampleTestingTime: '',
+        result: '',
+        remarks: ''
+    }), []);
+
+    const createEmptyShiftEntry = useCallback((date: string, shift: 'A' | 'B' | 'C', checkedBy: string): DailyEntry => ({
+        date: date,
+        testingDate: date,
+        shift: shift,
+        checkedBy: checkedBy,
+        po: '',
+        lines: {
+            '1': createEmptyLineEntry('1'),
+            '2': createEmptyLineEntry('2')
+        }
+    }), [createEmptyLineEntry]);
+
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
         try {
@@ -147,6 +199,23 @@ export default function SSHTest() {
 
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
+                
+                // Ensure entry has lines structure with line numbers
+                if (!entry.lines) {
+                    entry.lines = {
+                        '1': createEmptyLineEntry('1'),
+                        '2': createEmptyLineEntry('2')
+                    };
+                } else {
+                    // Add line numbers to existing entries for Excel export
+                    if (entry.lines['1'] && !entry.lines['1'].line) {
+                        entry.lines['1'].line = '1';
+                    }
+                    if (entry.lines['2'] && !entry.lines['2'].line) {
+                        entry.lines['2'].line = '2';
+                    }
+                }
+                
                 const entryWithNormalizedDate = {
                     ...entry,
                     date: normalizedDate,
@@ -165,20 +234,31 @@ export default function SSHTest() {
             setMonthlyEntries(entriesMap);
             setDateEntries(dateEntriesObj);
 
-            // Extract stats data
+            // Extract stats data with proper structure
             let statsData = statsJson.data || statsJson;
+            
+            // Ensure shiftStats has lines property
+            const shiftStats = statsData.shiftStats || {
+                A: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                B: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                C: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } }
+            };
+
+            // Ensure each shift has lines property
+            ['A', 'B', 'C'].forEach(shift => {
+                if (!shiftStats[shift].lines) {
+                    shiftStats[shift].lines = { '1': 0, '2': 0 };
+                }
+            });
+
             const newStats = {
                 totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3,
+                totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2,
                 filledEntries: statsData.filledEntries || 0,
                 completionRate: statsData.completionRate || 0,
                 passCount: statsData.passCount || 0,
                 failCount: statsData.failCount || 0,
-                shiftStats: statsData.shiftStats || {
-                    A: { filled: 0, pass: 0, fail: 0 },
-                    B: { filled: 0, pass: 0, fail: 0 },
-                    C: { filled: 0, pass: 0, fail: 0 }
-                }
+                shiftStats: shiftStats
             };
 
             console.log('Setting stats:', newStats);
@@ -192,21 +272,21 @@ export default function SSHTest() {
             const daysInMonth = new Date(year, month - 1, 0).getDate();
             setMonthlyStats({
                 totalDays: daysInMonth,
-                totalPossibleEntries: daysInMonth * 3,
+                totalPossibleEntries: daysInMonth * 3 * 2,
                 filledEntries: 0,
                 completionRate: 0,
                 passCount: 0,
                 failCount: 0,
                 shiftStats: {
-                    A: { filled: 0, pass: 0, fail: 0 },
-                    B: { filled: 0, pass: 0, fail: 0 },
-                    C: { filled: 0, pass: 0, fail: 0 }
+                    A: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                    B: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                    C: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } }
                 }
             });
         } finally {
             setIsLoading(false);
         }
-    }, [SSH_API_BASE_URL, normalizeDate]);
+    }, [SSH_API_BASE_URL, normalizeDate, createEmptyLineEntry]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -267,28 +347,30 @@ export default function SSHTest() {
 
         if (entry) {
             console.log('Loading existing entry:', entry);
+            // Ensure entry has lines structure with line numbers
+            if (!entry.lines) {
+                entry.lines = {
+                    '1': createEmptyLineEntry('1'),
+                    '2': createEmptyLineEntry('2')
+                };
+            } else {
+                // Add line numbers for Excel export if missing
+                if (entry.lines['1'] && !entry.lines['1'].line) {
+                    entry.lines['1'].line = '1';
+                }
+                if (entry.lines['2'] && !entry.lines['2'].line) {
+                    entry.lines['2'].line = '2';
+                }
+            }
             setCurrentEntry(entry);
             setIsEditing(true);
         } else {
             console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
-            // Create new blank entry for this date and shift
-            setCurrentEntry({
-                date: selectedDate,
-                testingDate: selectedDate,
-                shift: shift,
-                po: '',
-                line: '',
-                sealantSupplier: '',
-                sealantExpDate: '',
-                sampleTakingTime: '',
-                sampleTestingTime: '',
-                result: '',
-                checkedBy: username || '',
-                remarks: ''
-            });
+            // Create new blank entry with two lines
+            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, username || ''));
             setIsEditing(false);
         }
-    }, [selectedDate, monthlyEntries, username]);
+    }, [selectedDate, monthlyEntries, username, createEmptyShiftEntry, createEmptyLineEntry]);
 
     // Close shift selector
     const handleCloseShiftSelector = useCallback(() => {
@@ -311,7 +393,7 @@ export default function SSHTest() {
         }
     }, [currentDate, handleDateSelect]);
 
-    // Handle form input change
+    // Handle form input change for shift-level fields
     const handleInputChange = useCallback((field: keyof DailyEntry, value: string) => {
         if (!currentEntry) return;
         setCurrentEntry({
@@ -321,18 +403,40 @@ export default function SSHTest() {
         setHasUnsavedChanges(true);
     }, [currentEntry]);
 
+    // Handle line-specific input changes
+    const handleLineInputChange = useCallback((
+        line: '1' | '2',
+        field: keyof LineEntry,
+        value: string
+    ) => {
+        if (!currentEntry) return;
+        
+        setCurrentEntry({
+            ...currentEntry,
+            lines: {
+                ...currentEntry.lines,
+                [line]: {
+                    ...currentEntry.lines[line],
+                    [field]: value
+                }
+            }
+        });
+        setHasUnsavedChanges(true);
+    }, [currentEntry]);
+
     const handleSaveEntry = useCallback(async () => {
         if (!currentEntry || !currentEntry.testingDate || !currentEntry.shift) {
             showAlert('error', 'Please enter a valid date and shift');
             return;
         }
-
-        // Validate required fields
-        if (!currentEntry.moduleType || !currentEntry.result) {
-            showAlert('error', 'Module Type and Result are required');
+        if (!currentEntry.po) {
+            showAlert('error', 'PO number is required for this shift');
             return;
         }
-
+        if (!currentEntry.lines['1'].result || !currentEntry.lines['2'].result) {
+            showAlert('error', 'Both lines require a result');
+            return;
+        }
         setIsLoading(true);
         try {
             console.log('Saving entry:', currentEntry);
@@ -355,6 +459,17 @@ export default function SSHTest() {
             if (result.data && result.data.entry) {
                 const saved = result.data.entry as DailyEntry;
                 const normalized = normalizeDate(saved.date);
+                
+                // Ensure saved entry has line numbers
+                if (saved.lines) {
+                    if (saved.lines['1'] && !saved.lines['1'].line) {
+                        saved.lines['1'].line = '1';
+                    }
+                    if (saved.lines['2'] && !saved.lines['2'].line) {
+                        saved.lines['2'].line = '2';
+                    }
+                }
+                
                 const entryKey = `${normalized}_${saved.shift}`;
 
                 // Update maps
@@ -378,7 +493,16 @@ export default function SSHTest() {
             // Update stats
             if (result.data && result.data.stats) {
                 console.log('Updating stats:', result.data.stats);
-                setMonthlyStats(result.data.stats);
+                // Ensure stats have lines property
+                const stats = result.data.stats;
+                if (stats.shiftStats) {
+                    ['A', 'B', 'C'].forEach(shift => {
+                        if (!stats.shiftStats[shift].lines) {
+                            stats.shiftStats[shift].lines = { '1': 0, '2': 0 };
+                        }
+                    });
+                }
+                setMonthlyStats(stats);
             }
 
             setHasUnsavedChanges(false);
@@ -397,7 +521,7 @@ export default function SSHTest() {
 
         showConfirm({
             title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})?`,
+            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines.`,
             type: 'warning',
             confirmText: 'Delete',
             cancelText: 'Cancel',
@@ -438,7 +562,15 @@ export default function SSHTest() {
 
                     // Update stats
                     if (result.data && result.data.stats) {
-                        setMonthlyStats(result.data.stats);
+                        const stats = result.data.stats;
+                        if (stats.shiftStats) {
+                            ['A', 'B', 'C'].forEach(s => {
+                                if (!stats.shiftStats[s].lines) {
+                                    stats.shiftStats[s].lines = { '1': 0, '2': 0 };
+                                }
+                            });
+                        }
+                        setMonthlyStats(stats);
                     }
 
                     setCurrentEntry(null);
@@ -472,7 +604,22 @@ export default function SSHTest() {
             const monthlyResp = await fetch(`${SSH_API_BASE_URL}/entries/monthly?year=${year}&month=${month}`);
             if (!monthlyResp.ok) throw new Error('Failed to fetch monthly entries');
             const monthlyJson = await monthlyResp.json();
-            const entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
+            
+            // Get entries array and ensure line numbers are present
+            let entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
+            
+            // Add line numbers to entries if missing (for Excel export)
+            entriesArray = entriesArray.map((entry: DailyEntry) => {
+                if (entry.lines) {
+                    if (entry.lines['1'] && !entry.lines['1'].line) {
+                        entry.lines['1'].line = '1';
+                    }
+                    if (entry.lines['2'] && !entry.lines['2'].line) {
+                        entry.lines['2'].line = '2';
+                    }
+                }
+                return entry;
+            });
 
             const formData = {
                 preparedBySignature: signatures.preparedBy,
@@ -488,13 +635,17 @@ export default function SSHTest() {
                 month
             };
 
-            const response = await fetch(`${SSH_API_BASE_URL}/generate-ssh-report`, {
+            console.log('Sending to Excel generator:', sshReportData);
+
+            const response = await fetch(`${SSH_API_BASE_URL}/export/excel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(sshReportData),
             });
 
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Excel generation error:', errorText);
                 throw new Error('Failed to generate Excel report');
             }
 
@@ -511,7 +662,7 @@ export default function SSHTest() {
             showAlert('success', 'Excel report generated successfully');
         } catch (error) {
             console.error('Error generating Excel:', error);
-            showAlert('error', 'Failed to generate Excel report');
+            showAlert('error', error instanceof Error ? error.message : 'Failed to generate Excel report');
         } finally {
             setIsLoading(false);
         }
@@ -554,11 +705,19 @@ export default function SSHTest() {
         }
     }, []);
 
-    // Get result indicator for shift
+    // Get result indicator for shift showing combined status
     const getShiftResultIndicator = useCallback((entry: DailyEntry | undefined) => {
-        if (!entry) return <CircleOff className="w-3 h-3 text-gray-400" />;
-        if (entry.result === 'Pass') return <CircleDot className="w-3 h-3 text-green-500" />;
-        if (entry.result === 'Fail') return <Circle className="w-3 h-3 text-red-500" />;
+        if (!entry || !entry.lines) return <CircleOff className="w-3 h-3 text-gray-400" />;
+        
+        const line1Pass = entry.lines['1']?.result === 'Pass';
+        const line2Pass = entry.lines['2']?.result === 'Pass';
+        const line1Fail = entry.lines['1']?.result === 'Fail';
+        const line2Fail = entry.lines['2']?.result === 'Fail';
+        
+        if (line1Pass && line2Pass) return <CircleDot className="w-3 h-3 text-green-500" />;
+        if (line1Fail || line2Fail) return <Circle className="w-3 h-3 text-red-500" />;
+        if (entry.lines['1']?.result || entry.lines['2']?.result) return <Circle className="w-3 h-3 text-yellow-500" />;
+        
         return <CircleOff className="w-3 h-3 text-gray-400" />;
     }, []);
 
@@ -587,9 +746,17 @@ export default function SSHTest() {
             const isSelected = dateStr === selectedDate;
 
             // Determine overall day status
-            const hasPass = Object.values(dayEntries).some(e => e?.result === 'Pass');
-            const hasFail = Object.values(dayEntries).some(e => e?.result === 'Fail');
-            const hasAny = Object.keys(dayEntries).length > 0;
+            let hasPass = false;
+            let hasFail = false;
+            let hasAny = false;
+
+            Object.values(dayEntries).forEach((shiftEntry: DailyEntry) => {
+                if (shiftEntry?.lines) {
+                    if (shiftEntry.lines['1']?.result === 'Pass' || shiftEntry.lines['2']?.result === 'Pass') hasPass = true;
+                    if (shiftEntry.lines['1']?.result === 'Fail' || shiftEntry.lines['2']?.result === 'Fail') hasFail = true;
+                    if (shiftEntry.lines['1']?.result || shiftEntry.lines['2']?.result) hasAny = true;
+                }
+            });
 
             let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
 
@@ -606,7 +773,7 @@ export default function SSHTest() {
                     key={dateStr}
                     onClick={() => handleDateSelect(dateStr)}
                     className={`
-                        relative p-2 rounded-lg border-2 transition-all min-h-[80px]
+                        relative p-2 rounded-lg border-2 transition-all min-h-[100px]
                         ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : statusClass}
                         ${isToday ? 'font-bold' : ''}
                         hover:shadow-md hover:-translate-y-0.5
@@ -615,27 +782,19 @@ export default function SSHTest() {
                 >
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-sm dark:text-white">{i}</span>
-                        {hasAny && (
-                            <div className="flex gap-1">
-                                {hasPass && <CheckCircle className="w-3 h-3 text-green-500" />}
-                                {hasFail && <AlertCircle className="w-3 h-3 text-red-500" />}
-                            </div>
-                        )}
                     </div>
 
-                    {/* Shift indicators */}
+                    {/* Shift indicators with line details */}
                     <div className="flex flex-col gap-1 mt-1">
                         {(['A', 'B', 'C'] as const).map(shift => {
                             const entry = dayEntries[shift];
                             return (
-                                <div key={shift} className="flex items-center gap-1 text-xs">
-                                    {getShiftIcon(shift)}
-                                    {getShiftResultIndicator(entry)}
-                                    {entry && (
-                                        <span className="truncate max-w-[60px] text-[10px] dark:text-white">
-                                            {entry.moduleType}
-                                        </span>
-                                    )}
+                                <div key={shift} className="flex flex-col gap-0.5 text-xs">
+                                    <div className="flex items-center gap-1">
+                                        {getShiftIcon(shift)}
+                                        {getShiftResultIndicator(entry)}
+                                    </div>
+                                    
                                 </div>
                             );
                         })}
@@ -643,11 +802,10 @@ export default function SSHTest() {
                 </button>
             );
         }
-
         return days;
     }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator]);
 
-    // Signature handlers (same as before)
+    // Signature handlers
     const handleAddSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) {
             showAlert('error', 'User not logged in');
@@ -831,9 +989,9 @@ export default function SSHTest() {
                                             onClick={() => handleShiftSelect(shift)}
                                             className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3
                                                 ${isFilled
-                                                    ? entry?.result === 'Pass'
+                                                    ? entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass'
                                                         ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                                                        : entry?.result === 'Fail'
+                                                        : entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail'
                                                             ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                                                             : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                                                     : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'
@@ -848,8 +1006,9 @@ export default function SSHTest() {
                                                 <div className="font-semibold dark:text-white">Shift {shift}</div>
                                                 {isFilled ? (
                                                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {entry.moduleType} - {entry.result}
-                                                        {entry.testDoneBy && ` by ${entry.testDoneBy}`}
+                                                        <div>PO: {entry?.po}</div> {/* Show PO at shift level */}
+                                                        <div>Line 1: {entry?.lines['1']?.result}</div>
+                                                        <div>Line 2: {entry?.lines['2']?.result}</div>
                                                     </div>
                                                 ) : (
                                                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -859,8 +1018,10 @@ export default function SSHTest() {
                                             </div>
                                             {isFilled && (
                                                 <div className="flex-shrink-0">
-                                                    {entry?.result === 'Pass' && <CheckCircle className="w-5 h-5 text-green-500" />}
-                                                    {entry?.result === 'Fail' && <AlertCircle className="w-5 h-5 text-red-500" />}
+                                                    {entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass' && 
+                                                        <CheckCircle className="w-5 h-5 text-green-500" />}
+                                                    {(entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail') && 
+                                                        <AlertCircle className="w-5 h-5 text-red-500" />}
                                                 </div>
                                             )}
                                         </button>
@@ -1007,135 +1168,209 @@ export default function SSHTest() {
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Shift
-                                                </label>
-                                                <div className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-700">
-                                                    <div className="flex items-center gap-2">
-                                                        {currentEntry.shift === 'A' && <Sun className="w-4 h-4 text-amber-500" />}
-                                                        {currentEntry.shift === 'B' && <Sunset className="w-4 h-4 text-orange-500" />}
-                                                        {currentEntry.shift === 'C' && <Moon className="w-4 h-4 text-indigo-500" />}
-                                                        <span>Shift {currentEntry.shift}</span>
-                                                    </div>
-                                                </div>
+                                    
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                {currentEntry.shift === 'A' && <Sun className="w-5 h-5 text-amber-500" />}
+                                                {currentEntry.shift === 'B' && <Sunset className="w-5 h-5 text-orange-500" />}
+                                                {currentEntry.shift === 'C' && <Moon className="w-5 h-5 text-indigo-500" />}
+                                                <span className="font-medium dark:text-white">Shift {currentEntry.shift}</span>
                                             </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    P.O. Number
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.po}
-                                                    onChange={(e) => handleInputChange('po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter PO number"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Line <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.line}
-                                                    onChange={(e) => handleInputChange('line', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter line"
-                                                    required
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Sealant Supplier
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.sealantSupplier}
-                                                    onChange={(e) => handleInputChange('sealantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter sealant supplier"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Sealant Expiry Date
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.sealantExpDate}
-                                                    onChange={(e) => handleInputChange('sealantExpDate', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter sealant expiry date"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Sample Taking Time
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.sampleTakingTime}
-                                                    onChange={(e) => handleInputChange('sampleTakingTime', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter sample taking time"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Sample Testing Time
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.sampleTestingTime}
-                                                    onChange={(e) => handleInputChange('sampleTestingTime', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter sample testing time"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Result <span className="text-red-500">*</span>
-                                                </label>
-                                                <select
-                                                    value={currentEntry.result}
-                                                    onChange={(e) => handleInputChange('result', e.target.value as 'Pass' | 'Fail')}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    required
-                                                >
-                                                    <option value="">Select result</option>
-                                                    <option value="Pass">Pass</option>
-                                                    <option value="Fail">Fail</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            <div className="flex flex-col gap-1 items-start ml-auto">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                                     Checked By
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.checkedBy}
                                                     onChange={(e) => handleInputChange('checkedBy', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2 rounded-lg dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter checker name"
                                                 />
                                             </div>
-                                            <div className="md:col-span-2">
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Remarks
-                                                </label>
-                                                <textarea
-                                                    value={currentEntry.remarks || ''}
-                                                    onChange={(e) => handleInputChange('remarks', e.target.value)}
-                                                    rows={2}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Add any remarks"
-                                                />
+                                        </div>
+                                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                PO Number <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={currentEntry.po}
+                                                onChange={(e) => handleInputChange('po', e.target.value)}
+                                                className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Enter PO number for both lines"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="border-l-4 border-blue-500 pl-4">
+                                            <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
+                                                <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
+                                                Line 1 Details
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Supplier
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].sealantSupplier}
+                                                        onChange={(e) => handleLineInputChange('1', 'sealantSupplier', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter sealant supplier"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Expiry Date
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].sealantExpDate}
+                                                        onChange={(e) => handleLineInputChange('1', 'sealantExpDate', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="DD.MM.YYYY"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sample Taking Time
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].sampleTakingTime}
+                                                        onChange={(e) => handleLineInputChange('1', 'sampleTakingTime', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="HH:MM"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sample Testing Time
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].sampleTestingTime}
+                                                        onChange={(e) => handleLineInputChange('1', 'sampleTestingTime', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="HH:MM"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Result <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <select
+                                                        value={currentEntry.lines['1'].result}
+                                                        onChange={(e) => handleLineInputChange('1', 'result', e.target.value as 'Pass' | 'Fail')}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        required
+                                                    >
+                                                        <option value="">Select result</option>
+                                                        <option value="Pass">Pass</option>
+                                                        <option value="Fail">Fail</option>
+                                                    </select>
+                                                </div>
+                                                <div className="md:col-span-2 lg:col-span-3">
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Remarks (Line 1)
+                                                    </label>
+                                                    <textarea
+                                                        value={currentEntry.lines['1'].remarks || ''}
+                                                        onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
+                                                        rows={2}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Add any remarks for Line 1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="border-l-4 border-green-500 pl-4 mt-6">
+                                            <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
+                                                <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
+                                                Line 2 Details
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Supplier
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].sealantSupplier}
+                                                        onChange={(e) => handleLineInputChange('2', 'sealantSupplier', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter sealant supplier"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Expiry Date
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].sealantExpDate}
+                                                        onChange={(e) => handleLineInputChange('2', 'sealantExpDate', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="DD.MM.YYYY"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sample Taking Time
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].sampleTakingTime}
+                                                        onChange={(e) => handleLineInputChange('2', 'sampleTakingTime', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="HH:MM"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sample Testing Time
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].sampleTestingTime}
+                                                        onChange={(e) => handleLineInputChange('2', 'sampleTestingTime', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="HH:MM"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Result <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <select
+                                                        value={currentEntry.lines['2'].result}
+                                                        onChange={(e) => handleLineInputChange('2', 'result', e.target.value as 'Pass' | 'Fail')}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        required
+                                                    >
+                                                        <option value="">Select result</option>
+                                                        <option value="Pass">Pass</option>
+                                                        <option value="Fail">Fail</option>
+                                                    </select>
+                                                </div>
+                                                <div className="md:col-span-2 lg:col-span-3">
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Remarks (Line 2)
+                                                    </label>
+                                                    <textarea
+                                                        value={currentEntry.lines['2'].remarks || ''}
+                                                        onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
+                                                        rows={2}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Add any remarks for Line 2"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
 
+                                        {/* Action Buttons */}
                                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                                             <button
                                                 onClick={handleReset}
@@ -1197,7 +1432,16 @@ export default function SSHTest() {
                                 </h3>
                                 <div className="space-y-4">
                                     {(['A', 'B', 'C'] as const).map(shift => {
-                                        const stats = monthlyStats.shiftStats[shift];
+                                        const stats = monthlyStats.shiftStats?.[shift] || { 
+                                            filled: 0, 
+                                            pass: 0, 
+                                            fail: 0, 
+                                            lines: { '1': 0, '2': 0 } 
+                                        };
+                                        
+                                        // Ensure lines property exists
+                                        const lines = stats.lines || { '1': 0, '2': 0 };
+                                        
                                         const shiftIcon = shift === 'A' ? <Sun className="w-4 h-4 text-amber-500" /> :
                                             shift === 'B' ? <Sunset className="w-4 h-4 text-orange-500" /> :
                                                 <Moon className="w-4 h-4 text-indigo-500" />;
@@ -1210,17 +1454,21 @@ export default function SSHTest() {
                                                         <span className="font-medium dark:text-white">Shift {shift}</span>
                                                     </div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {stats.filled} / {monthlyStats.totalDays} days
+                                                        {stats.filled} / {monthlyStats.totalDays * 2} lines
                                                     </span>
                                                 </div>
-                                                <div className="flex gap-2 text-xs">
+                                                <div className="flex gap-4 text-xs">
                                                     <span className="text-green-600">Pass: {stats.pass}</span>
                                                     <span className="text-red-600">Fail: {stats.fail}</span>
+                                                </div>
+                                                <div className="flex gap-2 text-[10px] text-gray-500">
+                                                    <span>Line 1: {lines['1']}</span>
+                                                    <span>Line 2: {lines['2']}</span>
                                                 </div>
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
                                                         className="bg-blue-500 h-2 rounded-full transition-all"
-                                                        style={{ width: `${(stats.filled / monthlyStats.totalDays) * 100}%` }}
+                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 2)) * 100 : 0}%` }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -1241,7 +1489,7 @@ export default function SSHTest() {
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Lines)</span>
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">

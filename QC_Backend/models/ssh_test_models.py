@@ -6,6 +6,7 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 ssh_entries_collection = db["ssh_daily_entries"]
+# New index structure: date + shift combination (each document represents one shift with both lines)
 ssh_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
 ssh_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
@@ -120,24 +121,29 @@ class SSHDailyEntry:
             shift = entry_data.get("shift")
             if not shift:
                 raise ValueError("Missing shift in entry_data")
+            
             date_key = str(raw_date).split('T')[0]
             try:
                 date_obj = datetime.strptime(date_key, "%Y-%m-%d")
             except Exception:
                 date_obj = datetime.fromisoformat(date_key)
+            
             entry_data["date"] = date_obj.strftime("%Y-%m-%d")
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
             entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
+            
             if "_id" in entry_data:
                 del entry_data["_id"]
+            
             result = ssh_entries_collection.update_one(
                 {"date": entry_data["date"], "shift": shift},
                 {"$set": entry_data},
                 upsert=True
             )
+            
             if result.upserted_id:
                 return str(result.upserted_id)
             existing = ssh_entries_collection.find_one({"date": entry_data["date"], "shift": shift})

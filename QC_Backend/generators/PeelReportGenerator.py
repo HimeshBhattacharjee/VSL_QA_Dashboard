@@ -3,40 +3,6 @@ from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedSt
 import io
 from paths import get_template_key, download_from_s3
 
-def setup_peel_cell_styles(workbook):
-    data_style = NamedStyle(name="peel_data_style")
-    data_style.font = Font(name='Calibri', size=9)
-    data_style.alignment = Alignment(horizontal='center', vertical='center')
-    data_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    header_style = NamedStyle(name="peel_header_style")
-    header_style.font = Font(name='Calibri', size=9, bold=True)
-    header_style.fill = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
-    header_style.alignment = Alignment(horizontal='center', vertical='center')
-    header_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    highlight_style = NamedStyle(name="peel_highlight_style")
-    highlight_style.font = Font(name='Calibri', size=9, color='FF0000')
-    highlight_style.fill = PatternFill(start_color='FFCCCC', end_color='FFCCCC', fill_type='solid')
-    highlight_style.alignment = Alignment(horizontal='center', vertical='center')
-    highlight_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    for style in [data_style, header_style, highlight_style]:
-        if style.name not in workbook.named_styles:
-            workbook.add_named_style(style)
-
 def fill_peel_basic_info(worksheet, peel_data):
     try:
         form_data = peel_data.get('form_data', {})
@@ -108,13 +74,6 @@ def apply_peel_cell_formatting(cell, font_size=9, bold=False,
     if fill_color:
         cell.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
     cell.alignment = Alignment(horizontal=horizontal, vertical=vertical, wrap_text=True)
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    cell.border = thin_border
 
 def get_column_letter(col_idx):
     letters = []
@@ -144,7 +103,6 @@ def generate_peel_report(peel_data):
         template_path = download_from_s3(template_key)
         wb = load_workbook(template_path)
         ws = wb.active
-        setup_peel_cell_styles(wb)
         fill_peel_basic_info(ws, peel_data)
         fill_peel_test_data(ws, peel_data)
         output = io.BytesIO()
