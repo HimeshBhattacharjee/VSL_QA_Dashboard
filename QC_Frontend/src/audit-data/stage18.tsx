@@ -580,7 +580,7 @@ export const createJunctionBoxFixingStage = (lineNumber: string): StageData => {
             {
                 id: "18-6",
                 parameters: "JB sealant Weight",
-                criteria: "Sealant Weight for Split JB 6 ± 2 gm/JB",
+                criteria: "Sealant Weight for Split JB 7 ± 3 gm/JB",
                 typeOfInspection: "Measurements",
                 inspectionFrequency: "Every shift",
                 observations: [{ timeSlot: "", value: "" }],

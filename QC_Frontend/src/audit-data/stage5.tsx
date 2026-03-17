@@ -1476,7 +1476,7 @@ export const createTabbingStringingStage = (lineNumber: string = 'I'): StageData
         {
             id: "5-12-ribbon-flatten",
             parameters: "Ribbon flatten",
-            criteria: "Ribbon flatten must be ≥ 56% of ribbon diameter",
+            criteria: "Ribbon flatten must be ≤ 70% of ribbon diameter",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every shift",
             observations: [

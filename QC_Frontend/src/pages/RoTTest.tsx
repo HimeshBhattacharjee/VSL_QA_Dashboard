@@ -34,6 +34,16 @@ interface SignatureData {
     approvedBy: string;
 }
 
+interface MonthSignatureData {
+    [key: string]: SignatureData;
+}
+
+const defaultSignature: SignatureData = {
+    preparedBy: '',
+    reviewedBy: '',
+    approvedBy: ''
+};
+
 export default function RoTTest() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -52,25 +62,35 @@ export default function RoTTest() {
         passCount: 0,
         failCount: 0
     });
-    const [signatures, setSignatures] = useState<SignatureData>(() => {
-        const saved = localStorage.getItem('rotSignatures');
-        return saved ? JSON.parse(saved) : {
-            preparedBy: '',
-            reviewedBy: '',
-            approvedBy: ''
-        };
+    
+    const [allMonthSignatures, setAllMonthSignatures] = useState<MonthSignatureData>(() => {
+        const saved = localStorage.getItem('rotAllMonthSignatures');
+        return saved ? JSON.parse(saved) : {};
     });
+
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const ROT_API_BASE_URL = import.meta.env.VITE_API_URL + '/rot-test-reports';
+    
     const normalizeDate = useCallback((dateStr: string) => {
         if (!dateStr) return '';
         return dateStr.split('T')[0];
     }, []);
 
+    const getCurrentMonthKey = useCallback(() => {
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}`;
+    }, [currentDate]);
+
+    const currentMonthSignatures = useMemo(() => {
+        const monthKey = getCurrentMonthKey();
+        return allMonthSignatures[monthKey] || { ...defaultSignature };
+    }, [allMonthSignatures, getCurrentMonthKey]);
+
     useEffect(() => {
-        localStorage.setItem('rotSignatures', JSON.stringify(signatures));
-    }, [signatures]);
+        localStorage.setItem('rotAllMonthSignatures', JSON.stringify(allMonthSignatures));
+    }, [allMonthSignatures]);
 
     const months = useMemo(() => [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -159,7 +179,7 @@ export default function RoTTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [ROT_API_BASE_URL, selectedDate, normalizeDate]); // Include normalizeDate in deps
+    }, [ROT_API_BASE_URL, selectedDate, normalizeDate]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -373,11 +393,11 @@ export default function RoTTest() {
             const monthlyJson = await monthlyResp.json();
             const entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
 
-            // Get signatures from state
+            // Get signatures from current month state
             const formData = {
-                preparedBySignature: signatures.preparedBy,
-                reviewedBySignature: signatures.reviewedBy,
-                approvedBySignature: signatures.approvedBy
+                preparedBySignature: currentMonthSignatures.preparedBy,
+                reviewedBySignature: currentMonthSignatures.reviewedBy,
+                approvedBySignature: currentMonthSignatures.approvedBy
             };
 
             const rotReportData = {
@@ -415,7 +435,7 @@ export default function RoTTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, ROT_API_BASE_URL, showAlert, monthlyEntries, signatures]);
+    }, [currentDate, months, ROT_API_BASE_URL, showAlert, monthlyEntries, currentMonthSignatures]);
 
     // Reset form
     const handleReset = useCallback(() => {
@@ -514,21 +534,24 @@ export default function RoTTest() {
             return;
         }
 
+        const monthKey = getCurrentMonthKey();
+        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+
         let currentSignature = '';
         switch (section) {
             case 'prepared':
-                currentSignature = signatures.preparedBy;
+                currentSignature = currentSignatures.preparedBy;
                 break;
             case 'reviewed':
-                currentSignature = signatures.reviewedBy;
+                currentSignature = currentSignatures.reviewedBy;
                 break;
             case 'approved':
-                currentSignature = signatures.approvedBy;
+                currentSignature = currentSignatures.approvedBy;
                 break;
         }
 
         if (currentSignature.trim()) {
-            showAlert('error', `Signature already exists in ${section} section`);
+            showAlert('error', `Signature already exists in ${section} section for this month`);
             return;
         }
 
@@ -537,24 +560,29 @@ export default function RoTTest() {
             return;
         }
 
+        // Updated to allow both Supervisors and Managers to review and approve
         if (section === 'reviewed' && !['Supervisor', 'Manager'].includes(userRole || '')) {
             showAlert('error', 'Only Supervisors or Managers can review');
             return;
         }
 
-        if (section === 'approved' && userRole !== 'Manager') {
-            showAlert('error', 'Only Managers can approve');
+        if (section === 'approved' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can approve');
             return;
         }
 
-        setSignatures(prev => ({
+        // Update signatures for current month
+        setAllMonthSignatures(prev => ({
             ...prev,
-            [`${section}By`]: username
+            [monthKey]: {
+                ...(prev[monthKey] || defaultSignature),
+                [`${section}By`]: username
+            }
         }));
 
         setHasUnsavedChanges(true);
-        showAlert('success', `Signature added to ${section} section`);
-    }, [username, userRole, signatures, showAlert]);
+        showAlert('success', `Signature added to ${section} section for ${monthKey}`);
+    }, [username, userRole, allMonthSignatures, getCurrentMonthKey, showAlert]);
 
     const handleRemoveSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) {
@@ -562,16 +590,19 @@ export default function RoTTest() {
             return;
         }
 
+        const monthKey = getCurrentMonthKey();
+        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+
         let currentSignature = '';
         switch (section) {
             case 'prepared':
-                currentSignature = signatures.preparedBy;
+                currentSignature = currentSignatures.preparedBy;
                 break;
             case 'reviewed':
-                currentSignature = signatures.reviewedBy;
+                currentSignature = currentSignatures.reviewedBy;
                 break;
             case 'approved':
-                currentSignature = signatures.approvedBy;
+                currentSignature = currentSignatures.approvedBy;
                 break;
         }
 
@@ -580,28 +611,35 @@ export default function RoTTest() {
             return;
         }
 
-        setSignatures(prev => ({
+        // Update signatures for current month
+        setAllMonthSignatures(prev => ({
             ...prev,
-            [`${section}By`]: ''
+            [monthKey]: {
+                ...(prev[monthKey] || defaultSignature),
+                [`${section}By`]: ''
+            }
         }));
 
         setHasUnsavedChanges(true);
-        showAlert('info', `Signature removed from ${section} section`);
-    }, [username, signatures, showAlert]);
+        showAlert('info', `Signature removed from ${section} section for ${monthKey}`);
+    }, [username, allMonthSignatures, getCurrentMonthKey, showAlert]);
 
     const canAddSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) return false;
 
+        const monthKey = getCurrentMonthKey();
+        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+
         let currentSignature = '';
         switch (section) {
             case 'prepared':
-                currentSignature = signatures.preparedBy;
+                currentSignature = currentSignatures.preparedBy;
                 break;
             case 'reviewed':
-                currentSignature = signatures.reviewedBy;
+                currentSignature = currentSignatures.reviewedBy;
                 break;
             case 'approved':
-                currentSignature = signatures.approvedBy;
+                currentSignature = currentSignatures.approvedBy;
                 break;
         }
 
@@ -611,32 +649,37 @@ export default function RoTTest() {
             case 'prepared':
                 return userRole === 'Operator';
             case 'reviewed':
+                // Allow both Supervisor and Manager to review
                 return ['Supervisor', 'Manager'].includes(userRole || '');
             case 'approved':
-                return userRole === 'Manager';
+                // Allow both Supervisor and Manager to approve
+                return ['Supervisor', 'Manager'].includes(userRole || '');
             default:
                 return false;
         }
-    }, [username, userRole, signatures]);
+    }, [username, userRole, allMonthSignatures, getCurrentMonthKey]);
 
     const canRemoveSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) return false;
 
+        const monthKey = getCurrentMonthKey();
+        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+
         let currentSignature = '';
         switch (section) {
             case 'prepared':
-                currentSignature = signatures.preparedBy;
+                currentSignature = currentSignatures.preparedBy;
                 break;
             case 'reviewed':
-                currentSignature = signatures.reviewedBy;
+                currentSignature = currentSignatures.reviewedBy;
                 break;
             case 'approved':
-                currentSignature = signatures.approvedBy;
+                currentSignature = currentSignatures.approvedBy;
                 break;
         }
 
         return currentSignature.includes(username);
-    }, [username, signatures]);
+    }, [username, allMonthSignatures, getCurrentMonthKey]);
 
     return (
         <>
@@ -988,7 +1031,7 @@ export default function RoTTest() {
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
                                             <span className="text-green-600">Pass</span>
-                                            <span className="font-medium">{monthlyStats.passCount}</span>
+                                            <span className="font-medium text-green-600">{monthlyStats.passCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                             <div
@@ -1001,7 +1044,7 @@ export default function RoTTest() {
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
                                             <span className="text-red-600">Fail</span>
-                                            <span className="font-medium">{monthlyStats.failCount}</span>
+                                            <span className="font-medium text-red-600">{monthlyStats.failCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                             <div
@@ -1018,12 +1061,15 @@ export default function RoTTest() {
 
                 {/* Signature Section */}
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">
+                        Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Prepared By */}
                         <div className="text-center">
                             <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{signatures.preparedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.preparedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1053,7 +1099,7 @@ export default function RoTTest() {
                         <div className="text-center">
                             <p className="font-bold text-gray-800 dark:text-white mb-2">REVIEWED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{signatures.reviewedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.reviewedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1083,7 +1129,7 @@ export default function RoTTest() {
                         <div className="text-center">
                             <p className="font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{signatures.approvedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.approvedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button

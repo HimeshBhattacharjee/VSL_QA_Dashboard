@@ -58,13 +58,13 @@ def fill_wet_leakage_signatures(worksheet, form_data):
     try:
         prepared_by = form_data.get('preparedBySignature', '')
         if prepared_by:
-            worksheet['D37'] = prepared_by
+            worksheet['C37'] = prepared_by
         reviewed_by = form_data.get('reviewedBySignature', '')
         if reviewed_by:
-            worksheet['G37'] = reviewed_by
+            worksheet['I37'] = reviewed_by
         approved_by = form_data.get('approvedBySignature', '')
         if approved_by:
-            worksheet['J37'] = approved_by
+            worksheet['N37'] = approved_by
         print("Wet Leakage signatures filled successfully")
     except Exception as e:
         print(f"Error filling Wet Leakage signatures: {str(e)}")

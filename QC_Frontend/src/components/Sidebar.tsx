@@ -36,11 +36,12 @@ const MENU_ITEMS: MenuItem[] = [
         icon: '🧪',
         path: null,
         children: [
-            { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
+            { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
+            { id: 'potting', label: 'Potting Ratio Measurement', path: '/potting' },
+            { id: 'rot-test', label: 'Robustness of Termination Test', path: '/rot-test' },
             { id: 'ssh-test', label: 'Sealant Shore Hardness Test', path: '/ssh-test' },
             { id: 'peel-test', label: 'Solar Cell Peel Strength Test', path: '/peel-test' },
-            { id: 'rot-test', label: 'Robustness of Termination Test', path: '/rot-test' },
             { id: 'wet-leakage-test', label: 'Wet Leakage Test', path: '/wet-leakage-test' },
         ],
     },
@@ -50,10 +51,10 @@ const MENU_ITEMS: MenuItem[] = [
         icon: '📈',
         path: null,
         children: [
-            { id: 'pre-lam', label: 'Pre Lam', path: '/prelam' },
-            { id: 'lam-qc', label: 'Lam QC', path: '/lamqc' },
-            { id: 'fqc-analysis', label: 'FQC Analysis', path: '/fqc' },
             { id: 'b-grade', label: 'B-Grade', path: '/b-grade-trend' },
+            { id: 'fqc-analysis', label: 'FQC Analysis', path: '/fqc' },
+            { id: 'lam-qc', label: 'Lam QC', path: '/lamqc' },
+            { id: 'pre-lam', label: 'Pre Lam', path: '/prelam' },
         ],
     },
     {

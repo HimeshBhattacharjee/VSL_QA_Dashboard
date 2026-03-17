@@ -864,7 +864,7 @@ export default function QualityAudit() {
                                                     className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                 >
                                                     <option value="">Select</option>
-                                                    <option value="I">I</option>
+                                                    {/* <option value="I">I</option> */}
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>

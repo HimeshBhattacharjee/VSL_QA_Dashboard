@@ -531,7 +531,7 @@ export const createAutoTapingNLayupStage = (lineNumber: string): StageData => {
             {
                 id: "8-15",
                 parameters: "Space between 2 portions of half cut cell module",
-                criteria: "Middle Gap 15 ± 5 mm",
+                criteria: "Middle Gap 13 ± 5 mm",
                 typeOfInspection: "Measurements",
                 inspectionFrequency: "Every 4 hours",
                 observations: [{ timeSlot: "", value: "" }],

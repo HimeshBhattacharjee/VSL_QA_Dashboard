@@ -8,7 +8,57 @@
     }
 }
 
-.adhesion-editable, .gel-editable {
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 20px;
+    transition: all 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.8);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.5);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.8);
+}
+
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.3);
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.7);
+}
+
+.dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, 0.7);
+}
+
+.adhesion-editable,
+.gel-editable {
     position: relative;
     min-height: 20px;
     cursor: text;
@@ -16,11 +66,13 @@
     transition: border-color 0.2s ease;
 }
 
-.adhesion-editable:hover, .gel-editable:hover {
+.adhesion-editable:hover,
+.gel-editable:hover {
     border-color: #3498db;
 }
 
-.adhesion-data-cell, .gel-data-cell {
+.adhesion-data-cell,
+.gel-data-cell {
     text-align: center;
 }
 
@@ -111,7 +163,8 @@ td {
     text-align: center;
 }
 
-.user-table th, .user-table td {
+.user-table th,
+.user-table td {
     border: none;
 }
 

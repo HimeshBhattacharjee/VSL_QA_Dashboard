@@ -6,29 +6,34 @@ import TestHeading from '../components/TestHeading';
 import {
     CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Trash2, Save, X,
     BarChart3, Percent, Target, TrendingUp, Clock, Sun, Sunset, Moon,
-    Circle, CircleDot, CircleOff
+    Circle, CircleDot, CircleOff, Check
 } from 'lucide-react';
 
 interface LineEntry {
     line?: string;
-    sealantSupplier: string;
-    sealantExpDate: string;
-    sampleTakingTime: string;
-    sampleTestingTime: string;
-    result: 'Pass' | 'Fail' | '';
+    po: string;
+    pottingSupplier: string;
+    partA: string;
+    partB: string;
+    ratio: string;
+    totalWeight: string;
     remarks?: string;
+}
+
+interface Signatures {
+    preparedBy: string;
+    verifiedBy: string;
 }
 
 interface DailyEntry {
     date: string;
     testingDate: string;
     shift: 'A' | 'B' | 'C';
-    checkedBy: string;
-    po: string;
     lines: {
         '1': LineEntry;
         '2': LineEntry;
     };
+    signatures?: Signatures;
     [key: string]: any;
 }
 
@@ -66,15 +71,6 @@ interface MonthlyStats {
     };
 }
 
-interface SignatureData {
-    preparedBy: string;
-    approvedBy: string;
-}
-
-interface MonthSignatureData {
-    [key: string]: SignatureData;
-}
-
 const defaultShiftStats: ShiftStats = {
     filled: 0,
     pass: 0,
@@ -96,12 +92,7 @@ const defaultMonthlyStats: MonthlyStats = {
     }
 };
 
-const defaultSignature: SignatureData = {
-    preparedBy: '',
-    approvedBy: ''
-};
-
-export default function SSHTest() {
+export default function PottingRatioMeasurement() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +101,7 @@ export default function SSHTest() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [selectedShift, setSelectedShift] = useState<'A' | 'B' | 'C' | null>(null);
+    const [dateSignatures, setDateSignatures] = useState<{ [date: string]: Signatures }>({});
     const [showShiftSelector, setShowShiftSelector] = useState(false);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -117,34 +109,14 @@ export default function SSHTest() {
     const [monthlyEntries, setMonthlyEntries] = useState<Map<string, DailyEntry>>(new Map());
     const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>(defaultMonthlyStats);
 
-    const [allMonthSignatures, setAllMonthSignatures] = useState<MonthSignatureData>(() => {
-        const saved = localStorage.getItem('sshAllMonthSignatures');
-        return saved ? JSON.parse(saved) : {};
-    });
-
-    const getCurrentMonthKey = useCallback(() => {
-        const year = currentDate.getFullYear();
-        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-        return `${year}-${month}`;
-    }, [currentDate]);
-
-    const currentMonthSignatures = useMemo(() => {
-        const monthKey = getCurrentMonthKey();
-        return allMonthSignatures[monthKey] || { ...defaultSignature };
-    }, [allMonthSignatures, getCurrentMonthKey]);
-
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const SSH_API_BASE_URL = import.meta.env.VITE_API_URL + '/ssh-test-reports';
+    const API_BASE_URL = import.meta.env.VITE_API_URL + '/potting-ratio-reports';
 
     const normalizeDate = useCallback((dateStr: string) => {
         if (!dateStr) return '';
         return dateStr.split('T')[0];
     }, []);
-
-    useEffect(() => {
-        localStorage.setItem('sshAllMonthSignatures', JSON.stringify(allMonthSignatures));
-    }, [allMonthSignatures]);
 
     const months = useMemo(() => [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -162,37 +134,57 @@ export default function SSHTest() {
 
     const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
         line: lineNum,
-        sealantSupplier: '',
-        sealantExpDate: '',
-        sampleTakingTime: '',
-        sampleTestingTime: '',
-        result: '',
+        po: '',
+        pottingSupplier: '',
+        partA: '',
+        partB: '',
+        ratio: '',
+        totalWeight: '',
         remarks: ''
     }), []);
 
-    const createEmptyShiftEntry = useCallback((date: string, shift: 'A' | 'B' | 'C', checkedBy: string): DailyEntry => ({
+    const createEmptyShiftEntry = useCallback((date: string, shift: 'A' | 'B' | 'C'): DailyEntry => ({
         date: date,
         testingDate: date,
         shift: shift,
-        checkedBy: checkedBy,
-        po: '',
         lines: {
             '1': createEmptyLineEntry('1'),
             '2': createEmptyLineEntry('2')
+        },
+        signatures: {
+            preparedBy: '',
+            verifiedBy: ''
         }
     }), [createEmptyLineEntry]);
+
+    const calculateRatio = useCallback((partA: string, partB: string): string => {
+        if (!partA || !partB) return '';
+        const a = parseFloat(partA);
+        const b = parseFloat(partB);
+        if (isNaN(a) || isNaN(b) || b === 0) return '';
+        return (a / b).toFixed(2);
+    }, []);
+
+    const calculateTotalWeight = useCallback((partA: string, partB: string): string => {
+        if (!partA && !partB) return '';
+        const a = parseFloat(partA) || 0;
+        const b = parseFloat(partB) || 0;
+        return (a + b).toFixed(2);
+    }, []);
 
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
         try {
             console.log(`Loading data for ${year}-${month}`);
 
-            const entriesUrl = `${SSH_API_BASE_URL}/entries/monthly?year=${year}&month=${month}`;
-            const statsUrl = `${SSH_API_BASE_URL}/stats/monthly?year=${year}&month=${month}`;
+            const entriesUrl = `${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`;
+            const statsUrl = `${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`;
+
             const [entriesResponse, statsResponse] = await Promise.all([
                 fetch(entriesUrl),
                 fetch(statsUrl)
             ]);
+
             const entriesJson = await entriesResponse.json();
             const statsJson = await statsResponse.json();
 
@@ -210,6 +202,7 @@ export default function SSHTest() {
 
             const entriesMap = new Map<string, DailyEntry>();
             const dateEntriesObj: DateEntries = {};
+            const dateSigs: { [date: string]: Signatures } = entriesJson.date_signatures || {};
 
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
@@ -227,6 +220,12 @@ export default function SSHTest() {
                     }
                 }
 
+                // Use date-level signatures
+                entry.signatures = dateSigs[normalizedDate] || {
+                    preparedBy: '',
+                    verifiedBy: ''
+                };
+
                 const entryWithNormalizedDate = {
                     ...entry,
                     date: normalizedDate,
@@ -242,35 +241,55 @@ export default function SSHTest() {
 
             setMonthlyEntries(entriesMap);
             setDateEntries(dateEntriesObj);
-            let statsData = statsJson.data || statsJson;
-            const shiftStats = statsData.shiftStats || {
-                A: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
-                B: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
-                C: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } }
-            };
-            ['A', 'B', 'C'].forEach(shift => {
-                if (!shiftStats[shift].lines) {
-                    shiftStats[shift].lines = { '1': 0, '2': 0 };
-                }
-            });
+            setDateSignatures(dateSigs);
 
-            const newStats = {
-                totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2,
-                filledEntries: statsData.filledEntries || 0,
-                completionRate: statsData.completionRate || 0,
-                passCount: statsData.passCount || 0,
-                failCount: statsData.failCount || 0,
-                shiftStats: shiftStats
-            };
+            // Handle stats response
+            if (statsJson.data) {
+                const statsData = statsJson.data;
+                const shiftStats = statsData.shiftStats || {
+                    A: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                    B: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                    C: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } }
+                };
 
-            console.log('Setting stats:', newStats);
-            setMonthlyStats(newStats);
+                ['A', 'B', 'C'].forEach(shift => {
+                    if (!shiftStats[shift].lines) {
+                        shiftStats[shift].lines = { '1': 0, '2': 0 };
+                    }
+                });
+
+                const newStats = {
+                    totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
+                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2,
+                    filledEntries: statsData.filledEntries || 0,
+                    completionRate: statsData.completionRate || 0,
+                    passCount: statsData.passCount || 0,
+                    failCount: statsData.failCount || 0,
+                    shiftStats: shiftStats
+                };
+
+                console.log('Setting stats:', newStats);
+                setMonthlyStats(newStats);
+            } else {
+                // Default stats if no data
+                const daysInMonth = new Date(year, month - 1, 0).getDate();
+                setMonthlyStats({
+                    totalDays: daysInMonth,
+                    totalPossibleEntries: daysInMonth * 3 * 2,
+                    filledEntries: 0,
+                    completionRate: 0,
+                    passCount: 0,
+                    failCount: 0,
+                    shiftStats: {
+                        A: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                        B: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } },
+                        C: { filled: 0, pass: 0, fail: 0, lines: { '1': 0, '2': 0 } }
+                    }
+                });
+            }
 
         } catch (error) {
             console.error('Error loading monthly data:', error);
-            setMonthlyEntries(new Map());
-            setDateEntries({});
             const daysInMonth = new Date(year, month - 1, 0).getDate();
             setMonthlyStats({
                 totalDays: daysInMonth,
@@ -288,7 +307,7 @@ export default function SSHTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [SSH_API_BASE_URL, normalizeDate, createEmptyLineEntry]);
+    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -328,7 +347,6 @@ export default function SSHTest() {
         setShowShiftSelector(false);
     }, []);
 
-    // Handle date selection - show shift selector
     const handleDateSelect = useCallback((date: string) => {
         const normalized = normalizeDate(date);
         setSelectedDate(normalized);
@@ -337,25 +355,21 @@ export default function SSHTest() {
         setSelectedShift(null);
     }, [normalizeDate]);
 
-    // Handle shift selection
     const handleShiftSelect = useCallback((shift: 'A' | 'B' | 'C') => {
         setSelectedShift(shift);
         setShowShiftSelector(false);
 
-        // Check if entry exists for this date and shift
         const entryKey = `${selectedDate}_${shift}`;
         const entry = monthlyEntries.get(entryKey);
 
         if (entry) {
             console.log('Loading existing entry:', entry);
-            // Ensure entry has lines structure with line numbers
             if (!entry.lines) {
                 entry.lines = {
                     '1': createEmptyLineEntry('1'),
                     '2': createEmptyLineEntry('2')
                 };
             } else {
-                // Add line numbers for Excel export if missing
                 if (entry.lines['1'] && !entry.lines['1'].line) {
                     entry.lines['1'].line = '1';
                 }
@@ -363,17 +377,21 @@ export default function SSHTest() {
                     entry.lines['2'].line = '2';
                 }
             }
+            if (!entry.signatures) {
+                entry.signatures = {
+                    preparedBy: '',
+                    verifiedBy: ''
+                };
+            }
             setCurrentEntry(entry);
             setIsEditing(true);
         } else {
             console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
-            // Create new blank entry with two lines
-            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, username || ''));
+            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift));
             setIsEditing(false);
         }
-    }, [selectedDate, monthlyEntries, username, createEmptyShiftEntry, createEmptyLineEntry]);
+    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry]);
 
-    // Close shift selector
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
         setSelectedDate('');
@@ -384,27 +402,14 @@ export default function SSHTest() {
         const today = new Date().toISOString().split('T')[0];
         const todayDate = new Date(today);
 
-        // Check if today is in current month view
         if (todayDate.getMonth() === currentDate.getMonth() &&
             todayDate.getFullYear() === currentDate.getFullYear()) {
             handleDateSelect(today);
         } else {
-            // Navigate to current month first
             setCurrentDate(new Date());
         }
     }, [currentDate, handleDateSelect]);
 
-    // Handle form input change for shift-level fields
-    const handleInputChange = useCallback((field: keyof DailyEntry, value: string) => {
-        if (!currentEntry) return;
-        setCurrentEntry({
-            ...currentEntry,
-            [field]: value
-        });
-        setHasUnsavedChanges(true);
-    }, [currentEntry]);
-
-    // Handle line-specific input changes
     const handleLineInputChange = useCallback((
         line: '1' | '2',
         field: keyof LineEntry,
@@ -412,56 +417,68 @@ export default function SSHTest() {
     ) => {
         if (!currentEntry) return;
 
+        let updatedLines = {
+            ...currentEntry.lines,
+            [line]: {
+                ...currentEntry.lines[line],
+                [field]: value
+            }
+        };
+
+        // Auto-calculate ratio and total weight when Part A or Part B changes
+        if (field === 'partA' || field === 'partB') {
+            const partA = field === 'partA' ? value : currentEntry.lines[line].partA;
+            const partB = field === 'partB' ? value : currentEntry.lines[line].partB;
+
+            updatedLines[line].ratio = calculateRatio(partA, partB);
+            updatedLines[line].totalWeight = calculateTotalWeight(partA, partB);
+        }
+
         setCurrentEntry({
             ...currentEntry,
-            lines: {
-                ...currentEntry.lines,
-                [line]: {
-                    ...currentEntry.lines[line],
-                    [field]: value
-                }
-            }
+            lines: updatedLines
         });
         setHasUnsavedChanges(true);
-    }, [currentEntry]);
+    }, [currentEntry, calculateRatio, calculateTotalWeight]);
 
     const handleSaveEntry = useCallback(async () => {
         if (!currentEntry || !currentEntry.testingDate || !currentEntry.shift) {
             showAlert('error', 'Please enter a valid date and shift');
             return;
         }
-        if (!currentEntry.po) {
-            showAlert('error', 'PO number is required for this shift');
+
+        // Validate PO for both lines
+        if (!currentEntry.lines['1'].po) {
+            showAlert('error', 'PO number is required for Line 1');
             return;
         }
-        if (!currentEntry.lines['1'].result || !currentEntry.lines['2'].result) {
-            showAlert('error', 'Both lines require a result');
+        if (!currentEntry.lines['2'].po) {
+            showAlert('error', 'PO number is required for Line 2');
             return;
         }
+
         setIsLoading(true);
         try {
             console.log('Saving entry:', currentEntry);
 
-            const response = await fetch(`${SSH_API_BASE_URL}/entries`, {
+            const response = await fetch(`${API_BASE_URL}/entries`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(currentEntry),
             });
 
             if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text);
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to save entry');
             }
 
             const result = await response.json();
             console.log('Save response:', result);
 
-            // Update local state with the saved entry
             if (result.data && result.data.entry) {
                 const saved = result.data.entry as DailyEntry;
                 const normalized = normalizeDate(saved.date);
 
-                // Ensure saved entry has line numbers
                 if (saved.lines) {
                     if (saved.lines['1'] && !saved.lines['1'].line) {
                         saved.lines['1'].line = '1';
@@ -471,39 +488,42 @@ export default function SSHTest() {
                     }
                 }
 
+                // Ensure signatures object exists
+                if (!saved.signatures) {
+                    saved.signatures = {
+                        preparedBy: '',
+                        verifiedBy: ''
+                    };
+                }
+
                 const entryKey = `${normalized}_${saved.shift}`;
 
-                // Update maps
                 const updatedEntries = new Map(monthlyEntries);
                 updatedEntries.set(entryKey, { ...saved, date: normalized });
                 setMonthlyEntries(updatedEntries);
 
-                // Update date entries grouping
-                setDateEntries(prev => ({
-                    ...prev,
+                // Update dateEntries
+                const updatedDateEntries = {
+                    ...dateEntries,
                     [normalized]: {
-                        ...prev[normalized],
+                        ...dateEntries[normalized],
                         [saved.shift]: { ...saved, date: normalized }
                     }
-                }));
+                };
+                setDateEntries(updatedDateEntries);
 
                 setCurrentEntry({ ...saved, date: normalized });
                 setIsEditing(true);
             }
 
-            // Update stats
-            if (result.data && result.data.stats) {
-                console.log('Updating stats:', result.data.stats);
-                // Ensure stats have lines property
-                const stats = result.data.stats;
-                if (stats.shiftStats) {
-                    ['A', 'B', 'C'].forEach(shift => {
-                        if (!stats.shiftStats[shift].lines) {
-                            stats.shiftStats[shift].lines = { '1': 0, '2': 0 };
-                        }
-                    });
-                }
-                setMonthlyStats(stats);
+            // Reload stats to get updated counts
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth() + 1;
+            const statsResponse = await fetch(`${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`);
+            const statsJson = await statsResponse.json();
+
+            if (statsJson.data) {
+                setMonthlyStats(statsJson.data);
             }
 
             setHasUnsavedChanges(false);
@@ -515,7 +535,7 @@ export default function SSHTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentEntry, monthlyEntries, SSH_API_BASE_URL, showAlert, normalizeDate]);
+    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate]);
 
     const handleDeleteEntry = useCallback(() => {
         if (!currentEntry || !currentEntry.shift) return;
@@ -532,7 +552,7 @@ export default function SSHTest() {
                     const dateKey = normalizeDate(currentEntry.date);
                     const shift = currentEntry.shift;
 
-                    const response = await fetch(`${SSH_API_BASE_URL}/entries/${dateKey}/${shift}`, {
+                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${shift}`, {
                         method: 'DELETE',
                     });
 
@@ -540,20 +560,15 @@ export default function SSHTest() {
                         throw new Error('Failed to delete entry');
                     }
 
-                    const result = await response.json();
-
-                    // Update local state
                     const entryKey = `${dateKey}_${shift}`;
                     const updatedEntries = new Map(monthlyEntries);
                     updatedEntries.delete(entryKey);
                     setMonthlyEntries(updatedEntries);
 
-                    // Update date entries grouping
                     setDateEntries(prev => {
                         const newDateEntries = { ...prev };
                         if (newDateEntries[dateKey]) {
                             delete newDateEntries[dateKey][shift];
-                            // If no shifts left for this date, remove the date entry
                             if (Object.keys(newDateEntries[dateKey]).length === 0) {
                                 delete newDateEntries[dateKey];
                             }
@@ -561,17 +576,14 @@ export default function SSHTest() {
                         return newDateEntries;
                     });
 
-                    // Update stats
-                    if (result.data && result.data.stats) {
-                        const stats = result.data.stats;
-                        if (stats.shiftStats) {
-                            ['A', 'B', 'C'].forEach(s => {
-                                if (!stats.shiftStats[s].lines) {
-                                    stats.shiftStats[s].lines = { '1': 0, '2': 0 };
-                                }
-                            });
-                        }
-                        setMonthlyStats(stats);
+                    // Reload stats
+                    const year = currentDate.getFullYear();
+                    const month = currentDate.getMonth() + 1;
+                    const statsResponse = await fetch(`${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`);
+                    const statsJson = await statsResponse.json();
+
+                    if (statsJson.data) {
+                        setMonthlyStats(statsJson.data);
                     }
 
                     setCurrentEntry(null);
@@ -586,14 +598,131 @@ export default function SSHTest() {
                 }
             }
         });
-    }, [currentEntry, monthlyEntries, SSH_API_BASE_URL, showAlert, showConfirm, normalizeDate]);
+    }, [currentEntry, monthlyEntries, API_BASE_URL, showAlert, showConfirm, normalizeDate, currentDate]);
 
-    // Export monthly Excel report
+    const handleSignatureUpdate = useCallback(async (type: 'prepared' | 'verified') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+
+        if (!currentEntry) {
+            showAlert('error', 'Please select an entry first');
+            return;
+        }
+
+        const field = type === 'prepared' ? 'preparedBy' : 'verifiedBy';
+
+        // Get current date-level signatures
+        const currentDateSigs = dateSignatures[currentEntry.date] || {
+            preparedBy: '',
+            verifiedBy: ''
+        };
+
+        // Check if already signed
+        if (currentDateSigs[field]) {
+            // Remove signature
+            if (currentDateSigs[field] !== username) {
+                showAlert('error', 'You can only remove your own signature');
+                return;
+            }
+
+            const updatedSignatures = {
+                ...currentDateSigs,
+                [field]: ''
+            };
+
+            // Update all entries for this date in local state
+            const updatedDateSigs = {
+                ...dateSignatures,
+                [currentEntry.date]: updatedSignatures
+            };
+            setDateSignatures(updatedDateSigs);
+
+            // Update current entry's signatures
+            setCurrentEntry({
+                ...currentEntry,
+                signatures: updatedSignatures
+            });
+
+            // Save to backend
+            try {
+                const response = await fetch(`${API_BASE_URL}/signatures`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: currentEntry.date,
+                        signatures: updatedSignatures
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update signature');
+                }
+
+                showAlert('info', `Signature removed from ${type}`);
+            } catch (error) {
+                console.error('Error updating signature:', error);
+                showAlert('error', 'Failed to remove signature');
+            }
+        } else {
+            // Add signature
+            if (type === 'prepared' && userRole !== 'Operator') {
+                showAlert('error', 'Only Operators can sign as Prepared By');
+                return;
+            }
+
+            if (type === 'verified' && !['Manager', 'Supervisor'].includes(userRole || '')) {
+                showAlert('error', 'Only Managers or Supervisors can sign as Verified By');
+                return;
+            }
+
+            const updatedSignatures = {
+                ...currentDateSigs,
+                [field]: username
+            };
+
+            // Update all entries for this date in local state
+            const updatedDateSigs = {
+                ...dateSignatures,
+                [currentEntry.date]: updatedSignatures
+            };
+            setDateSignatures(updatedDateSigs);
+
+            // Update current entry's signatures
+            setCurrentEntry({
+                ...currentEntry,
+                signatures: updatedSignatures
+            });
+
+            // Save to backend
+            try {
+                const response = await fetch(`${API_BASE_URL}/signatures`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: currentEntry.date,
+                        signatures: updatedSignatures
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update signature');
+                }
+
+                showAlert('success', `Signature added as ${type}`);
+            } catch (error) {
+                console.error('Error updating signature:', error);
+                showAlert('error', 'Failed to add signature');
+            }
+        }
+    }, [username, userRole, currentEntry, dateSignatures, showAlert, API_BASE_URL]);
+
     const handleExportMonthlyExcel = useCallback(async () => {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
-        const reportName = `Sealant_Shore_Hardness_Test_${firstThreeLetters}_${year}`;
+        const reportName = `Potting_Ratio_Measurement_${firstThreeLetters}_${year}`;
 
         setIsLoading(true);
         try {
@@ -602,14 +731,12 @@ export default function SSHTest() {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth() + 1;
 
-            const monthlyResp = await fetch(`${SSH_API_BASE_URL}/entries/monthly?year=${year}&month=${month}`);
+            const monthlyResp = await fetch(`${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`);
             if (!monthlyResp.ok) throw new Error('Failed to fetch monthly entries');
             const monthlyJson = await monthlyResp.json();
 
-            // Get entries array and ensure line numbers are present
             let entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
 
-            // Add line numbers to entries if missing (for Excel export)
             entriesArray = entriesArray.map((entry: DailyEntry) => {
                 if (entry.lines) {
                     if (entry.lines['1'] && !entry.lines['1'].line) {
@@ -619,28 +746,27 @@ export default function SSHTest() {
                         entry.lines['2'].line = '2';
                     }
                 }
+                if (!entry.signatures) {
+                    entry.signatures = {
+                        preparedBy: '',
+                        verifiedBy: ''
+                    };
+                }
                 return entry;
             });
 
-            const formData = {
-                preparedBySignature: currentMonthSignatures.preparedBy,
-                approvedBySignature: currentMonthSignatures.approvedBy
-            };
-
-            const sshReportData = {
-                report_name: reportName,
+            const pottingReportData = {
                 entries: entriesArray,
-                form_data: formData,
                 year,
                 month
             };
 
-            console.log('Sending to Excel generator:', sshReportData);
+            console.log('Sending to Excel generator:', pottingReportData);
 
-            const response = await fetch(`${SSH_API_BASE_URL}/export/excel`, {
+            const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(sshReportData),
+                body: JSON.stringify(pottingReportData),
             });
 
             if (!response.ok) {
@@ -666,9 +792,8 @@ export default function SSHTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, SSH_API_BASE_URL, showAlert, currentMonthSignatures]);
+    }, [currentDate, months, API_BASE_URL, showAlert]);
 
-    // Reset form
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
         setSelectedDate('');
@@ -677,7 +802,6 @@ export default function SSHTest() {
         setHasUnsavedChanges(false);
     }, []);
 
-    // Handle back to home with unsaved changes check
     const handleBackToHome = useCallback(() => {
         if (hasUnsavedChanges) {
             showConfirm({
@@ -695,7 +819,6 @@ export default function SSHTest() {
         }
     }, [hasUnsavedChanges, navigate, showConfirm]);
 
-    // Get shift icon based on shift
     const getShiftIcon = useCallback((shift: 'A' | 'B' | 'C') => {
         switch (shift) {
             case 'A': return <Sun className="w-3 h-3 text-amber-500" />;
@@ -705,23 +828,22 @@ export default function SSHTest() {
         }
     }, []);
 
-    // Get result indicator for shift showing combined status
     const getShiftResultIndicator = useCallback((entry: DailyEntry | undefined) => {
         if (!entry || !entry.lines) return <CircleOff className="w-3 h-3 text-gray-400" />;
 
-        const line1Pass = entry.lines['1']?.result === 'Pass';
-        const line2Pass = entry.lines['2']?.result === 'Pass';
-        const line1Fail = entry.lines['1']?.result === 'Fail';
-        const line2Fail = entry.lines['2']?.result === 'Fail';
+        const line1Ratio = entry.lines['1']?.ratio;
+        const line2Ratio = entry.lines['2']?.ratio;
 
-        if (line1Pass && line2Pass) return <CircleDot className="w-3 h-3 text-green-500" />;
-        if (line1Fail || line2Fail) return <Circle className="w-3 h-3 text-red-500" />;
-        if (entry.lines['1']?.result || entry.lines['2']?.result) return <Circle className="w-3 h-3 text-yellow-500" />;
+        const isLine1Valid = line1Ratio && parseFloat(line1Ratio) >= 4 && parseFloat(line1Ratio) <= 6;
+        const isLine2Valid = line2Ratio && parseFloat(line2Ratio) >= 4 && parseFloat(line2Ratio) <= 6;
+
+        if (isLine1Valid && isLine2Valid) return <CircleDot className="w-3 h-3 text-green-500" />;
+        if ((line1Ratio && !isLine1Valid) || (line2Ratio && !isLine2Valid)) return <Circle className="w-3 h-3 text-red-500" />;
+        if (line1Ratio || line2Ratio) return <Circle className="w-3 h-3 text-yellow-500" />;
 
         return <CircleOff className="w-3 h-3 text-gray-400" />;
     }, []);
 
-    // Generate calendar days for current month
     const renderCalendarDays = useCallback(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
@@ -731,30 +853,37 @@ export default function SSHTest() {
         const days = [];
         const todayStr = new Date().toISOString().split('T')[0];
 
-        console.log(`Rendering calendar for ${year}-${month + 1}`);
-
-        // Empty cells for days before month starts
         for (let i = 0; i < firstDay; i++) {
             days.push(<div key={`empty-${i}`} className="p-2"></div>);
         }
 
-        // Actual days
         for (let i = 1; i <= daysInMonth; i++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             const dayEntries = dateEntries[dateStr] || {};
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDate;
 
-            // Determine overall day status
             let hasPass = false;
             let hasFail = false;
             let hasAny = false;
+            let hasSignatures = false;
 
-            Object.values(dayEntries).forEach((shiftEntry: DailyEntry) => {
-                if (shiftEntry?.lines) {
-                    if (shiftEntry.lines['1']?.result === 'Pass' || shiftEntry.lines['2']?.result === 'Pass') hasPass = true;
-                    if (shiftEntry.lines['1']?.result === 'Fail' || shiftEntry.lines['2']?.result === 'Fail') hasFail = true;
-                    if (shiftEntry.lines['1']?.result || shiftEntry.lines['2']?.result) hasAny = true;
+            Object.values(dayEntries).forEach((shiftEntry: any) => {
+                if (shiftEntry?.lines && typeof shiftEntry === 'object' && 'shift' in shiftEntry) {
+                    const line1Ratio = shiftEntry.lines['1']?.ratio;
+                    const line2Ratio = shiftEntry.lines['2']?.ratio;
+
+                    const isLine1Valid = line1Ratio && parseFloat(line1Ratio) >= 4 && parseFloat(line1Ratio) <= 6;
+                    const isLine2Valid = line2Ratio && parseFloat(line2Ratio) >= 4 && parseFloat(line2Ratio) <= 6;
+
+                    if (isLine1Valid || isLine2Valid) hasPass = true;
+                    if ((line1Ratio && !isLine1Valid) || (line2Ratio && !isLine2Valid)) hasFail = true;
+                    if (line1Ratio || line2Ratio) hasAny = true;
+                }
+
+                // Check for signatures
+                if (shiftEntry?.signatures && (shiftEntry.signatures.preparedBy || shiftEntry.signatures.verifiedBy)) {
+                    hasSignatures = true;
                 }
             });
 
@@ -764,7 +893,7 @@ export default function SSHTest() {
                 statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
             } else if (hasFail) {
                 statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
-            } else if (hasAny) {
+            } else if (hasAny || hasSignatures) {
                 statusClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
             }
 
@@ -777,24 +906,22 @@ export default function SSHTest() {
                         ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : statusClass}
                         ${isToday ? 'font-bold' : ''}
                         hover:shadow-md hover:-translate-y-0.5
-                        ${!hasAny ? 'hover:border-blue-300' : ''}
+                        ${!hasAny && !hasSignatures ? 'hover:border-blue-300' : ''}
                     `}
                 >
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-sm dark:text-white">{i}</span>
                     </div>
 
-                    {/* Shift indicators with line details */}
                     <div className="flex flex-col gap-1 mt-1">
                         {(['A', 'B', 'C'] as const).map(shift => {
-                            const entry = dayEntries[shift];
+                            const entry = dayEntries[shift] as DailyEntry | undefined;
                             return (
                                 <div key={shift} className="flex flex-col gap-0.5 text-xs">
                                     <div className="flex items-center gap-1">
                                         {getShiftIcon(shift)}
                                         {getShiftResultIndicator(entry)}
                                     </div>
-
                                 </div>
                             );
                         })}
@@ -805,137 +932,89 @@ export default function SSHTest() {
         return days;
     }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator]);
 
-    const handleAddSignature = useCallback((section: 'prepared' | 'approved') => {
-        if (!username) {
-            showAlert('error', 'User not logged in');
-            return;
-        }
+    const renderSignatureSection = useCallback(() => {
+        if (!currentEntry) return null;
 
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+        const currentDateSigs = dateSignatures[currentEntry.date] || {
+            preparedBy: '',
+            verifiedBy: ''
+        };
 
-        let currentSignature = '';
-        switch (section) {
-            case 'prepared':
-                currentSignature = currentSignatures.preparedBy;
-                break;
-            case 'approved':
-                currentSignature = currentSignatures.approvedBy;
-                break;
-        }
+        const canSignPrepared = userRole === 'Operator' && !currentDateSigs.preparedBy;
+        const canSignVerified = ['Manager', 'Supervisor'].includes(userRole || '') && !currentDateSigs.verifiedBy;
+        const canRemovePrepared = currentDateSigs.preparedBy === username;
+        const canRemoveVerified = currentDateSigs.verifiedBy === username;
 
-        if (currentSignature.trim()) {
-            showAlert('error', `Signature already exists in ${section} section for this month`);
-            return;
-        }
-
-        if (section === 'prepared' && userRole !== 'Operator') {
-            showAlert('error', 'Only Operators can sign');
-            return;
-        }
-
-        if (section === 'approved' && !['Manager', 'Supervisor'].includes(userRole || '')) {
-            showAlert('error', 'Only Managers or Supervisors can approve');
-            return;
-        }
-
-        // Update signatures for current month
-        setAllMonthSignatures(prev => ({
-            ...prev,
-            [monthKey]: {
-                ...(prev[monthKey] || defaultSignature),
-                [`${section}By`]: username
-            }
-        }));
-
-        setHasUnsavedChanges(true);
-        showAlert('success', `Signature added to ${section} section for ${monthKey}`);
-    }, [username, userRole, allMonthSignatures, getCurrentMonthKey, showAlert]);
-
-    const handleRemoveSignature = useCallback((section: 'prepared' | 'approved') => {
-        if (!username) {
-            showAlert('error', 'User not logged in');
-            return;
-        }
-
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
-
-        let currentSignature = '';
-        switch (section) {
-            case 'prepared':
-                currentSignature = currentSignatures.preparedBy;
-                break;
-            case 'approved':
-                currentSignature = currentSignatures.approvedBy;
-                break;
-        }
-
-        if (!currentSignature.includes(username)) {
-            showAlert('error', 'You can only remove your own signature');
-            return;
-        }
-
-        // Update signatures for current month
-        setAllMonthSignatures(prev => ({
-            ...prev,
-            [monthKey]: {
-                ...(prev[monthKey] || defaultSignature),
-                [`${section}By`]: ''
-            }
-        }));
-
-        setHasUnsavedChanges(true);
-        showAlert('info', `Signature removed from ${section} section for ${monthKey}`);
-    }, [username, allMonthSignatures, getCurrentMonthKey, showAlert]);
-
-    const canAddSignature = useCallback((section: 'prepared' | 'approved') => {
-        if (!username) return false;
-
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
-
-        let currentSignature = '';
-        switch (section) {
-            case 'prepared':
-                currentSignature = currentSignatures.preparedBy;
-                break;
-            case 'approved':
-                currentSignature = currentSignatures.approvedBy;
-                break;
-        }
-
-        if (currentSignature.trim()) return false;
-
-        switch (section) {
-            case 'prepared':
-                return userRole === 'Operator';
-            case 'approved':
-                // Allow both Manager and Supervisor to approve
-                return ['Manager', 'Supervisor'].includes(userRole || '');
-            default:
-                return false;
-        }
-    }, [username, userRole, allMonthSignatures, getCurrentMonthKey]);
-
-    const canRemoveSignature = useCallback((section: 'prepared' | 'approved') => {
-        if (!username) return false;
-
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
-
-        let currentSignature = '';
-        switch (section) {
-            case 'prepared':
-                currentSignature = currentSignatures.preparedBy;
-                break;
-            case 'approved':
-                currentSignature = currentSignatures.approvedBy;
-                break;
-        }
-
-        return currentSignature.includes(username);
-    }, [username, allMonthSignatures, getCurrentMonthKey]);
+        return (
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h4 className="text-md font-semibold mb-3 dark:text-white">
+                    Daily Signatures for {new Date(currentEntry.date).toLocaleDateString()} (Applies to all shifts)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Prepared By
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={currentDateSigs.preparedBy || ''}
+                                readOnly
+                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                placeholder="Not signed"
+                            />
+                            {canSignPrepared && (
+                                <button
+                                    onClick={() => handleSignatureUpdate('prepared')}
+                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                >
+                                    <Check className='w-4 h-4'/>
+                                </button>
+                            )}
+                            {canRemovePrepared && (
+                                <button
+                                    onClick={() => handleSignatureUpdate('prepared')}
+                                    className="p-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                >
+                                    <X className='w-4 h-4'/>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Verified By
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={currentDateSigs.verifiedBy || ''}
+                                readOnly
+                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                placeholder="Not signed"
+                            />
+                            {canSignVerified && (
+                                <button
+                                    onClick={() => handleSignatureUpdate('verified')}
+                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                >
+                                    <Check className='w-4 h-4'/>
+                                </button>
+                            )}
+                            {canRemoveVerified && (
+                                <button
+                                    onClick={() => handleSignatureUpdate('verified')}
+                                    className="px-2 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                >
+                                    <X className='w-4 h-4'/>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }, [currentEntry, dateSignatures, userRole, username, handleSignatureUpdate]);
 
     return (
         <>
@@ -957,8 +1036,8 @@ export default function SSHTest() {
                     </div>
                 )}
                 <TestHeading
-                    heading="Sealant Shore Hardness Test"
-                    criteria="≥ 39 Shore A"
+                    heading="Potting Ratio Measurement"
+                    criteria="Part A & B ratio is 5:1 ±1 (Range: 4:1 to 6:1)"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
@@ -984,19 +1063,27 @@ export default function SSHTest() {
                                     const entry = dateEntries[selectedDate]?.[shift];
                                     const isFilled = !!entry;
 
+                                    const line1Ratio = entry?.lines['1']?.ratio;
+                                    const line2Ratio = entry?.lines['2']?.ratio;
+                                    const isLine1Valid = line1Ratio && parseFloat(line1Ratio) >= 4 && parseFloat(line1Ratio) <= 6;
+                                    const isLine2Valid = line2Ratio && parseFloat(line2Ratio) >= 4 && parseFloat(line2Ratio) <= 6;
+
+                                    let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+                                    if (isFilled) {
+                                        if (isLine1Valid && isLine2Valid) {
+                                            statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+                                        } else if ((line1Ratio && !isLine1Valid) || (line2Ratio && !isLine2Valid)) {
+                                            statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
+                                        } else {
+                                            statusClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
+                                        }
+                                    }
+
                                     return (
                                         <button
                                             key={shift}
                                             onClick={() => handleShiftSelect(shift)}
-                                            className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3
-                                                ${isFilled
-                                                    ? entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass'
-                                                        ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                                                        : entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail'
-                                                            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
-                                                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                                                    : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'
-                                                }`}
+                                            className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${statusClass}`}
                                         >
                                             <div className="flex-shrink-0">
                                                 {shift === 'A' && <Sun className="w-6 h-6 text-amber-500" />}
@@ -1007,9 +1094,10 @@ export default function SSHTest() {
                                                 <div className="font-semibold dark:text-white">Shift {shift}</div>
                                                 {isFilled ? (
                                                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                        <div>PO: {entry?.po}</div>
-                                                        <div>Line 1: {entry?.lines['1']?.result}</div>
-                                                        <div>Line 2: {entry?.lines['2']?.result}</div>
+                                                        <div>Line 1 PO: {entry?.lines['1']?.po}</div>
+                                                        <div>Line 2 PO: {entry?.lines['2']?.po}</div>
+                                                        <div>Line 1 Ratio: {entry?.lines['1']?.ratio || 'N/A'}</div>
+                                                        <div>Line 2 Ratio: {entry?.lines['2']?.ratio || 'N/A'}</div>
                                                     </div>
                                                 ) : (
                                                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -1019,9 +1107,9 @@ export default function SSHTest() {
                                             </div>
                                             {isFilled && (
                                                 <div className="flex-shrink-0">
-                                                    {entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass' &&
+                                                    {isLine1Valid && isLine2Valid &&
                                                         <CheckCircle className="w-5 h-5 text-green-500" />}
-                                                    {(entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail') &&
+                                                    {((line1Ratio && !isLine1Valid) || (line2Ratio && !isLine2Valid)) &&
                                                         <AlertCircle className="w-5 h-5 text-red-500" />}
                                                 </div>
                                             )}
@@ -1114,11 +1202,11 @@ export default function SSHTest() {
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Pass</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (4-6)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Fail</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Out of Range</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-gray-200 border border-gray-500"></div>
@@ -1178,32 +1266,8 @@ export default function SSHTest() {
                                                 {currentEntry.shift === 'C' && <Moon className="w-5 h-5 text-indigo-500" />}
                                                 <span className="font-medium dark:text-white">Shift {currentEntry.shift}</span>
                                             </div>
-                                            <div className="flex flex-col gap-1 items-start ml-auto">
-                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    Checked By
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={currentEntry.checkedBy}
-                                                    onChange={(e) => handleInputChange('checkedBy', e.target.value)}
-                                                    className="w-full p-2 rounded-lg dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter checker name"
-                                                />
-                                            </div>
                                         </div>
-                                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                PO Number <span className="text-red-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={currentEntry.po}
-                                                onChange={(e) => handleInputChange('po', e.target.value)}
-                                                className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="Enter PO number for both lines"
-                                                required
-                                            />
-                                        </div>
+
                                         <div className="border-l-4 border-blue-500 pl-4">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
@@ -1212,66 +1276,76 @@ export default function SSHTest() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Supplier
+                                                        PO Number <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['1'].sealantSupplier}
-                                                        onChange={(e) => handleLineInputChange('1', 'sealantSupplier', e.target.value)}
+                                                        value={currentEntry.lines['1'].po}
+                                                        onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter sealant supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Expiry Date
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sealantExpDate}
-                                                        onChange={(e) => handleLineInputChange('1', 'sealantExpDate', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="DD.MM.YYYY"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sample Taking Time
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sampleTakingTime}
-                                                        onChange={(e) => handleLineInputChange('1', 'sampleTakingTime', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="HH:MM"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sample Testing Time
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sampleTestingTime}
-                                                        onChange={(e) => handleLineInputChange('1', 'sampleTestingTime', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="HH:MM"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Result <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <select
-                                                        value={currentEntry.lines['1'].result}
-                                                        onChange={(e) => handleLineInputChange('1', 'result', e.target.value as 'Pass' | 'Fail')}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter PO number"
                                                         required
-                                                    >
-                                                        <option value="">Select result</option>
-                                                        <option value="Pass">Pass</option>
-                                                        <option value="Fail">Fail</option>
-                                                    </select>
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Potting Supplier
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].pottingSupplier}
+                                                        onChange={(e) => handleLineInputChange('1', 'pottingSupplier', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter potting supplier"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part A (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].partA}
+                                                        onChange={(e) => handleLineInputChange('1', 'partA', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter Part A weight"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part B (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].partB}
+                                                        onChange={(e) => handleLineInputChange('1', 'partB', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter Part B weight"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Ratio (A:B)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].ratio}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Total Weight (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].totalWeight}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1295,66 +1369,76 @@ export default function SSHTest() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Supplier
+                                                        PO Number <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['2'].sealantSupplier}
-                                                        onChange={(e) => handleLineInputChange('2', 'sealantSupplier', e.target.value)}
+                                                        value={currentEntry.lines['2'].po}
+                                                        onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter sealant supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Expiry Date
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sealantExpDate}
-                                                        onChange={(e) => handleLineInputChange('2', 'sealantExpDate', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="DD.MM.YYYY"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sample Taking Time
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sampleTakingTime}
-                                                        onChange={(e) => handleLineInputChange('2', 'sampleTakingTime', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="HH:MM"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sample Testing Time
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sampleTestingTime}
-                                                        onChange={(e) => handleLineInputChange('2', 'sampleTestingTime', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="HH:MM"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Result <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <select
-                                                        value={currentEntry.lines['2'].result}
-                                                        onChange={(e) => handleLineInputChange('2', 'result', e.target.value as 'Pass' | 'Fail')}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter PO number"
                                                         required
-                                                    >
-                                                        <option value="">Select result</option>
-                                                        <option value="Pass">Pass</option>
-                                                        <option value="Fail">Fail</option>
-                                                    </select>
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Potting Supplier
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].pottingSupplier}
+                                                        onChange={(e) => handleLineInputChange('2', 'pottingSupplier', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter potting supplier"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part A (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].partA}
+                                                        onChange={(e) => handleLineInputChange('2', 'partA', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter Part A weight"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part B (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].partB}
+                                                        onChange={(e) => handleLineInputChange('2', 'partB', e.target.value)}
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Enter Part B weight"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Ratio (A:B)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].ratio}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Total Weight (g)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].totalWeight}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1370,8 +1454,7 @@ export default function SSHTest() {
                                                 </div>
                                             </div>
                                         </div>
-
-                                        {/* Action Buttons */}
+                                        {renderSignatureSection()}
                                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                                             <button
                                                 onClick={handleReset}
@@ -1394,7 +1477,6 @@ export default function SSHTest() {
 
                         {/* Right Panel - Statistics */}
                         <div className="lg:col-span-5 space-y-6">
-                            {/* Quick Stats Cards */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
@@ -1412,7 +1494,7 @@ export default function SSHTest() {
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <Target className="w-5 h-5 text-green-500" />
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">Pass Rate</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">Within Range</span>
                                     </div>
                                     <div className="text-2xl font-bold text-gray-800 dark:text-white">
                                         {monthlyStats.filledEntries > 0
@@ -1420,12 +1502,11 @@ export default function SSHTest() {
                                             : 0}%
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">
-                                        {monthlyStats.passCount} passed
+                                        {monthlyStats.passCount} within range
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Shift Statistics */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
                                     <Clock className="w-4 h-4 text-blue-500" />
@@ -1440,7 +1521,6 @@ export default function SSHTest() {
                                             lines: { '1': 0, '2': 0 }
                                         };
 
-                                        // Ensure lines property exists
                                         const lines = stats.lines || { '1': 0, '2': 0 };
 
                                         const shiftIcon = shift === 'A' ? <Sun className="w-4 h-4 text-amber-500" /> :
@@ -1459,8 +1539,8 @@ export default function SSHTest() {
                                                     </span>
                                                 </div>
                                                 <div className="flex gap-4 text-xs">
-                                                    <span className="text-green-600">Pass: {stats.pass}</span>
-                                                    <span className="text-red-600">Fail: {stats.fail}</span>
+                                                    <span className="text-green-600">Within Range: {stats.pass}</span>
+                                                    <span className="text-red-600">Out of Range: {stats.fail}</span>
                                                 </div>
                                                 <div className="flex gap-2 text-[10px] text-gray-500">
                                                     <span>Line 1: {lines['1']}</span>
@@ -1478,7 +1558,6 @@ export default function SSHTest() {
                                 </div>
                             </div>
 
-                            {/* Month Summary */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
                                     <BarChart3 className="w-4 h-4 text-blue-500" />
@@ -1504,18 +1583,17 @@ export default function SSHTest() {
                                 </div>
                             </div>
 
-                            {/* Results Breakdown */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
                                     <TrendingUp className="w-4 h-4 text-blue-500" />
-                                    Results Breakdown
+                                    Ratio Range Breakdown
                                 </h3>
 
                                 <div className="space-y-4">
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-green-600">Pass</span>
-                                            <span className="font-medium text-green-600">{monthlyStats.passCount}</span>
+                                            <span className="text-green-600">Within Range (4-6)</span>
+                                            <span className="font-medium">{monthlyStats.passCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                             <div
@@ -1527,8 +1605,8 @@ export default function SSHTest() {
 
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-red-600">Fail</span>
-                                            <span className="font-medium text-red-600">{monthlyStats.failCount}</span>
+                                            <span className="text-red-600">Out of Range</span>
+                                            <span className="font-medium">{monthlyStats.failCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                             <div
@@ -1543,69 +1621,7 @@ export default function SSHTest() {
                     </div>
                 </div>
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
-                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">
-                        Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
-                            <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.preparedBy}</span>
-                            </div>
-                            <div className="flex flex-wrap justify-center gap-2 mt-3">
-                                <button
-                                    className={`px-3 py-1.5 text-sm text-white rounded-lg transition-colors ${canAddSignature('prepared')
-                                        ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800'
-                                        : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'
-                                        }`}
-                                    onClick={() => handleAddSignature('prepared')}
-                                    disabled={!canAddSignature('prepared')}
-                                >
-                                    Add Signature
-                                </button>
-                                <button
-                                    className={`px-3 py-1.5 text-sm text-white rounded-lg transition-colors ${canRemoveSignature('prepared')
-                                        ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800'
-                                        : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'
-                                        }`}
-                                    onClick={() => handleRemoveSignature('prepared')}
-                                    disabled={!canRemoveSignature('prepared')}
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        </div>
-                        {/* Approved By */}
-                        <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
-                            <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.approvedBy}</span>
-                            </div>
-                            <div className="flex flex-wrap justify-center gap-2 mt-3">
-                                <button
-                                    className={`px-3 py-1.5 text-sm text-white rounded-lg transition-colors ${canAddSignature('approved')
-                                        ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800'
-                                        : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'
-                                        }`}
-                                    onClick={() => handleAddSignature('approved')}
-                                    disabled={!canAddSignature('approved')}
-                                >
-                                    Add Signature
-                                </button>
-                                <button
-                                    className={`px-3 py-1.5 text-sm text-white rounded-lg transition-colors ${canRemoveSignature('approved')
-                                        ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800'
-                                        : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'
-                                        }`}
-                                    onClick={() => handleRemoveSignature('approved')}
-                                    disabled={!canRemoveSignature('approved')}
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-center text-sm text-red-500 dark:text-red-400 mt-4 font-medium">
+                    <div className="text-center text-sm text-red-500 dark:text-red-400 font-medium">
                         (Controlled Copy)
                     </div>
                 </div>

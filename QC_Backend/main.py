@@ -12,6 +12,7 @@ from routes.peel_route import peel_router
 from routes.user_route import user_router
 from routes.gel_route import gel_router
 from routes.adhesion_route import adhesion_router
+from routes.potting_ratio_route import potting_router
 from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
@@ -20,6 +21,7 @@ from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.AdhesionReportGenerator import generate_adhesion_report
+from generators.PottingRatioReportGenerator import generate_potting_report
 from generators.SSHReportGenerator import generate_ssh_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
@@ -54,6 +56,7 @@ app.include_router(peel_router)
 app.include_router(user_router)
 app.include_router(gel_router)
 app.include_router(adhesion_router)
+app.include_router(potting_router)
 app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
@@ -224,6 +227,29 @@ async def generate_ssh_report_endpoint(request: dict):
     except Exception as e:
         print(f"Error generating SSH test report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+    
+@app.post("/api/potting-ratio-reports/generate-potting-report")
+async def generate_potting_report_endpoint(request: dict):
+    try:
+        report_data = {
+            "entries": request.get("entries", []),
+            "year": request.get("year", datetime.now().year),
+            "month": request.get("month", datetime.now().month),
+            "name": request.get("report_name", "Potting_Ratio_Report")
+        }
+        output, filename = generate_potting_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating potting ratio report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
 async def generate_peel_report_endpoint(request: dict):
@@ -361,6 +387,10 @@ async def root():
             "adhesion_report_generation": {
                 "base_path": "/generate-adhesion-report",
                 "description": "Generate adhesion test reports"
+            },
+            "potting_ratio_report_generation": {
+                "base_path": "/generate-potting-report",
+                "description": "Generate potting ratio test reports"
             },
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
