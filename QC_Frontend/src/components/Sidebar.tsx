@@ -38,6 +38,7 @@ const MENU_ITEMS: MenuItem[] = [
         children: [
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
             { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
+            { id: 'jb-sealant-wt', label: 'JB Sealant Weight Measurement', path: '/jb-sealant-wt' },
             { id: 'potting', label: 'Potting Ratio Measurement', path: '/potting' },
             { id: 'rot-test', label: 'Robustness of Termination Test', path: '/rot-test' },
             { id: 'ssh-test', label: 'Sealant Shore Hardness Test', path: '/ssh-test' },

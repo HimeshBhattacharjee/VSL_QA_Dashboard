@@ -10,6 +10,7 @@ import Admin from './pages/Admin';
 import GelTest from './pages/GelTest';
 import AdhesionTest from './pages/AdhesionTest';
 import PottingRatioMeasurement from './pages/PottingRatioMeasurement';
+import JBSealantWtMeasurement from './pages/JBSealantWtMeasurement';
 import SSHTest from './pages/SSHTest';
 import PeelTest from './pages/PeelTest';
 import RoTTest from './pages/RoTTest';
@@ -82,6 +83,11 @@ export default function App() {
                             <Route path="/potting" element={
                                 <UserRoute>
                                     <PottingRatioMeasurement />
+                                </UserRoute>
+                            } />
+                            <Route path="/jb-sealant-wt" element={
+                                <UserRoute>
+                                    <JBSealantWtMeasurement />
                                 </UserRoute>
                             } />
                             <Route path="/ssh-test" element={

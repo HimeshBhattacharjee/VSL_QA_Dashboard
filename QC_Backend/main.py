@@ -13,6 +13,7 @@ from routes.user_route import user_router
 from routes.gel_route import gel_router
 from routes.adhesion_route import adhesion_router
 from routes.potting_ratio_route import potting_router
+from routes.jb_sealant_wt_route import jb_sealant_router
 from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
@@ -22,6 +23,7 @@ from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.AdhesionReportGenerator import generate_adhesion_report
 from generators.PottingRatioReportGenerator import generate_potting_report
+from generators.JBSealantWeightReportGenerator import generate_jb_sealant_report
 from generators.SSHReportGenerator import generate_ssh_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
@@ -57,6 +59,7 @@ app.include_router(user_router)
 app.include_router(gel_router)
 app.include_router(adhesion_router)
 app.include_router(potting_router)
+app.include_router(jb_sealant_router)
 app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
@@ -250,6 +253,29 @@ async def generate_potting_report_endpoint(request: dict):
     except Exception as e:
         print(f"Error generating potting ratio report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+    
+@app.post("/api/jb-sealant-weight-reports/generate-jb-sealant-report")
+async def generate_jb_sealant_report_endpoint(request: dict):
+    try:
+        report_data = {
+            "entries": request.get("entries", []),
+            "year": request.get("year", datetime.now().year),
+            "month": request.get("month", datetime.now().month),
+            "name": request.get("report_name", "JB_Sealant_Weight_Report")
+        }
+        output, filename = generate_jb_sealant_report(report_data)
+        return StreamingResponse(
+            output,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating JB sealant weight report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
 async def generate_peel_report_endpoint(request: dict):
@@ -392,6 +418,14 @@ async def root():
                 "base_path": "/generate-potting-report",
                 "description": "Generate potting ratio test reports"
             },
+            "jb_sealant_weight_reports": {
+                "base_path": "/api/jb-sealant-weight-reports",
+                "description": "JB Sealant Weight reports management with MongoDB"
+            },
+            "jb_sealant_weight_report_generation": {
+                "base_path": "/generate-jb-sealant-report",
+                "description": "Generate JB sealant weight test reports"
+            },
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
                 "description": "Generate peel test reports"
@@ -457,6 +491,7 @@ async def global_health_check():
             "audit_pdf_reports": "available",
             "gel_test_reports": "available",
             "adhesion_test_reports": "available",
+            "jb_sealant_weight_reports": "available",
             "peel_test_reports": "available"
         }
     }
