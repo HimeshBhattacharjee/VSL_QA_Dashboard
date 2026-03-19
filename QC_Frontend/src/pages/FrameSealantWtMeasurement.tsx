@@ -1,3 +1,4 @@
+// File: CellSealantWtMeasurement.tsx
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
@@ -9,21 +10,21 @@ import {
     Circle, CircleDot, CircleOff, Check
 } from 'lucide-react';
 
-interface JBPositionData {
-    jbWeight: string;
-    jbWeightWithSealant: string;
+interface CellPositionData {
+    cellWeight: string;
+    cellWeightWithSealant: string;
     netSealantWeight: string;
 }
 
 interface LineEntry {
     line?: string;
     po: string;
-    jbSupplier: string;
+    cellSupplier: string;
     sealantSupplier: string;
     sealantExpiry: string;
-    positiveJB: JBPositionData;
-    middleJB: JBPositionData;
-    negativeJB: JBPositionData;
+    cell1: CellPositionData;
+    cell2: CellPositionData;
+    cell3: CellPositionData;
     totalModuleWeight: string;
     remarks?: string;
 }
@@ -100,13 +101,13 @@ const defaultMonthlyStats: MonthlyStats = {
     }
 };
 
-const createEmptyJBPosition = (): JBPositionData => ({
-    jbWeight: '',
-    jbWeightWithSealant: '',
+const createEmptyCellPosition = (): CellPositionData => ({
+    cellWeight: '',
+    cellWeightWithSealant: '',
     netSealantWeight: ''
 });
 
-export default function JBSealantWeightMeasurement() {
+export default function CellSealantWeightMeasurement() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -125,7 +126,7 @@ export default function JBSealantWeightMeasurement() {
 
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const API_BASE_URL = import.meta.env.VITE_API_URL + '/jb-sealant-weight-reports';
+    const API_BASE_URL = import.meta.env.VITE_API_URL + '/cell-sealant-weight-reports';
 
     const normalizeDate = useCallback((dateStr: string) => {
         if (!dateStr) return '';
@@ -149,12 +150,12 @@ export default function JBSealantWeightMeasurement() {
     const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
         line: lineNum,
         po: '',
-        jbSupplier: '',
+        cellSupplier: '',
         sealantSupplier: '',
         sealantExpiry: '',
-        positiveJB: createEmptyJBPosition(),
-        middleJB: createEmptyJBPosition(),
-        negativeJB: createEmptyJBPosition(),
+        cell1: createEmptyCellPosition(),
+        cell2: createEmptyCellPosition(),
+        cell3: createEmptyCellPosition(),
         totalModuleWeight: '',
         remarks: ''
     }), []);
@@ -173,24 +174,24 @@ export default function JBSealantWeightMeasurement() {
         }
     }), [createEmptyLineEntry]);
 
-    const calculateNetSealantWeight = useCallback((jbWeight: string, jbWeightWithSealant: string): string => {
-        if (!jbWeight || !jbWeightWithSealant) return '';
-        const jb = parseFloat(jbWeight) || 0;
-        const withSealant = parseFloat(jbWeightWithSealant) || 0;
-        return (withSealant - jb).toFixed(2);
+    const calculateNetSealantWeight = useCallback((cellWeight: string, cellWeightWithSealant: string): string => {
+        if (!cellWeight || !cellWeightWithSealant) return '';
+        const cell = parseFloat(cellWeight) || 0;
+        const withSealant = parseFloat(cellWeightWithSealant) || 0;
+        return (withSealant - cell).toFixed(2);
     }, []);
 
     const calculateTotalModuleWeight = useCallback((line: LineEntry): string => {
-        const positiveNet = parseFloat(line.positiveJB.netSealantWeight) || 0;
-        const middleNet = parseFloat(line.middleJB.netSealantWeight) || 0;
-        const negativeNet = parseFloat(line.negativeJB.netSealantWeight) || 0;
-        return (positiveNet + middleNet + negativeNet).toFixed(2);
+        const cell1Net = parseFloat(line.cell1.netSealantWeight) || 0;
+        const cell2Net = parseFloat(line.cell2.netSealantWeight) || 0;
+        const cell3Net = parseFloat(line.cell3.netSealantWeight) || 0;
+        return (cell1Net + cell2Net + cell3Net).toFixed(2);
     }, []);
 
-    const handleJBPositionChange = useCallback((
+    const handleCellPositionChange = useCallback((
         line: '1' | '2',
-        position: 'positiveJB' | 'middleJB' | 'negativeJB',
-        field: keyof JBPositionData,
+        position: 'cell1' | 'cell2' | 'cell3',
+        field: keyof CellPositionData,
         value: string
     ) => {
         if (!currentEntry) return;
@@ -200,11 +201,11 @@ export default function JBSealantWeightMeasurement() {
         
         updatedPosition[field] = value;
         
-        // Auto-calculate net sealant weight when JB weight or JB weight with sealant changes
-        if (field === 'jbWeight' || field === 'jbWeightWithSealant') {
-            const jbWeight = field === 'jbWeight' ? value : updatedPosition.jbWeight;
-            const jbWeightWithSealant = field === 'jbWeightWithSealant' ? value : updatedPosition.jbWeightWithSealant;
-            updatedPosition.netSealantWeight = calculateNetSealantWeight(jbWeight, jbWeightWithSealant);
+        // Auto-calculate net sealant weight when cell weight or cell weight with sealant changes
+        if (field === 'cellWeight' || field === 'cellWeightWithSealant') {
+            const cellWeight = field === 'cellWeight' ? value : updatedPosition.cellWeight;
+            const cellWeightWithSealant = field === 'cellWeightWithSealant' ? value : updatedPosition.cellWeightWithSealant;
+            updatedPosition.netSealantWeight = calculateNetSealantWeight(cellWeight, cellWeightWithSealant);
         }
         
         updatedLines[line][position] = updatedPosition;
@@ -221,7 +222,7 @@ export default function JBSealantWeightMeasurement() {
 
     const handleLineInputChange = useCallback((
         line: '1' | '2',
-        field: keyof Omit<LineEntry, 'positiveJB' | 'middleJB' | 'negativeJB' | 'totalModuleWeight'>,
+        field: keyof Omit<LineEntry, 'cell1' | 'cell2' | 'cell3' | 'totalModuleWeight'>,
         value: string
     ) => {
         if (!currentEntry) return;
@@ -285,9 +286,9 @@ export default function JBSealantWeightMeasurement() {
                 } else {
                     ['1', '2'].forEach(lineNum => {
                         const line = entry.lines[lineNum as '1' | '2'];
-                        if (!line.positiveJB) line.positiveJB = createEmptyJBPosition();
-                        if (!line.middleJB) line.middleJB = createEmptyJBPosition();
-                        if (!line.negativeJB) line.negativeJB = createEmptyJBPosition();
+                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
+                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
+                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
                         if (!line.line) line.line = lineNum;
                     });
                 }
@@ -332,7 +333,7 @@ export default function JBSealantWeightMeasurement() {
 
                 const newStats = {
                     totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2,
+                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2 * 3,
                     filledEntries: statsData.filledEntries || 0,
                     completionRate: statsData.completionRate || 0,
                     passCount: statsData.passCount || 0,
@@ -347,7 +348,7 @@ export default function JBSealantWeightMeasurement() {
                 const daysInMonth = new Date(year, month - 1, 0).getDate();
                 setMonthlyStats({
                     totalDays: daysInMonth,
-                    totalPossibleEntries: daysInMonth * 3 * 2,
+                    totalPossibleEntries: daysInMonth * 3 * 2 * 3,
                     filledEntries: 0,
                     completionRate: 0,
                     passCount: 0,
@@ -365,7 +366,7 @@ export default function JBSealantWeightMeasurement() {
             const daysInMonth = new Date(year, month - 1, 0).getDate();
             setMonthlyStats({
                 totalDays: daysInMonth,
-                totalPossibleEntries: daysInMonth * 3 * 2,
+                totalPossibleEntries: daysInMonth * 3 * 2 * 3,
                 filledEntries: 0,
                 completionRate: 0,
                 passCount: 0,
@@ -379,7 +380,7 @@ export default function JBSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry, createEmptyJBPosition]);
+    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry, createEmptyCellPosition]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -444,9 +445,9 @@ export default function JBSealantWeightMeasurement() {
             } else {
                 ['1', '2'].forEach(lineNum => {
                     const line = entry.lines[lineNum as '1' | '2'];
-                    if (!line.positiveJB) line.positiveJB = createEmptyJBPosition();
-                    if (!line.middleJB) line.middleJB = createEmptyJBPosition();
-                    if (!line.negativeJB) line.negativeJB = createEmptyJBPosition();
+                    if (!line.cell1) line.cell1 = createEmptyCellPosition();
+                    if (!line.cell2) line.cell2 = createEmptyCellPosition();
+                    if (!line.cell3) line.cell3 = createEmptyCellPosition();
                     if (!line.line) line.line = lineNum;
                 });
             }
@@ -463,7 +464,7 @@ export default function JBSealantWeightMeasurement() {
             setCurrentEntry(createEmptyShiftEntry(selectedDate, shift));
             setIsEditing(false);
         }
-    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry, createEmptyJBPosition]);
+    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry, createEmptyCellPosition]);
 
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
@@ -525,9 +526,9 @@ export default function JBSealantWeightMeasurement() {
                 if (saved.lines) {
                     ['1', '2'].forEach(lineNum => {
                         const line = saved.lines[lineNum as '1' | '2'];
-                        if (!line.positiveJB) line.positiveJB = createEmptyJBPosition();
-                        if (!line.middleJB) line.middleJB = createEmptyJBPosition();
-                        if (!line.negativeJB) line.negativeJB = createEmptyJBPosition();
+                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
+                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
+                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
                         if (!line.line) line.line = lineNum;
                     });
                 }
@@ -579,14 +580,14 @@ export default function JBSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate, createEmptyJBPosition]);
+    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate, createEmptyCellPosition]);
 
     const handleDeleteEntry = useCallback(() => {
         if (!currentEntry || !currentEntry.shift) return;
 
         showConfirm({
             title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines.`,
+            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines (3 cells each).`,
             type: 'warning',
             confirmText: 'Delete',
             cancelText: 'Cancel',
@@ -766,7 +767,7 @@ export default function JBSealantWeightMeasurement() {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
-        const reportName = `JB_Sealant_Weight_${firstThreeLetters}_${year}`;
+        const reportName = `Cell_Sealant_Weight_${firstThreeLetters}_${year}`;
 
         setIsLoading(true);
         try {
@@ -785,9 +786,9 @@ export default function JBSealantWeightMeasurement() {
                 if (entry.lines) {
                     ['1', '2'].forEach(lineNum => {
                         const line = entry.lines[lineNum as '1' | '2'];
-                        if (!line.positiveJB) line.positiveJB = createEmptyJBPosition();
-                        if (!line.middleJB) line.middleJB = createEmptyJBPosition();
-                        if (!line.negativeJB) line.negativeJB = createEmptyJBPosition();
+                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
+                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
+                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
                         if (!line.line) line.line = lineNum;
                     });
                 }
@@ -800,18 +801,18 @@ export default function JBSealantWeightMeasurement() {
                 return entry;
             });
 
-            const jbReportData = {
+            const cellReportData = {
                 entries: entriesArray,
                 year,
                 month
             };
 
-            console.log('Sending to Excel generator:', jbReportData);
+            console.log('Sending to Excel generator:', cellReportData);
 
             const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(jbReportData),
+                body: JSON.stringify(cellReportData),
             });
 
             if (!response.ok) {
@@ -837,7 +838,7 @@ export default function JBSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, API_BASE_URL, showAlert, createEmptyJBPosition]);
+    }, [currentDate, months, API_BASE_URL, showAlert, createEmptyCellPosition]);
 
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
@@ -876,21 +877,21 @@ export default function JBSealantWeightMeasurement() {
     const checkLineValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
         if (!line) return { pass: false, fail: false, any: false };
         
-        const positions = [
-            line.positiveJB,
-            line.middleJB,
-            line.negativeJB
+        const cells = [
+            line.cell1,
+            line.cell2,
+            line.cell3
         ];
         
         let pass = false;
         let fail = false;
         let any = false;
         
-        positions.forEach(pos => {
-            if (pos.netSealantWeight) {
+        cells.forEach(cell => {
+            if (cell.netSealantWeight) {
                 any = true;
-                const weight = parseFloat(pos.netSealantWeight);
-                if (weight >= 4 && weight <= 8) {
+                const weight = parseFloat(cell.netSealantWeight);
+                if (weight >= 3 && weight <= 7) {
                     pass = true;
                 } else {
                     fail = true;
@@ -1086,7 +1087,7 @@ export default function JBSealantWeightMeasurement() {
         );
     }, [currentEntry, dateSignatures, userRole, username, handleSignatureUpdate]);
 
-    const renderJBPositionFields = useCallback((line: '1' | '2', position: 'positiveJB' | 'middleJB' | 'negativeJB', title: string) => {
+    const renderCellPositionFields = useCallback((line: '1' | '2', position: 'cell1' | 'cell2' | 'cell3', title: string) => {
         if (!currentEntry) return null;
         
         const positionData = currentEntry.lines[line][position];
@@ -1097,26 +1098,26 @@ export default function JBSealantWeightMeasurement() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            JB Wt (gm)
+                            Cell Wt (gm)
                         </label>
                         <input
                             type="text"
-                            value={positionData.jbWeight}
-                            onChange={(e) => handleJBPositionChange(line, position, 'jbWeight', e.target.value)}
+                            value={positionData.cellWeight}
+                            onChange={(e) => handleCellPositionChange(line, position, 'cellWeight', e.target.value)}
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter JB weight"
+                            placeholder="Enter cell weight"
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            JB Wt with Sealant (gm)
+                            Cell Wt with Sealant (gm)
                         </label>
                         <input
                             type="text"
-                            value={positionData.jbWeightWithSealant}
-                            onChange={(e) => handleJBPositionChange(line, position, 'jbWeightWithSealant', e.target.value)}
+                            value={positionData.cellWeightWithSealant}
+                            onChange={(e) => handleCellPositionChange(line, position, 'cellWeightWithSealant', e.target.value)}
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter JB weight with sealant"
+                            placeholder="Enter cell weight with sealant"
                         />
                     </div>
                     <div>
@@ -1134,7 +1135,7 @@ export default function JBSealantWeightMeasurement() {
                 </div>
             </div>
         );
-    }, [currentEntry, handleJBPositionChange]);
+    }, [currentEntry, handleCellPositionChange]);
 
     return (
         <>
@@ -1156,8 +1157,8 @@ export default function JBSealantWeightMeasurement() {
                     </div>
                 )}
                 <TestHeading
-                    heading="JB Sealant Weight Measurement"
-                    criteria="Allowable Limit: 6 ± 2 (Range: 4 to 8)"
+                    heading="Cell Sealant Weight Measurement"
+                    criteria="Allowable Limit: 5 ± 2 (Range: 3 to 7)"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
@@ -1318,7 +1319,7 @@ export default function JBSealantWeightMeasurement() {
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (4-8)</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (3-7)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
@@ -1406,14 +1407,14 @@ export default function JBSealantWeightMeasurement() {
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        JB Supplier
+                                                        Cell Supplier
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['1'].jbSupplier}
-                                                        onChange={(e) => handleLineInputChange('1', 'jbSupplier', e.target.value)}
+                                                        value={currentEntry.lines['1'].cellSupplier}
+                                                        onChange={(e) => handleLineInputChange('1', 'cellSupplier', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter JB supplier"
+                                                        placeholder="Enter cell supplier"
                                                     />
                                                 </div>
                                                 <div>
@@ -1441,13 +1442,13 @@ export default function JBSealantWeightMeasurement() {
                                                     />
                                                 </div>
                                             </div>
-                                            {renderJBPositionFields('1', 'positiveJB', 'Positive JB')}
-                                            {renderJBPositionFields('1', 'middleJB', 'Middle JB')}
-                                            {renderJBPositionFields('1', 'negativeJB', 'Negative JB')}
+                                            {renderCellPositionFields('1', 'cell1', 'Cell 1')}
+                                            {renderCellPositionFields('1', 'cell2', 'Cell 2')}
+                                            {renderCellPositionFields('1', 'cell3', 'Cell 3')}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total JB Sealant Wt / Module (gm)
+                                                        Total Cell Sealant Wt / Module (gm)
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1492,14 +1493,14 @@ export default function JBSealantWeightMeasurement() {
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        JB Supplier
+                                                        Cell Supplier
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['2'].jbSupplier}
-                                                        onChange={(e) => handleLineInputChange('2', 'jbSupplier', e.target.value)}
+                                                        value={currentEntry.lines['2'].cellSupplier}
+                                                        onChange={(e) => handleLineInputChange('2', 'cellSupplier', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter JB supplier"
+                                                        placeholder="Enter cell supplier"
                                                     />
                                                 </div>
                                                 <div>
@@ -1527,13 +1528,13 @@ export default function JBSealantWeightMeasurement() {
                                                     />
                                                 </div>
                                             </div>
-                                            {renderJBPositionFields('2', 'positiveJB', 'Positive JB')}
-                                            {renderJBPositionFields('2', 'middleJB', 'Middle JB')}
-                                            {renderJBPositionFields('2', 'negativeJB', 'Negative JB')}
+                                            {renderCellPositionFields('2', 'cell1', 'Cell 1')}
+                                            {renderCellPositionFields('2', 'cell2', 'Cell 2')}
+                                            {renderCellPositionFields('2', 'cell3', 'Cell 3')}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total Module Weight (gm)
+                                                        Total Cell Sealant Wt / Module (gm)
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1638,7 +1639,7 @@ export default function JBSealantWeightMeasurement() {
                                                         <span className="font-medium dark:text-white">Shift {shift}</span>
                                                     </div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {stats.filled} / {monthlyStats.totalDays * 2} lines
+                                                        {stats.filled} / {monthlyStats.totalDays * 6} cells
                                                     </span>
                                                 </div>
                                                 <div className="flex gap-4 text-xs">
@@ -1652,7 +1653,7 @@ export default function JBSealantWeightMeasurement() {
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
                                                         className="bg-blue-500 h-2 rounded-full transition-all"
-                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 2)) * 100 : 0}%` }}
+                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 6)) * 100 : 0}%` }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -1672,7 +1673,7 @@ export default function JBSealantWeightMeasurement() {
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Lines)</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Cells)</span>
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
@@ -1695,7 +1696,7 @@ export default function JBSealantWeightMeasurement() {
                                 <div className="space-y-4">
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-green-600">Within Range (4-8)</span>
+                                            <span className="text-green-600">Within Range (3-7)</span>
                                             <span className="font-medium">{monthlyStats.passCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">

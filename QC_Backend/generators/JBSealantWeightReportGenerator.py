@@ -17,163 +17,190 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
         for entry in sorted_entries:
             shift = entry.get('shift', '')
             lines = entry.get('lines', {})
-            entry_signatures = entry.get('signatures', {})
             
-            # Set date in B column
-            worksheet[f'B{current_row}'] = date
-            worksheet[f'B{current_row+1}'] = date
-            worksheet[f'B{current_row+2}'] = date
+            # Set date and shift for the 6 rows that will be filled for this shift (3 rows per line)
+            for i in range(6):
+                worksheet[f'A{current_row + i}'] = date
+                worksheet[f'B{current_row + i}'] = f"Shift {shift}"
             
-            # Set shift in C column
-            worksheet[f'C{current_row}'] = f"Shift {shift}"
-            worksheet[f'C{current_row+1}'] = f"Shift {shift}"
-            worksheet[f'C{current_row+2}'] = f"Shift {shift}"
+            # Process Line 1 (first 3 rows)
+            line1_data = lines.get('1', {})
+            line1_number = line1_data.get('line', '1')
             
-            # Line 1 (first row) - Positive JB
-            line1 = lines.get('1', {})
-            worksheet[f'D{current_row}'] = '1'  # Line number
-            worksheet[f'E{current_row}'] = line1.get('po', '')  # PO
-            worksheet[f'F{current_row}'] = line1.get('jbSupplier', '')
-            worksheet[f'G{current_row}'] = line1.get('sealantSupplier', '')
-            worksheet[f'H{current_row}'] = line1.get('sealantExpiry', '')
-            worksheet[f'I{current_row}'] = '+ Ve JB'  # Junction Box type
-            worksheet[f'J{current_row}'] = line1.get('jbWeight', '')
-            worksheet[f'K{current_row}'] = line1.get('jbWeightWithSealant', '')
-            worksheet[f'L{current_row}'] = line1.get('netSealantWeight', '')
+            # Get JB position data for Line 1
+            line1_positive_jb = line1_data.get('positiveJB', {})
+            line1_middle_jb = line1_data.get('middleJB', {})
+            line1_negative_jb = line1_data.get('negativeJB', {})
             
-            # Color code net sealant weight based on allowable limit
-            weight_cell = worksheet[f'L{current_row}']
+            # Fill Line 1 - Positive JB row
+            line1_pos_row = current_row
+            worksheet[f'C{line1_pos_row}'] = line1_number
+            worksheet[f'D{line1_pos_row}'] = line1_data.get('po', '')
+            worksheet[f'E{line1_pos_row}'] = line1_data.get('jbSupplier', '')
+            worksheet[f'F{line1_pos_row}'] = line1_data.get('sealantSupplier', '')
+            worksheet[f'G{line1_pos_row}'] = line1_data.get('sealantExpiry', '')
+            worksheet[f'H{line1_pos_row}'] = '+ Ve JB'
+            worksheet[f'I{line1_pos_row}'] = line1_positive_jb.get('jbWeight', '')
+            worksheet[f'J{line1_pos_row}'] = line1_positive_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line1_pos_row}'] = line1_positive_jb.get('netSealantWeight', '')
+            
+            # Color code net sealant weight for Line 1 Positive JB
             try:
-                if line1.get('netSealantWeight'):
-                    weight_val = float(line1['netSealantWeight'])
+                if line1_positive_jb.get('netSealantWeight'):
+                    weight_val = float(line1_positive_jb['netSealantWeight'])
                     if 4 <= weight_val <= 8:
-                        weight_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                        worksheet[f'K{line1_pos_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
                     else:
-                        weight_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+                        worksheet[f'K{line1_pos_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
             except (ValueError, TypeError):
                 pass
             
-            # Line 1 Middle JB (second row)
-            worksheet[f'D{current_row+1}'] = '1'  # Line number
-            worksheet[f'E{current_row+1}'] = line1.get('po', '')
-            worksheet[f'F{current_row+1}'] = line1.get('jbSupplier', '')
-            worksheet[f'G{current_row+1}'] = line1.get('sealantSupplier', '')
-            worksheet[f'H{current_row+1}'] = line1.get('sealantExpiry', '')
-            worksheet[f'I{current_row+1}'] = 'Middle JB'
-            worksheet[f'J{current_row+1}'] = '14'  # Default Middle JB weight
-            worksheet[f'K{current_row+1}'] = ''  # Will be calculated by formula
-            worksheet[f'L{current_row+1}'] = f'=K{current_row+1}-J{current_row+1}'
+            # Fill Line 1 - Middle JB row
+            line1_mid_row = current_row + 1
+            worksheet[f'C{line1_mid_row}'] = line1_number
+            worksheet[f'D{line1_mid_row}'] = line1_data.get('po', '')
+            worksheet[f'E{line1_mid_row}'] = line1_data.get('jbSupplier', '')
+            worksheet[f'F{line1_mid_row}'] = line1_data.get('sealantSupplier', '')
+            worksheet[f'G{line1_mid_row}'] = line1_data.get('sealantExpiry', '')
+            worksheet[f'H{line1_mid_row}'] = 'Middle JB'
+            worksheet[f'I{line1_mid_row}'] = line1_middle_jb.get('jbWeight', '')
+            worksheet[f'J{line1_mid_row}'] = line1_middle_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line1_mid_row}'] = line1_middle_jb.get('netSealantWeight', '')
             
-            # Line 1 Negative JB (third row)
-            worksheet[f'D{current_row+2}'] = '1'  # Line number
-            worksheet[f'E{current_row+2}'] = line1.get('po', '')
-            worksheet[f'F{current_row+2}'] = line1.get('jbSupplier', '')
-            worksheet[f'G{current_row+2}'] = line1.get('sealantSupplier', '')
-            worksheet[f'H{current_row+2}'] = line1.get('sealantExpiry', '')
-            worksheet[f'I{current_row+2}'] = '- Ve JB'
-            worksheet[f'J{current_row+2}'] = line1.get('jbWeight', '')
-            worksheet[f'K{current_row+2}'] = line1.get('jbWeightWithSealant', '')
-            worksheet[f'L{current_row+2}'] = line1.get('netSealantWeight', '')
-            
-            # Total Module Weight formula
-            worksheet[f'M{current_row}'] = f'=SUM(L{current_row}:L{current_row+2})'
-            worksheet[f'M{current_row+1}'] = ''
-            worksheet[f'M{current_row+2}'] = ''
-            
-            # Color code net sealant weight for negative JB
-            weight_cell = worksheet[f'L{current_row+2}']
+            # Color code net sealant weight for Line 1 Middle JB
             try:
-                if line1.get('netSealantWeight'):
-                    weight_val = float(line1['netSealantWeight'])
+                if line1_middle_jb.get('netSealantWeight'):
+                    weight_val = float(line1_middle_jb['netSealantWeight'])
                     if 4 <= weight_val <= 8:
-                        weight_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                        worksheet[f'K{line1_mid_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
                     else:
-                        weight_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+                        worksheet[f'K{line1_mid_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
             except (ValueError, TypeError):
                 pass
             
-            # Remarks
-            worksheet[f'N{current_row}'] = line1.get('remarks', '')
+            # Fill Line 1 - Negative JB row
+            line1_neg_row = current_row + 2
+            worksheet[f'C{line1_neg_row}'] = line1_number
+            worksheet[f'D{line1_neg_row}'] = line1_data.get('po', '')
+            worksheet[f'E{line1_neg_row}'] = line1_data.get('jbSupplier', '')
+            worksheet[f'F{line1_neg_row}'] = line1_data.get('sealantSupplier', '')
+            worksheet[f'G{line1_neg_row}'] = line1_data.get('sealantExpiry', '')
+            worksheet[f'H{line1_neg_row}'] = '- Ve JB'
+            worksheet[f'I{line1_neg_row}'] = line1_negative_jb.get('jbWeight', '')
+            worksheet[f'J{line1_neg_row}'] = line1_negative_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line1_neg_row}'] = line1_negative_jb.get('netSealantWeight', '')
             
-            # Move to Line 2 (3 rows down)
-            current_row += 3
-            
-            # Line 2 (next three rows)
-            line2 = lines.get('2', {})
-            
-            # Line 2 Positive JB
-            worksheet[f'D{current_row}'] = '2'
-            worksheet[f'E{current_row}'] = line2.get('po', '')
-            worksheet[f'F{current_row}'] = line2.get('jbSupplier', '')
-            worksheet[f'G{current_row}'] = line2.get('sealantSupplier', '')
-            worksheet[f'H{current_row}'] = line2.get('sealantExpiry', '')
-            worksheet[f'I{current_row}'] = '+ Ve JB'
-            worksheet[f'J{current_row}'] = line2.get('jbWeight', '')
-            worksheet[f'K{current_row}'] = line2.get('jbWeightWithSealant', '')
-            worksheet[f'L{current_row}'] = line2.get('netSealantWeight', '')
-            
-            # Color code
-            weight_cell = worksheet[f'L{current_row}']
+            # Color code net sealant weight for Line 1 Negative JB
             try:
-                if line2.get('netSealantWeight'):
-                    weight_val = float(line2['netSealantWeight'])
+                if line1_negative_jb.get('netSealantWeight'):
+                    weight_val = float(line1_negative_jb['netSealantWeight'])
                     if 4 <= weight_val <= 8:
-                        weight_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                        worksheet[f'K{line1_neg_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
                     else:
-                        weight_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+                        worksheet[f'K{line1_neg_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
             except (ValueError, TypeError):
                 pass
             
-            # Line 2 Middle JB
-            worksheet[f'D{current_row+1}'] = '2'
-            worksheet[f'E{current_row+1}'] = line2.get('po', '')
-            worksheet[f'F{current_row+1}'] = line2.get('jbSupplier', '')
-            worksheet[f'G{current_row+1}'] = line2.get('sealantSupplier', '')
-            worksheet[f'H{current_row+1}'] = line2.get('sealantExpiry', '')
-            worksheet[f'I{current_row+1}'] = 'Middle JB'
-            worksheet[f'J{current_row+1}'] = '14'
-            worksheet[f'K{current_row+1}'] = ''
-            worksheet[f'L{current_row+1}'] = f'=K{current_row+1}-J{current_row+1}'
+            # Total Module Weight for Line 1 - place it in the first row of Line 1
+            worksheet[f'L{line1_pos_row}'] = line1_data.get('totalModuleWeight', '')
             
-            # Line 2 Negative JB
-            worksheet[f'D{current_row+2}'] = '2'
-            worksheet[f'E{current_row+2}'] = line2.get('po', '')
-            worksheet[f'F{current_row+2}'] = line2.get('jbSupplier', '')
-            worksheet[f'G{current_row+2}'] = line2.get('sealantSupplier', '')
-            worksheet[f'H{current_row+2}'] = line2.get('sealantExpiry', '')
-            worksheet[f'I{current_row+2}'] = '- Ve JB'
-            worksheet[f'J{current_row+2}'] = line2.get('jbWeight', '')
-            worksheet[f'K{current_row+2}'] = line2.get('jbWeightWithSealant', '')
-            worksheet[f'L{current_row+2}'] = line2.get('netSealantWeight', '')
+            # Add remarks for Line 1
+            worksheet[f'M{line1_pos_row}'] = line1_data.get('remarks', '')
             
-            # Total Module Weight formula for Line 2
-            worksheet[f'M{current_row}'] = f'=SUM(L{current_row}:L{current_row+2})'
+            # Process Line 2 (next 3 rows)
+            line2_data = lines.get('2', {})
+            line2_number = line2_data.get('line', '2')
             
-            # Color code net sealant weight for negative JB
-            weight_cell = worksheet[f'L{current_row+2}']
+            # Get JB position data for Line 2
+            line2_positive_jb = line2_data.get('positiveJB', {})
+            line2_middle_jb = line2_data.get('middleJB', {})
+            line2_negative_jb = line2_data.get('negativeJB', {})
+            
+            # Fill Line 2 - Positive JB row
+            line2_pos_row = current_row + 3
+            worksheet[f'C{line2_pos_row}'] = line2_number
+            worksheet[f'D{line2_pos_row}'] = line2_data.get('po', '')
+            worksheet[f'E{line2_pos_row}'] = line2_data.get('jbSupplier', '')
+            worksheet[f'F{line2_pos_row}'] = line2_data.get('sealantSupplier', '')
+            worksheet[f'G{line2_pos_row}'] = line2_data.get('sealantExpiry', '')
+            worksheet[f'H{line2_pos_row}'] = '+ Ve JB'
+            worksheet[f'I{line2_pos_row}'] = line2_positive_jb.get('jbWeight', '')
+            worksheet[f'J{line2_pos_row}'] = line2_positive_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line2_pos_row}'] = line2_positive_jb.get('netSealantWeight', '')
+            
+            # Color code net sealant weight for Line 2 Positive JB
             try:
-                if line2.get('netSealantWeight'):
-                    weight_val = float(line2['netSealantWeight'])
+                if line2_positive_jb.get('netSealantWeight'):
+                    weight_val = float(line2_positive_jb['netSealantWeight'])
                     if 4 <= weight_val <= 8:
-                        weight_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                        worksheet[f'K{line2_pos_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
                     else:
-                        weight_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+                        worksheet[f'K{line2_pos_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
             except (ValueError, TypeError):
                 pass
             
-            # Remarks
-            worksheet[f'N{current_row}'] = line2.get('remarks', '')
+            # Fill Line 2 - Middle JB row
+            line2_mid_row = current_row + 4
+            worksheet[f'C{line2_mid_row}'] = line2_number
+            worksheet[f'D{line2_mid_row}'] = line2_data.get('po', '')
+            worksheet[f'E{line2_mid_row}'] = line2_data.get('jbSupplier', '')
+            worksheet[f'F{line2_mid_row}'] = line2_data.get('sealantSupplier', '')
+            worksheet[f'G{line2_mid_row}'] = line2_data.get('sealantExpiry', '')
+            worksheet[f'H{line2_mid_row}'] = 'Middle JB'
+            worksheet[f'I{line2_mid_row}'] = line2_middle_jb.get('jbWeight', '')
+            worksheet[f'J{line2_mid_row}'] = line2_middle_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line2_mid_row}'] = line2_middle_jb.get('netSealantWeight', '')
             
-            # Move to next shift (3 rows down)
-            current_row += 3
+            # Color code net sealant weight for Line 2 Middle JB
+            try:
+                if line2_middle_jb.get('netSealantWeight'):
+                    weight_val = float(line2_middle_jb['netSealantWeight'])
+                    if 4 <= weight_val <= 8:
+                        worksheet[f'K{line2_mid_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                    else:
+                        worksheet[f'K{line2_mid_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+            except (ValueError, TypeError):
+                pass
+            
+            # Fill Line 2 - Negative JB row
+            line2_neg_row = current_row + 5
+            worksheet[f'C{line2_neg_row}'] = line2_number
+            worksheet[f'D{line2_neg_row}'] = line2_data.get('po', '')
+            worksheet[f'E{line2_neg_row}'] = line2_data.get('jbSupplier', '')
+            worksheet[f'F{line2_neg_row}'] = line2_data.get('sealantSupplier', '')
+            worksheet[f'G{line2_neg_row}'] = line2_data.get('sealantExpiry', '')
+            worksheet[f'H{line2_neg_row}'] = '- Ve JB'
+            worksheet[f'I{line2_neg_row}'] = line2_negative_jb.get('jbWeight', '')
+            worksheet[f'J{line2_neg_row}'] = line2_negative_jb.get('jbWeightWithSealant', '')
+            worksheet[f'K{line2_neg_row}'] = line2_negative_jb.get('netSealantWeight', '')
+            
+            # Color code net sealant weight for Line 2 Negative JB
+            try:
+                if line2_negative_jb.get('netSealantWeight'):
+                    weight_val = float(line2_negative_jb['netSealantWeight'])
+                    if 4 <= weight_val <= 8:
+                        worksheet[f'K{line2_neg_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+                    else:
+                        worksheet[f'K{line2_neg_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+            except (ValueError, TypeError):
+                pass
+            
+            # Total Module Weight for Line 2 - place it in the first row of Line 2
+            worksheet[f'L{line2_pos_row}'] = line2_data.get('totalModuleWeight', '')
+            
+            # Add remarks for Line 2
+            worksheet[f'M{line2_pos_row}'] = line2_data.get('remarks', '')
+            
+            # Move to next shift (6 rows down - 3 rows per line)
+            current_row += 6
         
         # Fill signatures at the bottom
         if sorted_entries and sorted_entries[0].get('signatures'):
             signatures = sorted_entries[0]['signatures']
             if signatures.get('preparedBy'):
-                worksheet['B28'] = signatures.get('preparedBy', '')
+                worksheet['C23'] = signatures.get('preparedBy', '')
             if signatures.get('verifiedBy'):
-                worksheet['H28'] = signatures.get('verifiedBy', '')
+                worksheet['J23'] = signatures.get('verifiedBy', '')
         
         print(f"Filled JB sealant data for date {date}")
         
@@ -215,7 +242,7 @@ def generate_jb_sealant_report(jb_data):
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Load template
-        template_key = get_template_key('VSL_QAD_FM_103 JB Sealant Weight Report.xlsx')
+        template_key = get_template_key('Blank JB Sealant Weight Report.xlsx')
         template_path = download_from_s3(template_key)
         
         # Load workbook

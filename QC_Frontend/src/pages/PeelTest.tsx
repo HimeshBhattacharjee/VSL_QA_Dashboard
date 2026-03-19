@@ -1393,7 +1393,7 @@ export default function PeelTest() {
 
     return (
         <>
-            <div className="container">
+            <div className="mx-auto">
                 <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}

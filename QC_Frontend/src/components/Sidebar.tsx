@@ -37,6 +37,7 @@ const MENU_ITEMS: MenuItem[] = [
         path: null,
         children: [
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
+            { id: 'frame-sealant-wt', label: 'Frame Sealant Weight Report', path: '/frame-sealant-wt' },
             { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
             { id: 'jb-sealant-wt', label: 'JB Sealant Weight Measurement', path: '/jb-sealant-wt' },
             { id: 'potting', label: 'Potting Ratio Measurement', path: '/potting' },

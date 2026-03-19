@@ -5,9 +5,9 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
-jb_sealant_entries_collection = db["jb_sealant_daily_entries"]
-jb_sealant_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
-jb_sealant_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+cell_sealant_entries_collection = db["cell_sealant_daily_entries"]
+cell_sealant_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
+cell_sealant_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -123,10 +123,10 @@ try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory jb_sealant_entries_collection for testing")
-    jb_sealant_entries_collection = _InMemoryCollection()
+    print("Warning: MongoDB not configured; using in-memory cell_sealant_entries_collection for testing")
+    cell_sealant_entries_collection = _InMemoryCollection()
 
-class JBSealantDailyEntry:
+class CellSealantDailyEntry:
     @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
         try:
@@ -150,26 +150,26 @@ class JBSealantDailyEntry:
             entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
             
-            # Ensure JB position fields exist with proper structure
+            # Ensure cell position fields exist with proper structure
             if "lines" in entry_data:
                 for line_num in ["1", "2"]:
                     if line_num in entry_data["lines"]:
                         line = entry_data["lines"][line_num]
-                        # Ensure all JB position objects exist
-                        if "positiveJB" not in line:
-                            line["positiveJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
-                        if "middleJB" not in line:
-                            line["middleJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
-                        if "negativeJB" not in line:
-                            line["negativeJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
+                        # Ensure all cell position objects exist
+                        if "cell1" not in line:
+                            line["cell1"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                        if "cell2" not in line:
+                            line["cell2"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                        if "cell3" not in line:
+                            line["cell3"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
                         
                         # Calculate total module weight if not present
                         if "totalModuleWeight" not in line or not line["totalModuleWeight"]:
                             try:
-                                positive = float(line["positiveJB"].get("netSealantWeight", 0) or 0)
-                                middle = float(line["middleJB"].get("netSealantWeight", 0) or 0)
-                                negative = float(line["negativeJB"].get("netSealantWeight", 0) or 0)
-                                line["totalModuleWeight"] = str(positive + middle + negative)
+                                cell1 = float(line["cell1"].get("netSealantWeight", 0) or 0)
+                                cell2 = float(line["cell2"].get("netSealantWeight", 0) or 0)
+                                cell3 = float(line["cell3"].get("netSealantWeight", 0) or 0)
+                                line["totalModuleWeight"] = str(cell1 + cell2 + cell3)
                             except (ValueError, TypeError):
                                 line["totalModuleWeight"] = ""
             
@@ -177,7 +177,7 @@ class JBSealantDailyEntry:
             if "_id" in entry_data:
                 del entry_data["_id"]
             
-            result = jb_sealant_entries_collection.update_one(
+            result = cell_sealant_entries_collection.update_one(
                 {"date": entry_data["date"], "shift": shift},
                 {"$set": entry_data},
                 upsert=True
@@ -185,7 +185,7 @@ class JBSealantDailyEntry:
             
             if result.upserted_id:
                 return str(result.upserted_id)
-            existing = jb_sealant_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
+            existing = cell_sealant_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
             print(f"Error in create: {str(e)}")
@@ -195,7 +195,7 @@ class JBSealantDailyEntry:
     def get_by_date_and_shift(date: str, shift: str) -> Optional[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            return jb_sealant_entries_collection.find_one({"date": date_key, "shift": shift})
+            return cell_sealant_entries_collection.find_one({"date": date_key, "shift": shift})
         except Exception as e:
             print(f"Error in get_by_date_and_shift: {str(e)}")
             return None
@@ -204,7 +204,7 @@ class JBSealantDailyEntry:
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            cursor = jb_sealant_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
+            cursor = cell_sealant_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
             return list(cursor)
         except Exception as e:
             print(f"Error in get_all_for_date: {str(e)}")
@@ -213,7 +213,7 @@ class JBSealantDailyEntry:
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
         try:
-            cursor = jb_sealant_entries_collection.find(
+            cursor = cell_sealant_entries_collection.find(
                 {"year": year, "month": month}
             ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
@@ -224,7 +224,7 @@ class JBSealantDailyEntry:
     @staticmethod
     def delete_by_date_and_shift(date: str, shift: str) -> bool:
         try:
-            result = jb_sealant_entries_collection.delete_one({"date": date, "shift": shift})
+            result = cell_sealant_entries_collection.delete_one({"date": date, "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
             print(f"Error in delete_by_date_and_shift: {str(e)}")
@@ -234,7 +234,7 @@ class JBSealantDailyEntry:
     def update_date_signatures(date: str, signatures: Dict[str, str]) -> bool:
         """Update signatures for all shifts on a specific date"""
         try:
-            result = jb_sealant_entries_collection.update_many(
+            result = cell_sealant_entries_collection.update_many(
                 {"date": date},
                 {"$set": {"signatures": signatures, "updated_at": datetime.now().isoformat()}}
             )
@@ -247,7 +247,7 @@ class JBSealantDailyEntry:
     def get_date_signatures(date: str) -> Optional[Dict[str, str]]:
         """Get signatures for a specific date (from any shift entry)"""
         try:
-            entries = jb_sealant_entries_collection.find({"date": date})
+            entries = cell_sealant_entries_collection.find({"date": date})
             for entry in entries:
                 if entry.get("signatures"):
                     return entry.get("signatures")

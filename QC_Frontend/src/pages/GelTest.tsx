@@ -844,7 +844,7 @@ export default function GelTest() {
 
     return (
         <>
-            <div className="container mx-auto">
+            <div className="mx-auto">
                 <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}

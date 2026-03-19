@@ -715,7 +715,7 @@ export default function WetLeakageTest() {
 
     return (
         <>
-            <div className="container mx-auto">
+            <div className="mx-auto">
                 <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}

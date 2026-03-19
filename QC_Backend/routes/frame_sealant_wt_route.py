@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from models.jb_sealant_wt_models import JBSealantDailyEntry
+from models.frame_sealant_wt_models import CellSealantDailyEntry
 from datetime import datetime
 import calendar
-from generators.JBSealantWeightReportGenerator import generate_jb_sealant_report
+from generators.FrameSealantWtReportGenerator import generate_cell_sealant_report
 
-jb_sealant_router = APIRouter(prefix="/api/jb-sealant-weight-reports", tags=["JB Sealant Weight Reports"])
+cell_sealant_router = APIRouter(prefix="/api/cell-sealant-weight-reports", tags=["Cell Sealant Weight Reports"])
 
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
@@ -31,17 +31,17 @@ def serialize_doc(doc):
     except Exception:
         pass
     
-    # Ensure all JB position fields exist
+    # Ensure all cell position fields exist
     if "lines" in doc_copy:
         for line_num in ["1", "2"]:
             if line_num in doc_copy["lines"]:
                 line = doc_copy["lines"][line_num]
-                if "positiveJB" not in line:
-                    line["positiveJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
-                if "middleJB" not in line:
-                    line["middleJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
-                if "negativeJB" not in line:
-                    line["negativeJB"] = {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""}
+                if "cell1" not in line:
+                    line["cell1"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                if "cell2" not in line:
+                    line["cell2"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                if "cell3" not in line:
+                    line["cell3"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
     
     return doc_copy
 
@@ -49,14 +49,14 @@ def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
-@jb_sealant_router.get("/entries/monthly")
+@cell_sealant_router.get("/entries/monthly")
 async def get_monthly_entries(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
     """Get all entries for a specific month"""
     try:
-        entries = JBSealantDailyEntry.get_month_entries(year, month)
+        entries = CellSealantDailyEntry.get_month_entries(year, month)
         
         # Group entries by date for easier frontend consumption
         entries_by_date = {}
@@ -87,13 +87,13 @@ async def get_monthly_entries(
             "error": str(e)
         }
 
-@jb_sealant_router.get("/entries/{date}")
+@cell_sealant_router.get("/entries/{date}")
 async def get_entries_for_date(date: str):
     """Get all shift entries for a specific date"""
     try:
         date_key = date.split('T')[0]
-        entries = JBSealantDailyEntry.get_all_for_date(date_key)
-        date_signatures = JBSealantDailyEntry.get_date_signatures(date_key)
+        entries = CellSealantDailyEntry.get_all_for_date(date_key)
+        date_signatures = CellSealantDailyEntry.get_date_signatures(date_key)
         return {
             "success": True,
             "data": serialize_docs(entries),
@@ -102,7 +102,7 @@ async def get_entries_for_date(date: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
-@jb_sealant_router.get("/entries/{date}/{shift}")
+@cell_sealant_router.get("/entries/{date}/{shift}")
 async def get_entry(date: str, shift: str):
     """Get a single entry by date and shift"""
     try:
@@ -110,7 +110,7 @@ async def get_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = date.split('T')[0]
-        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = CellSealantDailyEntry.get_by_date_and_shift(date_key, shift)
         if entry:
             return serialize_doc(entry)
         return None
@@ -119,20 +119,20 @@ async def get_entry(date: str, shift: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entry: {str(e)}")
 
-@jb_sealant_router.get("/stats/monthly")
+@cell_sealant_router.get("/stats/monthly")
 async def get_monthly_stats(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
-    """Get statistics for a specific month - counting lines not shifts"""
+    """Get statistics for a specific month - counting cells not shifts"""
     try:
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Get all entries for the month
-        entries = JBSealantDailyEntry.get_month_entries(year, month)
+        entries = CellSealantDailyEntry.get_month_entries(year, month)
         
-        # Calculate stats based on lines
-        total_possible_entries = days_in_month * 3 * 2  # 3 shifts * 2 lines per day
+        # Calculate stats based on cells (3 per line, 2 lines = 6 cells per shift)
+        total_possible_entries = days_in_month * 3 * 2 * 3  # 3 shifts * 2 lines * 3 cells per day
         filled_entries = 0
         pass_count = 0
         fail_count = 0
@@ -149,15 +149,15 @@ async def get_monthly_stats(
             lines = entry.get("lines", {})
             
             if shift in shift_stats:
-                # Process line 1 - check all three JB positions
+                # Process line 1 - check all three cells
                 line1 = lines.get("1", {})
-                positions = [
-                    line1.get("positiveJB", {}).get("netSealantWeight"),
-                    line1.get("middleJB", {}).get("netSealantWeight"),
-                    line1.get("negativeJB", {}).get("netSealantWeight")
+                cells = [
+                    line1.get("cell1", {}).get("netSealantWeight"),
+                    line1.get("cell2", {}).get("netSealantWeight"),
+                    line1.get("cell3", {}).get("netSealantWeight")
                 ]
                 
-                for net_weight in positions:
+                for net_weight in cells:
                     if net_weight:
                         filled_entries += 1
                         shift_stats[shift]["filled"] += 1
@@ -165,7 +165,7 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 4 <= weight <= 8:
+                            if 3 <= weight <= 7:
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -175,15 +175,15 @@ async def get_monthly_stats(
                             fail_count += 1
                             shift_stats[shift]["fail"] += 1
                 
-                # Process line 2 - check all three JB positions
+                # Process line 2 - check all three cells
                 line2 = lines.get("2", {})
-                positions = [
-                    line2.get("positiveJB", {}).get("netSealantWeight"),
-                    line2.get("middleJB", {}).get("netSealantWeight"),
-                    line2.get("negativeJB", {}).get("netSealantWeight")
+                cells = [
+                    line2.get("cell1", {}).get("netSealantWeight"),
+                    line2.get("cell2", {}).get("netSealantWeight"),
+                    line2.get("cell3", {}).get("netSealantWeight")
                 ]
                 
-                for net_weight in positions:
+                for net_weight in cells:
                     if net_weight:
                         filled_entries += 1
                         shift_stats[shift]["filled"] += 1
@@ -191,7 +191,7 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 4 <= weight <= 8:
+                            if 3 <= weight <= 7:
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -217,7 +217,7 @@ async def get_monthly_stats(
         }
     except Exception as e:
         days_in_month = calendar.monthrange(year, month)[1]
-        total_possible_entries = days_in_month * 3 * 2
+        total_possible_entries = days_in_month * 3 * 2 * 3
         return {
             "success": False,
             "data": {
@@ -236,9 +236,9 @@ async def get_monthly_stats(
             "error": str(e)
         }
 
-@jb_sealant_router.post("/entries")
+@cell_sealant_router.post("/entries")
 async def create_entry(entry: dict):
-    """Create or update a daily entry for a specific shift with two lines"""
+    """Create or update a daily entry for a specific shift with two lines (3 cells each)"""
     try:
         # Validate required fields
         required_fields = ["date", "testingDate", "shift", "lines"]
@@ -275,7 +275,7 @@ async def create_entry(entry: dict):
         entry["updated_at"] = datetime.now().isoformat()
         
         # Get existing date signatures if any
-        date_signatures = JBSealantDailyEntry.get_date_signatures(entry["date"])
+        date_signatures = CellSealantDailyEntry.get_date_signatures(entry["date"])
         
         # Preserve signatures if they exist at date level, otherwise initialize
         if "signatures" not in entry or not entry["signatures"].get("preparedBy"):
@@ -286,10 +286,10 @@ async def create_entry(entry: dict):
             del entry["_id"]
         
         # Use the model's create method which handles upsert by date and shift
-        JBSealantDailyEntry.create(entry)
+        CellSealantDailyEntry.create(entry)
         
         # Get the saved entry
-        saved_entry = JBSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
+        saved_entry = CellSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
         
         return {
             "success": True,
@@ -303,7 +303,7 @@ async def create_entry(entry: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save entry: {str(e)}")
 
-@jb_sealant_router.post("/signatures")
+@cell_sealant_router.post("/signatures")
 async def update_signatures(payload: dict):
     """Update signatures for a specific date (applies to all shifts on that date)"""
     try:
@@ -314,7 +314,7 @@ async def update_signatures(payload: dict):
             raise HTTPException(status_code=400, detail="Date is required")
         
         # Update signatures for all shifts on this date
-        success = JBSealantDailyEntry.update_date_signatures(date, signatures)
+        success = CellSealantDailyEntry.update_date_signatures(date, signatures)
         
         if not success:
             # If no entries exist, create a placeholder entry for Shift A with signatures
@@ -325,17 +325,17 @@ async def update_signatures(payload: dict):
                 "shift": "A",  # Use Shift A as the placeholder
                 "lines": {
                     "1": {
-                        "po": "", "jbSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
-                        "positiveJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
-                        "middleJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
-                        "negativeJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
+                        "po": "", "cellSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
+                        "cell1": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
+                        "cell2": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
+                        "cell3": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
                         "totalModuleWeight": "", "remarks": ""
                     },
                     "2": {
-                        "po": "", "jbSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
-                        "positiveJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
-                        "middleJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
-                        "negativeJB": {"jbWeight": "", "jbWeightWithSealant": "", "netSealantWeight": ""},
+                        "po": "", "cellSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
+                        "cell1": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
+                        "cell2": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
+                        "cell3": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
                         "totalModuleWeight": "", "remarks": ""
                     }
                 },
@@ -343,7 +343,7 @@ async def update_signatures(payload: dict):
                 "year": date_obj.year,
                 "month": date_obj.month
             }
-            JBSealantDailyEntry.create(placeholder_entry)
+            CellSealantDailyEntry.create(placeholder_entry)
         
         return {
             "success": True,
@@ -354,7 +354,7 @@ async def update_signatures(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update signatures: {str(e)}")
 
-@jb_sealant_router.delete("/entries/{date}/{shift}")
+@cell_sealant_router.delete("/entries/{date}/{shift}")
 async def delete_entry(date: str, shift: str):
     """Delete an entry by date and shift"""
     try:
@@ -362,11 +362,11 @@ async def delete_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = str(date).split('T')[0]
-        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = CellSealantDailyEntry.get_by_date_and_shift(date_key, shift)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        deleted = JBSealantDailyEntry.delete_by_date_and_shift(date_key, shift)
+        deleted = CellSealantDailyEntry.delete_by_date_and_shift(date_key, shift)
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")
@@ -380,11 +380,11 @@ async def delete_entry(date: str, shift: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
 
-@jb_sealant_router.post("/export/excel")
+@cell_sealant_router.post("/export/excel")
 async def export_monthly_excel_post(payload: dict):
     """Generate Excel with multiple sheets - one sheet per day of the month"""
     try:
-        output, filename = generate_jb_sealant_report(payload)
+        output, filename = generate_cell_sealant_report(payload)
         
         return StreamingResponse(
             output,
