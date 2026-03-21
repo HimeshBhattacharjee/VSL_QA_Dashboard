@@ -1,4 +1,4 @@
-// File: CellSealantWtMeasurement.tsx
+// File: FrameSealantWtMeasurement.tsx
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
@@ -10,22 +10,26 @@ import {
     Circle, CircleDot, CircleOff, Check
 } from 'lucide-react';
 
-interface CellPositionData {
-    cellWeight: string;
-    cellWeightWithSealant: string;
-    netSealantWeight: string;
+interface FrameDivisionData {
+    frameSupplier: string;
+    frameSize: string;
+    sealantSupplier: string;
+    sealantExpiry: string;
+    frameWithoutSealant1: string;
+    frameWithoutSealant2: string;
+    frameWithSealant1: string;
+    frameWithSealant2: string;
+    netSealantWeight1: string;
+    netSealantWeight2: string;
 }
 
 interface LineEntry {
     line?: string;
     po: string;
-    cellSupplier: string;
-    sealantSupplier: string;
-    sealantExpiry: string;
-    cell1: CellPositionData;
-    cell2: CellPositionData;
-    cell3: CellPositionData;
-    totalModuleWeight: string;
+    length: FrameDivisionData;  // Frame Length division
+    width: FrameDivisionData;    // Frame Width division
+    totalSealantWeightPerModule: string;  // Sum of all 4 net sealant weights (gm)
+    sealantWeightPerModulePerMeter: string;  // totalSealantWeightPerModule / 6.824 (gm/m)
     remarks?: string;
 }
 
@@ -101,13 +105,20 @@ const defaultMonthlyStats: MonthlyStats = {
     }
 };
 
-const createEmptyCellPosition = (): CellPositionData => ({
-    cellWeight: '',
-    cellWeightWithSealant: '',
-    netSealantWeight: ''
+const createEmptyFrameDivision = (): FrameDivisionData => ({
+    frameSupplier: '',
+    frameSize: '',
+    sealantSupplier: '',
+    sealantExpiry: '',
+    frameWithoutSealant1: '',
+    frameWithoutSealant2: '',
+    frameWithSealant1: '',
+    frameWithSealant2: '',
+    netSealantWeight1: '',
+    netSealantWeight2: ''
 });
 
-export default function CellSealantWeightMeasurement() {
+export default function FrameSealantWeightMeasurement() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -126,7 +137,7 @@ export default function CellSealantWeightMeasurement() {
 
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
-    const API_BASE_URL = import.meta.env.VITE_API_URL + '/cell-sealant-weight-reports';
+    const API_BASE_URL = import.meta.env.VITE_API_URL + '/frame-sealant-weight-reports';
 
     const normalizeDate = useCallback((dateStr: string) => {
         if (!dateStr) return '';
@@ -147,16 +158,51 @@ export default function CellSealantWeightMeasurement() {
         setUsername(storedUsername);
     }, []);
 
+    const calculateNetSealantWeight = useCallback((
+        frameWithout: string,
+        frameWith: string
+    ): string => {
+        if (!frameWithout || !frameWith) return '';
+        
+        const without = parseFloat(frameWithout);
+        const withSealant = parseFloat(frameWith);
+        
+        if (isNaN(without) || isNaN(withSealant)) return '';
+        
+        return (withSealant - without).toFixed(2);
+    }, []);
+
+    const calculateLineTotals = useCallback((line: LineEntry): { totalGm: string; totalPerMeter: string } => {
+        const netWeights = [
+            line.length.netSealantWeight1,
+            line.length.netSealantWeight2,
+            line.width.netSealantWeight1,
+            line.width.netSealantWeight2
+        ];
+        
+        let totalGm = 0;
+        netWeights.forEach(weight => {
+            if (weight) {
+                const num = parseFloat(weight);
+                if (!isNaN(num)) {
+                    totalGm += num;
+                }
+            }
+        });
+        
+        const totalGmStr = totalGm.toFixed(2);
+        const totalPerMeter = (totalGm / 6.824).toFixed(2);
+        
+        return { totalGm: totalGmStr, totalPerMeter };
+    }, []);
+
     const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
         line: lineNum,
         po: '',
-        cellSupplier: '',
-        sealantSupplier: '',
-        sealantExpiry: '',
-        cell1: createEmptyCellPosition(),
-        cell2: createEmptyCellPosition(),
-        cell3: createEmptyCellPosition(),
-        totalModuleWeight: '',
+        length: createEmptyFrameDivision(),
+        width: createEmptyFrameDivision(),
+        totalSealantWeightPerModule: '',
+        sealantWeightPerModulePerMeter: '',
         remarks: ''
     }), []);
 
@@ -174,55 +220,49 @@ export default function CellSealantWeightMeasurement() {
         }
     }), [createEmptyLineEntry]);
 
-    const calculateNetSealantWeight = useCallback((cellWeight: string, cellWeightWithSealant: string): string => {
-        if (!cellWeight || !cellWeightWithSealant) return '';
-        const cell = parseFloat(cellWeight) || 0;
-        const withSealant = parseFloat(cellWeightWithSealant) || 0;
-        return (withSealant - cell).toFixed(2);
-    }, []);
-
-    const calculateTotalModuleWeight = useCallback((line: LineEntry): string => {
-        const cell1Net = parseFloat(line.cell1.netSealantWeight) || 0;
-        const cell2Net = parseFloat(line.cell2.netSealantWeight) || 0;
-        const cell3Net = parseFloat(line.cell3.netSealantWeight) || 0;
-        return (cell1Net + cell2Net + cell3Net).toFixed(2);
-    }, []);
-
-    const handleCellPositionChange = useCallback((
+    const handleFrameDivisionChange = useCallback((
         line: '1' | '2',
-        position: 'cell1' | 'cell2' | 'cell3',
-        field: keyof CellPositionData,
+        division: 'length' | 'width',
+        field: keyof FrameDivisionData,
         value: string
     ) => {
         if (!currentEntry) return;
 
         const updatedLines = { ...currentEntry.lines };
-        const updatedPosition = { ...updatedLines[line][position] };
+        const updatedDivision = { ...updatedLines[line][division] };
         
-        updatedPosition[field] = value;
+        updatedDivision[field] = value;
         
-        // Auto-calculate net sealant weight when cell weight or cell weight with sealant changes
-        if (field === 'cellWeight' || field === 'cellWeightWithSealant') {
-            const cellWeight = field === 'cellWeight' ? value : updatedPosition.cellWeight;
-            const cellWeightWithSealant = field === 'cellWeightWithSealant' ? value : updatedPosition.cellWeightWithSealant;
-            updatedPosition.netSealantWeight = calculateNetSealantWeight(cellWeight, cellWeightWithSealant);
+        // Auto-calculate net sealant weights when frame weights change
+        if (field === 'frameWithoutSealant1' || field === 'frameWithSealant1') {
+            const without = field === 'frameWithoutSealant1' ? value : updatedDivision.frameWithoutSealant1;
+            const withSealant = field === 'frameWithSealant1' ? value : updatedDivision.frameWithSealant1;
+            updatedDivision.netSealantWeight1 = calculateNetSealantWeight(without, withSealant);
         }
         
-        updatedLines[line][position] = updatedPosition;
+        if (field === 'frameWithoutSealant2' || field === 'frameWithSealant2') {
+            const without = field === 'frameWithoutSealant2' ? value : updatedDivision.frameWithoutSealant2;
+            const withSealant = field === 'frameWithSealant2' ? value : updatedDivision.frameWithSealant2;
+            updatedDivision.netSealantWeight2 = calculateNetSealantWeight(without, withSealant);
+        }
         
-        // Update total module weight for this line
-        updatedLines[line].totalModuleWeight = calculateTotalModuleWeight(updatedLines[line]);
+        updatedLines[line][division] = updatedDivision;
+        
+        // Recalculate line totals
+        const { totalGm, totalPerMeter } = calculateLineTotals(updatedLines[line]);
+        updatedLines[line].totalSealantWeightPerModule = totalGm;
+        updatedLines[line].sealantWeightPerModulePerMeter = totalPerMeter;
         
         setCurrentEntry({
             ...currentEntry,
             lines: updatedLines
         });
         setHasUnsavedChanges(true);
-    }, [currentEntry, calculateNetSealantWeight, calculateTotalModuleWeight]);
+    }, [currentEntry, calculateNetSealantWeight, calculateLineTotals]);
 
     const handleLineInputChange = useCallback((
         line: '1' | '2',
-        field: keyof Omit<LineEntry, 'cell1' | 'cell2' | 'cell3' | 'totalModuleWeight'>,
+        field: keyof Omit<LineEntry, 'length' | 'width' | 'totalSealantWeightPerModule' | 'sealantWeightPerModulePerMeter'>,
         value: string
     ) => {
         if (!currentEntry) return;
@@ -286,10 +326,11 @@ export default function CellSealantWeightMeasurement() {
                 } else {
                     ['1', '2'].forEach(lineNum => {
                         const line = entry.lines[lineNum as '1' | '2'];
-                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
-                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
-                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
+                        if (!line.length) line.length = createEmptyFrameDivision();
+                        if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
+                        if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
                 }
 
@@ -333,7 +374,7 @@ export default function CellSealantWeightMeasurement() {
 
                 const newStats = {
                     totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2 * 3,
+                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2 * 4, // 3 shifts * 2 lines * 4 frames
                     filledEntries: statsData.filledEntries || 0,
                     completionRate: statsData.completionRate || 0,
                     passCount: statsData.passCount || 0,
@@ -348,7 +389,7 @@ export default function CellSealantWeightMeasurement() {
                 const daysInMonth = new Date(year, month - 1, 0).getDate();
                 setMonthlyStats({
                     totalDays: daysInMonth,
-                    totalPossibleEntries: daysInMonth * 3 * 2 * 3,
+                    totalPossibleEntries: daysInMonth * 3 * 2 * 4, // 3 shifts * 2 lines * 4 frames
                     filledEntries: 0,
                     completionRate: 0,
                     passCount: 0,
@@ -366,7 +407,7 @@ export default function CellSealantWeightMeasurement() {
             const daysInMonth = new Date(year, month - 1, 0).getDate();
             setMonthlyStats({
                 totalDays: daysInMonth,
-                totalPossibleEntries: daysInMonth * 3 * 2 * 3,
+                totalPossibleEntries: daysInMonth * 3 * 2 * 4,
                 filledEntries: 0,
                 completionRate: 0,
                 passCount: 0,
@@ -380,7 +421,7 @@ export default function CellSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry, createEmptyCellPosition]);
+    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -445,10 +486,11 @@ export default function CellSealantWeightMeasurement() {
             } else {
                 ['1', '2'].forEach(lineNum => {
                     const line = entry.lines[lineNum as '1' | '2'];
-                    if (!line.cell1) line.cell1 = createEmptyCellPosition();
-                    if (!line.cell2) line.cell2 = createEmptyCellPosition();
-                    if (!line.cell3) line.cell3 = createEmptyCellPosition();
+                    if (!line.length) line.length = createEmptyFrameDivision();
+                    if (!line.width) line.width = createEmptyFrameDivision();
                     if (!line.line) line.line = lineNum;
+                    if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
+                    if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                 });
             }
             if (!entry.signatures) {
@@ -464,7 +506,7 @@ export default function CellSealantWeightMeasurement() {
             setCurrentEntry(createEmptyShiftEntry(selectedDate, shift));
             setIsEditing(false);
         }
-    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry, createEmptyCellPosition]);
+    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry]);
 
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
@@ -526,10 +568,11 @@ export default function CellSealantWeightMeasurement() {
                 if (saved.lines) {
                     ['1', '2'].forEach(lineNum => {
                         const line = saved.lines[lineNum as '1' | '2'];
-                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
-                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
-                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
+                        if (!line.length) line.length = createEmptyFrameDivision();
+                        if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
+                        if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
                 }
 
@@ -580,14 +623,14 @@ export default function CellSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate, createEmptyCellPosition]);
+    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate]);
 
     const handleDeleteEntry = useCallback(() => {
         if (!currentEntry || !currentEntry.shift) return;
 
         showConfirm({
             title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines (3 cells each).`,
+            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines (2 divisions each with 4 frames).`,
             type: 'warning',
             confirmText: 'Delete',
             cancelText: 'Cancel',
@@ -767,7 +810,7 @@ export default function CellSealantWeightMeasurement() {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
-        const reportName = `Cell_Sealant_Weight_${firstThreeLetters}_${year}`;
+        const reportName = `Frame_Sealant_Weight_${firstThreeLetters}_${year}`;
 
         setIsLoading(true);
         try {
@@ -786,10 +829,11 @@ export default function CellSealantWeightMeasurement() {
                 if (entry.lines) {
                     ['1', '2'].forEach(lineNum => {
                         const line = entry.lines[lineNum as '1' | '2'];
-                        if (!line.cell1) line.cell1 = createEmptyCellPosition();
-                        if (!line.cell2) line.cell2 = createEmptyCellPosition();
-                        if (!line.cell3) line.cell3 = createEmptyCellPosition();
+                        if (!line.length) line.length = createEmptyFrameDivision();
+                        if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
+                        if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
                 }
                 if (!entry.signatures) {
@@ -801,18 +845,18 @@ export default function CellSealantWeightMeasurement() {
                 return entry;
             });
 
-            const cellReportData = {
+            const frameReportData = {
                 entries: entriesArray,
                 year,
                 month
             };
 
-            console.log('Sending to Excel generator:', cellReportData);
+            console.log('Sending to Excel generator:', frameReportData);
 
             const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(cellReportData),
+                body: JSON.stringify(frameReportData),
             });
 
             if (!response.ok) {
@@ -838,7 +882,7 @@ export default function CellSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, API_BASE_URL, showAlert, createEmptyCellPosition]);
+    }, [currentDate, months, API_BASE_URL, showAlert]);
 
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
@@ -874,24 +918,27 @@ export default function CellSealantWeightMeasurement() {
         }
     }, []);
 
-    const checkLineValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
+    const checkFrameValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
         if (!line) return { pass: false, fail: false, any: false };
         
-        const cells = [
-            line.cell1,
-            line.cell2,
-            line.cell3
+        const frames = [
+            line.length.netSealantWeight1,
+            line.length.netSealantWeight2,
+            line.width.netSealantWeight1,
+            line.width.netSealantWeight2
         ];
         
         let pass = false;
         let fail = false;
         let any = false;
         
-        cells.forEach(cell => {
-            if (cell.netSealantWeight) {
+        frames.forEach(weight => {
+            if (weight) {
                 any = true;
-                const weight = parseFloat(cell.netSealantWeight);
-                if (weight >= 3 && weight <= 7) {
+                const weightNum = parseFloat(weight);
+                // Allowable limit based on sealant weight per module (gm)
+                // Using 33-56 range as per original
+                if (weightNum >= 33 && weightNum <= 56) {
                     pass = true;
                 } else {
                     fail = true;
@@ -905,8 +952,8 @@ export default function CellSealantWeightMeasurement() {
     const getShiftResultIndicator = useCallback((entry: DailyEntry | undefined) => {
         if (!entry || !entry.lines) return <CircleOff className="w-3 h-3 text-gray-400" />;
 
-        const line1Validity = checkLineValidity(entry.lines['1']);
-        const line2Validity = checkLineValidity(entry.lines['2']);
+        const line1Validity = checkFrameValidity(entry.lines['1']);
+        const line2Validity = checkFrameValidity(entry.lines['2']);
 
         if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail) 
             return <CircleDot className="w-3 h-3 text-green-500" />;
@@ -916,7 +963,7 @@ export default function CellSealantWeightMeasurement() {
             return <Circle className="w-3 h-3 text-yellow-500" />;
 
         return <CircleOff className="w-3 h-3 text-gray-400" />;
-    }, [checkLineValidity]);
+    }, [checkFrameValidity]);
 
     const renderCalendarDays = useCallback(() => {
         const year = currentDate.getFullYear();
@@ -944,8 +991,8 @@ export default function CellSealantWeightMeasurement() {
 
             Object.values(dayEntries).forEach((shiftEntry: any) => {
                 if (shiftEntry?.lines && typeof shiftEntry === 'object' && 'shift' in shiftEntry) {
-                    const line1Validity = checkLineValidity(shiftEntry.lines['1']);
-                    const line2Validity = checkLineValidity(shiftEntry.lines['2']);
+                    const line1Validity = checkFrameValidity(shiftEntry.lines['1']);
+                    const line2Validity = checkFrameValidity(shiftEntry.lines['2']);
                     
                     if (line1Validity.pass || line2Validity.pass) hasPass = true;
                     if (line1Validity.fail || line2Validity.fail) hasFail = true;
@@ -1001,7 +1048,7 @@ export default function CellSealantWeightMeasurement() {
             );
         }
         return days;
-    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, checkLineValidity]);
+    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, checkFrameValidity]);
 
     const renderSignatureSection = useCallback(() => {
         if (!currentEntry) return null;
@@ -1087,46 +1134,134 @@ export default function CellSealantWeightMeasurement() {
         );
     }, [currentEntry, dateSignatures, userRole, username, handleSignatureUpdate]);
 
-    const renderCellPositionFields = useCallback((line: '1' | '2', position: 'cell1' | 'cell2' | 'cell3', title: string) => {
+    const renderFrameDivisionFields = useCallback((
+        line: '1' | '2',
+        division: 'length' | 'width',
+        title: string
+    ) => {
         if (!currentEntry) return null;
         
-        const positionData = currentEntry.lines[line][position];
+        const divisionData = currentEntry.lines[line][division];
         
         return (
             <div className="border-l-4 border-violet-500 pl-4 mb-4">
                 <h5 className="text-sm font-semibold mb-2 dark:text-white">{title}</h5>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Cell Wt (gm)
+                            Frame Supplier
                         </label>
                         <input
                             type="text"
-                            value={positionData.cellWeight}
-                            onChange={(e) => handleCellPositionChange(line, position, 'cellWeight', e.target.value)}
+                            value={divisionData.frameSupplier}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameSupplier', e.target.value)}
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter cell weight"
+                            placeholder="Enter frame supplier"
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Cell Wt with Sealant (gm)
+                            Frame Size (mm)
                         </label>
                         <input
                             type="text"
-                            value={positionData.cellWeightWithSealant}
-                            onChange={(e) => handleCellPositionChange(line, position, 'cellWeightWithSealant', e.target.value)}
+                            value={divisionData.frameSize}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameSize', e.target.value)}
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter cell weight with sealant"
+                            placeholder="Enter frame size"
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Net Sealant Wt (gm)
+                            Sealant Supplier
                         </label>
                         <input
                             type="text"
-                            value={positionData.netSealantWeight}
+                            value={divisionData.sealantSupplier}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'sealantSupplier', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter sealant supplier"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Sealant Expiry Date
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.sealantExpiry}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'sealantExpiry', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="DD.MM.YYYY"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Frame 1 (Without sealant) (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.frameWithoutSealant1}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant1', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter weight"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Frame 2 (Without sealant) (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.frameWithoutSealant2}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant2', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter weight"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Frame 1 (With sealant) (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.frameWithSealant1}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant1', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter weight"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Frame 2 (With sealant) (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.frameWithSealant2}
+                            onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant2', e.target.value)}
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter weight"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Net Sealant Weight 1 (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.netSealantWeight1}
+                            readOnly
+                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                            placeholder="Auto-calculated"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Net Sealant Weight 2 (gm)
+                        </label>
+                        <input
+                            type="text"
+                            value={divisionData.netSealantWeight2}
                             readOnly
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                             placeholder="Auto-calculated"
@@ -1135,7 +1270,7 @@ export default function CellSealantWeightMeasurement() {
                 </div>
             </div>
         );
-    }, [currentEntry, handleCellPositionChange]);
+    }, [currentEntry, handleFrameDivisionChange]);
 
     return (
         <>
@@ -1157,8 +1292,8 @@ export default function CellSealantWeightMeasurement() {
                     </div>
                 )}
                 <TestHeading
-                    heading="Cell Sealant Weight Measurement"
-                    criteria="Allowable Limit: 5 ± 2 (Range: 3 to 7)"
+                    heading="Frame Sealant Weight Measurement"
+                    criteria="Allowable Limit: 40±7 gm/m for Glass Groove (5.6±0.15 mm) and 49±7 gm/m for Glass Groove (6.1+0.3/-0 mm)"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
@@ -1184,8 +1319,8 @@ export default function CellSealantWeightMeasurement() {
                                     const entry = dateEntries[selectedDate]?.[shift];
                                     const isFilled = !!entry;
 
-                                    const line1Validity = entry?.lines['1'] ? checkLineValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
-                                    const line2Validity = entry?.lines['2'] ? checkLineValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
+                                    const line1Validity = entry?.lines['1'] ? checkFrameValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
+                                    const line2Validity = entry?.lines['2'] ? checkFrameValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
 
                                     let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
                                     if (isFilled) {
@@ -1319,7 +1454,7 @@ export default function CellSealantWeightMeasurement() {
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (3-7)</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
@@ -1329,19 +1464,13 @@ export default function CellSealantWeightMeasurement() {
                                         <div className="w-4 h-4 rounded bg-gray-200 border border-gray-500"></div>
                                         <span className="text-xs text-gray-600 dark:text-gray-400">No Entry</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1">
-                                            <Sun className="w-3 h-3 text-amber-500" />
-                                            <span className="text-xs text-gray-600 dark:text-gray-400">A</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Sunset className="w-3 h-3 text-orange-500" />
-                                            <span className="text-xs text-gray-600 dark:text-gray-400">B</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Moon className="w-3 h-3 text-indigo-500" />
-                                            <span className="text-xs text-gray-600 dark:text-gray-400">C</span>
-                                        </div>
+                                    <div className="flex items-center gap-1">
+                                        <Sun className="w-3 h-3 text-amber-500" />
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">A</span>
+                                        <Sunset className="w-3 h-3 text-orange-500 ml-2" />
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">B</span>
+                                        <Moon className="w-3 h-3 text-indigo-500 ml-2" />
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">C</span>
                                     </div>
                                 </div>
                             </div>
@@ -1391,7 +1520,7 @@ export default function CellSealantWeightMeasurement() {
                                                 <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
                                                 Line 1 Details
                                             </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         PO Number <span className="text-red-500">*</span>
@@ -1405,60 +1534,50 @@ export default function CellSealantWeightMeasurement() {
                                                         required
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Cell Supplier
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].cellSupplier}
-                                                        onChange={(e) => handleLineInputChange('1', 'cellSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter cell supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Supplier
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sealantSupplier}
-                                                        onChange={(e) => handleLineInputChange('1', 'sealantSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter sealant supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Expiry Date
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sealantExpiry}
-                                                        onChange={(e) => handleLineInputChange('1', 'sealantExpiry', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="DD.MM.YYYY"
-                                                    />
-                                                </div>
                                             </div>
-                                            {renderCellPositionFields('1', 'cell1', 'Cell 1')}
-                                            {renderCellPositionFields('1', 'cell2', 'Cell 2')}
-                                            {renderCellPositionFields('1', 'cell3', 'Cell 3')}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                            
+                                            {/* Frame Length Section */}
+                                            <div className="mt-4">
+                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                    Frame Length
+                                                </h5>
+                                                {renderFrameDivisionFields('1', 'length', 'Frame Length Details')}
+                                            </div>
+                                            
+                                            {/* Frame Width Section */}
+                                            <div className="mt-4">
+                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                    Frame Width
+                                                </h5>
+                                                {renderFrameDivisionFields('1', 'width', 'Frame Width Details')}
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total Cell Sealant Wt / Module (gm)
+                                                        Sealant Weight/Module (gm)
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['1'].totalModuleWeight}
+                                                        value={currentEntry.lines['1'].totalSealantWeightPerModule}
                                                         readOnly
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
-                                                <div className="md:col-span-2">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Weight/Module (gm/m)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['1'].sealantWeightPerModulePerMeter}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
+                                                </div>
+                                                <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Remarks (Line 1)
                                                     </label>
@@ -1472,12 +1591,14 @@ export default function CellSealantWeightMeasurement() {
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        {/* Line 2 */}
                                         <div className="border-l-4 border-green-500 pl-4 mt-6">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
                                                 Line 2 Details
                                             </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         PO Number <span className="text-red-500">*</span>
@@ -1491,60 +1612,50 @@ export default function CellSealantWeightMeasurement() {
                                                         required
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Cell Supplier
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].cellSupplier}
-                                                        onChange={(e) => handleLineInputChange('2', 'cellSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter cell supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Supplier
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sealantSupplier}
-                                                        onChange={(e) => handleLineInputChange('2', 'sealantSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter sealant supplier"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Expiry Date
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sealantExpiry}
-                                                        onChange={(e) => handleLineInputChange('2', 'sealantExpiry', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="DD.MM.YYYY"
-                                                    />
-                                                </div>
                                             </div>
-                                            {renderCellPositionFields('2', 'cell1', 'Cell 1')}
-                                            {renderCellPositionFields('2', 'cell2', 'Cell 2')}
-                                            {renderCellPositionFields('2', 'cell3', 'Cell 3')}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                            
+                                            {/* Frame Length Section */}
+                                            <div className="mt-4">
+                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                    Frame Length
+                                                </h5>
+                                                {renderFrameDivisionFields('2', 'length', 'Frame Length Details')}
+                                            </div>
+                                            
+                                            {/* Frame Width Section */}
+                                            <div className="mt-4">
+                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                    Frame Width
+                                                </h5>
+                                                {renderFrameDivisionFields('2', 'width', 'Frame Width Details')}
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total Cell Sealant Wt / Module (gm)
+                                                        Sealant Weight/Module (gm)
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['2'].totalModuleWeight}
+                                                        value={currentEntry.lines['2'].totalSealantWeightPerModule}
                                                         readOnly
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
-                                                <div className="md:col-span-2">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Sealant Weight/Module (gm/m)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentEntry.lines['2'].sealantWeightPerModulePerMeter}
+                                                        readOnly
+                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        placeholder="Auto-calculated"
+                                                    />
+                                                </div>
+                                                <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Remarks (Line 2)
                                                     </label>
@@ -1639,7 +1750,7 @@ export default function CellSealantWeightMeasurement() {
                                                         <span className="font-medium dark:text-white">Shift {shift}</span>
                                                     </div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {stats.filled} / {monthlyStats.totalDays * 6} cells
+                                                        {stats.filled} / {monthlyStats.totalDays * 4 * 2} frames
                                                     </span>
                                                 </div>
                                                 <div className="flex gap-4 text-xs">
@@ -1653,7 +1764,7 @@ export default function CellSealantWeightMeasurement() {
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
                                                         className="bg-blue-500 h-2 rounded-full transition-all"
-                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 6)) * 100 : 0}%` }}
+                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 4 * 2)) * 100 : 0}%` }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -1673,7 +1784,7 @@ export default function CellSealantWeightMeasurement() {
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Cells)</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Frames)</span>
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
@@ -1696,7 +1807,7 @@ export default function CellSealantWeightMeasurement() {
                                 <div className="space-y-4">
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-green-600">Within Range (3-7)</span>
+                                            <span className="text-green-600">Within Range</span>
                                             <span className="font-medium">{monthlyStats.passCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -1706,7 +1817,6 @@ export default function CellSealantWeightMeasurement() {
                                             ></div>
                                         </div>
                                     </div>
-
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
                                             <span className="text-red-600">Out of Range</span>

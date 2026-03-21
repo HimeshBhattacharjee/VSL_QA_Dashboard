@@ -24,8 +24,8 @@ interface SidebarProps {
 
 const MENU_ITEMS: MenuItem[] = [
     {
-        id: 'dashboard',
-        label: 'Dashboard',
+        id: 'home',
+        label: 'Home',
         icon: '📊',
         path: '/home',
         children: null,

@@ -5,227 +5,260 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 
-def fill_cell_data_in_sheet(worksheet, entries, date):
-    """Fill cell sealant weight data for a specific date into a worksheet"""
+def fill_frame_data_in_sheet(worksheet, entries, date):
+    """Fill frame sealant weight data for a specific date into a worksheet"""
     try:
         # Sort entries by shift
         shift_order = {'A': 0, 'B': 1, 'C': 2}
         sorted_entries = sorted(entries, key=lambda e: shift_order.get(e.get('shift', ''), 3))
         
-        current_row = 5  # Start from row 5 as per template
+        # Define row ranges for each shift
+        shift_rows = {
+            'A': {'start': 7, 'end': 10},    # A shift rows 7-10
+            'B': {'start': 11, 'end': 14},   # B shift rows 11-14
+            'C': {'start': 15, 'end': 18}    # C shift rows 15-18
+        }
         
+        # Create a dictionary to map shift to entry
+        entry_by_shift = {}
         for entry in sorted_entries:
             shift = entry.get('shift', '')
-            lines = entry.get('lines', {})
-            
-            # Set date and shift for the 6 rows that will be filled for this shift (3 rows per line)
-            for i in range(6):
-                worksheet[f'A{current_row + i}'] = date
-                worksheet[f'B{current_row + i}'] = f"Shift {shift}"
-            
-            # Process Line 1 (first 3 rows)
-            line1_data = lines.get('1', {})
-            line1_number = line1_data.get('line', '1')
-            
-            # Get cell position data for Line 1
-            line1_cell1 = line1_data.get('cell1', {})
-            line1_cell2 = line1_data.get('cell2', {})
-            line1_cell3 = line1_data.get('cell3', {})
-            
-            # Fill Line 1 - Cell 1 row
-            line1_cell1_row = current_row
-            worksheet[f'C{line1_cell1_row}'] = line1_number
-            worksheet[f'D{line1_cell1_row}'] = line1_data.get('po', '')
-            worksheet[f'E{line1_cell1_row}'] = line1_data.get('cellSupplier', '')
-            worksheet[f'F{line1_cell1_row}'] = line1_data.get('sealantSupplier', '')
-            worksheet[f'G{line1_cell1_row}'] = line1_data.get('sealantExpiry', '')
-            worksheet[f'H{line1_cell1_row}'] = 'Cell 1'
-            worksheet[f'I{line1_cell1_row}'] = line1_cell1.get('cellWeight', '')
-            worksheet[f'J{line1_cell1_row}'] = line1_cell1.get('cellWeightWithSealant', '')
-            worksheet[f'K{line1_cell1_row}'] = line1_cell1.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 1 Cell 1
-            try:
-                if line1_cell1.get('netSealantWeight'):
-                    weight_val = float(line1_cell1['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line1_cell1_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_cell1_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Fill Line 1 - Cell 2 row
-            line1_cell2_row = current_row + 1
-            worksheet[f'C{line1_cell2_row}'] = line1_number
-            worksheet[f'D{line1_cell2_row}'] = line1_data.get('po', '')
-            worksheet[f'E{line1_cell2_row}'] = line1_data.get('cellSupplier', '')
-            worksheet[f'F{line1_cell2_row}'] = line1_data.get('sealantSupplier', '')
-            worksheet[f'G{line1_cell2_row}'] = line1_data.get('sealantExpiry', '')
-            worksheet[f'H{line1_cell2_row}'] = 'Cell 2'
-            worksheet[f'I{line1_cell2_row}'] = line1_cell2.get('cellWeight', '')
-            worksheet[f'J{line1_cell2_row}'] = line1_cell2.get('cellWeightWithSealant', '')
-            worksheet[f'K{line1_cell2_row}'] = line1_cell2.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 1 Cell 2
-            try:
-                if line1_cell2.get('netSealantWeight'):
-                    weight_val = float(line1_cell2['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line1_cell2_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_cell2_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Fill Line 1 - Cell 3 row
-            line1_cell3_row = current_row + 2
-            worksheet[f'C{line1_cell3_row}'] = line1_number
-            worksheet[f'D{line1_cell3_row}'] = line1_data.get('po', '')
-            worksheet[f'E{line1_cell3_row}'] = line1_data.get('cellSupplier', '')
-            worksheet[f'F{line1_cell3_row}'] = line1_data.get('sealantSupplier', '')
-            worksheet[f'G{line1_cell3_row}'] = line1_data.get('sealantExpiry', '')
-            worksheet[f'H{line1_cell3_row}'] = 'Cell 3'
-            worksheet[f'I{line1_cell3_row}'] = line1_cell3.get('cellWeight', '')
-            worksheet[f'J{line1_cell3_row}'] = line1_cell3.get('cellWeightWithSealant', '')
-            worksheet[f'K{line1_cell3_row}'] = line1_cell3.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 1 Cell 3
-            try:
-                if line1_cell3.get('netSealantWeight'):
-                    weight_val = float(line1_cell3['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line1_cell3_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_cell3_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Total Module Weight for Line 1 - place it in the first row of Line 1
-            worksheet[f'L{line1_cell1_row}'] = line1_data.get('totalModuleWeight', '')
-            
-            # Add remarks for Line 1
-            worksheet[f'M{line1_cell1_row}'] = line1_data.get('remarks', '')
-            
-            # Process Line 2 (next 3 rows)
-            line2_data = lines.get('2', {})
-            line2_number = line2_data.get('line', '2')
-            
-            # Get cell position data for Line 2
-            line2_cell1 = line2_data.get('cell1', {})
-            line2_cell2 = line2_data.get('cell2', {})
-            line2_cell3 = line2_data.get('cell3', {})
-            
-            # Fill Line 2 - Cell 1 row
-            line2_cell1_row = current_row + 3
-            worksheet[f'C{line2_cell1_row}'] = line2_number
-            worksheet[f'D{line2_cell1_row}'] = line2_data.get('po', '')
-            worksheet[f'E{line2_cell1_row}'] = line2_data.get('cellSupplier', '')
-            worksheet[f'F{line2_cell1_row}'] = line2_data.get('sealantSupplier', '')
-            worksheet[f'G{line2_cell1_row}'] = line2_data.get('sealantExpiry', '')
-            worksheet[f'H{line2_cell1_row}'] = 'Cell 1'
-            worksheet[f'I{line2_cell1_row}'] = line2_cell1.get('cellWeight', '')
-            worksheet[f'J{line2_cell1_row}'] = line2_cell1.get('cellWeightWithSealant', '')
-            worksheet[f'K{line2_cell1_row}'] = line2_cell1.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 2 Cell 1
-            try:
-                if line2_cell1.get('netSealantWeight'):
-                    weight_val = float(line2_cell1['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line2_cell1_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_cell1_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Fill Line 2 - Cell 2 row
-            line2_cell2_row = current_row + 4
-            worksheet[f'C{line2_cell2_row}'] = line2_number
-            worksheet[f'D{line2_cell2_row}'] = line2_data.get('po', '')
-            worksheet[f'E{line2_cell2_row}'] = line2_data.get('cellSupplier', '')
-            worksheet[f'F{line2_cell2_row}'] = line2_data.get('sealantSupplier', '')
-            worksheet[f'G{line2_cell2_row}'] = line2_data.get('sealantExpiry', '')
-            worksheet[f'H{line2_cell2_row}'] = 'Cell 2'
-            worksheet[f'I{line2_cell2_row}'] = line2_cell2.get('cellWeight', '')
-            worksheet[f'J{line2_cell2_row}'] = line2_cell2.get('cellWeightWithSealant', '')
-            worksheet[f'K{line2_cell2_row}'] = line2_cell2.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 2 Cell 2
-            try:
-                if line2_cell2.get('netSealantWeight'):
-                    weight_val = float(line2_cell2['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line2_cell2_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_cell2_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Fill Line 2 - Cell 3 row
-            line2_cell3_row = current_row + 5
-            worksheet[f'C{line2_cell3_row}'] = line2_number
-            worksheet[f'D{line2_cell3_row}'] = line2_data.get('po', '')
-            worksheet[f'E{line2_cell3_row}'] = line2_data.get('cellSupplier', '')
-            worksheet[f'F{line2_cell3_row}'] = line2_data.get('sealantSupplier', '')
-            worksheet[f'G{line2_cell3_row}'] = line2_data.get('sealantExpiry', '')
-            worksheet[f'H{line2_cell3_row}'] = 'Cell 3'
-            worksheet[f'I{line2_cell3_row}'] = line2_cell3.get('cellWeight', '')
-            worksheet[f'J{line2_cell3_row}'] = line2_cell3.get('cellWeightWithSealant', '')
-            worksheet[f'K{line2_cell3_row}'] = line2_cell3.get('netSealantWeight', '')
-            
-            # Color code net sealant weight for Line 2 Cell 3
-            try:
-                if line2_cell3.get('netSealantWeight'):
-                    weight_val = float(line2_cell3['netSealantWeight'])
-                    if 3 <= weight_val <= 7:
-                        worksheet[f'K{line2_cell3_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_cell3_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
-            
-            # Total Module Weight for Line 2 - place it in the first row of Line 2
-            worksheet[f'L{line2_cell1_row}'] = line2_data.get('totalModuleWeight', '')
-            
-            # Add remarks for Line 2
-            worksheet[f'M{line2_cell1_row}'] = line2_data.get('remarks', '')
-            
-            # Move to next shift (6 rows down - 3 rows per line)
-            current_row += 6
+            if shift:
+                entry_by_shift[shift] = entry
         
-        # Fill signatures at the bottom
+        # Process all shifts in order
+        for shift in ['A', 'B', 'C']:
+            entry = entry_by_shift.get(shift)
+            
+            if entry:
+                # Entry exists for this shift, fill data
+                current_row = shift_rows[shift]['start']
+                fill_shift_data(worksheet, entry, date, current_row)
+            else:
+                # No entry for this shift, leave rows empty
+                # Optionally, you can clear the rows or leave them as is
+                # The rows will remain empty from the template
+                pass
+        
+        # Fill signatures at the bottom (using the first entry if available)
         if sorted_entries and sorted_entries[0].get('signatures'):
             signatures = sorted_entries[0]['signatures']
             if signatures.get('preparedBy'):
-                worksheet['C23'] = signatures.get('preparedBy', '')
+                worksheet['E19'] = signatures.get('preparedBy', '')
             if signatures.get('verifiedBy'):
-                worksheet['J23'] = signatures.get('verifiedBy', '')
+                worksheet['M19'] = signatures.get('verifiedBy', '')
         
-        print(f"Filled cell sealant data for date {date}")
+        print(f"Filled frame sealant data for date {date}")
         
     except Exception as e:
-        print(f"Error filling cell sealant data in sheet: {str(e)}")
+        print(f"Error filling frame sealant data in sheet: {str(e)}")
         raise
 
 
-def generate_cell_sealant_report(cell_data):
-    """Generate cell sealant weight report with multiple sheets - one sheet per day of the month"""
+def fill_shift_data(worksheet, entry, date, current_row):
+    """Helper function to fill data for a single shift at the specified starting row"""
+    shift = entry.get('shift', '')
+    lines = entry.get('lines', {})
+    
+    # Process Line 1 (first 2 rows - length and width)
+    line1_data = lines.get('1', {})
+    line1_po = line1_data.get('po', '')
+    
+    # Get frame data for Line 1
+    length_data = line1_data.get('length', {})
+    width_data = line1_data.get('width', {})
+    
+    # Row 1: Frame Length Division
+    row_idx = current_row
+    worksheet[f'A{row_idx}'] = date
+    worksheet[f'B{row_idx}'] = f"Shift {shift}"
+    worksheet[f'C{row_idx}'] = "1"  # Line number
+    worksheet[f'D{row_idx}'] = line1_po
+    worksheet[f'E{row_idx}'] = length_data.get('frameSupplier', '')
+    worksheet[f'F{row_idx}'] = f"Length - {length_data.get('frameSize', '')}"
+    worksheet[f'G{row_idx}'] = length_data.get('sealantSupplier', '')
+    worksheet[f'H{row_idx}'] = length_data.get('sealantExpiry', '')
+    worksheet[f'I{row_idx}'] = length_data.get('frameWithoutSealant1', '')
+    worksheet[f'J{row_idx}'] = length_data.get('frameWithoutSealant2', '')
+    worksheet[f'K{row_idx}'] = length_data.get('frameWithSealant1', '')
+    worksheet[f'L{row_idx}'] = length_data.get('frameWithSealant2', '')
+    worksheet[f'M{row_idx}'] = length_data.get('netSealantWeight1', '')
+    worksheet[f'N{row_idx}'] = length_data.get('netSealantWeight2', '')
+    
+    # Color code net sealant weight for Frame 1 (Length)
     try:
-        if not cell_data:
-            raise ValueError("No cell sealant data provided")
+        if length_data.get('netSealantWeight1'):
+            weight_val = float(length_data['netSealantWeight1'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Color code net sealant weight for Frame 2 (Length)
+    try:
+        if length_data.get('netSealantWeight2'):
+            weight_val = float(length_data['netSealantWeight2'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Row 2: Frame Width Division
+    row_idx = current_row + 1
+    worksheet[f'A{row_idx}'] = date
+    worksheet[f'B{row_idx}'] = f"Shift {shift}"
+    worksheet[f'C{row_idx}'] = "1"  # Line number
+    worksheet[f'D{row_idx}'] = line1_po
+    worksheet[f'E{row_idx}'] = width_data.get('frameSupplier', '')
+    worksheet[f'F{row_idx}'] = f"Width - {width_data.get('frameSize', '')}"
+    worksheet[f'G{row_idx}'] = width_data.get('sealantSupplier', '')
+    worksheet[f'H{row_idx}'] = width_data.get('sealantExpiry', '')
+    worksheet[f'I{row_idx}'] = width_data.get('frameWithoutSealant1', '')
+    worksheet[f'J{row_idx}'] = width_data.get('frameWithoutSealant2', '')
+    worksheet[f'K{row_idx}'] = width_data.get('frameWithSealant1', '')
+    worksheet[f'L{row_idx}'] = width_data.get('frameWithSealant2', '')
+    worksheet[f'M{row_idx}'] = width_data.get('netSealantWeight1', '')
+    worksheet[f'N{row_idx}'] = width_data.get('netSealantWeight2', '')
+    
+    # Color code net sealant weight for Frame 1 (Width)
+    try:
+        if width_data.get('netSealantWeight1'):
+            weight_val = float(width_data['netSealantWeight1'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Color code net sealant weight for Frame 2 (Width)
+    try:
+        if width_data.get('netSealantWeight2'):
+            weight_val = float(width_data['netSealantWeight2'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Sealant Weight/Module (gm) and (gm/m) for Line 1
+    worksheet[f'O{current_row}'] = line1_data.get('totalSealantWeightPerModule', '')
+    worksheet[f'P{current_row}'] = line1_data.get('sealantWeightPerModulePerMeter', '')
+    worksheet[f'Q{current_row}'] = line1_data.get('remarks', '')
+    
+    # Process Line 2 (next 2 rows)
+    line2_data = lines.get('2', {})
+    line2_po = line2_data.get('po', '')
+    
+    # Get frame data for Line 2
+    length_data2 = line2_data.get('length', {})
+    width_data2 = line2_data.get('width', {})
+    
+    # Row 3: Frame Length Division - Line 2
+    row_idx = current_row + 2
+    worksheet[f'A{row_idx}'] = date
+    worksheet[f'B{row_idx}'] = f"Shift {shift}"
+    worksheet[f'C{row_idx}'] = "2"  # Line number
+    worksheet[f'D{row_idx}'] = line2_po
+    worksheet[f'E{row_idx}'] = length_data2.get('frameSupplier', '')
+    worksheet[f'F{row_idx}'] = f"Length - {length_data2.get('frameSize', '')}"
+    worksheet[f'G{row_idx}'] = length_data2.get('sealantSupplier', '')
+    worksheet[f'H{row_idx}'] = length_data2.get('sealantExpiry', '')
+    worksheet[f'I{row_idx}'] = length_data2.get('frameWithoutSealant1', '')
+    worksheet[f'J{row_idx}'] = length_data2.get('frameWithoutSealant2', '')
+    worksheet[f'K{row_idx}'] = length_data2.get('frameWithSealant1', '')
+    worksheet[f'L{row_idx}'] = length_data2.get('frameWithSealant2', '')
+    worksheet[f'M{row_idx}'] = length_data2.get('netSealantWeight1', '')
+    worksheet[f'N{row_idx}'] = length_data2.get('netSealantWeight2', '')
+    
+    # Color code net sealant weight for Frame 1 (Length - Line 2)
+    try:
+        if length_data2.get('netSealantWeight1'):
+            weight_val = float(length_data2['netSealantWeight1'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Color code net sealant weight for Frame 2 (Length - Line 2)
+    try:
+        if length_data2.get('netSealantWeight2'):
+            weight_val = float(length_data2['netSealantWeight2'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Row 4: Frame Width Division - Line 2
+    row_idx = current_row + 3
+    worksheet[f'A{row_idx}'] = date
+    worksheet[f'B{row_idx}'] = f"Shift {shift}"
+    worksheet[f'C{row_idx}'] = "2"  # Line number
+    worksheet[f'D{row_idx}'] = line2_po
+    worksheet[f'E{row_idx}'] = width_data2.get('frameSupplier', '')
+    worksheet[f'F{row_idx}'] = f"Width - {width_data2.get('frameSize', '')}"
+    worksheet[f'G{row_idx}'] = width_data2.get('sealantSupplier', '')
+    worksheet[f'H{row_idx}'] = width_data2.get('sealantExpiry', '')
+    worksheet[f'I{row_idx}'] = width_data2.get('frameWithoutSealant1', '')
+    worksheet[f'J{row_idx}'] = width_data2.get('frameWithoutSealant2', '')
+    worksheet[f'K{row_idx}'] = width_data2.get('frameWithSealant1', '')
+    worksheet[f'L{row_idx}'] = width_data2.get('frameWithSealant2', '')
+    worksheet[f'M{row_idx}'] = width_data2.get('netSealantWeight1', '')
+    worksheet[f'N{row_idx}'] = width_data2.get('netSealantWeight2', '')
+    
+    # Color code net sealant weight for Frame 1 (Width - Line 2)
+    try:
+        if width_data2.get('netSealantWeight1'):
+            weight_val = float(width_data2['netSealantWeight1'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'M{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Color code net sealant weight for Frame 2 (Width - Line 2)
+    try:
+        if width_data2.get('netSealantWeight2'):
+            weight_val = float(width_data2['netSealantWeight2'])
+            if 33 <= weight_val <= 56:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                worksheet[f'N{row_idx}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+    
+    # Sealant Weight/Module (gm) and (gm/m) for Line 2
+    worksheet[f'O{current_row + 2}'] = line2_data.get('totalSealantWeightPerModule', '')
+    worksheet[f'P{current_row + 2}'] = line2_data.get('sealantWeightPerModulePerMeter', '')
+    worksheet[f'Q{current_row + 2}'] = line2_data.get('remarks', '')
+
+def generate_frame_sealant_report(frame_data):
+    """Generate frame sealant weight report with multiple sheets - one sheet per day of the month"""
+    try:
+        if not frame_data:
+            raise ValueError("No frame sealant data provided")
         
-        print("Received cell sealant data for report generation")
+        print("Received frame sealant data for report generation")
         
         # Handle different input formats
-        if isinstance(cell_data, list):
-            entries = cell_data
+        if isinstance(frame_data, list):
+            entries = frame_data
             year = datetime.now().year
             month = datetime.now().month
         else:
-            entries = cell_data.get('entries', [])
-            year = cell_data.get('year', datetime.now().year)
-            month = cell_data.get('month', datetime.now().month)
+            entries = frame_data.get('entries', [])
+            year = frame_data.get('year', datetime.now().year)
+            month = frame_data.get('month', datetime.now().month)
         
         print(f"Entries count: {len(entries)}")
         print(f"Year: {year}, Month: {month}")
@@ -242,7 +275,7 @@ def generate_cell_sealant_report(cell_data):
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Load template
-        template_key = get_template_key('Blank Cell Sealant Weight Report.xlsx')
+        template_key = get_template_key('Blank Frame Sealant Weight Report.xlsx')
         template_path = download_from_s3(template_key)
         
         # Load workbook
@@ -262,7 +295,7 @@ def generate_cell_sealant_report(cell_data):
             
             if date_entries:
                 # Fill data if entries exist
-                fill_cell_data_in_sheet(new_sheet, date_entries, formatted_date)
+                fill_frame_data_in_sheet(new_sheet, date_entries, formatted_date)
         
         # Remove the original template sheet (first sheet)
         if len(wb.worksheets) > 1:
@@ -275,11 +308,11 @@ def generate_cell_sealant_report(cell_data):
         
         # Generate filename
         month_name = datetime(year, month, 1).strftime("%B")
-        filename = f"Cell_Sealant_Weight_{month_name}_{year}.xlsx"
+        filename = f"Frame_Sealant_Weight_{month_name}_{year}.xlsx"
         
-        print(f"Cell sealant report generated successfully: {filename}")
+        print(f"Frame sealant report generated successfully: {filename}")
         return output, filename
         
     except Exception as e:
-        print(f"Error generating cell sealant report: {str(e)}")
+        print(f"Error generating frame sealant report: {str(e)}")
         raise

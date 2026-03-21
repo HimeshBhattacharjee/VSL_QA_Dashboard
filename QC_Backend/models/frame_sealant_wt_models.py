@@ -5,9 +5,9 @@ from constants import MONGODB_URI, MONGODB_DB_NAME
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
-cell_sealant_entries_collection = db["cell_sealant_daily_entries"]
-cell_sealant_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
-cell_sealant_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+frame_sealant_entries_collection = db["frame_sealant_daily_entries"]
+frame_sealant_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
+frame_sealant_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -123,10 +123,10 @@ try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory cell_sealant_entries_collection for testing")
-    cell_sealant_entries_collection = _InMemoryCollection()
+    print("Warning: MongoDB not configured; using in-memory frame_sealant_entries_collection for testing")
+    frame_sealant_entries_collection = _InMemoryCollection()
 
-class CellSealantDailyEntry:
+class FrameSealantDailyEntry:
     @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
         try:
@@ -150,34 +150,48 @@ class CellSealantDailyEntry:
             entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
             
-            # Ensure cell position fields exist with proper structure
+            # Ensure frame division fields exist with proper structure
             if "lines" in entry_data:
                 for line_num in ["1", "2"]:
                     if line_num in entry_data["lines"]:
                         line = entry_data["lines"][line_num]
-                        # Ensure all cell position objects exist
-                        if "cell1" not in line:
-                            line["cell1"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
-                        if "cell2" not in line:
-                            line["cell2"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
-                        if "cell3" not in line:
-                            line["cell3"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                        # Ensure length and width divisions exist
+                        if "length" not in line:
+                            line["length"] = {
+                                "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                                "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                                "frameWithSealant1": "", "frameWithSealant2": "",
+                                "netSealantWeight1": "", "netSealantWeight2": ""
+                            }
+                        if "width" not in line:
+                            line["width"] = {
+                                "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                                "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                                "frameWithSealant1": "", "frameWithSealant2": "",
+                                "netSealantWeight1": "", "netSealantWeight2": ""
+                            }
                         
-                        # Calculate total module weight if not present
-                        if "totalModuleWeight" not in line or not line["totalModuleWeight"]:
+                        # Calculate total sealant weight if not present
+                        if "totalSealantWeightPerModule" not in line or not line["totalSealantWeightPerModule"]:
                             try:
-                                cell1 = float(line["cell1"].get("netSealantWeight", 0) or 0)
-                                cell2 = float(line["cell2"].get("netSealantWeight", 0) or 0)
-                                cell3 = float(line["cell3"].get("netSealantWeight", 0) or 0)
-                                line["totalModuleWeight"] = str(cell1 + cell2 + cell3)
+                                net_weights = [
+                                    float(line["length"].get("netSealantWeight1", 0) or 0),
+                                    float(line["length"].get("netSealantWeight2", 0) or 0),
+                                    float(line["width"].get("netSealantWeight1", 0) or 0),
+                                    float(line["width"].get("netSealantWeight2", 0) or 0)
+                                ]
+                                total_gm = sum(net_weights)
+                                line["totalSealantWeightPerModule"] = str(total_gm)
+                                line["sealantWeightPerModulePerMeter"] = str(total_gm / 6.824)
                             except (ValueError, TypeError):
-                                line["totalModuleWeight"] = ""
+                                line["totalSealantWeightPerModule"] = ""
+                                line["sealantWeightPerModulePerMeter"] = ""
             
             # Remove _id if present
             if "_id" in entry_data:
                 del entry_data["_id"]
             
-            result = cell_sealant_entries_collection.update_one(
+            result = frame_sealant_entries_collection.update_one(
                 {"date": entry_data["date"], "shift": shift},
                 {"$set": entry_data},
                 upsert=True
@@ -185,7 +199,7 @@ class CellSealantDailyEntry:
             
             if result.upserted_id:
                 return str(result.upserted_id)
-            existing = cell_sealant_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
+            existing = frame_sealant_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
             print(f"Error in create: {str(e)}")
@@ -195,7 +209,7 @@ class CellSealantDailyEntry:
     def get_by_date_and_shift(date: str, shift: str) -> Optional[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            return cell_sealant_entries_collection.find_one({"date": date_key, "shift": shift})
+            return frame_sealant_entries_collection.find_one({"date": date_key, "shift": shift})
         except Exception as e:
             print(f"Error in get_by_date_and_shift: {str(e)}")
             return None
@@ -204,7 +218,7 @@ class CellSealantDailyEntry:
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            cursor = cell_sealant_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
+            cursor = frame_sealant_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
             return list(cursor)
         except Exception as e:
             print(f"Error in get_all_for_date: {str(e)}")
@@ -213,7 +227,7 @@ class CellSealantDailyEntry:
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
         try:
-            cursor = cell_sealant_entries_collection.find(
+            cursor = frame_sealant_entries_collection.find(
                 {"year": year, "month": month}
             ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
@@ -224,7 +238,7 @@ class CellSealantDailyEntry:
     @staticmethod
     def delete_by_date_and_shift(date: str, shift: str) -> bool:
         try:
-            result = cell_sealant_entries_collection.delete_one({"date": date, "shift": shift})
+            result = frame_sealant_entries_collection.delete_one({"date": date, "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
             print(f"Error in delete_by_date_and_shift: {str(e)}")
@@ -234,7 +248,7 @@ class CellSealantDailyEntry:
     def update_date_signatures(date: str, signatures: Dict[str, str]) -> bool:
         """Update signatures for all shifts on a specific date"""
         try:
-            result = cell_sealant_entries_collection.update_many(
+            result = frame_sealant_entries_collection.update_many(
                 {"date": date},
                 {"$set": {"signatures": signatures, "updated_at": datetime.now().isoformat()}}
             )
@@ -247,7 +261,7 @@ class CellSealantDailyEntry:
     def get_date_signatures(date: str) -> Optional[Dict[str, str]]:
         """Get signatures for a specific date (from any shift entry)"""
         try:
-            entries = cell_sealant_entries_collection.find({"date": date})
+            entries = frame_sealant_entries_collection.find({"date": date})
             for entry in entries:
                 if entry.get("signatures"):
                     return entry.get("signatures")

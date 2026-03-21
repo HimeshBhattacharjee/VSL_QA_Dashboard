@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from models.frame_sealant_wt_models import CellSealantDailyEntry
+from models.frame_sealant_wt_models import FrameSealantDailyEntry
 from datetime import datetime
 import calendar
-from generators.FrameSealantWtReportGenerator import generate_cell_sealant_report
+from generators.FrameSealantWtReportGenerator import generate_frame_sealant_report
 
-cell_sealant_router = APIRouter(prefix="/api/cell-sealant-weight-reports", tags=["Cell Sealant Weight Reports"])
+frame_sealant_router = APIRouter(prefix="/api/frame-sealant-weight-reports", tags=["Frame Sealant Weight Reports"])
 
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
@@ -31,17 +31,25 @@ def serialize_doc(doc):
     except Exception:
         pass
     
-    # Ensure all cell position fields exist
+    # Ensure all frame division fields exist
     if "lines" in doc_copy:
         for line_num in ["1", "2"]:
             if line_num in doc_copy["lines"]:
                 line = doc_copy["lines"][line_num]
-                if "cell1" not in line:
-                    line["cell1"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
-                if "cell2" not in line:
-                    line["cell2"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
-                if "cell3" not in line:
-                    line["cell3"] = {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""}
+                if "length" not in line:
+                    line["length"] = {
+                        "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                        "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                        "frameWithSealant1": "", "frameWithSealant2": "",
+                        "netSealantWeight1": "", "netSealantWeight2": ""
+                    }
+                if "width" not in line:
+                    line["width"] = {
+                        "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                        "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                        "frameWithSealant1": "", "frameWithSealant2": "",
+                        "netSealantWeight1": "", "netSealantWeight2": ""
+                    }
     
     return doc_copy
 
@@ -49,14 +57,14 @@ def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
-@cell_sealant_router.get("/entries/monthly")
+@frame_sealant_router.get("/entries/monthly")
 async def get_monthly_entries(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
     """Get all entries for a specific month"""
     try:
-        entries = CellSealantDailyEntry.get_month_entries(year, month)
+        entries = FrameSealantDailyEntry.get_month_entries(year, month)
         
         # Group entries by date for easier frontend consumption
         entries_by_date = {}
@@ -87,13 +95,13 @@ async def get_monthly_entries(
             "error": str(e)
         }
 
-@cell_sealant_router.get("/entries/{date}")
+@frame_sealant_router.get("/entries/{date}")
 async def get_entries_for_date(date: str):
     """Get all shift entries for a specific date"""
     try:
         date_key = date.split('T')[0]
-        entries = CellSealantDailyEntry.get_all_for_date(date_key)
-        date_signatures = CellSealantDailyEntry.get_date_signatures(date_key)
+        entries = FrameSealantDailyEntry.get_all_for_date(date_key)
+        date_signatures = FrameSealantDailyEntry.get_date_signatures(date_key)
         return {
             "success": True,
             "data": serialize_docs(entries),
@@ -102,7 +110,7 @@ async def get_entries_for_date(date: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
-@cell_sealant_router.get("/entries/{date}/{shift}")
+@frame_sealant_router.get("/entries/{date}/{shift}")
 async def get_entry(date: str, shift: str):
     """Get a single entry by date and shift"""
     try:
@@ -110,7 +118,7 @@ async def get_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = date.split('T')[0]
-        entry = CellSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = FrameSealantDailyEntry.get_by_date_and_shift(date_key, shift)
         if entry:
             return serialize_doc(entry)
         return None
@@ -119,20 +127,20 @@ async def get_entry(date: str, shift: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entry: {str(e)}")
 
-@cell_sealant_router.get("/stats/monthly")
+@frame_sealant_router.get("/stats/monthly")
 async def get_monthly_stats(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
-    """Get statistics for a specific month - counting cells not shifts"""
+    """Get statistics for a specific month - counting frames (4 per line, 2 lines = 8 frames per shift)"""
     try:
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Get all entries for the month
-        entries = CellSealantDailyEntry.get_month_entries(year, month)
+        entries = FrameSealantDailyEntry.get_month_entries(year, month)
         
-        # Calculate stats based on cells (3 per line, 2 lines = 6 cells per shift)
-        total_possible_entries = days_in_month * 3 * 2 * 3  # 3 shifts * 2 lines * 3 cells per day
+        # Calculate stats based on frames (4 per line, 2 lines = 8 frames per shift)
+        total_possible_entries = days_in_month * 8 * 3  # 8 frames * 3 shifts per day
         filled_entries = 0
         pass_count = 0
         fail_count = 0
@@ -149,15 +157,16 @@ async def get_monthly_stats(
             lines = entry.get("lines", {})
             
             if shift in shift_stats:
-                # Process line 1 - check all three cells
+                # Process line 1 - check all 4 frames (2 from length, 2 from width)
                 line1 = lines.get("1", {})
-                cells = [
-                    line1.get("cell1", {}).get("netSealantWeight"),
-                    line1.get("cell2", {}).get("netSealantWeight"),
-                    line1.get("cell3", {}).get("netSealantWeight")
+                frames = [
+                    line1.get("length", {}).get("netSealantWeight1"),
+                    line1.get("length", {}).get("netSealantWeight2"),
+                    line1.get("width", {}).get("netSealantWeight1"),
+                    line1.get("width", {}).get("netSealantWeight2")
                 ]
                 
-                for net_weight in cells:
+                for net_weight in frames:
                     if net_weight:
                         filled_entries += 1
                         shift_stats[shift]["filled"] += 1
@@ -165,7 +174,8 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 3 <= weight <= 7:
+                            # Allowable limit based on sealant weight per module (gm)
+                            if 33 <= weight <= 56:  # 40±7 simplified range
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -175,15 +185,16 @@ async def get_monthly_stats(
                             fail_count += 1
                             shift_stats[shift]["fail"] += 1
                 
-                # Process line 2 - check all three cells
+                # Process line 2 - check all 4 frames (2 from length, 2 from width)
                 line2 = lines.get("2", {})
-                cells = [
-                    line2.get("cell1", {}).get("netSealantWeight"),
-                    line2.get("cell2", {}).get("netSealantWeight"),
-                    line2.get("cell3", {}).get("netSealantWeight")
+                frames = [
+                    line2.get("length", {}).get("netSealantWeight1"),
+                    line2.get("length", {}).get("netSealantWeight2"),
+                    line2.get("width", {}).get("netSealantWeight1"),
+                    line2.get("width", {}).get("netSealantWeight2")
                 ]
                 
-                for net_weight in cells:
+                for net_weight in frames:
                     if net_weight:
                         filled_entries += 1
                         shift_stats[shift]["filled"] += 1
@@ -191,7 +202,7 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 3 <= weight <= 7:
+                            if 33 <= weight <= 56:
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -217,7 +228,7 @@ async def get_monthly_stats(
         }
     except Exception as e:
         days_in_month = calendar.monthrange(year, month)[1]
-        total_possible_entries = days_in_month * 3 * 2 * 3
+        total_possible_entries = days_in_month * 8 * 3
         return {
             "success": False,
             "data": {
@@ -236,9 +247,9 @@ async def get_monthly_stats(
             "error": str(e)
         }
 
-@cell_sealant_router.post("/entries")
+@frame_sealant_router.post("/entries")
 async def create_entry(entry: dict):
-    """Create or update a daily entry for a specific shift with two lines (3 cells each)"""
+    """Create or update a daily entry for a specific shift with two lines (2 divisions each: length and width)"""
     try:
         # Validate required fields
         required_fields = ["date", "testingDate", "shift", "lines"]
@@ -275,7 +286,7 @@ async def create_entry(entry: dict):
         entry["updated_at"] = datetime.now().isoformat()
         
         # Get existing date signatures if any
-        date_signatures = CellSealantDailyEntry.get_date_signatures(entry["date"])
+        date_signatures = FrameSealantDailyEntry.get_date_signatures(entry["date"])
         
         # Preserve signatures if they exist at date level, otherwise initialize
         if "signatures" not in entry or not entry["signatures"].get("preparedBy"):
@@ -286,10 +297,10 @@ async def create_entry(entry: dict):
             del entry["_id"]
         
         # Use the model's create method which handles upsert by date and shift
-        CellSealantDailyEntry.create(entry)
+        FrameSealantDailyEntry.create(entry)
         
         # Get the saved entry
-        saved_entry = CellSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
+        saved_entry = FrameSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
         
         return {
             "success": True,
@@ -303,7 +314,7 @@ async def create_entry(entry: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save entry: {str(e)}")
 
-@cell_sealant_router.post("/signatures")
+@frame_sealant_router.post("/signatures")
 async def update_signatures(payload: dict):
     """Update signatures for a specific date (applies to all shifts on that date)"""
     try:
@@ -314,7 +325,7 @@ async def update_signatures(payload: dict):
             raise HTTPException(status_code=400, detail="Date is required")
         
         # Update signatures for all shifts on this date
-        success = CellSealantDailyEntry.update_date_signatures(date, signatures)
+        success = FrameSealantDailyEntry.update_date_signatures(date, signatures)
         
         if not success:
             # If no entries exist, create a placeholder entry for Shift A with signatures
@@ -325,25 +336,47 @@ async def update_signatures(payload: dict):
                 "shift": "A",  # Use Shift A as the placeholder
                 "lines": {
                     "1": {
-                        "po": "", "cellSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
-                        "cell1": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "cell2": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "cell3": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "totalModuleWeight": "", "remarks": ""
+                        "po": "",
+                        "length": {
+                            "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                            "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                            "frameWithSealant1": "", "frameWithSealant2": "",
+                            "netSealantWeight1": "", "netSealantWeight2": ""
+                        },
+                        "width": {
+                            "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                            "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                            "frameWithSealant1": "", "frameWithSealant2": "",
+                            "netSealantWeight1": "", "netSealantWeight2": ""
+                        },
+                        "totalSealantWeightPerModule": "",
+                        "sealantWeightPerModulePerMeter": "",
+                        "remarks": ""
                     },
                     "2": {
-                        "po": "", "cellSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
-                        "cell1": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "cell2": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "cell3": {"cellWeight": "", "cellWeightWithSealant": "", "netSealantWeight": ""},
-                        "totalModuleWeight": "", "remarks": ""
+                        "po": "",
+                        "length": {
+                            "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                            "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                            "frameWithSealant1": "", "frameWithSealant2": "",
+                            "netSealantWeight1": "", "netSealantWeight2": ""
+                        },
+                        "width": {
+                            "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
+                            "frameWithoutSealant1": "", "frameWithoutSealant2": "",
+                            "frameWithSealant1": "", "frameWithSealant2": "",
+                            "netSealantWeight1": "", "netSealantWeight2": ""
+                        },
+                        "totalSealantWeightPerModule": "",
+                        "sealantWeightPerModulePerMeter": "",
+                        "remarks": ""
                     }
                 },
                 "signatures": signatures,
                 "year": date_obj.year,
                 "month": date_obj.month
             }
-            CellSealantDailyEntry.create(placeholder_entry)
+            FrameSealantDailyEntry.create(placeholder_entry)
         
         return {
             "success": True,
@@ -354,7 +387,7 @@ async def update_signatures(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update signatures: {str(e)}")
 
-@cell_sealant_router.delete("/entries/{date}/{shift}")
+@frame_sealant_router.delete("/entries/{date}/{shift}")
 async def delete_entry(date: str, shift: str):
     """Delete an entry by date and shift"""
     try:
@@ -362,11 +395,11 @@ async def delete_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = str(date).split('T')[0]
-        entry = CellSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = FrameSealantDailyEntry.get_by_date_and_shift(date_key, shift)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        deleted = CellSealantDailyEntry.delete_by_date_and_shift(date_key, shift)
+        deleted = FrameSealantDailyEntry.delete_by_date_and_shift(date_key, shift)
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")
@@ -380,11 +413,11 @@ async def delete_entry(date: str, shift: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
 
-@cell_sealant_router.post("/export/excel")
+@frame_sealant_router.post("/export/excel")
 async def export_monthly_excel_post(payload: dict):
     """Generate Excel with multiple sheets - one sheet per day of the month"""
     try:
-        output, filename = generate_cell_sealant_report(payload)
+        output, filename = generate_frame_sealant_report(payload)
         
         return StreamingResponse(
             output,
