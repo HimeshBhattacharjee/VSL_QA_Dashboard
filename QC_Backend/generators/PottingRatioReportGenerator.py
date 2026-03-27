@@ -34,7 +34,7 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             worksheet[f'F{current_row}'] = line1.get('pottingSupplier', '')
             worksheet[f'G{current_row}'] = line1.get('partA', '')
             worksheet[f'H{current_row}'] = line1.get('partB', '')
-            worksheet[f'I{current_row}'] = line1.get('ratio', '')
+            worksheet[f'I{current_row}'] = line1.get('ratio', '') and f"{line1.get('ratio', '')}:1" or ''
             
             # Color code ratio based on allowable limit
             ratio_cell = worksheet[f'I{current_row}']
@@ -58,7 +58,7 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             worksheet[f'F{current_row+1}'] = line2.get('pottingSupplier', '')
             worksheet[f'G{current_row+1}'] = line2.get('partA', '')
             worksheet[f'H{current_row+1}'] = line2.get('partB', '')
-            worksheet[f'I{current_row+1}'] = line2.get('ratio', '')
+            worksheet[f'I{current_row+1}'] = line2.get('ratio', '') and f"{line2.get('ratio', '')}:1" or ''
             
             # Color code ratio based on allowable limit
             ratio_cell = worksheet[f'I{current_row+1}']

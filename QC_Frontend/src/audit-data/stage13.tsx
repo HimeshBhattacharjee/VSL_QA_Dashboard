@@ -85,7 +85,7 @@ export const preLamRepairNAutoEdgeSealStage: StageData = {
             criteria: "Calibration should be done once/day, SPC graph update",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every day",
-            observations: [{ timeSlot: "", value: "" }],
+            observations: [{ timeSlot: "", value: "Checked OK" }],
             renderObservation: PreLamRepairNAutoEdgeSealObservations.renderSelector
         },
         {
@@ -103,7 +103,7 @@ export const preLamRepairNAutoEdgeSealStage: StageData = {
             criteria: "Tape should be covered around the module",
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
-            observations: [{ timeSlot: "4 hrs", value: "" }, { timeSlot: "8 hrs", value: "" }],
+            observations: [{ timeSlot: "4 hrs", value: "Checked OK" }, { timeSlot: "8 hrs", value: "Checked OK" }],
             renderObservation: PreLamRepairNAutoEdgeSealObservations.renderSelector
         },
     ]

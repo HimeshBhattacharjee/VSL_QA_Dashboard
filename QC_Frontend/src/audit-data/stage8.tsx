@@ -12,6 +12,7 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     if (!value) return 'bg-white';
     const upperValue = value.toUpperCase();
     if (upperValue === 'OFF') return 'bg-yellow-100';
+    if (upperValue === 'NOT REQUIRED') return 'bg-yellow-100';
     if (type === 'status') {
         if (upperValue === 'N/A') return 'bg-yellow-100';
         if (upperValue === 'CHECKED NOT OK') return 'bg-red-100';
@@ -173,7 +174,7 @@ const AutoTapingNLayupObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },
@@ -211,10 +212,10 @@ const AutoTapingNLayupObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Outside RFID'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
-                                    { value: "Laminate Inside", label: "Laminate Inside" },
+                                    { value: "Inside RFID", label: "Inside RFID" },
                                     { value: "Outside RFID", label: "Outside RFID" },
                                     { value: "Not Required", label: "Not Required" }
                                 ]}

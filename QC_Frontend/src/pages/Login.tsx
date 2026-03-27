@@ -8,18 +8,14 @@ const PasswordInput = ({
     onChange,
     placeholder,
     showPassword,
-    onMouseDown,
-    onMouseUp,
-    onMouseLeave,
+    onToggle,
     disabled = false
 }: {
     value: string;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     placeholder: string;
     showPassword: boolean;
-    onMouseDown: () => void;
-    onMouseUp: () => void;
-    onMouseLeave: () => void;
+    onToggle: () => void;
     disabled?: boolean;
 }) => (
     <div className="relative">
@@ -35,9 +31,7 @@ const PasswordInput = ({
         <button
             type="button"
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 p-1 rounded-full hover:bg-white/30"
-            onMouseDown={onMouseDown}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseLeave}
+            onClick={onToggle}
             disabled={disabled}
         >
             {showPassword ? (
@@ -75,14 +69,9 @@ export default function Login() {
         sessionStorage.removeItem("userRole");
     }, []);
 
-    const handleShowPassword = useCallback(() => setShowPassword(true), []);
-    const handleHidePassword = useCallback(() => setShowPassword(false), []);
-
-    const handleShowNewPassword = useCallback(() => setShowNewPassword(true), []);
-    const handleHideNewPassword = useCallback(() => setShowNewPassword(false), []);
-
-    const handleShowConfirmPassword = useCallback(() => setShowConfirmPassword(true), []);
-    const handleHideConfirmPassword = useCallback(() => setShowConfirmPassword(false), []);
+    const handleTogglePassword = useCallback(() => setShowPassword(prev => !prev), []);
+    const handleToggleNewPassword = useCallback(() => setShowNewPassword(prev => !prev), []);
+    const handleToggleConfirmPassword = useCallback(() => setShowConfirmPassword(prev => !prev), []);
 
     const validatePassword = (password: string): string | null => {
         if (password.length < 8) {
@@ -167,7 +156,7 @@ export default function Login() {
             setLoading(false);
             return;
         }
-
+        `After analyzing all the files and folders, it should help me by making all the selectors have the default value as "OK" so that "Checked OK" is selected by default in the audit sections with options as Checked OK, Checked Not OK, OFF. In case of new audit check sheet creation, all the selectors should have "Checked OK" as default value. In case of existing audit check sheet, the selectors should have the value as per the last saved value. The change should reflect well everywhere in the application where the selectors are used as well as in the database.`
         try {
             const response = await fetch(`${USER_API_BASE_URL}/auth/change-password`, {
                 method: 'POST',
@@ -241,9 +230,7 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     showPassword={showPassword}
-                    onMouseDown={handleShowPassword}
-                    onMouseUp={handleHidePassword}
-                    onMouseLeave={handleHidePassword}
+                    onToggle={handleTogglePassword}
                     disabled={loading}
                 />
             </div>
@@ -314,9 +301,7 @@ export default function Login() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
                     showPassword={showNewPassword}
-                    onMouseDown={handleShowNewPassword}
-                    onMouseUp={handleHideNewPassword}
-                    onMouseLeave={handleHideNewPassword}
+                    onToggle={handleToggleNewPassword}
                     disabled={loading}
                 />
             </div>
@@ -327,9 +312,7 @@ export default function Login() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
                     showPassword={showConfirmPassword}
-                    onMouseDown={handleShowConfirmPassword}
-                    onMouseUp={handleHideConfirmPassword}
-                    onMouseLeave={handleHideConfirmPassword}
+                    onToggle={handleToggleConfirmPassword}
                     disabled={loading}
                 />
             </div>

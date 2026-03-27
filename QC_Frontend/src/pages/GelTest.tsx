@@ -29,6 +29,18 @@ export default function GelTest() {
     const [preparedBySignature, setPreparedBySignature] = useState<string>('');
     const [acceptedBySignature, setAcceptedBySignature] = useState<string>('');
     const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
+    
+    // New state variables for date and shift
+    const [testDate, setTestDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [shift, setShift] = useState<string>('');
+    
+    // State for all editable input values
+    const [editableValues, setEditableValues] = useState<{ [key: string]: string }>({});
+    // State for data cells (gel data cells)
+    const [dataValues, setDataValues] = useState<{ [key: string]: string }>({});
+    // State for checkboxes
+    const [checkboxValues, setCheckboxValues] = useState<{ [key: string]: boolean }>({});
+
     const apiService = {
         getAllReports: async (): Promise<GelTestReport[]> => {
             const response = await fetch(`${GEL_API_BASE_URL}`);
@@ -134,119 +146,37 @@ export default function GelTest() {
         return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
     }, []);
 
-    const initializeForm = () => { calculateAverages() };
-
-    const handleEditableCellClick = (e: Event) => {
-        const cell = e.target as HTMLElement;
-        const currentText = cell.textContent || '';
-        const oldValue = currentText.trim();
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentText;
-        input.style.width = '100%';
-        input.style.height = '100%';
-        input.style.border = 'none';
-        input.style.background = 'transparent';
-        input.style.fontFamily = 'inherit';
-        input.style.fontSize = 'inherit';
-        cell.textContent = '';
-        cell.appendChild(input);
-        input.focus();
-        const handleBlur = () => {
-            const newValue = input.value.trim();
-            cell.textContent = newValue || ' ';
-            if (newValue) cell.classList.add('has-content');
-            else cell.classList.remove('has-content');
-            if (detectMeaningfulChange(oldValue, newValue)) {
-                setHasUnsavedChanges(true);
-                saveFormData();
-            }
-            saveFormData();
-        };
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') input.blur();
-        };
-        input.addEventListener('blur', handleBlur);
-        input.addEventListener('keydown', handleKeyDown);
+    const initializeForm = () => { 
+        calculateAverages();
+        initializeDataCellsWithHyphens();
     };
 
-    const handleDataCellClick = (e: Event) => {
-        const cell = e.target as HTMLElement;
-        const currentText = cell.textContent || '';
-        const oldValue = currentText.trim();
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentText;
-        input.style.width = '100%';
-        input.style.height = '100%';
-        input.style.border = 'none';
-        input.style.background = 'transparent';
-        input.style.fontFamily = 'inherit';
-        input.style.fontSize = 'inherit';
-        input.style.textAlign = 'center';
-        cell.textContent = '';
-        cell.appendChild(input);
-        input.focus();
-        const handleBlur = () => {
-            const value = input.value.trim();
-            const isValid = value === '' ||
-                !isNaN(parseFloat(value)) ||
-                (!isNaN(parseFloat(value.replace('%', ''))) && value.includes('%'));
-            if (isValid) {
-                cell.textContent = value || '';
-                if (value) cell.classList.add('has-content');
-                else cell.classList.remove('has-content');
-                calculateAverages();
-                if (detectMeaningfulChange(oldValue, value)) {
-                    setHasUnsavedChanges(true);
-                    saveFormData();
-                }
-                saveFormData();
-            } else {
-                showAlert('error', 'Please enter a valid number (with or without % sign)');
-                cell.textContent = currentText || '';
-                if (currentText) cell.classList.add('has-content');
-            }
-        };
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') input.blur();
-        };
-        input.addEventListener('blur', handleBlur);
-        input.addEventListener('keydown', handleKeyDown);
-    };
-
-    const handleCheckboxChange = (e: Event) => {
-        e.target as HTMLInputElement;
-        setHasUnsavedChanges(true);
-        saveFormData();
-    };
-
-    useEffect(() => {
-        if (gelReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-        if (gelReportName !== '') saveFormData();
-    }, [gelReportName]);
-
-    const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
-        if (!oldValue.trim() && !newValue.trim()) return false;
-        return oldValue.trim() !== newValue.trim();
+    const initializeDataCellsWithHyphens = () => {
+        const initialData: { [key: string]: string } = {};
+        // Initialize all data cells (positions A-G with 5 readings each)
+        // Total 7 positions * 5 readings = 35 cells
+        for (let i = 0; i < 35; i++) {
+            initialData[`gel_data_${i}`] = '';
+        }
+        setDataValues(initialData);
     };
 
     const calculateAverages = () => {
-        const rows = document.querySelectorAll('tr');
-        const dataRows: HTMLTableRowElement[] = [];
-        rows.forEach(row => {
-            const cells = row.querySelectorAll('.gel-data-cell');
-            if (cells.length > 0) dataRows.push(row as HTMLTableRowElement);
-        });
-        const averages: { value: number; hasPercentage: boolean; count: number }[] = [];
-        dataRows.forEach(row => {
-            const dataCells = row.querySelectorAll('.gel-data-cell');
+        // Group data by position (7 positions: A, B, C, D, E, F, G)
+        // Each position has 5 readings (indices 0-4 for position A, 5-9 for B, etc.)
+        const positions = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+        
+        positions.forEach((position, posIndex) => {
             let sum = 0;
             let count = 0;
             let hasPercentage = false;
-            dataCells.forEach(cell => {
-                const value = cell.textContent?.trim() || '';
-                if (value) {
+            
+            for (let i = 0; i < 5; i++) {
+                const dataIndex = posIndex * 5 + i;
+                const key = `gel_data_${dataIndex}`;
+                const value = dataValues[key] || '';
+                
+                if (value && value.trim() !== '') {
                     if (value.includes('%')) {
                         hasPercentage = true;
                         const numericValue = parseFloat(value.replace('%', ''));
@@ -262,28 +192,81 @@ export default function GelTest() {
                         }
                     }
                 }
-            });
+            }
+            
             let average = 0;
             if (count > 0) average = sum / count;
             let averageDisplay = average.toFixed(2);
             if (hasPercentage && count > 0) averageDisplay += '%';
-            averages.push({ value: average, hasPercentage, count });
-            const averageCell = row.querySelector('.average-cell');
-            if (averageCell) averageCell.textContent = averageDisplay;
-        });
-
-        const meanCell = document.querySelector('.mean-cell');
-        if (meanCell && averages.length > 0) {
-            const validAverages = averages.filter(avg => avg.count > 0);
-            if (validAverages.length > 0) {
-                const mean = validAverages.reduce((sum, avg) => sum + avg.value, 0) / validAverages.length;
-                let meanDisplay = mean.toFixed(2);
-                const hasAnyPercentage = validAverages.some(avg => avg.hasPercentage);
-                if (hasAnyPercentage) meanDisplay += '%';
-                meanCell.textContent = meanDisplay;
+            
+            // Update average cell in DOM
+            const avgCells = document.querySelectorAll('.average-cell');
+            if (avgCells[posIndex]) {
+                avgCells[posIndex].textContent = averageDisplay;
             }
-            else meanCell.textContent = '0';
+        });
+        
+        // Calculate mean of all averages
+        const avgCells = document.querySelectorAll('.average-cell');
+        let totalSum = 0;
+        let validCount = 0;
+        let anyHasPercentage = false;
+        
+        avgCells.forEach(cell => {
+            const text = cell.textContent?.trim() || '';
+            if (text && text !== '0' && text !== '-') {
+                let numericValue = parseFloat(text);
+                if (!isNaN(numericValue)) {
+                    totalSum += numericValue;
+                    validCount++;
+                    if (text.includes('%')) anyHasPercentage = true;
+                }
+            }
+        });
+        
+        const meanCell = document.querySelector('.mean-cell');
+        if (meanCell) {
+            if (validCount > 0) {
+                const mean = totalSum / validCount;
+                let meanDisplay = mean.toFixed(2);
+                if (anyHasPercentage) meanDisplay += '%';
+                meanCell.textContent = meanDisplay;
+            } else {
+                meanCell.textContent = '0';
+            }
         }
+    };
+
+    // Handle editable input changes
+    const handleEditableChange = (key: string, value: string) => {
+        setEditableValues(prev => ({ ...prev, [key]: value }));
+        setHasUnsavedChanges(true);
+        setTimeout(() => saveFormData(), 0);
+    };
+
+    // Handle data cell changes
+    const handleDataChange = (key: string, value: string) => {
+        // Allow empty string or numbers (with or without %)
+        if (value === '' || value === '-' || !isNaN(parseFloat(value)) || (value.includes('%') && !isNaN(parseFloat(value.replace('%', ''))))) {
+            setDataValues(prev => {
+                const newValues = { ...prev, [key]: value };
+                setTimeout(() => {
+                    calculateAverages();
+                }, 0);
+                return newValues;
+            });
+            setHasUnsavedChanges(true);
+            setTimeout(() => saveFormData(), 0);
+        } else {
+            showAlert('error', 'Please enter a valid number (with or without % sign)');
+        }
+    };
+
+    // Handle checkbox changes
+    const handleCheckboxChange = (key: string, checked: boolean) => {
+        setCheckboxValues(prev => ({ ...prev, [key]: checked }));
+        setHasUnsavedChanges(true);
+        setTimeout(() => saveFormData(), 0);
     };
 
     const handleAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
@@ -450,39 +433,71 @@ export default function GelTest() {
 
     const loadReportData = (report: GelTestReport) => {
         setGelReportName(report.name);
-        const editableCells = document.querySelectorAll('.gel-editable');
-        editableCells.forEach((cell, index) => {
-            const key = `gel_editable_${index}`;
+        
+        // Load date
+        if (report.formData.testDate !== undefined) {
+            setTestDate(report.formData.testDate as string);
+        }
+        
+        // Load shift
+        if (report.formData.shift !== undefined) {
+            setShift(report.formData.shift as string);
+        }
+        
+        // Load editable fields
+        const editableInputs: { [key: string]: string } = {};
+        for (let i = 0; i < 35; i++) {
+            const key = `gel_editable_${i}`;
             if (report.formData[key] !== undefined) {
-                const value = report.formData[key] as string;
-                cell.textContent = value;
-                if (value.trim()) cell.classList.add('has-content');
-                else cell.classList.remove('has-content');
+                editableInputs[key] = report.formData[key] as string;
             }
-        });
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach((checkbox, index) => {
-            const key = `checkbox_${index}`;
-            if (report.formData[key] !== undefined) (checkbox as HTMLInputElement).checked = report.formData[key] as boolean;
-        });
+        }
+        setEditableValues(editableInputs);
+        
+        // Load data cells
+        const dataInputs: { [key: string]: string } = {};
+        for (let i = 0; i < 35; i++) {
+            const key = `gel_data_${i}`;
+            if (report.formData[key] !== undefined) {
+                dataInputs[key] = report.formData[key] as string;
+            } else {
+                dataInputs[key] = '';
+            }
+        }
+        setDataValues(dataInputs);
+        
+        // Load checkboxes
+        const checkboxInputs: { [key: string]: boolean } = {};
+        for (let i = 0; i < 5; i++) {
+            const key = `checkbox_${i}`;
+            if (report.formData[key] !== undefined) {
+                checkboxInputs[key] = report.formData[key] as boolean;
+            }
+        }
+        setCheckboxValues(checkboxInputs);
+        
         if (report.formData.preparedBySignature !== undefined) {
             setPreparedBySignature(report.formData.preparedBySignature as string);
         } else {
             setPreparedBySignature('');
         }
+        
         if (report.formData.acceptedBySignature !== undefined) {
             setAcceptedBySignature(report.formData.acceptedBySignature as string);
         } else {
             setAcceptedBySignature('');
         }
+        
         if (report.formData.verifiedBySignature !== undefined) {
             setVerifiedBySignature(report.formData.verifiedBySignature as string);
         } else {
             setVerifiedBySignature('');
         }
+        
         setTimeout(() => {
             calculateAverages();
         }, 150);
+        
         setTimeout(() => {
             saveFormData();
         }, 200);
@@ -506,18 +521,29 @@ export default function GelTest() {
 
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
-        const editableCells = document.querySelectorAll('.gel-editable');
-        editableCells.forEach((cell, index) => {
-            formData[`gel_editable_${index}`] = cell.textContent?.trim() || '';
+        
+        // Save editable fields
+        Object.keys(editableValues).forEach(key => {
+            formData[key] = editableValues[key];
         });
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach((checkbox, index) => {
-            formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+        
+        // Save data cells
+        Object.keys(dataValues).forEach(key => {
+            formData[key] = dataValues[key] || '';
         });
+        
+        // Save checkboxes
+        Object.keys(checkboxValues).forEach(key => {
+            formData[key] = checkboxValues[key];
+        });
+        
         formData.preparedBySignature = preparedBySignature;
         formData.acceptedBySignature = acceptedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
         formData.reportName = gelReportName;
+        formData.testDate = testDate;
+        formData.shift = shift;
+        
         sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
     };
 
@@ -525,22 +551,43 @@ export default function GelTest() {
         const savedData = sessionStorage.getItem('gelTestFormData');
         if (savedData) {
             const formData = JSON.parse(savedData);
+            
             if (formData.reportName !== undefined) setGelReportName(formData.reportName);
-            const editableCells = document.querySelectorAll('.gel-editable');
-            editableCells.forEach((cell, index) => {
-                const key = `gel_editable_${index}`;
+            if (formData.testDate !== undefined) setTestDate(formData.testDate);
+            if (formData.shift !== undefined) setShift(formData.shift);
+            
+            // Load editable fields
+            const editableInputs: { [key: string]: string } = {};
+            for (let i = 0; i < 35; i++) {
+                const key = `gel_editable_${i}`;
                 if (formData[key] !== undefined) {
-                    cell.textContent = formData[key] as string;
-                    if ((formData[key] as string).trim()) cell.classList.add('has-content');
+                    editableInputs[key] = formData[key];
                 }
-            });
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach((checkbox, index) => {
-                const key = `checkbox_${index}`;
+            }
+            setEditableValues(editableInputs);
+            
+            // Load data cells
+            const dataInputs: { [key: string]: string } = {};
+            for (let i = 0; i < 35; i++) {
+                const key = `gel_data_${i}`;
                 if (formData[key] !== undefined) {
-                    (checkbox as HTMLInputElement).checked = formData[key] as boolean;
+                    dataInputs[key] = formData[key];
+                } else {
+                    dataInputs[key] = '';
                 }
-            });
+            }
+            setDataValues(dataInputs);
+            
+            // Load checkboxes
+            const checkboxInputs: { [key: string]: boolean } = {};
+            for (let i = 0; i < 5; i++) {
+                const key = `checkbox_${i}`;
+                if (formData[key] !== undefined) {
+                    checkboxInputs[key] = formData[key] as boolean;
+                }
+            }
+            setCheckboxValues(checkboxInputs);
+            
             if (formData.preparedBySignature !== undefined) {
                 setPreparedBySignature(formData.preparedBySignature as string);
             }
@@ -550,42 +597,54 @@ export default function GelTest() {
             if (formData.verifiedBySignature !== undefined) {
                 setVerifiedBySignature(formData.verifiedBySignature as string);
             }
+            
             setTimeout(() => {
                 calculateAverages();
             }, 100);
+            
             setHasUnsavedChanges(true);
+        } else {
+            // Initialize data cells with empty values
+            initializeDataCellsWithHyphens();
         }
     };
 
     const clearFormData = (clearEditingState = true) => {
-        const editableCells = document.querySelectorAll('.gel-editable');
-        editableCells.forEach(cell => {
-            cell.textContent = '';
-            cell.classList.remove('has-content');
-        });
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(checkbox => {
-            (checkbox as HTMLInputElement).checked = false;
-        });
+        setEditableValues({});
+        
+        const initialDataInputs: { [key: string]: string } = {};
+        for (let i = 0; i < 35; i++) {
+            initialDataInputs[`gel_data_${i}`] = '';
+        }
+        setDataValues(initialDataInputs);
+        
+        setCheckboxValues({});
         setPreparedBySignature('');
         setAcceptedBySignature('');
         setVerifiedBySignature('');
+        setTestDate(new Date().toISOString().split('T')[0]);
+        setShift('');
+        
         if (clearEditingState) {
             setGelReportName('');
             sessionStorage.removeItem('editingReportId');
             sessionStorage.removeItem('editingReportData');
         }
-        const averageCells = document.querySelectorAll('.average-cell');
-        averageCells.forEach(cell => {
+        
+        // Reset average cells
+        const avgCells = document.querySelectorAll('.average-cell');
+        avgCells.forEach(cell => {
             cell.textContent = '0';
         });
         const meanCell = document.querySelector('.mean-cell');
         if (meanCell) {
             meanCell.textContent = '0';
         }
+        
         if (clearEditingState) {
             sessionStorage.removeItem('gelTestFormData');
         }
+        
         setHasUnsavedChanges(false);
     };
 
@@ -616,24 +675,37 @@ export default function GelTest() {
             });
             const meanCell = document.querySelector('.mean-cell');
             averages.mean = meanCell?.textContent?.trim() || '0';
+            
             const reportData: Omit<GelTestReport, '_id'> = {
                 name: gelReportName,
                 timestamp: new Date().toISOString(),
                 formData: {},
                 averages: averages,
             };
-            const editableCells = document.querySelectorAll('.gel-editable');
-            editableCells.forEach((cell, index) => {
-                reportData.formData[`gel_editable_${index}`] = cell.textContent?.trim() || '';
+            
+            // Save editable fields
+            Object.keys(editableValues).forEach(key => {
+                reportData.formData[key] = editableValues[key];
             });
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach((checkbox, index) => {
-                reportData.formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            
+            // Save data cells
+            Object.keys(dataValues).forEach(key => {
+                reportData.formData[key] = dataValues[key] || '';
             });
+            
+            // Save checkboxes
+            Object.keys(checkboxValues).forEach(key => {
+                reportData.formData[key] = checkboxValues[key];
+            });
+            
             reportData.formData.preparedBySignature = preparedBySignature;
             reportData.formData.acceptedBySignature = acceptedBySignature;
             reportData.formData.verifiedBySignature = verifiedBySignature;
+            reportData.formData.testDate = testDate;
+            reportData.formData.shift = shift;
+            
             const editingId = sessionStorage.getItem('editingReportId');
+            
             if (editingId) {
                 const existingReport = await apiService.getReportById(editingId);
                 if (gelReportName === existingReport.name) {
@@ -703,6 +775,7 @@ export default function GelTest() {
                     showAlert('success', 'Report saved successfully!');
                 }
             }
+            
             clearFormData();
             loadSavedReports();
             setActiveTab('saved-reports');
@@ -735,17 +808,28 @@ export default function GelTest() {
         try {
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const formData: { [key: string]: string | boolean } = {};
-            const editableCells = document.querySelectorAll('.gel-editable');
-            editableCells.forEach((cell, index) => {
-                formData[`gel_editable_${index}`] = cell.textContent?.trim() || '';
+            
+            // Save editable fields
+            Object.keys(editableValues).forEach(key => {
+                formData[key] = editableValues[key];
             });
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach((checkbox, index) => {
-                formData[`checkbox_${index}`] = (checkbox as HTMLInputElement).checked;
+            
+            // Save data cells
+            Object.keys(dataValues).forEach(key => {
+                formData[key] = dataValues[key] || '';
             });
+            
+            // Save checkboxes
+            Object.keys(checkboxValues).forEach(key => {
+                formData[key] = checkboxValues[key];
+            });
+            
             formData.preparedBySignature = preparedBySignature;
             formData.acceptedBySignature = acceptedBySignature;
             formData.verifiedBySignature = verifiedBySignature;
+            formData.testDate = testDate;
+            formData.shift = shift;
+            
             const averages: { [key: string]: string } = {};
             const averageCells = document.querySelectorAll('.average-cell');
             averageCells.forEach((cell, index) => {
@@ -753,18 +837,22 @@ export default function GelTest() {
             });
             const meanCell = document.querySelector('.mean-cell');
             if (meanCell) averages.mean = meanCell.textContent?.trim() || '0';
+            
             const gelReportData = {
                 report_name: gelReportName.trim() || 'Gel_Test_Report',
                 timestamp: new Date().toISOString(),
                 form_data: formData,
                 averages: averages,
             };
+            
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(gelReportData),
             });
+            
             if (!response.ok) throw new Error('Failed to generate report');
+            
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -774,6 +862,7 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -788,14 +877,18 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
+            
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
+            
             const report = reports[index];
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: report._id }),
             });
+            
             if (!response.ok) throw new Error('Failed to generate report');
+            
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -805,6 +898,7 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -813,34 +907,69 @@ export default function GelTest() {
     };
 
     useEffect(() => {
-        const editableCells = document.querySelectorAll('.gel-editable:not(.gel-data-cell)');
-        editableCells.forEach(cell => {
-            cell.addEventListener('click', handleEditableCellClick);
-        });
-        const dataCells = document.querySelectorAll('.gel-data-cell');
-        dataCells.forEach(cell => {
-            cell.addEventListener('click', handleDataCellClick);
-        });
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', handleCheckboxChange);
-        });
-        return () => {
-            editableCells.forEach(cell => {
-                cell.removeEventListener('click', handleEditableCellClick);
-            });
-            dataCells.forEach(cell => {
-                cell.removeEventListener('click', handleDataCellClick);
-            });
-            checkboxes.forEach(checkbox => {
-                checkbox.removeEventListener('change', handleCheckboxChange);
-            });
-        };
-    }, []);
-
-    useEffect(() => {
         if (gelReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
     }, [gelReportName]);
+
+    // Define editable field keys for text inputs
+    const editableFieldKeys = [
+        'gel_editable_0',   // Inv. No./ Date
+        'gel_editable_1',   // P.O. No.
+        'gel_editable_2',   // Type of Test
+        'gel_editable_3',   // Laminator Details
+        'gel_editable_4',   // Pumping Time Lam-1
+        'gel_editable_5',   // Pumping Time Lam-2
+        'gel_editable_6',   // Pumping Time Lam-3 (CP)
+        'gel_editable_7',   // Pressing/Cooling Time Lam-1
+        'gel_editable_8',   // Pressing/Cooling Time Lam-2
+        'gel_editable_9',   // Pressing/Cooling Time Lam-3 (CP)
+        'gel_editable_10',  // Venting Time Lam-1
+        'gel_editable_11',  // Venting Time Lam-2
+        'gel_editable_12',  // Venting Time Lam-3 (CP)
+        'gel_editable_13',  // Lower Heating Lam-1
+        'gel_editable_14',  // Lower Heating Lam-2
+        'gel_editable_15',  // Lower Heating Lam-3 (CP)
+        'gel_editable_16',  // Upper Heating Lam-1
+        'gel_editable_17',  // Upper Heating Lam-2
+        'gel_editable_18',  // Upper Heating Lam-3 (CP)
+        'gel_editable_19',  // Upper Pressure Lam-1
+        'gel_editable_20',  // Upper Pressure Lam-2
+        'gel_editable_21',  // Upper Pressure Lam-3 (CP)
+        'gel_editable_22',  // Lower Pressure Lam-1
+        'gel_editable_23',  // Lower Pressure Lam-2
+        'gel_editable_24',  // Lower Pressure Lam-3 (CP)
+        'gel_editable_25',  // Date, Shift, & Time (first cell - will use date picker and dropdown)
+        'gel_editable_26',  // Date, Shift, & Time (second cell - will use date picker and dropdown)
+        'gel_editable_27',  // Category cell 1
+        'gel_editable_28',  // Category cell 2
+        'gel_editable_29',  // Category cell 3
+        'gel_editable_30',  // Category cell 4
+        'gel_editable_31',  // Batch/Lot No. cell 1
+        'gel_editable_32',  // Batch/Lot No. cell 2
+        'gel_editable_33',  // Batch/Lot No. cell 3
+        'gel_editable_34',  // Batch/Lot No. cell 4
+        'gel_editable_35',  // MFG. Date cell 1
+        'gel_editable_36',  // MFG. Date cell 2
+        'gel_editable_37',  // MFG. Date cell 3
+        'gel_editable_38',  // MFG. Date cell 4
+        'gel_editable_39',  // Exp. Date cell 1
+        'gel_editable_40',  // Exp. Date cell 2
+        'gel_editable_41',  // Exp. Date cell 3
+        'gel_editable_42',  // Exp. Date cell 4
+        'gel_editable_43',  // Glass Size
+    ];
+
+    // Define data cell keys for gel content readings
+    // 7 positions (A-G) with 5 readings each = 35 data cells
+    const getDataCellKey = (positionIndex: number, readingIndex: number) => `gel_data_${positionIndex * 5 + readingIndex}`;
+
+    // Define checkbox keys
+    const checkboxKeys = [
+        'checkbox_0',   // EVA & EPE checkbox
+        'checkbox_1',   // POE checkbox
+        'checkbox_2',   // EVA checkbox (material info)
+        'checkbox_3',   // EPE checkbox (material info)
+        'checkbox_4',   // POE checkbox (material info)
+    ];
 
     return (
         <>
@@ -937,32 +1066,76 @@ export default function GelTest() {
                                                     <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
                                                         <div className="checkbox-item flex items-center mx-2">
                                                             <label htmlFor="eva-epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">1. Gel Content should be: 75 to 95% for EVA & EPE</label>
-                                                            <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                            <input 
+                                                                type="checkbox" 
+                                                                id="eva-epe-checkbox" 
+                                                                checked={checkboxValues[checkboxKeys[0]] || false}
+                                                                onChange={(e) => handleCheckboxChange(checkboxKeys[0], e.target.checked)}
+                                                                className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                            />
                                                         </div>
                                                     </div>
                                                     <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
                                                         <div className="checkbox-item flex items-center mx-1.5">
                                                             <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">2. Gel Content should be: ≥ 60% for POE</label>
-                                                            <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                            <input 
+                                                                type="checkbox" 
+                                                                id="poe-checkbox" 
+                                                                checked={checkboxValues[checkboxKeys[1]] || false}
+                                                                onChange={(e) => handleCheckboxChange(checkboxKeys[1], e.target.checked)}
+                                                                className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Inv. No./ Date:</td>
-                                            <td colSpan={5} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[0]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[0], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Inv. No./ Date"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O. No.:</td>
-                                            <td colSpan={5} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[1]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[1], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="P.O. No."
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>
-                                            <td colSpan={5} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[2]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[2], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Type of Test"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={10} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Laminator Parameter</td>
                                             <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Laminator Details:</td>
-                                            <td colSpan={5} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[3]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[3], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Laminator Details"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process Name</td>
@@ -973,86 +1146,408 @@ export default function GelTest() {
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pumping Time (Sec)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[4]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[4], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping Time Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[5]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[5], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping Time Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[6]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[6], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping Time Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Types:</td>
                                             <td colSpan={5}>
                                                 <div className="checkbox-container flex flex-col sm:flex-row justify-center items-center gap-2 p-2">
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="eva-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EVA</label>
-                                                        <input type="checkbox" id="eva-checkbox" name="encapsulant" value="EVA" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                        <label htmlFor="eva-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EVA</label>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id="eva-material-checkbox" 
+                                                            checked={checkboxValues[checkboxKeys[2]] || false}
+                                                            onChange={(e) => handleCheckboxChange(checkboxKeys[2], e.target.checked)}
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                        />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EPE</label>
-                                                        <input type="checkbox" id="epe-checkbox" name="encapsulant" value="EPE" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                        <label htmlFor="epe-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EPE</label>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id="epe-material-checkbox" 
+                                                            checked={checkboxValues[checkboxKeys[3]] || false}
+                                                            onChange={(e) => handleCheckboxChange(checkboxKeys[3], e.target.checked)}
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                        />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">POE</label>
-                                                        <input type="checkbox" id="poe-checkbox" name="encapsulant" value="POE" className="ml-1 w-4 h-4 dark:accent-blue-500" />
+                                                        <label htmlFor="poe-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">POE</label>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id="poe-material-checkbox" 
+                                                            checked={checkboxValues[checkboxKeys[4]] || false}
+                                                            onChange={(e) => handleCheckboxChange(checkboxKeys[4], e.target.checked)}
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                        />
                                                     </div>
                                                 </div>
                                             </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pressing/Cooling Time (Sec)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[7]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[7], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling Time Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[8]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[8], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling Time Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[9]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[9], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling Time Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
                                             <td colSpan={5} className="p-2 text-center text-gray-800 dark:text-white">FIRST</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting Time (Sec)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[10]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[10], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting Time Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[11]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[11], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting Time Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[12]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[12], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting Time Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Category:</td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[27]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[27], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Category"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[28]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[28], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Category"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[29]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[29], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Category"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[30]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[30], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Category"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Heating (˚C)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[13]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[13], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Heating Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[14]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[14], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Heating Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[15]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[15], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Heating Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Batch/Lot No.:</td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[31]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[31], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Batch/Lot No."
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[32]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[32], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Batch/Lot No."
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[33]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[33], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Batch/Lot No."
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[34]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[34], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Batch/Lot No."
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Heating (˚C)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[16]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[16], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Heating Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[17]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[17], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Heating Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[18]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[18], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Heating Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MFG. Date:</td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[35]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[35], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="MFG. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[36]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[36], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="MFG. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[37]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[37], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="MFG. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[38]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[38], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="MFG. Date"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Pressure (Kpa)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[19]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[19], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Pressure Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[20]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[20], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Pressure Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[21]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[21], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Upper Pressure Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Exp. Date:</td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={1} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[39]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[39], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Exp. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[40]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[40], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Exp. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[41]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[41], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Exp. Date"
+                                                />
+                                            </td>
+                                            <td colSpan={1}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[42]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[42], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Exp. Date"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Pressure (Kpa)</td>
-                                            <td colSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[22]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[22], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Pressure Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[23]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[23], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Pressure Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={3}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[24]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[24], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Lower Pressure Lam-3 (CP)"
+                                                />
+                                            </td>
                                             <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size:</td>
-                                            <td colSpan={5} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[43]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[43], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Glass Size"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={16} className="p-2">
@@ -1060,7 +1555,7 @@ export default function GelTest() {
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Date, Shift, & Time</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Date, Shift, & Time: </td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Workshop</td>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Platen Position (A/B/C/D/E/F/G)</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#1</td>
@@ -1072,71 +1567,146 @@ export default function GelTest() {
                                             <td colSpan={4} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Mean</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={2} rowSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={2}>
+                                                <div className="flex flex-col gap-2 p-2">
+                                                    <input
+                                                        type="date"
+                                                        value={testDate}
+                                                        onChange={(e) => {
+                                                            setTestDate(e.target.value);
+                                                            setHasUnsavedChanges(true);
+                                                            setTimeout(() => saveFormData(), 0);
+                                                        }}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    />
+                                                    <select
+                                                        value={shift}
+                                                        onChange={(e) => {
+                                                            setShift(e.target.value);
+                                                            setHasUnsavedChanges(true);
+                                                            setTimeout(() => saveFormData(), 0);
+                                                        }}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    >
+                                                        <option value="">Select Shift</option>
+                                                        <option value="A">A</option>
+                                                        <option value="B">B</option>
+                                                        <option value="C">C</option>
+                                                        <option value="G">G</option>
+                                                    </select>
+                                                    <input
+                                                        type="text"
+                                                        value={editableValues[editableFieldKeys[25]] || ''}
+                                                        onChange={(e) => handleEditableChange(editableFieldKeys[25], e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                        placeholder="Time"
+                                                    />
+                                                </div>
+                                            </td>
                                             <td rowSpan={7} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">VSL FAB-II</td>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">A</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`A_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(0, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(0, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                             <td colSpan={4} rowSpan={7} className="mean-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">B</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`B_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(1, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(1, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={2} rowSpan={3} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">C</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`C_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(2, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(2, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">D</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`D_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(3, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(3, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">E</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`E_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(4, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(4, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={2} rowSpan={2} className="gel-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">F</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`F_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(5, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(5, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">G</td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            <td className="gel-editable gel-data-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
+                                            {[0, 1, 2, 3, 4].map(readingIdx => (
+                                                <td key={`G_${readingIdx}`} className="p-2 text-center">
+                                                    <input
+                                                        type="text"
+                                                        value={dataValues[getDataCellKey(6, readingIdx)] || ''}
+                                                        onChange={(e) => handleDataChange(getDataCellKey(6, readingIdx), e.target.value)}
+                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                        placeholder=""
+                                                    />
+                                                </td>
+                                            ))}
                                             <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
                                         </tr>
                                     </tbody>

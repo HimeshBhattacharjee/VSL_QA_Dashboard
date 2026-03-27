@@ -76,8 +76,8 @@ const AutoFrontGlassObservations = {
     renderSurfaceQuality: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
             ? {
-                "Sample-1": "", "Sample-2": "", "Sample-3": "",
-                "Sample-4": "", "Sample-5": "", "Sample-6": ""
+                "Sample-1": "Checked OK", "Sample-2": "Checked OK", "Sample-3": "Checked OK",
+                "Sample-4": "Checked OK", "Sample-5": "Checked OK", "Sample-6": "Checked OK"
             }
             : props.value as Record<string, string>;
 
@@ -233,8 +233,8 @@ export const autoFrontGlassStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "4 hrs", value: "Checked OK" },
+                { timeSlot: "8 hrs", value: "Checked OK" }
             ],
             renderObservation: AutoFrontGlassObservations.renderVacuumCup
         },

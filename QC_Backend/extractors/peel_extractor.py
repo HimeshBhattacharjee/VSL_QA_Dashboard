@@ -92,7 +92,7 @@ def extract_data_from_excel(file_ref, sheet_type, s3_service=None):
                     value = row[ribbon_idx]
                     if pd.notna(value):
                         key = f"{sheet_type}_{bus_pad_position}_{ribbon_idx}"
-                        ribbon_data[key] = float(value)
+                        ribbon_data[key] = round(float(value), 2)
                 
                 data_dict.update(ribbon_data)
         

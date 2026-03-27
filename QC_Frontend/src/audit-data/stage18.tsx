@@ -387,7 +387,7 @@ const JunctionBoxFixingObservations = {
                     >
                         {(sample, timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${sample}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${sample}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, sample, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },

@@ -286,7 +286,7 @@ const AutoFramingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Both side of length'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "Both side of length", label: "Both side of length" },
@@ -331,7 +331,7 @@ const AutoFramingObservations = {
                     >
                         {(sample, timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${sample}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${sample}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, sample, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },

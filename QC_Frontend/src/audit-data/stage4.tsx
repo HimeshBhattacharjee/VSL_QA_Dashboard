@@ -75,7 +75,7 @@ const CellSortingObservations = {
     renderUsageValidity: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'Expired') return 'bg-red-100';
+            if (value === 'New Box Not Opened') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -86,9 +86,8 @@ const CellSortingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="Used within 4 hrs">Used within 4 hrs</option>
-                <option value="Used within 8 hrs">Used within 8 hrs</option>
-                <option value="Expired">Expired</option>
+                <option value="New Box Open">New Box Open</option>
+                <option value="New Box Not Opened">New Box Not Opened</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -97,7 +96,7 @@ const CellSortingObservations = {
     renderStorageConditions: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'Non-Compliant') return 'bg-red-100';
+            if (value === 'Stacked more than two box of cells') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -108,8 +107,8 @@ const CellSortingObservations = {
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
-                <option value="Compliant">Compliant</option>
-                <option value="Non-Compliant">Non-Compliant</option>
+                <option value="Stacked two box of cells">Stacked two box of cells</option>
+                <option value="Stacked more than two box of cells">Stacked more than two box of cells</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -139,7 +138,7 @@ const CellSortingObservations = {
     renderGlovesChange: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'Hand Gloves Not Changed') return 'bg-red-100';
+            if (value === 'New Hand Gloves Not Used') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -151,7 +150,7 @@ const CellSortingObservations = {
             >
                 <option value="">Select</option>
                 <option value="New Hand Gloves Used">New Hand Gloves Used</option>
-                <option value="Hand Gloves Not Changed">Hand Gloves Not Changed</option>
+                <option value="New Hand Gloves Not Used">New Hand Gloves Not Used</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -211,8 +210,8 @@ export const cellSortingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "4 hrs", value: "New Box Open" },
+                { timeSlot: "8 hrs", value: "New Box Open" }
             ],
             renderObservation: CellSortingObservations.renderUsageValidity
         },
@@ -223,8 +222,8 @@ export const cellSortingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "4 hrs", value: "Stacked two box of cells" },
+                { timeSlot: "8 hrs", value: "Stacked two box of cells" }
             ],
             renderObservation: CellSortingObservations.renderStorageConditions
         },
@@ -235,8 +234,8 @@ export const cellSortingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "4 hrs", value: "Checked OK" },
+                { timeSlot: "8 hrs", value: "Checked OK" }
             ],
             renderObservation: CellSortingObservations.renderCellAppearance
         },
@@ -247,7 +246,7 @@ export const cellSortingStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "", value: "" }
+                { timeSlot: "", value: "New Hand Gloves Used" }
             ],
             renderObservation: CellSortingObservations.renderGlovesChange
         },

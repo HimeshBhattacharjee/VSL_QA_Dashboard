@@ -103,7 +103,7 @@ const FrontEncapsulantObservations = {
     renderUsageValidity: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value === 'OFF') return 'bg-yellow-100';
-            if (value === 'Expired') return 'bg-red-100';
+            if (value === 'New Box Not Opened') return 'bg-red-100';
             return 'bg-white';
         };
 
@@ -113,10 +113,9 @@ const FrontEncapsulantObservations = {
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
-                <option value="">Select Validity</option>
-                <option value="Used within 4 hrs">Used within 4 hrs</option>
-                <option value="Used within 8 hrs">Used within 8 hrs</option>
-                <option value="Expired">Expired</option>
+                <option value="">Select</option>
+                <option value="New Box Open">New Box Open</option>
+                <option value="New Box Not Opened">New Box Not Opened</option>
                 <option value="OFF">OFF</option>
             </select>
         );
@@ -148,7 +147,7 @@ const FrontEncapsulantObservations = {
 
     renderAestheticCondition: (props: ObservationRenderProps) => {
         const sampleValue = typeof props.value === 'string'
-            ? { "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "", "Sample-5": "", "Sample-6": "" }
+            ? { "Sample-1": "Checked OK", "Sample-2": "Checked OK", "Sample-3": "Checked OK", "Sample-4": "Checked OK", "Sample-5": "Checked OK", "Sample-6": "Checked OK" }
             : props.value as Record<string, string>;
 
         const getBackgroundColor = (value: string) => {
@@ -282,7 +281,7 @@ export const frontEncapsulantStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "", value: "" }
+                { timeSlot: "", value: "New Box Open" }
             ],
             renderObservation: FrontEncapsulantObservations.renderUsageValidity
         },

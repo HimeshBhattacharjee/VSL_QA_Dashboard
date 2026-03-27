@@ -118,7 +118,7 @@ export const preLamStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "", value: "" }
+                { timeSlot: "", value: "Checked OK" }
             ],
             renderObservation: PreLamObservations.renderAccessControl
         }

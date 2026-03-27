@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
@@ -28,6 +28,26 @@ export default function AdhesionTest() {
     const ADHESION_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/adhesion-test-reports';
     const [preparedBySignature, setPreparedBySignature] = useState<string>('');
     const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
+
+    // State variables for dropdowns
+    const [testDate, setTestDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [shift, setShift] = useState<string>('');
+    const [laminator, setLaminator] = useState<string>('');
+    const [laminationPosition, setLaminationPosition] = useState<string>('');
+
+    // State for lamination parameters
+    const [lamParams, setLamParams] = useState({
+        lam1: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' },
+        lam2: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' },
+        lam3: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' }
+    });
+
+    // State for all input values
+    const [editableValues, setEditableValues] = useState<{ [key: string]: string }>({});
+    const [dataValues, setDataValues] = useState<{ [key: string]: string }>({});
+
+    // Use ref to store the latest values for real-time calculation
+    const dataValuesRef = useRef<{ [key: string]: string }>({});
 
     const apiService = {
         getAllReports: async (): Promise<AdhesionTestReport[]> => {
@@ -134,174 +154,184 @@ export default function AdhesionTest() {
         return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
     }, []);
 
-    const initializeForm = () => { calculateAverages() };
-
-    const handleEditableCellClick = (e: Event) => {
-        const cell = e.target as HTMLElement;
-        const currentText = cell.textContent || '';
-        const oldValue = currentText.trim();
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentText;
-        input.style.width = '100%';
-        input.style.height = '100%';
-        input.style.border = 'none';
-        input.style.background = 'transparent';
-        input.style.fontFamily = 'inherit';
-        input.style.fontSize = 'inherit';
-        cell.textContent = '';
-        cell.appendChild(input);
-        input.focus();
-
-        const handleBlur = () => {
-            const newValue = input.value.trim();
-            cell.textContent = newValue || ' ';
-            if (newValue) cell.classList.add('has-content');
-            else cell.classList.remove('has-content');
-            if (detectMeaningfulChange(oldValue, newValue)) {
-                setHasUnsavedChanges(true);
-                saveFormData();
-            }
-            saveFormData();
-        };
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') input.blur();
-        };
-
-        input.addEventListener('blur', handleBlur);
-        input.addEventListener('keydown', handleKeyDown);
+    const initializeForm = () => { 
+        calculateAverages();
+        initializeDataCellsWithHyphens();
     };
 
-    const handleDataCellClick = (e: Event) => {
-        const cell = e.target as HTMLElement;
-        const currentText = cell.textContent || '';
-        const oldValue = currentText.trim();
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentText;
-        input.style.width = '100%';
-        input.style.height = '100%';
-        input.style.border = 'none';
-        input.style.background = 'transparent';
-        input.style.fontFamily = 'inherit';
-        input.style.fontSize = 'inherit';
-        input.style.textAlign = 'center';
-        cell.textContent = '';
-        cell.appendChild(input);
-        input.focus();
-
-        const handleBlur = () => {
-            const value = input.value.trim();
-            const isValid = value === '' || !isNaN(parseFloat(value));
-            if (isValid) {
-                cell.textContent = value || '';
-                if (value) cell.classList.add('has-content');
-                else cell.classList.remove('has-content');
-                calculateAverages();
-                if (detectMeaningfulChange(oldValue, value)) {
-                    setHasUnsavedChanges(true);
-                    saveFormData();
-                }
-                saveFormData();
-            } else {
-                showAlert('error', 'Please enter a valid number');
-                cell.textContent = currentText || '';
-                if (currentText) cell.classList.add('has-content');
-            }
-        };
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') input.blur();
-        };
-
-        input.addEventListener('blur', handleBlur);
-        input.addEventListener('keydown', handleKeyDown);
-    };
-
-    useEffect(() => {
-        if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-        if (adhesionReportName !== '') saveFormData();
-    }, [adhesionReportName]);
-
-    const detectMeaningfulChange = (oldValue: string, newValue: string): boolean => {
-        if (!oldValue.trim() && !newValue.trim()) return false;
-        return oldValue.trim() !== newValue.trim();
+    const initializeDataCellsWithHyphens = () => {
+        const initialData: { [key: string]: string } = {};
+        for (let i = 0; i <= 19; i++) {
+            initialData[`adhesion_data_${i}`] = '-';
+        }
+        setDataValues(initialData);
+        dataValuesRef.current = { ...initialData };
     };
 
     const calculateAverages = () => {
+        // Use the ref to get the latest values
+        const currentDataValues = dataValuesRef.current;
+        
         // Front Glass to Encapsulant Min (Column B)
-        const frontMinCells = document.querySelectorAll('.front-min-cell');
         let frontMinSum = 0;
         let frontMinCount = 0;
-        frontMinCells.forEach(cell => {
-            const value = cell.textContent?.trim() || '';
-            if (value) {
+        for (let i = 0; i <= 4; i++) {
+            const key = `adhesion_data_${i * 4}`;
+            const value = currentDataValues[key];
+            if (value && value !== '-') {
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue)) {
                     frontMinSum += numValue;
                     frontMinCount++;
                 }
             }
-        });
-        const frontMinAvg = frontMinCount > 0 ? (frontMinSum / frontMinCount).toFixed(2) : '0';
-        const frontMinAvgCell = document.querySelector('.front-min-avg');
-        if (frontMinAvgCell) frontMinAvgCell.textContent = frontMinAvg;
-
+        }
+        const frontMinAvg = frontMinCount > 0 ? (frontMinSum / frontMinCount).toFixed(2) : '-';
+        
         // Front Glass to Encapsulant Max (Column C)
-        const frontMaxCells = document.querySelectorAll('.front-max-cell');
         let frontMaxSum = 0;
         let frontMaxCount = 0;
-        frontMaxCells.forEach(cell => {
-            const value = cell.textContent?.trim() || '';
-            if (value) {
+        for (let i = 0; i <= 4; i++) {
+            const key = `adhesion_data_${i * 4 + 1}`;
+            const value = currentDataValues[key];
+            if (value && value !== '-') {
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue)) {
                     frontMaxSum += numValue;
                     frontMaxCount++;
                 }
             }
-        });
-        const frontMaxAvg = frontMaxCount > 0 ? (frontMaxSum / frontMaxCount).toFixed(2) : '0';
-        const frontMaxAvgCell = document.querySelector('.front-max-avg');
-        if (frontMaxAvgCell) frontMaxAvgCell.textContent = frontMaxAvg;
-
+        }
+        const frontMaxAvg = frontMaxCount > 0 ? (frontMaxSum / frontMaxCount).toFixed(2) : '-';
+        
         // Backsheet to Encapsulant Min (Column D)
-        const backMinCells = document.querySelectorAll('.back-min-cell');
         let backMinSum = 0;
         let backMinCount = 0;
-        backMinCells.forEach(cell => {
-            const value = cell.textContent?.trim() || '';
-            if (value) {
+        for (let i = 0; i <= 4; i++) {
+            const key = `adhesion_data_${i * 4 + 2}`;
+            const value = currentDataValues[key];
+            if (value && value !== '-') {
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue)) {
                     backMinSum += numValue;
                     backMinCount++;
                 }
             }
-        });
-        const backMinAvg = backMinCount > 0 ? (backMinSum / backMinCount).toFixed(2) : '0';
-        const backMinAvgCell = document.querySelector('.back-min-avg');
-        if (backMinAvgCell) backMinAvgCell.textContent = backMinAvg;
-
+        }
+        const backMinAvg = backMinCount > 0 ? (backMinSum / backMinCount).toFixed(2) : '-';
+        
         // Backsheet to Encapsulant Max (Column E)
-        const backMaxCells = document.querySelectorAll('.back-max-cell');
         let backMaxSum = 0;
         let backMaxCount = 0;
-        backMaxCells.forEach(cell => {
-            const value = cell.textContent?.trim() || '';
-            if (value) {
+        for (let i = 0; i <= 4; i++) {
+            const key = `adhesion_data_${i * 4 + 3}`;
+            const value = currentDataValues[key];
+            if (value && value !== '-') {
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue)) {
                     backMaxSum += numValue;
                     backMaxCount++;
                 }
             }
-        });
-        const backMaxAvg = backMaxCount > 0 ? (backMaxSum / backMaxCount).toFixed(2) : '0';
+        }
+        const backMaxAvg = backMaxCount > 0 ? (backMaxSum / backMaxCount).toFixed(2) : '-';
+        
+        // Update the DOM elements
+        const frontMinAvgCell = document.querySelector('.front-min-avg');
+        if (frontMinAvgCell) frontMinAvgCell.textContent = frontMinAvg;
+        
+        const frontMaxAvgCell = document.querySelector('.front-max-avg');
+        if (frontMaxAvgCell) frontMaxAvgCell.textContent = frontMaxAvg;
+        
+        const backMinAvgCell = document.querySelector('.back-min-avg');
+        if (backMinAvgCell) backMinAvgCell.textContent = backMinAvg;
+        
         const backMaxAvgCell = document.querySelector('.back-max-avg');
         if (backMaxAvgCell) backMaxAvgCell.textContent = backMaxAvg;
     };
+
+    // Calculate process time for a specific laminator
+    const calculateProcessTime = (pumpingTime: string, pressingTime: string, ventingTime: string): string => {
+        const pump = parseFloat(pumpingTime) || 0;
+        const press = parseFloat(pressingTime) || 0;
+        const vent = parseFloat(ventingTime) || 0;
+        const total = pump + press + vent;
+        return total.toString();
+    };
+
+    // Handle lamination parameter changes
+    const handleLamParamChange = (lam: 'lam1' | 'lam2' | 'lam3', field: 'pumpingTime' | 'pressingTime' | 'ventingTime', value: string) => {
+        setLamParams(prev => {
+            const updated = { ...prev };
+            updated[lam][field] = value;
+            updated[lam].processTime = calculateProcessTime(
+                updated[lam].pumpingTime,
+                updated[lam].pressingTime,
+                updated[lam].ventingTime
+            );
+            return updated;
+        });
+        setHasUnsavedChanges(true);
+        setTimeout(() => saveFormData(), 0);
+    };
+
+    // Handle editable input changes
+    const handleEditableChange = (key: string, value: string) => {
+        setEditableValues(prev => ({ ...prev, [key]: value }));
+        setHasUnsavedChanges(true);
+        setTimeout(() => saveFormData(), 0);
+    };
+
+    // Handle data input changes - immediate update with ref for real-time calculation
+    const handleDataChange = (key: string, value: string) => {
+        // Allow empty string, hyphen, or numbers
+        if (value === '' || value === '-' || !isNaN(parseFloat(value))) {
+            // Update state
+            setDataValues(prev => {
+                const newValues = { ...prev, [key]: value };
+                // Update ref immediately for calculateAverages
+                dataValuesRef.current = newValues;
+                // Calculate averages using the updated values
+                calculateAverages();
+                return newValues;
+            });
+            setHasUnsavedChanges(true);
+            setTimeout(() => saveFormData(), 0);
+        } else {
+            showAlert('error', 'Please enter a valid number');
+        }
+    };
+
+    // Handle focus on data input - clear hyphen
+    const handleDataFocus = (key: string) => {
+        if (dataValues[key] === '-') {
+            setDataValues(prev => {
+                const newValues = { ...prev, [key]: '' };
+                dataValuesRef.current = newValues;
+                return newValues;
+            });
+        }
+    };
+
+    // Handle blur on data input - set hyphen if empty
+    const handleDataBlur = (key: string, value: string) => {
+        if (value === '' || value === null || value === undefined) {
+            setDataValues(prev => {
+                const newValues = { ...prev, [key]: '-' };
+                dataValuesRef.current = newValues;
+                calculateAverages();
+                return newValues;
+            });
+            setTimeout(() => {
+                saveFormData();
+            }, 0);
+        }
+    };
+
+    useEffect(() => {
+        if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
+        if (adhesionReportName !== '') saveFormData();
+    }, [adhesionReportName]);
 
     const handleAddSignature = (section: 'prepared' | 'verified') => {
         if (!username) {
@@ -461,27 +491,55 @@ export default function AdhesionTest() {
     const loadReportData = (report: AdhesionTestReport) => {
         setAdhesionReportName(report.name);
 
-        const editableCells = document.querySelectorAll('.adhesion-editable');
-        editableCells.forEach((cell, index) => {
-            const key = `adhesion_editable_${index}`;
-            if (report.formData[key] !== undefined) {
-                const value = report.formData[key] as string;
-                cell.textContent = value;
-                if (value.trim()) cell.classList.add('has-content');
-                else cell.classList.remove('has-content');
-            }
-        });
+        // Load date
+        if (report.formData.testDate !== undefined) {
+            setTestDate(report.formData.testDate as string);
+        }
 
-        const dataCells = document.querySelectorAll('.adhesion-data-cell');
-        dataCells.forEach((cell, index) => {
-            const key = `adhesion_data_${index}`;
+        // Load shift
+        if (report.formData.shift !== undefined) {
+            setShift(report.formData.shift as string);
+        }
+
+        // Load laminator
+        if (report.formData.laminator !== undefined) {
+            setLaminator(report.formData.laminator as string);
+        }
+
+        // Load lamination position
+        if (report.formData.laminationPosition !== undefined) {
+            setLaminationPosition(report.formData.laminationPosition as string);
+        }
+
+        // Load lamination parameters
+        if (report.formData.lamParams !== undefined) {
+            const params = JSON.parse(report.formData.lamParams as string);
+            setLamParams(params);
+        }
+
+        // Load editable text fields
+        const editableInputs: { [key: string]: string } = {};
+        for (let i = 0; i <= 33; i++) {
+            const key = `adhesion_editable_${i}`;
+            if (report.formData[key] !== undefined) {
+                editableInputs[key] = report.formData[key] as string;
+            }
+        }
+        setEditableValues(editableInputs);
+
+        // Load data cells
+        const dataInputs: { [key: string]: string } = {};
+        for (let i = 0; i <= 19; i++) {
+            const key = `adhesion_data_${i}`;
             if (report.formData[key] !== undefined) {
                 const value = report.formData[key] as string;
-                cell.textContent = value;
-                if (value.trim()) cell.classList.add('has-content');
-                else cell.classList.remove('has-content');
+                dataInputs[key] = value || '-';
+            } else {
+                dataInputs[key] = '-';
             }
-        });
+        }
+        setDataValues(dataInputs);
+        dataValuesRef.current = { ...dataInputs };
 
         if (report.formData.preparedBySignature !== undefined) {
             setPreparedBySignature(report.formData.preparedBySignature as string);
@@ -523,19 +581,24 @@ export default function AdhesionTest() {
     const saveFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
-        const editableCells = document.querySelectorAll('.adhesion-editable');
-        editableCells.forEach((cell, index) => {
-            formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
+        // Save editable text fields
+        Object.keys(editableValues).forEach(key => {
+            formData[key] = editableValues[key];
         });
 
-        const dataCells = document.querySelectorAll('.adhesion-data-cell');
-        dataCells.forEach((cell, index) => {
-            formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
+        // Save data cells
+        Object.keys(dataValues).forEach(key => {
+            formData[key] = dataValues[key] || '-';
         });
 
         formData.preparedBySignature = preparedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
         formData.reportName = adhesionReportName;
+        formData.testDate = testDate;
+        formData.shift = shift;
+        formData.laminator = laminator;
+        formData.laminationPosition = laminationPosition;
+        formData.lamParams = JSON.stringify(lamParams);
 
         sessionStorage.setItem('adhesionTestFormData', JSON.stringify(formData));
     };
@@ -546,24 +609,34 @@ export default function AdhesionTest() {
             const formData = JSON.parse(savedData);
 
             if (formData.reportName !== undefined) setAdhesionReportName(formData.reportName);
+            if (formData.testDate !== undefined) setTestDate(formData.testDate);
+            if (formData.shift !== undefined) setShift(formData.shift);
+            if (formData.laminator !== undefined) setLaminator(formData.laminator);
+            if (formData.laminationPosition !== undefined) setLaminationPosition(formData.laminationPosition);
+            if (formData.lamParams !== undefined) setLamParams(JSON.parse(formData.lamParams));
 
-            const editableCells = document.querySelectorAll('.adhesion-editable');
-            editableCells.forEach((cell, index) => {
-                const key = `adhesion_editable_${index}`;
+            // Load editable text fields
+            const editableInputs: { [key: string]: string } = {};
+            for (let i = 0; i <= 33; i++) {
+                const key = `adhesion_editable_${i}`;
                 if (formData[key] !== undefined) {
-                    cell.textContent = formData[key] as string;
-                    if ((formData[key] as string).trim()) cell.classList.add('has-content');
+                    editableInputs[key] = formData[key];
                 }
-            });
+            }
+            setEditableValues(editableInputs);
 
-            const dataCells = document.querySelectorAll('.adhesion-data-cell');
-            dataCells.forEach((cell, index) => {
-                const key = `adhesion_data_${index}`;
+            // Load data cells
+            const dataInputs: { [key: string]: string } = {};
+            for (let i = 0; i <= 19; i++) {
+                const key = `adhesion_data_${i}`;
                 if (formData[key] !== undefined) {
-                    cell.textContent = formData[key] as string;
-                    if ((formData[key] as string).trim()) cell.classList.add('has-content');
+                    dataInputs[key] = formData[key];
+                } else {
+                    dataInputs[key] = '-';
                 }
-            });
+            }
+            setDataValues(dataInputs);
+            dataValuesRef.current = { ...dataInputs };
 
             if (formData.preparedBySignature !== undefined) {
                 setPreparedBySignature(formData.preparedBySignature as string);
@@ -577,24 +650,33 @@ export default function AdhesionTest() {
             }, 100);
 
             setHasUnsavedChanges(true);
+        } else {
+            // Initialize data cells with hyphens if no saved data
+            initializeDataCellsWithHyphens();
         }
     };
 
     const clearFormData = (clearEditingState = true) => {
-        const editableCells = document.querySelectorAll('.adhesion-editable');
-        editableCells.forEach(cell => {
-            cell.textContent = '';
-            cell.classList.remove('has-content');
-        });
-
-        const dataCells = document.querySelectorAll('.adhesion-data-cell');
-        dataCells.forEach(cell => {
-            cell.textContent = '';
-            cell.classList.remove('has-content');
-        });
+        setEditableValues({});
+        
+        const initialDataInputs: { [key: string]: string } = {};
+        for (let i = 0; i <= 19; i++) {
+            initialDataInputs[`adhesion_data_${i}`] = '-';
+        }
+        setDataValues(initialDataInputs);
+        dataValuesRef.current = { ...initialDataInputs };
 
         setPreparedBySignature('');
         setVerifiedBySignature('');
+        setTestDate(new Date().toISOString().split('T')[0]);
+        setShift('');
+        setLaminator('');
+        setLaminationPosition('');
+        setLamParams({
+            lam1: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' },
+            lam2: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' },
+            lam3: { pumpingTime: '', pressingTime: '', ventingTime: '', processTime: '' }
+        });
 
         if (clearEditingState) {
             setAdhesionReportName('');
@@ -605,7 +687,7 @@ export default function AdhesionTest() {
         // Reset average cells
         const avgCells = document.querySelectorAll('.front-min-avg, .front-max-avg, .back-min-avg, .back-max-avg');
         avgCells.forEach(cell => {
-            cell.textContent = '0';
+            cell.textContent = '-';
         });
 
         if (clearEditingState) {
@@ -640,16 +722,16 @@ export default function AdhesionTest() {
             const averages: { [key: string]: string } = {};
 
             const frontMinAvgCell = document.querySelector('.front-min-avg');
-            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '0';
+            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '-';
 
             const frontMaxAvgCell = document.querySelector('.front-max-avg');
-            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '0';
+            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '-';
 
             const backMinAvgCell = document.querySelector('.back-min-avg');
-            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '0';
+            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '-';
 
             const backMaxAvgCell = document.querySelector('.back-max-avg');
-            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '0';
+            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '-';
 
             const reportData: Omit<AdhesionTestReport, '_id'> = {
                 name: adhesionReportName,
@@ -658,18 +740,23 @@ export default function AdhesionTest() {
                 averages: averages,
             };
 
-            const editableCells = document.querySelectorAll('.adhesion-editable');
-            editableCells.forEach((cell, index) => {
-                reportData.formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
+            // Save editable text fields
+            Object.keys(editableValues).forEach(key => {
+                reportData.formData[key] = editableValues[key];
             });
 
-            const dataCells = document.querySelectorAll('.adhesion-data-cell');
-            dataCells.forEach((cell, index) => {
-                reportData.formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
+            // Save data cells
+            Object.keys(dataValues).forEach(key => {
+                reportData.formData[key] = dataValues[key] || '-';
             });
 
             reportData.formData.preparedBySignature = preparedBySignature;
             reportData.formData.verifiedBySignature = verifiedBySignature;
+            reportData.formData.testDate = testDate;
+            reportData.formData.shift = shift;
+            reportData.formData.laminator = laminator;
+            reportData.formData.laminationPosition = laminationPosition;
+            reportData.formData.lamParams = JSON.stringify(lamParams);
 
             const editingId = sessionStorage.getItem('editingReportId');
 
@@ -777,32 +864,37 @@ export default function AdhesionTest() {
 
             const formData: { [key: string]: string | boolean } = {};
 
-            const editableCells = document.querySelectorAll('.adhesion-editable');
-            editableCells.forEach((cell, index) => {
-                formData[`adhesion_editable_${index}`] = cell.textContent?.trim() || '';
+            // Save editable text fields
+            Object.keys(editableValues).forEach(key => {
+                formData[key] = editableValues[key];
             });
 
-            const dataCells = document.querySelectorAll('.adhesion-data-cell');
-            dataCells.forEach((cell, index) => {
-                formData[`adhesion_data_${index}`] = cell.textContent?.trim() || '';
+            // Save data cells
+            Object.keys(dataValues).forEach(key => {
+                formData[key] = dataValues[key] || '-';
             });
 
             formData.preparedBySignature = preparedBySignature;
             formData.verifiedBySignature = verifiedBySignature;
+            formData.testDate = testDate;
+            formData.shift = shift;
+            formData.laminator = laminator;
+            formData.laminationPosition = laminationPosition;
+            formData.lamParams = JSON.stringify(lamParams);
 
             const averages: { [key: string]: string } = {};
 
             const frontMinAvgCell = document.querySelector('.front-min-avg');
-            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '0';
+            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '-';
 
             const frontMaxAvgCell = document.querySelector('.front-max-avg');
-            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '0';
+            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '-';
 
             const backMinAvgCell = document.querySelector('.back-min-avg');
-            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '0';
+            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '-';
 
             const backMaxAvgCell = document.querySelector('.back-max-avg');
-            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '0';
+            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '-';
 
             const adhesionReportData = {
                 report_name: adhesionReportName.trim() || 'Adhesion_Test_Report',
@@ -873,29 +965,38 @@ export default function AdhesionTest() {
     };
 
     useEffect(() => {
-        const editableCells = document.querySelectorAll('.adhesion-editable:not(.adhesion-data-cell)');
-        editableCells.forEach(cell => {
-            cell.addEventListener('click', handleEditableCellClick);
-        });
-
-        const dataCells = document.querySelectorAll('.adhesion-data-cell');
-        dataCells.forEach(cell => {
-            cell.addEventListener('click', handleDataCellClick);
-        });
-
-        return () => {
-            editableCells.forEach(cell => {
-                cell.removeEventListener('click', handleEditableCellClick);
-            });
-            dataCells.forEach(cell => {
-                cell.removeEventListener('click', handleDataCellClick);
-            });
-        };
-    }, []);
-
-    useEffect(() => {
         if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
     }, [adhesionReportName]);
+
+    // Define editable field keys
+    const editableFieldKeys = [
+        'adhesion_editable_0',  // Type of Test
+        'adhesion_editable_1',  // P.O.
+        'adhesion_editable_2',  // Room Temp
+        'adhesion_editable_3',  // RH %
+        'adhesion_editable_4',  // Set Temp Lam-1
+        'adhesion_editable_5',  // Set Temp Lam-2
+        'adhesion_editable_6',  // Set Temp Lam-3
+        'adhesion_editable_7',  // Pumping time Lam-1 (handled separately)
+        'adhesion_editable_8',  // Pumping time Lam-2 (handled separately)
+        'adhesion_editable_9',  // Pumping time Lam-3 (handled separately)
+        'adhesion_editable_10', // Pressing time Lam-1 (handled separately)
+        'adhesion_editable_11', // Pressing time Lam-2 (handled separately)
+        'adhesion_editable_12', // Pressing time Lam-3 (handled separately)
+        'adhesion_editable_13', // Venting time Lam-1 (handled separately)
+        'adhesion_editable_14', // Venting time Lam-2 (handled separately)
+        'adhesion_editable_15', // Venting time Lam-3 (handled separately)
+        'adhesion_editable_16', // Process time Lam-1 (auto-calculated)
+        'adhesion_editable_17', // Process time Lam-2 (auto-calculated)
+        'adhesion_editable_18', // Process time Lam-3 (auto-calculated)
+        'adhesion_editable_19', // Front Encapsulant Supplier
+        'adhesion_editable_20', // Front Encapsulant Type
+        'adhesion_editable_21', // Back Encapsulant Supplier
+        'adhesion_editable_22', // Back Encapsulant Type
+        'adhesion_editable_23', // Back Sheet Supplier
+        'adhesion_editable_24', // Glass Supplier
+        'adhesion_editable_25', // Glass Size
+    ];
 
     return (
         <>
@@ -989,42 +1090,137 @@ export default function AdhesionTest() {
                                         </tr>
                                         <tr>
                                             <td colSpan={8}>
-
                                                 <div className="allowable-limit p-2.5 bg-gray-50 dark:bg-gray-900 border-l-4 border-l-blue-500 dark:border-l-blue-400 text-left">
                                                     <strong className="text-gray-800 dark:text-white">Allowable Limit:</strong>
                                                     <span className="text-gray-700 dark:text-gray-300"> (Glass to Encapsulant ≥ 60N/cm & Backsheet to Encapsulant ≥ 40N/cm)</span>
                                                 </div>
                                             </td>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[0]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[0], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Type of Test"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Date:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="date"
+                                                    value={testDate}
+                                                    onChange={(e) => {
+                                                        setTestDate(e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Shift:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <select
+                                                    value={shift}
+                                                    onChange={(e) => {
+                                                        setShift(e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                >
+                                                    <option value="">Select Shift</option>
+                                                    <option value="A">A</option>
+                                                    <option value="B">B</option>
+                                                    <option value="C">C</option>
+                                                    <option value="G">G</option>
+                                                </select>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O.:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[1]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[1], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="P.O."
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Room Temp (°C):</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[2]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[2], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Room Temp"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">RH %:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[3]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[3], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="RH %"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Laminator:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <select
+                                                    value={laminator}
+                                                    onChange={(e) => {
+                                                        setLaminator(e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                >
+                                                    <option value="">Select Laminator</option>
+                                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                                                        <Fragment key={num}>
+                                                            <option value={`${num} (Lower)`}>{num} (Lower)</option>
+                                                            <option value={`${num} (Upper)`}>{num} (Upper)</option>
+                                                        </Fragment>
+                                                    ))}
+                                                </select>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lamination Position:</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <select
+                                                    value={laminationPosition}
+                                                    onChange={(e) => {
+                                                        setLaminationPosition(e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                >
+                                                    <option value="">Select Position</option>
+                                                    <option value="A">A</option>
+                                                    <option value="B">B</option>
+                                                    <option value="C">C</option>
+                                                    <option value="D">D</option>
+                                                    <option value="E">E</option>
+                                                    <option value="F">F</option>
+                                                    <option value="G">G</option>
+                                                </select>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={14} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">LAMINATION PARAMETER</td>
@@ -1038,68 +1234,226 @@ export default function AdhesionTest() {
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Set Temp. (°C) :</td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[4]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[4], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Set Temp Lam-1"
+                                                />
+                                            </td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[5]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[5], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Set Temp Lam-2"
+                                                />
+                                            </td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[6]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[6], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Set Temp Lam-3"
+                                                />
+                                            </td>
                                         </tr>
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pumping time (Sec) :</td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam1.pumpingTime}
+                                                    onChange={(e) => handleLamParamChange('lam1', 'pumpingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping time"
+                                                />
+                                            </td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam2.pumpingTime}
+                                                    onChange={(e) => handleLamParamChange('lam2', 'pumpingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping time"
+                                                />
+                                            </td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam3.pumpingTime}
+                                                    onChange={(e) => handleLamParamChange('lam3', 'pumpingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pumping time"
+                                                />
+                                            </td>
                                         </tr>
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pressing /Cooling time (Sec) :</td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam1.pressingTime}
+                                                    onChange={(e) => handleLamParamChange('lam1', 'pressingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling time"
+                                                />
+                                            </td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam2.pressingTime}
+                                                    onChange={(e) => handleLamParamChange('lam2', 'pressingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling time"
+                                                />
+                                            </td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam3.pressingTime}
+                                                    onChange={(e) => handleLamParamChange('lam3', 'pressingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Pressing/Cooling time"
+                                                />
+                                            </td>
                                         </tr>
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting time (Sec) :</td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam1.ventingTime}
+                                                    onChange={(e) => handleLamParamChange('lam1', 'ventingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting time"
+                                                />
+                                            </td>
+                                            <td colSpan={4}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam2.ventingTime}
+                                                    onChange={(e) => handleLamParamChange('lam2', 'ventingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting time"
+                                                />
+                                            </td>
+                                            <td colSpan={5}>
+                                                <input
+                                                    type="text"
+                                                    value={lamParams.lam3.ventingTime}
+                                                    onChange={(e) => handleLamParamChange('lam3', 'ventingTime', e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Venting time"
+                                                />
+                                            </td>
                                         </tr>
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process time (Sec) :</td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={4} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
-                                            <td colSpan={5} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                                {lamParams.lam1.processTime || '-'}
+                                            </td>
+                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                                {lamParams.lam2.processTime || '-'}
+                                            </td>
+                                            <td colSpan={5} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                                {lamParams.lam3.processTime || '-'}
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={14} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">RAW MATERIAL DETAILS</td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Front Encapsulant Supplier :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[19]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[19], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Front Encapsulant Supplier"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Front Encapsulant Type :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[20]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[20], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Front Encapsulant Type"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Back Encapsulant Supplier :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[21]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[21], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Back Encapsulant Supplier"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Back Encapsulant Type :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[22]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[22], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Back Encapsulant Type"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Back Sheet Supplier :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[23]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[23], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Back Sheet Supplier"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Supplier :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[24]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[24], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Glass Supplier"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
-                                            <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size :</td>
-                                            <td colSpan={13} className="adhesion-editable min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2"></td>
+                                            <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size (mm) :</td>
+                                            <td colSpan={13}>
+                                                <input
+                                                    type="text"
+                                                    value={editableValues[editableFieldKeys[25]] || ''}
+                                                    onChange={(e) => handleEditableChange(editableFieldKeys[25], e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                                                    placeholder="Glass Size (mm)"
+                                                />
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={14} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">ADHESION STRENGTH</td>
@@ -1115,21 +1469,72 @@ export default function AdhesionTest() {
                                             <td colSpan={3} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Min</td>
                                             <td colSpan={4} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Max</td>
                                         </tr>
-                                        {[1, 2, 3, 4, 5].map(pos => (
-                                            <tr key={pos}>
-                                                <td className="p-2 text-center bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-bold">{pos}</td>
-                                                <td colSpan={3} className="adhesion-editable adhesion-data-cell front-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={3} className="adhesion-editable adhesion-data-cell front-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={3} className="adhesion-editable adhesion-data-cell back-min-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                                <td colSpan={4} className="adhesion-editable adhesion-data-cell back-max-cell min-h-5 cursor-text relative border border-transparent transition-border-color duration-200 ease-in-out dark:text-white hover:border-blue-500 dark:hover:border-blue-400 p-2 text-center"></td>
-                                            </tr>
-                                        ))}
+                                        {[0, 1, 2, 3, 4].map(pos => {
+                                            const frontMinKey = `adhesion_data_${pos * 4}`;
+                                            const frontMaxKey = `adhesion_data_${pos * 4 + 1}`;
+                                            const backMinKey = `adhesion_data_${pos * 4 + 2}`;
+                                            const backMaxKey = `adhesion_data_${pos * 4 + 3}`;
+                                            const frontMinValue = dataValues[frontMinKey];
+                                            const frontMaxValue = dataValues[frontMaxKey];
+                                            const backMinValue = dataValues[backMinKey];
+                                            const backMaxValue = dataValues[backMaxKey];
+                                            
+                                            return (
+                                                <tr key={pos}>
+                                                    <td className="p-2 text-center bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-bold">{pos + 1}</td>
+                                                    <td colSpan={3}>
+                                                        <input
+                                                            type="text"
+                                                            value={frontMinValue}
+                                                            onChange={(e) => handleDataChange(frontMinKey, e.target.value)}
+                                                            onFocus={() => handleDataFocus(frontMinKey)}
+                                                            onBlur={(e) => handleDataBlur(frontMinKey, e.target.value)}
+                                                            className="front-min-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            placeholder="-"
+                                                        />
+                                                    </td>
+                                                    <td colSpan={3}>
+                                                        <input
+                                                            type="text"
+                                                            value={frontMaxValue}
+                                                            onChange={(e) => handleDataChange(frontMaxKey, e.target.value)}
+                                                            onFocus={() => handleDataFocus(frontMaxKey)}
+                                                            onBlur={(e) => handleDataBlur(frontMaxKey, e.target.value)}
+                                                            className="front-max-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            placeholder="-"
+                                                        />
+                                                    </td>
+                                                    <td colSpan={3}>
+                                                        <input
+                                                            type="text"
+                                                            value={backMinValue}
+                                                            onChange={(e) => handleDataChange(backMinKey, e.target.value)}
+                                                            onFocus={() => handleDataFocus(backMinKey)}
+                                                            onBlur={(e) => handleDataBlur(backMinKey, e.target.value)}
+                                                            className="back-min-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            placeholder="-"
+                                                        />
+                                                    </td>
+                                                    <td colSpan={4}>
+                                                        <input
+                                                            type="text"
+                                                            value={backMaxValue}
+                                                            onChange={(e) => handleDataChange(backMaxKey, e.target.value)}
+                                                            onFocus={() => handleDataFocus(backMaxKey)}
+                                                            onBlur={(e) => handleDataBlur(backMaxKey, e.target.value)}
+                                                            className="back-max-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            placeholder="-"
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">AVERAGE</td>
-                                            <td colSpan={3} className="front-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                            <td colSpan={3} className="front-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                            <td colSpan={3} className="back-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                            <td colSpan={4} className="back-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
+                                            <td colSpan={3} className="front-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
+                                            <td colSpan={3} className="front-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
+                                            <td colSpan={3} className="back-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
+                                            <td colSpan={4} className="back-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
                                         </tr>
                                     </tbody>
                                 </table>

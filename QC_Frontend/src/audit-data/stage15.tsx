@@ -103,7 +103,7 @@ const AutoTrimmingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${machine}-${timeSlot}`] || ''}
+                                value={sampleValue[`${machine}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(machine, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },
@@ -141,7 +141,7 @@ const AutoTrimmingObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[machine] || ''}
+                            value={sampleValue[machine] || 'Checked OK'}
                             onChange={(value) => handleUpdate(machine, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },

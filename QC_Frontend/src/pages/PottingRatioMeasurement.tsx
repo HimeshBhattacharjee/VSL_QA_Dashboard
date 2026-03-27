@@ -1329,7 +1329,7 @@ export default function PottingRatioMeasurement() {
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['1'].ratio}
+                                                        value={currentEntry.lines['1'].ratio ? `${currentEntry.lines['1'].ratio}:1` : ''}
                                                         readOnly
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"
@@ -1422,7 +1422,7 @@ export default function PottingRatioMeasurement() {
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={currentEntry.lines['2'].ratio}
+                                                        value={currentEntry.lines['2'].ratio ? `${currentEntry.lines['2'].ratio}:1` : ''}
                                                         readOnly
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"

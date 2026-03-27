@@ -101,7 +101,7 @@ const LaminateInspectionObservations = {
 
 export const laminateInspectionStage: StageData = {
     id: 16,
-    name: "Laminate inspection",
+    name: "Laminate Inspection",
     parameters: [
         {
             id: "16-1",

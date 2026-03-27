@@ -36,8 +36,8 @@ export const roboticLayupStage: StageData = {
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hours",
             observations: [
-                { timeSlot: "4 hrs", value: "" },
-                { timeSlot: "8 hrs", value: "" }
+                { timeSlot: "4 hrs", value: "Checked OK" },
+                { timeSlot: "8 hrs", value: "Checked OK" }
             ],
             renderObservation: RoboticLayupObservations.renderSelector
         }
