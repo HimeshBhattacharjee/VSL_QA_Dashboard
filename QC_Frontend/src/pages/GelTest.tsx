@@ -13,6 +13,20 @@ interface GelTestReport {
     averages: { [key: string]: string; };
 }
 
+interface DateShiftTimeValue {
+    date: string;
+    shift: string;
+    time: string;
+}
+
+interface MeasurementRow {
+    label: string;
+    dataKeys: string[];
+    dateShiftTimeKey?: string;
+    dateShiftTimeField?: 'date' | 'shift' | 'time';
+    dateShiftTimeRowSpan?: number;
+}
+
 export default function GelTest() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
@@ -27,20 +41,44 @@ export default function GelTest() {
     const { showConfirm } = useConfirmModal();
     const GEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/gel-test-reports';
     const [preparedBySignature, setPreparedBySignature] = useState<string>('');
-    const [acceptedBySignature, setAcceptedBySignature] = useState<string>('');
     const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
-    
-    // New state variables for date and shift
-    const [testDate, setTestDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [shift, setShift] = useState<string>('');
-    
-    // State for all editable input values
     const [editableValues, setEditableValues] = useState<{ [key: string]: string }>({});
-    // State for data cells (gel data cells)
     const [dataValues, setDataValues] = useState<{ [key: string]: string }>({});
-    // State for checkboxes
     const [checkboxValues, setCheckboxValues] = useState<{ [key: string]: boolean }>({});
+    const [averageValues, setAverageValues] = useState<string[]>(Array(7).fill('0'));
+    const [meanValue, setMeanValue] = useState('0');
 
+    const buildFieldKey = (index: number) => `gel_editable_${index}`;
+    const totalFieldCount = 81;
+    const encapsulantSupplierKey = buildFieldKey(80);
+    const checkboxKeys = ['checkbox_0', 'checkbox_1', 'checkbox_2', 'checkbox_3', 'checkbox_4'] as const;
+    const dateShiftTimeFieldKeys = ['gel_editable_42', 'gel_editable_53', 'gel_editable_69'] as const;
+    const dateShiftTimeFieldKeySet = new Set<string>(dateShiftTimeFieldKeys);
+    const measurementRows: MeasurementRow[] = [
+        { dateShiftTimeKey: 'gel_editable_42', dateShiftTimeField: 'date', dateShiftTimeRowSpan: 2, label: 'A', dataKeys: [43, 44, 45, 46, 47].map(buildFieldKey) },
+        { label: 'B', dataKeys: [48, 49, 50, 51, 52].map(buildFieldKey) },
+        { dateShiftTimeKey: 'gel_editable_53', dateShiftTimeField: 'shift', dateShiftTimeRowSpan: 3, label: 'C', dataKeys: [54, 55, 56, 57, 58].map(buildFieldKey) },
+        { label: 'D', dataKeys: [59, 60, 61, 62, 63].map(buildFieldKey) },
+        { label: 'E', dataKeys: [64, 65, 66, 67, 68].map(buildFieldKey) },
+        { dateShiftTimeKey: 'gel_editable_69', dateShiftTimeField: 'time', dateShiftTimeRowSpan: 2, label: 'F', dataKeys: [70, 71, 72, 73, 74].map(buildFieldKey) },
+        { label: 'G', dataKeys: [75, 76, 77, 78, 79].map(buildFieldKey) },
+    ];
+    const dataFieldKeys = measurementRows.flatMap(row => row.dataKeys);
+    const dataFieldKeySet = new Set(dataFieldKeys);
+    const emptyDateShiftTimeValue: DateShiftTimeValue = { date: '', shift: '', time: '' };
+    const createInitialDateShiftTimeValues = (): Record<string, DateShiftTimeValue> => ({
+        gel_editable_42: { ...emptyDateShiftTimeValue },
+        gel_editable_53: { ...emptyDateShiftTimeValue },
+        gel_editable_69: { ...emptyDateShiftTimeValue },
+    });
+    const [dateShiftTimeValues, setDateShiftTimeValues] = useState<Record<string, DateShiftTimeValue>>(createInitialDateShiftTimeValues);
+    const previousDataValuesRef = useRef<{ [key: string]: string }>({});
+    const suppressAutoSaveRef = useRef(true);
+    const getDateShiftTimeFieldType = (key: string): 'date' | 'shift' | 'time' => {
+        if (key === 'gel_editable_42') return 'date';
+        if (key === 'gel_editable_53') return 'shift';
+        return 'time';
+    };
     const apiService = {
         getAllReports: async (): Promise<GelTestReport[]> => {
             const response = await fetch(`${GEL_API_BASE_URL}`);
@@ -146,130 +184,347 @@ export default function GelTest() {
         return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
     }, []);
 
-    const initializeForm = () => { 
-        calculateAverages();
-        initializeDataCellsWithHyphens();
+    const initializeForm = () => {
+        setAverageValues(Array(7).fill('0'));
+        setMeanValue('0');
     };
 
-    const initializeDataCellsWithHyphens = () => {
-        const initialData: { [key: string]: string } = {};
-        // Initialize all data cells (positions A-G with 5 readings each)
-        // Total 7 positions * 5 readings = 35 cells
-        for (let i = 0; i < 35; i++) {
-            initialData[`gel_data_${i}`] = '';
+    const formatDateShiftTimeValue = (key: string, value: { date: string; shift: string; time: string }) =>
+        value[getDateShiftTimeFieldType(key)] || '';
+
+    const materialInfoLabelKeyPairs = [
+        { frontLabelKey: buildFieldKey(13), backLabelKey: buildFieldKey(15) },
+        { frontLabelKey: buildFieldKey(20), backLabelKey: buildFieldKey(22) },
+        { frontLabelKey: buildFieldKey(27), backLabelKey: buildFieldKey(29) },
+        { frontLabelKey: buildFieldKey(34), backLabelKey: buildFieldKey(36) },
+    ];
+
+    const parseDateShiftTimeValue = (formData: { [key: string]: string | boolean }, key: string) => {
+        const storedDate = formData[`${key}_date`];
+        const storedShift = formData[`${key}_shift`];
+        const storedTime = formData[`${key}_time`];
+        const fieldType = getDateShiftTimeFieldType(key);
+
+        if (typeof storedDate === 'string' || typeof storedShift === 'string' || typeof storedTime === 'string') {
+            return {
+                date: typeof storedDate === 'string' ? storedDate : '',
+                shift: typeof storedShift === 'string' ? storedShift : '',
+                time: typeof storedTime === 'string' ? storedTime : '',
+            };
         }
-        setDataValues(initialData);
+
+        const combinedValue = typeof formData[key] === 'string' ? formData[key] : '';
+        if (!combinedValue) return { ...emptyDateShiftTimeValue };
+
+        if (!combinedValue.includes('|')) {
+            return {
+                date: fieldType === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(combinedValue) ? combinedValue : '',
+                shift: fieldType === 'shift' && ['A', 'B', 'C', 'G'].includes(combinedValue) ? combinedValue : '',
+                time: fieldType === 'time' ? combinedValue : '',
+            };
+        }
+
+        const parts = combinedValue.split('|').map(part => part.trim());
+        const [date = '', shift = '', time = ''] = parts;
+
+        return {
+            date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+            shift: ['A', 'B', 'C', 'G'].includes(shift) ? shift : '',
+            time: /^\d{4}-\d{2}-\d{2}$/.test(date) || ['A', 'B', 'C', 'G'].includes(shift)
+                ? time
+                : combinedValue,
+        };
     };
 
-    const calculateAverages = () => {
-        // Group data by position (7 positions: A, B, C, D, E, F, G)
-        // Each position has 5 readings (indices 0-4 for position A, 5-9 for B, etc.)
-        const positions = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-        
-        positions.forEach((position, posIndex) => {
+    const buildFormData = () => {
+        const formData: { [key: string]: string | boolean } = {};
+
+        for (let index = 0; index < totalFieldCount; index++) {
+            const key = buildFieldKey(index);
+
+            if (dateShiftTimeFieldKeySet.has(key)) {
+                const structuredValue = dateShiftTimeValues[key] || emptyDateShiftTimeValue;
+                formData[key] = formatDateShiftTimeValue(key, structuredValue);
+                formData[`${key}_date`] = structuredValue.date;
+                formData[`${key}_shift`] = structuredValue.shift;
+                formData[`${key}_time`] = structuredValue.time;
+                continue;
+            }
+
+            if (dataFieldKeySet.has(key)) {
+                formData[key] = dataValues[key] || '';
+                continue;
+            }
+
+            formData[key] = editableValues[key] || '';
+        }
+
+        checkboxKeys.forEach(key => {
+            formData[key] = checkboxValues[key] || false;
+        });
+
+        materialInfoLabelKeyPairs.forEach(({ frontLabelKey, backLabelKey }) => {
+            formData[frontLabelKey] = 'Front';
+            formData[backLabelKey] = 'Back';
+        });
+
+        formData.preparedBySignature = preparedBySignature;
+        formData.verifiedBySignature = verifiedBySignature;
+        formData.reportName = gelReportName;
+
+        return formData;
+    };
+
+    const buildAverages = () => {
+        const averages: { [key: string]: string } = {};
+
+        averageValues.forEach((value, index) => {
+            averages[`average_${index}`] = value;
+        });
+
+        averages.mean = meanValue;
+        return averages;
+    };
+
+    const applyStoredFormData = (formData: { [key: string]: string | boolean }, reportName?: string) => {
+        suppressAutoSaveRef.current = true;
+
+        const nextEditableValues: { [key: string]: string } = {};
+        const nextDataValues: { [key: string]: string } = {};
+        const nextCheckboxValues: { [key: string]: boolean } = {};
+        const nextDateShiftTimeValues = createInitialDateShiftTimeValues();
+
+        for (let index = 0; index < totalFieldCount; index++) {
+            const key = buildFieldKey(index);
+
+            if (dateShiftTimeFieldKeySet.has(key)) {
+                nextDateShiftTimeValues[key] = parseDateShiftTimeValue(formData, key);
+                continue;
+            }
+
+            if (dataFieldKeySet.has(key)) {
+                nextDataValues[key] = typeof formData[key] === 'string' ? formData[key] as string : '';
+                continue;
+            }
+
+            nextEditableValues[key] = typeof formData[key] === 'string' ? formData[key] as string : '';
+        }
+
+        checkboxKeys.forEach(key => {
+            nextCheckboxValues[key] = Boolean(formData[key]);
+        });
+
+        previousDataValuesRef.current = { ...nextDataValues };
+        setEditableValues(nextEditableValues);
+        setDataValues(nextDataValues);
+        setCheckboxValues(nextCheckboxValues);
+        setDateShiftTimeValues(nextDateShiftTimeValues);
+        setPreparedBySignature(typeof formData.preparedBySignature === 'string' ? formData.preparedBySignature : '');
+        setVerifiedBySignature(typeof formData.verifiedBySignature === 'string' ? formData.verifiedBySignature : '');
+
+        if (typeof reportName === 'string') {
+            setGelReportName(reportName);
+        } else if (typeof formData.reportName === 'string') {
+            setGelReportName(formData.reportName);
+        }
+    };
+
+    const saveFormData = () => {
+        sessionStorage.setItem('gelTestFormData', JSON.stringify(buildFormData()));
+    };
+
+    const isValidDataValue = (value: string): boolean => {
+        return value === '' ||
+            !isNaN(parseFloat(value)) ||
+            (!isNaN(parseFloat(value.replace('%', ''))) && value.includes('%'));
+    };
+
+    const validateDataFields = () => {
+        const invalidKey = dataFieldKeys.find(key => !isValidDataValue((dataValues[key] || '').trim()));
+
+        if (invalidKey) {
+            showAlert('error', 'Please enter a valid number (with or without % sign)');
+            return false;
+        }
+
+        return true;
+    };
+
+    const parseNumericDataValue = (value: string) => {
+        const numericValue = parseFloat(value.trim().replace(/%/g, ''));
+        return Number.isNaN(numericValue) ? null : numericValue;
+    };
+
+    const shouldHighlightPlatenValue = (key: string) => {
+        const numericValue = parseNumericDataValue(dataValues[key] || '');
+
+        if (numericValue === null) {
+            return false;
+        }
+
+        const isEvaOrEpeSelected = Boolean(checkboxValues[checkboxKeys[2]] || checkboxValues[checkboxKeys[3]]);
+        const isPoeSelected = Boolean(checkboxValues[checkboxKeys[4]]);
+
+        return (isEvaOrEpeSelected && (numericValue < 75 || numericValue > 95))
+            || (isPoeSelected && numericValue < 60);
+    };
+
+    const normalizeDateValue = (value: string) => {
+        const trimmedValue = value.trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedValue)) {
+            return trimmedValue;
+        }
+
+        const legacyDateMatch = trimmedValue.match(/^(\d{2})[./-](\d{2})[./-](\d{4})$/);
+
+        if (legacyDateMatch) {
+            const [, day, month, year] = legacyDateMatch;
+            return `${year}-${month}-${day}`;
+        }
+
+        return '';
+    };
+
+    const getDateInputValue = (key: string) => {
+        return normalizeDateValue(editableValues[key] || '');
+    };
+
+    const calculateAverages = (currentDataValues: { [key: string]: string }) => {
+        const calculatedAverages = measurementRows.map(row => {
             let sum = 0;
             let count = 0;
             let hasPercentage = false;
-            
-            for (let i = 0; i < 5; i++) {
-                const dataIndex = posIndex * 5 + i;
-                const key = `gel_data_${dataIndex}`;
-                const value = dataValues[key] || '';
-                
-                if (value && value.trim() !== '') {
+
+            row.dataKeys.forEach(key => {
+                const value = (currentDataValues[key] || '').trim();
+
+                if (value) {
                     if (value.includes('%')) {
                         hasPercentage = true;
                         const numericValue = parseFloat(value.replace('%', ''));
+
                         if (!isNaN(numericValue)) {
                             sum += numericValue;
                             count++;
                         }
                     } else {
                         const numericValue = parseFloat(value);
+
                         if (!isNaN(numericValue)) {
                             sum += numericValue;
                             count++;
                         }
                     }
                 }
-            }
-            
+            });
+
             let average = 0;
             if (count > 0) average = sum / count;
-            let averageDisplay = average.toFixed(2);
-            if (hasPercentage && count > 0) averageDisplay += '%';
-            
-            // Update average cell in DOM
-            const avgCells = document.querySelectorAll('.average-cell');
-            if (avgCells[posIndex]) {
-                avgCells[posIndex].textContent = averageDisplay;
-            }
+
+            let displayValue = average.toFixed(2);
+            if (hasPercentage && count > 0) displayValue += '%';
+
+            return { value: average, hasPercentage, count, displayValue };
         });
-        
-        // Calculate mean of all averages
-        const avgCells = document.querySelectorAll('.average-cell');
-        let totalSum = 0;
-        let validCount = 0;
-        let anyHasPercentage = false;
-        
-        avgCells.forEach(cell => {
-            const text = cell.textContent?.trim() || '';
-            if (text && text !== '0' && text !== '-') {
-                let numericValue = parseFloat(text);
-                if (!isNaN(numericValue)) {
-                    totalSum += numericValue;
-                    validCount++;
-                    if (text.includes('%')) anyHasPercentage = true;
-                }
+
+        setAverageValues(calculatedAverages.map(average => average.displayValue));
+
+        const validAverages = calculatedAverages.filter(average => average.count > 0);
+        if (validAverages.length > 0) {
+            const mean = validAverages.reduce((sum, average) => sum + average.value, 0) / validAverages.length;
+            let meanDisplay = mean.toFixed(2);
+
+            if (validAverages.some(average => average.hasPercentage)) {
+                meanDisplay += '%';
             }
-        });
-        
-        const meanCell = document.querySelector('.mean-cell');
-        if (meanCell) {
-            if (validCount > 0) {
-                const mean = totalSum / validCount;
-                let meanDisplay = mean.toFixed(2);
-                if (anyHasPercentage) meanDisplay += '%';
-                meanCell.textContent = meanDisplay;
-            } else {
-                meanCell.textContent = '0';
-            }
+
+            setMeanValue(meanDisplay);
+            return;
         }
+
+        setMeanValue('0');
     };
 
-    // Handle editable input changes
     const handleEditableChange = (key: string, value: string) => {
         setEditableValues(prev => ({ ...prev, [key]: value }));
         setHasUnsavedChanges(true);
-        setTimeout(() => saveFormData(), 0);
     };
 
-    // Handle data cell changes
+    const handleDateShiftTimeChange = (
+        key: string,
+        field: 'date' | 'shift' | 'time',
+        value: string
+    ) => {
+        setDateShiftTimeValues(prev => ({
+            ...prev,
+            [key]: {
+                ...(prev[key] || emptyDateShiftTimeValue),
+                [field]: value,
+            },
+        }));
+        setHasUnsavedChanges(true);
+    };
+
+    const handleDataFocus = (key: string) => {
+        previousDataValuesRef.current[key] = dataValues[key] || '';
+    };
+
     const handleDataChange = (key: string, value: string) => {
-        // Allow empty string or numbers (with or without %)
-        if (value === '' || value === '-' || !isNaN(parseFloat(value)) || (value.includes('%') && !isNaN(parseFloat(value.replace('%', ''))))) {
-            setDataValues(prev => {
-                const newValues = { ...prev, [key]: value };
-                setTimeout(() => {
-                    calculateAverages();
-                }, 0);
-                return newValues;
-            });
-            setHasUnsavedChanges(true);
-            setTimeout(() => saveFormData(), 0);
-        } else {
-            showAlert('error', 'Please enter a valid number (with or without % sign)');
-        }
+        setDataValues(prev => ({ ...prev, [key]: value }));
+        setHasUnsavedChanges(true);
     };
 
-    // Handle checkbox changes
+    const handleDataBlur = (key: string) => {
+        const value = (dataValues[key] || '').trim();
+
+        if (isValidDataValue(value)) {
+            if (value !== dataValues[key]) {
+                setDataValues(prev => ({ ...prev, [key]: value }));
+            }
+            return;
+        }
+
+        showAlert('error', 'Please enter a valid number (with or without % sign)');
+        setDataValues(prev => ({
+            ...prev,
+            [key]: previousDataValuesRef.current[key] || '',
+        }));
+    };
+
     const handleCheckboxChange = (key: string, checked: boolean) => {
         setCheckboxValues(prev => ({ ...prev, [key]: checked }));
         setHasUnsavedChanges(true);
-        setTimeout(() => saveFormData(), 0);
     };
 
-    const handleAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+    useEffect(() => {
+        calculateAverages(dataValues);
+    }, [dataValues]);
+
+    useEffect(() => {
+        if (gelReportName.trim() && !hasUnsavedChanges) {
+            setHasUnsavedChanges(true);
+        }
+    }, [gelReportName, hasUnsavedChanges]);
+
+    useEffect(() => {
+        if (suppressAutoSaveRef.current) {
+            suppressAutoSaveRef.current = false;
+            return;
+        }
+
+        saveFormData();
+    }, [
+        editableValues,
+        dataValues,
+        checkboxValues,
+        dateShiftTimeValues,
+        preparedBySignature,
+        verifiedBySignature,
+        gelReportName,
+    ]);
+
+    const handleAddSignature = (section: 'prepared' | 'verified') => {
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -278,9 +533,6 @@ export default function GelTest() {
         switch (section) {
             case 'prepared':
                 currentSignature = preparedBySignature;
-                break;
-            case 'accepted':
-                currentSignature = acceptedBySignature;
                 break;
             case 'verified':
                 currentSignature = verifiedBySignature;
@@ -294,10 +546,6 @@ export default function GelTest() {
             showAlert('error', 'Only Operators can add signature to Prepared By section');
             return;
         }
-        if (section === 'accepted' && !['Supervisor', 'Manager'].includes(userRole || '')) {
-            showAlert('error', 'Only Supervisors or Managers can add signature to Accepted By section');
-            return;
-        }
         if (section === 'verified' && !['Supervisor', 'Manager'].includes(userRole || '')) {
             showAlert('error', 'Only Supervisors or Managers can add signature to Verified By section');
             return;
@@ -307,21 +555,15 @@ export default function GelTest() {
             case 'prepared':
                 setPreparedBySignature(signatureText);
                 break;
-            case 'accepted':
-                setAcceptedBySignature(signatureText);
-                break;
             case 'verified':
                 setVerifiedBySignature(signatureText);
                 break;
         }
         setHasUnsavedChanges(true);
-        setTimeout(() => {
-            saveFormData();
-        }, 0);
         showAlert('success', `Signature added to ${section} section`);
     };
 
-    const handleRemoveSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+    const handleRemoveSignature = (section: 'prepared' | 'verified') => {
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -330,9 +572,6 @@ export default function GelTest() {
         switch (section) {
             case 'prepared':
                 currentSignature = preparedBySignature;
-                break;
-            case 'accepted':
-                currentSignature = acceptedBySignature;
                 break;
             case 'verified':
                 currentSignature = verifiedBySignature;
@@ -346,29 +585,20 @@ export default function GelTest() {
             case 'prepared':
                 setPreparedBySignature('');
                 break;
-            case 'accepted':
-                setAcceptedBySignature('');
-                break;
             case 'verified':
                 setVerifiedBySignature('');
                 break;
         }
         setHasUnsavedChanges(true);
-        setTimeout(() => {
-            saveFormData();
-        }, 0);
         showAlert('info', `Signature removed from ${section} section`);
     };
 
-    const canRemoveSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+    const canRemoveSignature = (section: 'prepared' | 'verified') => {
         if (!username) return false;
         let currentSignature = '';
         switch (section) {
             case 'prepared':
                 currentSignature = preparedBySignature;
-                break;
-            case 'accepted':
-                currentSignature = acceptedBySignature;
                 break;
             case 'verified':
                 currentSignature = verifiedBySignature;
@@ -377,15 +607,12 @@ export default function GelTest() {
         return currentSignature.includes(username);
     };
 
-    const canAddSignature = (section: 'prepared' | 'accepted' | 'verified') => {
+    const canAddSignature = (section: 'prepared' | 'verified') => {
         if (!username) return false;
         let currentSignature = '';
         switch (section) {
             case 'prepared':
                 currentSignature = preparedBySignature;
-                break;
-            case 'accepted':
-                currentSignature = acceptedBySignature;
                 break;
             case 'verified':
                 currentSignature = verifiedBySignature;
@@ -395,7 +622,6 @@ export default function GelTest() {
         switch (section) {
             case 'prepared':
                 return userRole === 'Operator';
-            case 'accepted':
             case 'verified':
                 return ['Supervisor', 'Manager'].includes(userRole || '');
             default:
@@ -432,75 +658,7 @@ export default function GelTest() {
     };
 
     const loadReportData = (report: GelTestReport) => {
-        setGelReportName(report.name);
-        
-        // Load date
-        if (report.formData.testDate !== undefined) {
-            setTestDate(report.formData.testDate as string);
-        }
-        
-        // Load shift
-        if (report.formData.shift !== undefined) {
-            setShift(report.formData.shift as string);
-        }
-        
-        // Load editable fields
-        const editableInputs: { [key: string]: string } = {};
-        for (let i = 0; i < 35; i++) {
-            const key = `gel_editable_${i}`;
-            if (report.formData[key] !== undefined) {
-                editableInputs[key] = report.formData[key] as string;
-            }
-        }
-        setEditableValues(editableInputs);
-        
-        // Load data cells
-        const dataInputs: { [key: string]: string } = {};
-        for (let i = 0; i < 35; i++) {
-            const key = `gel_data_${i}`;
-            if (report.formData[key] !== undefined) {
-                dataInputs[key] = report.formData[key] as string;
-            } else {
-                dataInputs[key] = '';
-            }
-        }
-        setDataValues(dataInputs);
-        
-        // Load checkboxes
-        const checkboxInputs: { [key: string]: boolean } = {};
-        for (let i = 0; i < 5; i++) {
-            const key = `checkbox_${i}`;
-            if (report.formData[key] !== undefined) {
-                checkboxInputs[key] = report.formData[key] as boolean;
-            }
-        }
-        setCheckboxValues(checkboxInputs);
-        
-        if (report.formData.preparedBySignature !== undefined) {
-            setPreparedBySignature(report.formData.preparedBySignature as string);
-        } else {
-            setPreparedBySignature('');
-        }
-        
-        if (report.formData.acceptedBySignature !== undefined) {
-            setAcceptedBySignature(report.formData.acceptedBySignature as string);
-        } else {
-            setAcceptedBySignature('');
-        }
-        
-        if (report.formData.verifiedBySignature !== undefined) {
-            setVerifiedBySignature(report.formData.verifiedBySignature as string);
-        } else {
-            setVerifiedBySignature('');
-        }
-        
-        setTimeout(() => {
-            calculateAverages();
-        }, 150);
-        
-        setTimeout(() => {
-            saveFormData();
-        }, 200);
+        applyStoredFormData(report.formData, report.name);
     };
 
     useEffect(() => {
@@ -519,132 +677,38 @@ export default function GelTest() {
         }
     }, [activeTab]);
 
-    const saveFormData = () => {
-        const formData: { [key: string]: string | boolean } = {};
-        
-        // Save editable fields
-        Object.keys(editableValues).forEach(key => {
-            formData[key] = editableValues[key];
-        });
-        
-        // Save data cells
-        Object.keys(dataValues).forEach(key => {
-            formData[key] = dataValues[key] || '';
-        });
-        
-        // Save checkboxes
-        Object.keys(checkboxValues).forEach(key => {
-            formData[key] = checkboxValues[key];
-        });
-        
-        formData.preparedBySignature = preparedBySignature;
-        formData.acceptedBySignature = acceptedBySignature;
-        formData.verifiedBySignature = verifiedBySignature;
-        formData.reportName = gelReportName;
-        formData.testDate = testDate;
-        formData.shift = shift;
-        
-        sessionStorage.setItem('gelTestFormData', JSON.stringify(formData));
-    };
-
     const loadFormData = () => {
         const savedData = sessionStorage.getItem('gelTestFormData');
         if (savedData) {
             const formData = JSON.parse(savedData);
-            
-            if (formData.reportName !== undefined) setGelReportName(formData.reportName);
-            if (formData.testDate !== undefined) setTestDate(formData.testDate);
-            if (formData.shift !== undefined) setShift(formData.shift);
-            
-            // Load editable fields
-            const editableInputs: { [key: string]: string } = {};
-            for (let i = 0; i < 35; i++) {
-                const key = `gel_editable_${i}`;
-                if (formData[key] !== undefined) {
-                    editableInputs[key] = formData[key];
-                }
-            }
-            setEditableValues(editableInputs);
-            
-            // Load data cells
-            const dataInputs: { [key: string]: string } = {};
-            for (let i = 0; i < 35; i++) {
-                const key = `gel_data_${i}`;
-                if (formData[key] !== undefined) {
-                    dataInputs[key] = formData[key];
-                } else {
-                    dataInputs[key] = '';
-                }
-            }
-            setDataValues(dataInputs);
-            
-            // Load checkboxes
-            const checkboxInputs: { [key: string]: boolean } = {};
-            for (let i = 0; i < 5; i++) {
-                const key = `checkbox_${i}`;
-                if (formData[key] !== undefined) {
-                    checkboxInputs[key] = formData[key] as boolean;
-                }
-            }
-            setCheckboxValues(checkboxInputs);
-            
-            if (formData.preparedBySignature !== undefined) {
-                setPreparedBySignature(formData.preparedBySignature as string);
-            }
-            if (formData.acceptedBySignature !== undefined) {
-                setAcceptedBySignature(formData.acceptedBySignature as string);
-            }
-            if (formData.verifiedBySignature !== undefined) {
-                setVerifiedBySignature(formData.verifiedBySignature as string);
-            }
-            
-            setTimeout(() => {
-                calculateAverages();
-            }, 100);
-            
+            applyStoredFormData(formData);
             setHasUnsavedChanges(true);
-        } else {
-            // Initialize data cells with empty values
-            initializeDataCellsWithHyphens();
         }
     };
 
     const clearFormData = (clearEditingState = true) => {
+        suppressAutoSaveRef.current = true;
+        previousDataValuesRef.current = {};
         setEditableValues({});
-        
-        const initialDataInputs: { [key: string]: string } = {};
-        for (let i = 0; i < 35; i++) {
-            initialDataInputs[`gel_data_${i}`] = '';
-        }
-        setDataValues(initialDataInputs);
-        
+        setDataValues({});
         setCheckboxValues({});
+        setDateShiftTimeValues(createInitialDateShiftTimeValues());
         setPreparedBySignature('');
-        setAcceptedBySignature('');
         setVerifiedBySignature('');
-        setTestDate(new Date().toISOString().split('T')[0]);
-        setShift('');
-        
+
         if (clearEditingState) {
             setGelReportName('');
             sessionStorage.removeItem('editingReportId');
             sessionStorage.removeItem('editingReportData');
         }
-        
-        // Reset average cells
-        const avgCells = document.querySelectorAll('.average-cell');
-        avgCells.forEach(cell => {
-            cell.textContent = '0';
-        });
-        const meanCell = document.querySelector('.mean-cell');
-        if (meanCell) {
-            meanCell.textContent = '0';
-        }
-        
+
+        setAverageValues(Array(7).fill('0'));
+        setMeanValue('0');
+
         if (clearEditingState) {
             sessionStorage.removeItem('gelTestFormData');
         }
-        
+
         setHasUnsavedChanges(false);
     };
 
@@ -666,46 +730,20 @@ export default function GelTest() {
             showAlert('error', 'Please enter a report name');
             return;
         }
+
+        if (!validateDataFields()) {
+            return;
+        }
+
         try {
             setIsLoading(true);
-            const averages: { [key: string]: string } = {};
-            const averageCells = document.querySelectorAll('.average-cell');
-            averageCells.forEach((cell, index) => {
-                averages[`average_${index}`] = cell.textContent?.trim() || '0';
-            });
-            const meanCell = document.querySelector('.mean-cell');
-            averages.mean = meanCell?.textContent?.trim() || '0';
-            
             const reportData: Omit<GelTestReport, '_id'> = {
                 name: gelReportName,
                 timestamp: new Date().toISOString(),
-                formData: {},
-                averages: averages,
+                formData: buildFormData(),
+                averages: buildAverages(),
             };
-            
-            // Save editable fields
-            Object.keys(editableValues).forEach(key => {
-                reportData.formData[key] = editableValues[key];
-            });
-            
-            // Save data cells
-            Object.keys(dataValues).forEach(key => {
-                reportData.formData[key] = dataValues[key] || '';
-            });
-            
-            // Save checkboxes
-            Object.keys(checkboxValues).forEach(key => {
-                reportData.formData[key] = checkboxValues[key];
-            });
-            
-            reportData.formData.preparedBySignature = preparedBySignature;
-            reportData.formData.acceptedBySignature = acceptedBySignature;
-            reportData.formData.verifiedBySignature = verifiedBySignature;
-            reportData.formData.testDate = testDate;
-            reportData.formData.shift = shift;
-            
             const editingId = sessionStorage.getItem('editingReportId');
-            
             if (editingId) {
                 const existingReport = await apiService.getReportById(editingId);
                 if (gelReportName === existingReport.name) {
@@ -775,7 +813,6 @@ export default function GelTest() {
                     showAlert('success', 'Report saved successfully!');
                 }
             }
-            
             clearFormData();
             loadSavedReports();
             setActiveTab('saved-reports');
@@ -805,54 +842,24 @@ export default function GelTest() {
     };
 
     const exportToExcel = async () => {
+        if (!validateDataFields()) {
+            return;
+        }
+
         try {
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const formData: { [key: string]: string | boolean } = {};
-            
-            // Save editable fields
-            Object.keys(editableValues).forEach(key => {
-                formData[key] = editableValues[key];
-            });
-            
-            // Save data cells
-            Object.keys(dataValues).forEach(key => {
-                formData[key] = dataValues[key] || '';
-            });
-            
-            // Save checkboxes
-            Object.keys(checkboxValues).forEach(key => {
-                formData[key] = checkboxValues[key];
-            });
-            
-            formData.preparedBySignature = preparedBySignature;
-            formData.acceptedBySignature = acceptedBySignature;
-            formData.verifiedBySignature = verifiedBySignature;
-            formData.testDate = testDate;
-            formData.shift = shift;
-            
-            const averages: { [key: string]: string } = {};
-            const averageCells = document.querySelectorAll('.average-cell');
-            averageCells.forEach((cell, index) => {
-                averages[`average_${index}`] = cell.textContent?.trim() || '0';
-            });
-            const meanCell = document.querySelector('.mean-cell');
-            if (meanCell) averages.mean = meanCell.textContent?.trim() || '0';
-            
             const gelReportData = {
                 report_name: gelReportName.trim() || 'Gel_Test_Report',
                 timestamp: new Date().toISOString(),
-                form_data: formData,
-                averages: averages,
+                form_data: buildFormData(),
+                averages: buildAverages(),
             };
-            
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(gelReportData),
             });
-            
             if (!response.ok) throw new Error('Failed to generate report');
-            
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -862,7 +869,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -877,18 +883,14 @@ export default function GelTest() {
                 showAlert('error', 'Report not found');
                 return;
             }
-            
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            
             const report = reports[index];
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: report._id }),
             });
-            
             if (!response.ok) throw new Error('Failed to generate report');
-            
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -898,7 +900,6 @@ export default function GelTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -906,70 +907,122 @@ export default function GelTest() {
         }
     };
 
-    useEffect(() => {
-        if (gelReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-    }, [gelReportName]);
+    const inputBaseClassName = 'w-full min-w-0 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white';
+    const inputClassName = `${inputBaseClassName} p-2`;
+    const centeredInputClassName = `${inputClassName} text-center`;
+    const highlightedDataInputClassName = `${centeredInputClassName} border-red-400 bg-red-300 text-red-600 dark:border-red-500 dark:bg-red-950 dark:text-red-200`;
 
-    // Define editable field keys for text inputs
-    const editableFieldKeys = [
-        'gel_editable_0',   // Inv. No./ Date
-        'gel_editable_1',   // P.O. No.
-        'gel_editable_2',   // Type of Test
-        'gel_editable_3',   // Laminator Details
-        'gel_editable_4',   // Pumping Time Lam-1
-        'gel_editable_5',   // Pumping Time Lam-2
-        'gel_editable_6',   // Pumping Time Lam-3 (CP)
-        'gel_editable_7',   // Pressing/Cooling Time Lam-1
-        'gel_editable_8',   // Pressing/Cooling Time Lam-2
-        'gel_editable_9',   // Pressing/Cooling Time Lam-3 (CP)
-        'gel_editable_10',  // Venting Time Lam-1
-        'gel_editable_11',  // Venting Time Lam-2
-        'gel_editable_12',  // Venting Time Lam-3 (CP)
-        'gel_editable_13',  // Lower Heating Lam-1
-        'gel_editable_14',  // Lower Heating Lam-2
-        'gel_editable_15',  // Lower Heating Lam-3 (CP)
-        'gel_editable_16',  // Upper Heating Lam-1
-        'gel_editable_17',  // Upper Heating Lam-2
-        'gel_editable_18',  // Upper Heating Lam-3 (CP)
-        'gel_editable_19',  // Upper Pressure Lam-1
-        'gel_editable_20',  // Upper Pressure Lam-2
-        'gel_editable_21',  // Upper Pressure Lam-3 (CP)
-        'gel_editable_22',  // Lower Pressure Lam-1
-        'gel_editable_23',  // Lower Pressure Lam-2
-        'gel_editable_24',  // Lower Pressure Lam-3 (CP)
-        'gel_editable_25',  // Date, Shift, & Time (first cell - will use date picker and dropdown)
-        'gel_editable_26',  // Date, Shift, & Time (second cell - will use date picker and dropdown)
-        'gel_editable_27',  // Category cell 1
-        'gel_editable_28',  // Category cell 2
-        'gel_editable_29',  // Category cell 3
-        'gel_editable_30',  // Category cell 4
-        'gel_editable_31',  // Batch/Lot No. cell 1
-        'gel_editable_32',  // Batch/Lot No. cell 2
-        'gel_editable_33',  // Batch/Lot No. cell 3
-        'gel_editable_34',  // Batch/Lot No. cell 4
-        'gel_editable_35',  // MFG. Date cell 1
-        'gel_editable_36',  // MFG. Date cell 2
-        'gel_editable_37',  // MFG. Date cell 3
-        'gel_editable_38',  // MFG. Date cell 4
-        'gel_editable_39',  // Exp. Date cell 1
-        'gel_editable_40',  // Exp. Date cell 2
-        'gel_editable_41',  // Exp. Date cell 3
-        'gel_editable_42',  // Exp. Date cell 4
-        'gel_editable_43',  // Glass Size
-    ];
+    const renderTextInput = (key: string, placeholder = '') => (
+        <input
+            type="text"
+            value={editableValues[key] || ''}
+            onChange={(e) => handleEditableChange(key, e.target.value)}
+            className={inputClassName}
+            placeholder={placeholder}
+        />
+    );
 
-    // Define data cell keys for gel content readings
-    // 7 positions (A-G) with 5 readings each = 35 data cells
-    const getDataCellKey = (positionIndex: number, readingIndex: number) => `gel_data_${positionIndex * 5 + readingIndex}`;
+    const renderDateInput = (key: string) => (
+        <input
+            type="date"
+            value={getDateInputValue(key)}
+            onChange={(e) => handleEditableChange(key, e.target.value)}
+            className={inputClassName}
+        />
+    );
 
-    // Define checkbox keys
-    const checkboxKeys = [
-        'checkbox_0',   // EVA & EPE checkbox
-        'checkbox_1',   // POE checkbox
-        'checkbox_2',   // EVA checkbox (material info)
-        'checkbox_3',   // EPE checkbox (material info)
-        'checkbox_4',   // POE checkbox (material info)
-    ];
+    const materialInfoLabelClassName = 'bg-gray-50 dark:bg-gray-800/80 p-2 text-center text-sm font-semibold text-gray-700 dark:text-gray-300';
+    const dateShiftTimeFieldWrapperClassName = 'flex min-h-[96px] items-center justify-center';
+    const dateShiftTimeFieldClassName = `${inputClassName} mx-auto max-w-[220px]`;
+
+    const renderMaterialFrontBackFields = (
+        frontKey: string,
+        backKey: string,
+        inputType: 'text' | 'date' = 'text'
+    ) => (
+        <td colSpan={5} className="p-2">
+            <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                <table className="w-full table-fixed border-collapse">
+                    <tbody>
+                        <tr>
+                            <td className={`${materialInfoLabelClassName} border-r border-gray-200 dark:border-gray-700`}>Front</td>
+                            <td className="border-r border-gray-200 p-1.5 dark:border-gray-700">
+                                {inputType === 'date' ? renderDateInput(frontKey) : renderTextInput(frontKey)}
+                            </td>
+                            <td className={`${materialInfoLabelClassName} border-r border-gray-200 dark:border-gray-700`}>Back</td>
+                            <td className="p-1.5">
+                                {inputType === 'date' ? renderDateInput(backKey) : renderTextInput(backKey)}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </td>
+    );
+
+    const renderDataInput = (key: string) => (
+        <input
+            type="text"
+            value={dataValues[key] || ''}
+            onChange={(e) => handleDataChange(key, e.target.value)}
+            onFocus={() => handleDataFocus(key)}
+            onBlur={() => handleDataBlur(key)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                }
+            }}
+            className={shouldHighlightPlatenValue(key) ? highlightedDataInputClassName : centeredInputClassName}
+            placeholder="-"
+        />
+    );
+
+    const renderDateShiftTimeFields = (key: string, field: 'date' | 'shift' | 'time') => {
+        const value = dateShiftTimeValues[key] || emptyDateShiftTimeValue;
+
+        if (field === 'date') {
+            return (
+                <div className={dateShiftTimeFieldWrapperClassName}>
+                    <input
+                        type="date"
+                        value={value.date}
+                        onChange={(e) => handleDateShiftTimeChange(key, 'date', e.target.value)}
+                        className={dateShiftTimeFieldClassName}
+                    />
+                </div>
+            );
+        }
+
+        if (field === 'shift') {
+            return (
+                <div className={dateShiftTimeFieldWrapperClassName}>
+                    <select
+                        value={value.shift}
+                        onChange={(e) => handleDateShiftTimeChange(key, 'shift', e.target.value)}
+                        className={dateShiftTimeFieldClassName}
+                    >
+                        <option value="">Shift</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="G">G</option>
+                    </select>
+                </div>
+            );
+        }
+
+        return (
+            <div className={dateShiftTimeFieldWrapperClassName}>
+                <input
+                    type="text"
+                    value={value.time}
+                    onChange={(e) => handleDateShiftTimeChange(key, 'time', e.target.value)}
+                    className={dateShiftTimeFieldClassName}
+                    placeholder="Time"
+                />
+            </div>
+        );
+    };
 
     return (
         <>
@@ -1033,7 +1086,7 @@ export default function GelTest() {
                         </div>
                         <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg">
                             <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
-                                <table ref={tableRef} className="w-full border-collapse min-w-[1000px]">
+                                <table ref={tableRef} className="w-full table-fixed border-collapse min-w-[1000px] text-xs sm:text-sm">
                                     <tbody>
                                         <tr>
                                             <td colSpan={2} rowSpan={3} className="p-2 bg-gray-100 dark:bg-gray-700">
@@ -1042,12 +1095,12 @@ export default function GelTest() {
                                             <td colSpan={8} rowSpan={2} className="section-title text-xl sm:text-2xl md:text-3xl font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">
                                                 VIKRAM SOLAR LIMITED
                                             </td>
-                                            <td colSpan={6} rowSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                            <td colSpan={7} rowSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
                                                 Doc. No.: VSL/QAD/FM/90
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={6} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                            <td colSpan={7} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
                                                 Issue Date: 11.01.2023
                                             </td>
                                         </tr>
@@ -1055,7 +1108,7 @@ export default function GelTest() {
                                             <td colSpan={8} className="section-title text-lg sm:text-xl md:text-2xl font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">
                                                 Gel Content Test Report
                                             </td>
-                                            <td colSpan={6} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
+                                            <td colSpan={7} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-sm sm:text-base text-gray-800 dark:text-white">
                                                 Rev. No./ Date: 03/ 25.02.2025
                                             </td>
                                         </tr>
@@ -1065,145 +1118,89 @@ export default function GelTest() {
                                                     <strong className="px-2.5 text-gray-800 dark:text-white">Allowable Limit:</strong>
                                                     <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
                                                         <div className="checkbox-item flex items-center mx-2">
-                                                            <label htmlFor="eva-epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">1. Gel Content should be: 75 to 95% for EVA & EPE</label>
-                                                            <input 
-                                                                type="checkbox" 
-                                                                id="eva-epe-checkbox" 
+                                                            <label htmlFor="gel-limit-eva-epe" className="text-sm text-gray-700 dark:text-gray-300">1. Gel Content should be: 75 to 95% for EVA & EPE</label>
+                                                            <input
+                                                                type="checkbox"
+                                                                id="gel-limit-eva-epe"
                                                                 checked={checkboxValues[checkboxKeys[0]] || false}
                                                                 onChange={(e) => handleCheckboxChange(checkboxKeys[0], e.target.checked)}
-                                                                className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                                className="ml-1 w-4 h-4 dark:accent-blue-500"
                                                             />
                                                         </div>
                                                     </div>
                                                     <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
                                                         <div className="checkbox-item flex items-center mx-1.5">
                                                             <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">2. Gel Content should be: ≥ 60% for POE</label>
-                                                            <input 
-                                                                type="checkbox" 
-                                                                id="poe-checkbox" 
+                                                            <input
+                                                                type="checkbox"
+                                                                id="gel-limit-poe"
                                                                 checked={checkboxValues[checkboxKeys[1]] || false}
                                                                 onChange={(e) => handleCheckboxChange(checkboxKeys[1], e.target.checked)}
-                                                                className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                                className="ml-1 w-4 h-4 dark:accent-blue-500"
                                                             />
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Inv. No./ Date:</td>
-                                            <td colSpan={5}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[0]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[0], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Inv. No./ Date"
-                                                />
-                                            </td>
+                                            <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Inv. No./ Date:</td>
+                                            <td colSpan={5}>{renderDateInput(buildFieldKey(0))}</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O. No.:</td>
-                                            <td colSpan={5}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[1]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[1], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="P.O. No."
-                                                />
-                                            </td>
+                                            <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O. No.:</td>
+                                            <td colSpan={5}>{renderTextInput(buildFieldKey(1), 'P.O. No.')}</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>
-                                            <td colSpan={5}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[2]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[2], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Type of Test"
-                                                />
-                                            </td>
+                                            <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>
+                                            <td colSpan={5}>{renderTextInput(buildFieldKey(2), 'Type of Test')}</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={10} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Laminator Parameter</td>
-                                            <td colSpan={1} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Laminator Details:</td>
-                                            <td colSpan={5}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[3]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[3], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Laminator Details"
-                                                />
-                                            </td>
+                                            <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Laminator Details:</td>
+                                            <td colSpan={5}>{renderTextInput(buildFieldKey(3), 'Laminator Details')}</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process Name</td>
                                             <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 1</td>
                                             <td colSpan={3} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 2</td>
                                             <td colSpan={3} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Lam - 3 (CP)</td>
-                                            <td colSpan={6} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MATERIAL INFORMATION (S)</td>
+                                            <td colSpan={7} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MATERIAL INFORMATION (S)</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pumping Time (Sec)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[4]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[4], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pumping Time Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[5]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[5], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pumping Time Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[6]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[6], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pumping Time Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Types:</td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(4))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(5))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(6))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Types:</td>
                                             <td colSpan={5}>
                                                 <div className="checkbox-container flex flex-col sm:flex-row justify-center items-center gap-2 p-2">
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="eva-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EVA</label>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            id="eva-material-checkbox" 
+                                                        <label htmlFor="eva-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EVA</label>
+                                                        <input
+                                                            type="checkbox"
+                                                            id="gel-material-eva"
                                                             checked={checkboxValues[checkboxKeys[2]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[2], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
                                                         />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="epe-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EPE</label>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            id="epe-material-checkbox" 
+                                                        <label htmlFor="epe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">EPE</label>
+                                                        <input
+                                                            type="checkbox"
+                                                            id="gel-material-epe"
                                                             checked={checkboxValues[checkboxKeys[3]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[3], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
                                                         />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
-                                                        <label htmlFor="poe-material-checkbox" className="text-sm text-gray-700 dark:text-gray-300">POE</label>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            id="poe-material-checkbox" 
+                                                        <label htmlFor="poe-checkbox" className="text-sm text-gray-700 dark:text-gray-300">POE</label>
+                                                        <input
+                                                            type="checkbox"
+                                                            id="gel-material-poe"
                                                             checked={checkboxValues[checkboxKeys[4]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[4], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500" 
+                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
                                                         />
                                                     </div>
                                                 </div>
@@ -1211,504 +1208,99 @@ export default function GelTest() {
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Pressing/Cooling Time (Sec)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[7]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[7], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pressing/Cooling Time Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[8]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[8], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pressing/Cooling Time Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[9]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[9], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Pressing/Cooling Time Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
-                                            <td colSpan={5} className="p-2 text-center text-gray-800 dark:text-white">FIRST</td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(7))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(8))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(9))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
+                                            <td colSpan={5}>{renderTextInput(encapsulantSupplierKey, 'Encapsulant Supplier')}</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting Time (Sec)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[10]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[10], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Venting Time Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[11]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[11], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Venting Time Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[12]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[12], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Venting Time Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Category:</td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[27]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[27], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Category"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[28]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[28], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Category"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[29]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[29], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Category"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[30]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[30], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Category"
-                                                />
-                                            </td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(10))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(11))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(12))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Category:</td>
+                                            {renderMaterialFrontBackFields(buildFieldKey(14), buildFieldKey(16))}
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Heating (˚C)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[13]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[13], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Heating Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[14]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[14], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Heating Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[15]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[15], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Heating Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Batch/Lot No.:</td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[31]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[31], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Batch/Lot No."
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[32]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[32], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Batch/Lot No."
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[33]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[33], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Batch/Lot No."
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[34]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[34], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Batch/Lot No."
-                                                />
-                                            </td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(17))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(18))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(19))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Batch/Lot No.:</td>
+                                            {renderMaterialFrontBackFields(buildFieldKey(21), buildFieldKey(23))}
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Heating (˚C)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[16]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[16], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Heating Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[17]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[17], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Heating Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[18]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[18], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Heating Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MFG. Date:</td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[35]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[35], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="MFG. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[36]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[36], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="MFG. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[37]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[37], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="MFG. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[38]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[38], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="MFG. Date"
-                                                />
-                                            </td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(24))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(25))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(26))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">MFG. Date:</td>
+                                            {renderMaterialFrontBackFields(buildFieldKey(28), buildFieldKey(30), 'date')}
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Upper Pressure (Kpa)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[19]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[19], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Pressure Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[20]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[20], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Pressure Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[21]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[21], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Upper Pressure Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Exp. Date:</td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[39]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[39], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Exp. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[40]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[40], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Exp. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[41]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[41], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Exp. Date"
-                                                />
-                                            </td>
-                                            <td colSpan={1}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[42]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[42], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Exp. Date"
-                                                />
-                                            </td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(31))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(32))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(33))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Exp. Date:</td>
+                                            {renderMaterialFrontBackFields(buildFieldKey(35), buildFieldKey(37), 'date')}
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Lower Pressure (Kpa)</td>
-                                            <td colSpan={2}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[22]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[22], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Pressure Lam-1"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[23]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[23], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Pressure Lam-2"
-                                                />
-                                            </td>
-                                            <td colSpan={3}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[24]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[24], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Lower Pressure Lam-3 (CP)"
-                                                />
-                                            </td>
-                                            <td colSpan={1} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size:</td>
-                                            <td colSpan={5}>
-                                                <input
-                                                    type="text"
-                                                    value={editableValues[editableFieldKeys[43]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[43], e.target.value)}
-                                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Glass Size"
-                                                />
-                                            </td>
+                                            <td colSpan={2}>{renderTextInput(buildFieldKey(38))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(39))}</td>
+                                            <td colSpan={3}>{renderTextInput(buildFieldKey(40))}</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Size:</td>
+                                            <td colSpan={5}>{renderTextInput(buildFieldKey(41), 'Glass Size')}</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={16} className="p-2">
+                                            <td colSpan={17} className="p-2">
                                                 <img src="../IMAGES/GelTest.jpg" alt="Gel Test" className="w-full h-auto max-h-[300px] object-contain rounded-md" />
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Date, Shift, & Time: </td>
-                                            <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Workshop</td>
-                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Platen Position (A/B/C/D/E/F/G)</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Date, Shift, & Time</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Workshop</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Platen Position</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#1</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#2</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#3</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#4</td>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">#5</td>
-                                            <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Average (A/B/C/D/E/F/G)</td>
+                                            <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Average</td>
                                             <td colSpan={4} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Mean</td>
                                         </tr>
-                                        <tr>
-                                            <td colSpan={2}>
-                                                <div className="flex flex-col gap-2 p-2">
-                                                    <input
-                                                        type="date"
-                                                        value={testDate}
-                                                        onChange={(e) => {
-                                                            setTestDate(e.target.value);
-                                                            setHasUnsavedChanges(true);
-                                                            setTimeout(() => saveFormData(), 0);
-                                                        }}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    />
-                                                    <select
-                                                        value={shift}
-                                                        onChange={(e) => {
-                                                            setShift(e.target.value);
-                                                            setHasUnsavedChanges(true);
-                                                            setTimeout(() => saveFormData(), 0);
-                                                        }}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    >
-                                                        <option value="">Select Shift</option>
-                                                        <option value="A">A</option>
-                                                        <option value="B">B</option>
-                                                        <option value="C">C</option>
-                                                        <option value="G">G</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
-                                                        value={editableValues[editableFieldKeys[25]] || ''}
-                                                        onChange={(e) => handleEditableChange(editableFieldKeys[25], e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                        placeholder="Time"
-                                                    />
-                                                </div>
-                                            </td>
-                                            <td rowSpan={7} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">VSL FAB-II</td>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">A</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`A_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(0, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(0, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
+                                        {measurementRows.map((row, rowIndex) => (
+                                            <tr key={row.label}>
+                                                {row.dateShiftTimeKey && row.dateShiftTimeField && (
+                                                    <td colSpan={2} rowSpan={row.dateShiftTimeRowSpan} className="p-2 align-middle">
+                                                        {renderDateShiftTimeFields(row.dateShiftTimeKey, row.dateShiftTimeField)}
+                                                    </td>
+                                                )}
+                                                {rowIndex === 0 && (
+                                                    <td colSpan={2} rowSpan={7} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">
+                                                        VSL FAB-II
+                                                    </td>
+                                                )}
+                                                <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">
+                                                    {row.label}
                                                 </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                            <td colSpan={4} rowSpan={7} className="mean-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">B</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`B_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(1, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(1, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
+                                                {row.dataKeys.map(key => (
+                                                    <td key={key} className="p-2 text-center">
+                                                        {renderDataInput(key)}
+                                                    </td>
+                                                ))}
+                                                <td colSpan={2} className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">
+                                                    {averageValues[rowIndex] || '0'}
                                                 </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">C</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`C_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(2, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(2, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">D</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`D_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(3, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(3, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">E</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`E_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(4, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(4, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">F</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`F_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(5, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(5, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan={2} className="p-2 text-center bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">G</td>
-                                            {[0, 1, 2, 3, 4].map(readingIdx => (
-                                                <td key={`G_${readingIdx}`} className="p-2 text-center">
-                                                    <input
-                                                        type="text"
-                                                        value={dataValues[getDataCellKey(6, readingIdx)] || ''}
-                                                        onChange={(e) => handleDataChange(getDataCellKey(6, readingIdx), e.target.value)}
-                                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
-                                                        placeholder=""
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="average-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">0</td>
-                                        </tr>
+                                                {rowIndex === 0 && (
+                                                    <td colSpan={4} rowSpan={7} className="mean-cell font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">
+                                                        {meanValue}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -1732,30 +1324,6 @@ export default function GelTest() {
                                             className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('prepared') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
                                             onClick={() => handleRemoveSignature('prepared')}
                                             disabled={!canRemoveSignature('prepared')}
-                                        >
-                                            Remove my Signature
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="signature flex-1 text-center mb-4">
-                                    <p className="font-bold text-gray-800 dark:text-white mb-2">ACCEPTED BY:</p>
-                                    <div className="w-full min-h-24 border border-gray-300 dark:border-gray-700 rounded-md flex items-center justify-center">
-                                        <div className="text-center relative signature-field p-4 w-full h-full flex items-center justify-center">
-                                            <span className="text-gray-800 dark:text-white text-lg font-semibold">{acceptedBySignature}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap justify-center gap-2 mt-3">
-                                        <button
-                                            className={`px-3 py-2 text-sm text-white rounded ${canAddSignature('accepted') ? 'bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
-                                            onClick={() => handleAddSignature('accepted')}
-                                            disabled={!canAddSignature('accepted')}
-                                        >
-                                            Add my Signature
-                                        </button>
-                                        <button
-                                            className={`px-3 py-2 text-sm text-white rounded ${canRemoveSignature('accepted') ? 'bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 cursor-pointer' : 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed'}`}
-                                            onClick={() => handleRemoveSignature('accepted')}
-                                            disabled={!canRemoveSignature('accepted')}
                                         >
                                             Remove my Signature
                                         </button>

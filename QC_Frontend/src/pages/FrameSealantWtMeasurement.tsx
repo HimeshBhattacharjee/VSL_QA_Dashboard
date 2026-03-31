@@ -26,8 +26,8 @@ interface FrameDivisionData {
 interface LineEntry {
     line?: string;
     po: string;
-    length: FrameDivisionData;  // Frame Length division
-    width: FrameDivisionData;    // Frame Width division
+    length: FrameDivisionData;  // Long Frame division
+    width: FrameDivisionData;    // Short Frame division
     totalSealantWeightPerModule: string;  // Sum of all 4 net sealant weights (gm)
     sealantWeightPerModulePerMeter: string;  // totalSealantWeightPerModule / 6.824 (gm/m)
     remarks?: string;
@@ -1536,20 +1536,20 @@ export default function FrameSealantWeightMeasurement() {
                                                 </div>
                                             </div>
                                             
-                                            {/* Frame Length Section */}
+                                            {/* Long Frame Section */}
                                             <div className="mt-4">
                                                 <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Frame Length
+                                                    Long Frame
                                                 </h5>
-                                                {renderFrameDivisionFields('1', 'length', 'Frame Length Details')}
+                                                {renderFrameDivisionFields('1', 'length', 'Long Frame Details')}
                                             </div>
                                             
-                                            {/* Frame Width Section */}
+                                            {/* Short Frame Section */}
                                             <div className="mt-4">
                                                 <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Frame Width
+                                                    Short Frame
                                                 </h5>
-                                                {renderFrameDivisionFields('1', 'width', 'Frame Width Details')}
+                                                {renderFrameDivisionFields('1', 'width', 'Short Frame Details')}
                                             </div>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
@@ -1614,20 +1614,20 @@ export default function FrameSealantWeightMeasurement() {
                                                 </div>
                                             </div>
                                             
-                                            {/* Frame Length Section */}
+                                            {/* Long Frame Section */}
                                             <div className="mt-4">
                                                 <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Frame Length
+                                                    Long Frame
                                                 </h5>
-                                                {renderFrameDivisionFields('2', 'length', 'Frame Length Details')}
+                                                {renderFrameDivisionFields('2', 'length', 'Long Frame Details')}
                                             </div>
                                             
-                                            {/* Frame Width Section */}
+                                            {/* Short Frame Section */}
                                             <div className="mt-4">
                                                 <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Frame Width
+                                                    Short Frame
                                                 </h5>
-                                                {renderFrameDivisionFields('2', 'width', 'Frame Width Details')}
+                                                {renderFrameDivisionFields('2', 'width', 'Short Frame Details')}
                                             </div>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">

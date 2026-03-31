@@ -1,7 +1,61 @@
 from openpyxl import load_workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, PatternFill
+from copy import copy
 import io
 from paths import get_template_key, download_from_s3
+
+GEL_ALERT_FILL = PatternFill(fill_type='solid', fgColor='FECACA')
+
+def parse_gel_numeric_value(value):
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, str):
+        sanitized_value = value.strip().replace('%', '')
+
+        if not sanitized_value:
+            return None
+
+        try:
+            return float(sanitized_value)
+        except ValueError:
+            return None
+
+    return None
+
+def should_highlight_gel_value(form_data, value):
+    numeric_value = parse_gel_numeric_value(value)
+
+    if numeric_value is None:
+        return False
+
+    is_eva_or_epe_selected = bool(form_data.get('checkbox_2') or form_data.get('checkbox_3'))
+    is_poe_selected = bool(form_data.get('checkbox_4'))
+
+    return (
+        is_eva_or_epe_selected and (numeric_value < 75 or numeric_value > 95)
+    ) or (
+        is_poe_selected and numeric_value < 60
+    )
+
+def apply_gel_conditional_formatting(worksheet, form_data, test_data_mapping):
+    try:
+        for field, cell_ref in test_data_mapping.items():
+            cell = worksheet[cell_ref]
+
+            if should_highlight_gel_value(form_data, form_data.get(field)):
+                cell.fill = GEL_ALERT_FILL
+                alert_font = copy(cell.font)
+                alert_font.color = '7F1D1D'
+                cell.font = alert_font
+
+        print("Gel conditional formatting applied successfully")
+    except Exception as e:
+        print(f"Error applying gel conditional formatting: {str(e)}")
+        raise
 
 def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
     try:
@@ -84,11 +138,12 @@ def fill_gel_basic_info(worksheet, gel_data):
             'gel_editable_39': 'D16',
             'gel_editable_40': 'E16',
             'gel_editable_41': 'I16',
+            'gel_editable_80': 'I11',
             'gel_editable_42': 'B19',
             'gel_editable_53': 'B21',
             'gel_editable_69': 'B23',
             'preparedBySignature': 'C27',
-            'acceptedBySignature': 'H27'
+            'verifiedBySignature': 'H27'
         }
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
@@ -116,6 +171,7 @@ def fill_gel_test_data(worksheet, gel_data):
         for field, cell_ref in test_data_mapping.items():
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
+        apply_gel_conditional_formatting(worksheet, form_data, test_data_mapping)
         averages_mapping = {
             'average_0': 'J19',
             'average_1': 'J20',
@@ -123,7 +179,7 @@ def fill_gel_test_data(worksheet, gel_data):
             'average_3': 'J22',
             'average_4': 'J23',
             'average_5': 'J24',
-            'average_6': 'J25' 
+            'average_6': 'J25'
         }
         for field, cell_ref in averages_mapping.items():
             if field in averages and averages[field]:
