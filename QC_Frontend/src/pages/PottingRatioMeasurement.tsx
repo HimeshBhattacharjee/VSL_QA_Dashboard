@@ -92,6 +92,15 @@ const defaultMonthlyStats: MonthlyStats = {
     }
 };
 
+const isRatioOutOfRange = (value: string): boolean => {
+    if (!value) return false;
+
+    const ratio = parseFloat(value);
+    if (isNaN(ratio)) return false;
+
+    return ratio < 4 || ratio > 6;
+};
+
 export default function PottingRatioMeasurement() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -1331,7 +1340,10 @@ export default function PottingRatioMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['1'].ratio ? `${currentEntry.lines['1'].ratio}:1` : ''}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['1'].ratio)
+                                                            ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                                                            : 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700'
+                                                            }`}
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
@@ -1424,7 +1436,10 @@ export default function PottingRatioMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['2'].ratio ? `${currentEntry.lines['2'].ratio}:1` : ''}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['2'].ratio)
+                                                            ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                                                            : 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700'
+                                                            }`}
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>

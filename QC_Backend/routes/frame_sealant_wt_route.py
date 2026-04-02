@@ -7,6 +7,141 @@ from generators.FrameSealantWtReportGenerator import generate_frame_sealant_repo
 
 frame_sealant_router = APIRouter(prefix="/api/frame-sealant-weight-reports", tags=["Frame Sealant Weight Reports"])
 
+GLASS_GROOVE_TARGETS = {
+    "Glass Groove (5.6 mm)": 40,
+    "Glass Groove (6.1 mm)": 49
+}
+
+FRAME_SEALANT_PASS_TOLERANCE = 7
+FRAME_SEALANT_LINES_PER_SHIFT = 2
+FRAME_SEALANT_SHIFTS_PER_DAY = 3
+
+FRAME_DIVISION_REQUIRED_FIELDS = (
+    ("frameSupplier", "Frame Supplier"),
+    ("frameSize", "Frame Size"),
+    ("sealantSupplier", "Sealant Supplier"),
+    ("sealantExpiry", "Sealant Expiry Date"),
+    ("frameWithoutSealant1", "Frame 1 (Without sealant)"),
+    ("frameWithoutSealant2", "Frame 2 (Without sealant)"),
+    ("frameWithSealant1", "Frame 1 (With sealant)"),
+    ("frameWithSealant2", "Frame 2 (With sealant)")
+)
+
+def _normalize_field_value(value):
+    return str(value).strip() if value is not None else ""
+
+def _get_line_required_details(line: dict):
+    details = [("Glass Groove", _normalize_field_value(line.get("glassGroove")))]
+    for division_key, division_label in (("length", "Long Frame"), ("width", "Short Frame")):
+        division = line.get(division_key, {}) or {}
+        for field_key, field_label in FRAME_DIVISION_REQUIRED_FIELDS:
+            details.append((f"{division_label} - {field_label}", _normalize_field_value(division.get(field_key))))
+    return details
+
+def _has_any_line_detail_input(line: dict):
+    return any(value for _, value in _get_line_required_details(line)) or bool(_normalize_field_value(line.get("remarks")))
+
+def _get_line_validation_error(line: dict, line_number: str):
+    has_po = bool(_normalize_field_value(line.get("po")))
+    has_any_line_input = _has_any_line_detail_input(line)
+
+    if not has_po and not has_any_line_input:
+        return None
+
+    if not has_po:
+        return f"Please enter the PO number for Line {line_number} before saving."
+
+    first_missing_detail = next((label for label, value in _get_line_required_details(line) if not value), None)
+    if first_missing_detail:
+        return f"Please complete all mandatory details for Line {line_number} before saving. Missing: {first_missing_detail}."
+
+    return None
+
+def _parse_numeric_value(value):
+    normalized = _normalize_field_value(value)
+    if not normalized:
+        return None
+
+    try:
+        return float(normalized)
+    except (TypeError, ValueError):
+        return None
+
+def _get_glass_groove_target(glass_groove):
+    return GLASS_GROOVE_TARGETS.get(_normalize_field_value(glass_groove))
+
+def _has_any_line_input(line: dict):
+    return (
+        bool(_normalize_field_value(line.get("po"))) or
+        _has_any_line_detail_input(line) or
+        bool(_normalize_field_value(line.get("totalSealantWeightPerModule"))) or
+        bool(_normalize_field_value(line.get("sealantWeightPerModulePerMeter")))
+    )
+
+def _get_line_validity(line: dict):
+    any_input = _has_any_line_input(line)
+    weight_per_meter = _parse_numeric_value(line.get("sealantWeightPerModulePerMeter"))
+    target_weight = _get_glass_groove_target(line.get("glassGroove"))
+
+    if weight_per_meter is None or target_weight is None:
+        return {"pass": False, "fail": False, "any": any_input}
+
+    min_weight = target_weight - FRAME_SEALANT_PASS_TOLERANCE
+    max_weight = target_weight + FRAME_SEALANT_PASS_TOLERANCE
+    is_pass = min_weight <= weight_per_meter <= max_weight
+
+    return {"pass": is_pass, "fail": not is_pass, "any": True}
+
+def _build_default_monthly_stats(year: int, month: int):
+    days_in_month = calendar.monthrange(year, month)[1]
+    total_possible_entries = days_in_month * FRAME_SEALANT_LINES_PER_SHIFT * FRAME_SEALANT_SHIFTS_PER_DAY
+    return {
+        "totalDays": days_in_month,
+        "totalPossibleEntries": total_possible_entries,
+        "filledEntries": 0,
+        "completionRate": 0,
+        "passCount": 0,
+        "failCount": 0,
+        "shiftStats": {
+            "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
+        }
+    }
+
+def _build_monthly_stats(year: int, month: int):
+    entries = FrameSealantDailyEntry.get_month_entries(year, month)
+    stats = _build_default_monthly_stats(year, month)
+
+    for entry in entries:
+        shift = entry.get("shift")
+        lines = entry.get("lines", {})
+
+        if shift not in stats["shiftStats"]:
+            continue
+
+        for line_number in ("1", "2"):
+            line = lines.get(line_number, {}) or {}
+            if not _has_any_line_input(line):
+                continue
+
+            stats["filledEntries"] += 1
+            stats["shiftStats"][shift]["filled"] += 1
+            stats["shiftStats"][shift]["lines"][line_number] += 1
+
+            validity = _get_line_validity(line)
+            if validity["pass"]:
+                stats["passCount"] += 1
+                stats["shiftStats"][shift]["pass"] += 1
+            elif validity["fail"]:
+                stats["failCount"] += 1
+                stats["shiftStats"][shift]["fail"] += 1
+
+    if stats["totalPossibleEntries"] > 0:
+        stats["completionRate"] = round((stats["filledEntries"] / stats["totalPossibleEntries"]) * 100)
+
+    return stats
+
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
     if doc is None:
@@ -50,6 +185,14 @@ def serialize_doc(doc):
                         "frameWithSealant1": "", "frameWithSealant2": "",
                         "netSealantWeight1": "", "netSealantWeight2": ""
                     }
+                if "glassGroove" not in line:
+                    line["glassGroove"] = ""
+                if "line" not in line:
+                    line["line"] = line_num
+                if "totalSealantWeightPerModule" not in line:
+                    line["totalSealantWeightPerModule"] = ""
+                if "sealantWeightPerModulePerMeter" not in line:
+                    line["sealantWeightPerModulePerMeter"] = ""
     
     return doc_copy
 
@@ -132,8 +275,13 @@ async def get_monthly_stats(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12)
 ):
-    """Get statistics for a specific month - counting frames (4 per line, 2 lines = 8 frames per shift)"""
+    """Get statistics for a specific month using line-level glass groove criteria."""
     try:
+        return {
+            "success": True,
+            "data": _build_monthly_stats(year, month)
+        }
+
         days_in_month = calendar.monthrange(year, month)[1]
         
         # Get all entries for the month
@@ -231,19 +379,7 @@ async def get_monthly_stats(
         total_possible_entries = days_in_month * 8 * 3
         return {
             "success": False,
-            "data": {
-                "totalDays": days_in_month,
-                "totalPossibleEntries": total_possible_entries,
-                "filledEntries": 0,
-                "completionRate": 0,
-                "passCount": 0,
-                "failCount": 0,
-                "shiftStats": {
-                    "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-                    "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-                    "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
-                }
-            },
+            "data": _build_default_monthly_stats(year, month),
             "error": str(e)
         }
 
@@ -264,12 +400,11 @@ async def create_entry(entry: dict):
         # Validate lines structure
         if not isinstance(entry["lines"], dict) or "1" not in entry["lines"] or "2" not in entry["lines"]:
             raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
-        
-        # Validate PO for both lines
-        if not entry["lines"]["1"].get("po"):
-            raise HTTPException(status_code=400, detail="PO number is required for Line 1")
-        if not entry["lines"]["2"].get("po"):
-            raise HTTPException(status_code=400, detail="PO number is required for Line 2")
+
+        for line_number in ("1", "2"):
+            validation_error = _get_line_validation_error(entry["lines"].get(line_number, {}), line_number)
+            if validation_error:
+                raise HTTPException(status_code=400, detail=validation_error)
         
         # Normalize and extract year/month from date
         raw_date = entry.get("date")
@@ -337,6 +472,7 @@ async def update_signatures(payload: dict):
                 "lines": {
                     "1": {
                         "po": "",
+                        "glassGroove": "",
                         "length": {
                             "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
                             "frameWithoutSealant1": "", "frameWithoutSealant2": "",
@@ -355,6 +491,7 @@ async def update_signatures(payload: dict):
                     },
                     "2": {
                         "po": "",
+                        "glassGroove": "",
                         "length": {
                             "frameSupplier": "", "frameSize": "", "sealantSupplier": "", "sealantExpiry": "",
                             "frameWithoutSealant1": "", "frameWithoutSealant2": "",

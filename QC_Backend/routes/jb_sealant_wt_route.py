@@ -7,6 +7,61 @@ from generators.JBSealantWeightReportGenerator import generate_jb_sealant_report
 
 jb_sealant_router = APIRouter(prefix="/api/jb-sealant-weight-reports", tags=["JB Sealant Weight Reports"])
 
+JB_PASS_MIN = 4
+JB_PASS_MAX = 10
+
+LINE_REQUIRED_FIELDS = (
+    ("jbSupplier", "JB Supplier"),
+    ("sealantSupplier", "Sealant Supplier"),
+    ("sealantExpiry", "Sealant Expiry Date")
+)
+
+POSITION_REQUIRED_FIELDS = (
+    ("jbWeight", "JB Wt"),
+    ("jbWeightWithSealant", "JB Wt with Sealant")
+)
+
+POSITION_LABELS = {
+    "positiveJB": "Positive JB",
+    "middleJB": "Middle JB",
+    "negativeJB": "Negative JB"
+}
+
+def _normalize_field_value(value):
+    return str(value).strip() if value is not None else ""
+
+def _get_line_required_details(line: dict):
+    details = []
+
+    for field_key, field_label in LINE_REQUIRED_FIELDS:
+        details.append((field_label, _normalize_field_value(line.get(field_key))))
+
+    for position_key, position_label in POSITION_LABELS.items():
+        position = line.get(position_key, {}) or {}
+        for field_key, field_label in POSITION_REQUIRED_FIELDS:
+            details.append((f"{position_label} - {field_label}", _normalize_field_value(position.get(field_key))))
+
+    return details
+
+def _has_any_line_detail_input(line: dict):
+    return any(value for _, value in _get_line_required_details(line))
+
+def _get_line_validation_error(line: dict, line_number: str):
+    has_po = bool(_normalize_field_value(line.get("po")))
+    has_any_line_input = _has_any_line_detail_input(line)
+
+    if not has_po and not has_any_line_input:
+        return None
+
+    if not has_po:
+        return f"Please enter the PO number for Line {line_number} before saving."
+
+    first_missing_detail = next((label for label, value in _get_line_required_details(line) if not value), None)
+    if first_missing_detail:
+        return f"Please complete all mandatory details for Line {line_number} before saving. Missing: {first_missing_detail}."
+
+    return None
+
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
     if doc is None:
@@ -165,7 +220,7 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 4 <= weight <= 8:
+                            if JB_PASS_MIN <= weight <= JB_PASS_MAX:
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -191,7 +246,7 @@ async def get_monthly_stats(
                         
                         try:
                             weight = float(net_weight)
-                            if 4 <= weight <= 8:
+                            if JB_PASS_MIN <= weight <= JB_PASS_MAX:
                                 pass_count += 1
                                 shift_stats[shift]["pass"] += 1
                             else:
@@ -254,11 +309,10 @@ async def create_entry(entry: dict):
         if not isinstance(entry["lines"], dict) or "1" not in entry["lines"] or "2" not in entry["lines"]:
             raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
         
-        # Validate PO for both lines
-        if not entry["lines"]["1"].get("po"):
-            raise HTTPException(status_code=400, detail="PO number is required for Line 1")
-        if not entry["lines"]["2"].get("po"):
-            raise HTTPException(status_code=400, detail="PO number is required for Line 2")
+        for line_number in ("1", "2"):
+            validation_error = _get_line_validation_error(entry["lines"].get(line_number, {}), line_number)
+            if validation_error:
+                raise HTTPException(status_code=400, detail=validation_error)
         
         # Normalize and extract year/month from date
         raw_date = entry.get("date")

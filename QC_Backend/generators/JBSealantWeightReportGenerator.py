@@ -5,6 +5,20 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 
+JB_PASS_MIN = 4
+JB_PASS_MAX = 10
+
+def apply_weight_fill(cell, net_weight):
+    try:
+        if net_weight:
+            weight_val = float(net_weight)
+            if JB_PASS_MIN <= weight_val <= JB_PASS_MAX:
+                cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+            else:
+                cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+    except (ValueError, TypeError):
+        pass
+
 def fill_jb_data_in_sheet(worksheet, entries, date):
     """Fill JB sealant weight data for a specific date into a worksheet"""
     try:
@@ -44,16 +58,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line1_pos_row}'] = line1_positive_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line1_pos_row}'] = line1_positive_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 1 Positive JB
-            try:
-                if line1_positive_jb.get('netSealantWeight'):
-                    weight_val = float(line1_positive_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line1_pos_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_pos_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line1_pos_row}'], line1_positive_jb.get('netSealantWeight'))
             
             # Fill Line 1 - Middle JB row
             line1_mid_row = current_row + 1
@@ -67,16 +72,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line1_mid_row}'] = line1_middle_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line1_mid_row}'] = line1_middle_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 1 Middle JB
-            try:
-                if line1_middle_jb.get('netSealantWeight'):
-                    weight_val = float(line1_middle_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line1_mid_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_mid_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line1_mid_row}'], line1_middle_jb.get('netSealantWeight'))
             
             # Fill Line 1 - Negative JB row
             line1_neg_row = current_row + 2
@@ -90,16 +86,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line1_neg_row}'] = line1_negative_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line1_neg_row}'] = line1_negative_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 1 Negative JB
-            try:
-                if line1_negative_jb.get('netSealantWeight'):
-                    weight_val = float(line1_negative_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line1_neg_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line1_neg_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line1_neg_row}'], line1_negative_jb.get('netSealantWeight'))
             
             # Total Module Weight for Line 1 - place it in the first row of Line 1
             worksheet[f'L{line1_pos_row}'] = line1_data.get('totalModuleWeight', '')
@@ -128,16 +115,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line2_pos_row}'] = line2_positive_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line2_pos_row}'] = line2_positive_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 2 Positive JB
-            try:
-                if line2_positive_jb.get('netSealantWeight'):
-                    weight_val = float(line2_positive_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line2_pos_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_pos_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line2_pos_row}'], line2_positive_jb.get('netSealantWeight'))
             
             # Fill Line 2 - Middle JB row
             line2_mid_row = current_row + 4
@@ -151,16 +129,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line2_mid_row}'] = line2_middle_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line2_mid_row}'] = line2_middle_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 2 Middle JB
-            try:
-                if line2_middle_jb.get('netSealantWeight'):
-                    weight_val = float(line2_middle_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line2_mid_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_mid_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line2_mid_row}'], line2_middle_jb.get('netSealantWeight'))
             
             # Fill Line 2 - Negative JB row
             line2_neg_row = current_row + 5
@@ -174,16 +143,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             worksheet[f'J{line2_neg_row}'] = line2_negative_jb.get('jbWeightWithSealant', '')
             worksheet[f'K{line2_neg_row}'] = line2_negative_jb.get('netSealantWeight', '')
             
-            # Color code net sealant weight for Line 2 Negative JB
-            try:
-                if line2_negative_jb.get('netSealantWeight'):
-                    weight_val = float(line2_negative_jb['netSealantWeight'])
-                    if 4 <= weight_val <= 8:
-                        worksheet[f'K{line2_neg_row}'].fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        worksheet[f'K{line2_neg_row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            apply_weight_fill(worksheet[f'K{line2_neg_row}'], line2_negative_jb.get('netSealantWeight'))
             
             # Total Module Weight for Line 2 - place it in the first row of Line 2
             worksheet[f'L{line2_pos_row}'] = line2_data.get('totalModuleWeight', '')

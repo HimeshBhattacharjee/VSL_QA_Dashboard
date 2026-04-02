@@ -1,6 +1,62 @@
 from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill
+from copy import copy
 import io
 from paths import get_template_key, download_from_s3
+
+FRONT_ADHESION_THRESHOLD = 60
+BACK_ADHESION_THRESHOLD = 40
+ADHESION_FAIL_FILL = PatternFill(start_color='FECACA', end_color='FECACA', fill_type='solid')
+ADHESION_FAIL_FONT_COLOR = '9C0006'
+
+
+def parse_adhesion_numeric_value(value):
+    if value in (None, '', '-'):
+        return None
+
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def calculate_adhesion_average(form_data, indexes):
+    numeric_values = []
+
+    for index in indexes:
+        numeric_value = parse_adhesion_numeric_value(form_data.get(f'adhesion_data_{index}'))
+        if numeric_value is not None:
+            numeric_values.append(numeric_value)
+
+    if not numeric_values:
+        return '0.00'
+
+    return f"{sum(numeric_values) / len(numeric_values):.2f}"
+
+
+def build_adhesion_averages(form_data):
+    return {
+        'frontMinAvg': calculate_adhesion_average(form_data, [0, 4, 8, 12, 16]),
+        'frontMaxAvg': calculate_adhesion_average(form_data, [1, 5, 9, 13, 17]),
+        'backMinAvg': calculate_adhesion_average(form_data, [2, 6, 10, 14, 18]),
+        'backMaxAvg': calculate_adhesion_average(form_data, [3, 7, 11, 15, 19]),
+    }
+
+
+def get_adhesion_threshold(field_name):
+    try:
+        field_index = int(field_name.rsplit('_', 1)[1])
+    except (IndexError, ValueError):
+        return None
+
+    return FRONT_ADHESION_THRESHOLD if field_index % 4 in (0, 1) else BACK_ADHESION_THRESHOLD
+
+
+def apply_adhesion_fail_style(cell):
+    cell.fill = ADHESION_FAIL_FILL
+    updated_font = copy(cell.font) if cell.font else Font()
+    updated_font.color = ADHESION_FAIL_FONT_COLOR
+    cell.font = updated_font
 
 def fill_adhesion_basic_info(worksheet, adhesion_data):
     try:
@@ -118,7 +174,10 @@ def fill_adhesion_basic_info(worksheet, adhesion_data):
 def fill_adhesion_test_data(worksheet, adhesion_data):
     try:
         form_data = adhesion_data.get('form_data', {})
-        averages = adhesion_data.get('averages', {})
+        averages = {
+            **adhesion_data.get('averages', {}),
+            **build_adhesion_averages(form_data)
+        }
         
         test_data_mapping = {
             'adhesion_data_0': 'B31',  # Position 1 Front Min
@@ -146,11 +205,16 @@ def fill_adhesion_test_data(worksheet, adhesion_data):
         for field, cell_ref in test_data_mapping.items():
             if field in form_data:
                 value = form_data[field]
-                # Handle hyphenated values
+                cell = worksheet[cell_ref]
+
                 if value == '-' or value == '':
-                    worksheet[cell_ref] = '-'  # Keep hyphen for empty values
+                    cell.value = '-'
                 else:
-                    worksheet[cell_ref] = value
+                    cell.value = value
+                    numeric_value = parse_adhesion_numeric_value(value)
+                    threshold = get_adhesion_threshold(field)
+                    if numeric_value is not None and threshold is not None and numeric_value < threshold:
+                        apply_adhesion_fail_style(cell)
         
         averages_mapping = {
             'frontMinAvg': 'B36',
@@ -160,14 +224,10 @@ def fill_adhesion_test_data(worksheet, adhesion_data):
         }
         
         for field, cell_ref in averages_mapping.items():
-            if field in averages and averages[field]:
+            if field in averages:
                 value = averages[field]
-                # Handle hyphenated average values
-                if value == '-' or value == '':
-                    worksheet[cell_ref] = '-'
-                else:
-                    worksheet[cell_ref] = value
-        
+                worksheet[cell_ref] = value if value not in (None, '', '-') else '0.00'
+
         print("Adhesion test data filled successfully")
     except Exception as e:
         print(f"Error filling adhesion test data: {str(e)}")

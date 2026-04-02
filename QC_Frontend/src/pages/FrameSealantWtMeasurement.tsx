@@ -26,6 +26,7 @@ interface FrameDivisionData {
 interface LineEntry {
     line?: string;
     po: string;
+    glassGroove: string;
     length: FrameDivisionData;  // Long Frame division
     width: FrameDivisionData;    // Short Frame division
     totalSealantWeightPerModule: string;  // Sum of all 4 net sealant weights (gm)
@@ -84,6 +85,23 @@ interface MonthlyStats {
     };
 }
 
+type LineNumber = '1' | '2';
+type FrameDivisionKey = 'length' | 'width';
+
+const GLASS_GROOVE_OPTIONS = [
+    'Glass Groove (5.6 mm)',
+    'Glass Groove (6.1 mm)'
+] as const;
+
+const GLASS_GROOVE_TARGETS: Record<(typeof GLASS_GROOVE_OPTIONS)[number], number> = {
+    'Glass Groove (5.6 mm)': 40,
+    'Glass Groove (6.1 mm)': 49
+};
+
+const FRAME_SEALANT_PASS_TOLERANCE = 7;
+const FRAME_SEALANT_LINES_PER_SHIFT = 2;
+const FRAME_SEALANT_SHIFTS_PER_DAY = 3;
+
 const defaultShiftStats: ShiftStats = {
     filled: 0,
     pass: 0,
@@ -117,6 +135,120 @@ const createEmptyFrameDivision = (): FrameDivisionData => ({
     netSealantWeight1: '',
     netSealantWeight2: ''
 });
+
+const frameDivisionRequiredFields: Array<{
+    key: keyof Omit<FrameDivisionData, 'netSealantWeight1' | 'netSealantWeight2'>;
+    label: string;
+}> = [
+    { key: 'frameSupplier', label: 'Frame Supplier' },
+    { key: 'frameSize', label: 'Frame Size' },
+    { key: 'sealantSupplier', label: 'Sealant Supplier' },
+    { key: 'sealantExpiry', label: 'Sealant Expiry Date' },
+    { key: 'frameWithoutSealant1', label: 'Frame 1 (Without sealant)' },
+    { key: 'frameWithoutSealant2', label: 'Frame 2 (Without sealant)' },
+    { key: 'frameWithSealant1', label: 'Frame 1 (With sealant)' },
+    { key: 'frameWithSealant2', label: 'Frame 2 (With sealant)' }
+];
+
+const frameDivisionLabels: Record<FrameDivisionKey, string> = {
+    length: 'Long Frame',
+    width: 'Short Frame'
+};
+
+const normalizeFieldValue = (value?: string) => value?.trim() ?? '';
+
+const parseNumericValue = (value?: string) => {
+    const normalized = normalizeFieldValue(value);
+    if (!normalized) return null;
+
+    const parsed = parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+};
+
+const getGlassGrooveTarget = (glassGroove?: string) => {
+    const normalized = normalizeFieldValue(glassGroove);
+    return normalized in GLASS_GROOVE_TARGETS
+        ? GLASS_GROOVE_TARGETS[normalized as keyof typeof GLASS_GROOVE_TARGETS]
+        : null;
+};
+
+const getLineValidity = (line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
+    if (!line) return { pass: false, fail: false, any: false };
+
+    const weightPerMeter = parseNumericValue(line.sealantWeightPerModulePerMeter);
+    const targetWeight = getGlassGrooveTarget(line.glassGroove);
+    const hasAnyInput =
+        normalizeFieldValue(line.po) !== '' ||
+        normalizeFieldValue(line.totalSealantWeightPerModule) !== '' ||
+        normalizeFieldValue(line.sealantWeightPerModulePerMeter) !== '' ||
+        hasLineDetailInput(line);
+
+    if (weightPerMeter === null || targetWeight === null) {
+        return { pass: false, fail: false, any: hasAnyInput };
+    }
+
+    const minWeight = targetWeight - FRAME_SEALANT_PASS_TOLERANCE;
+    const maxWeight = targetWeight + FRAME_SEALANT_PASS_TOLERANCE;
+    const isPass = weightPerMeter >= minWeight && weightPerMeter <= maxWeight;
+
+    return {
+        pass: isPass,
+        fail: !isPass,
+        any: true
+    };
+};
+
+const getSealantWeightPerMeterClass = (line: LineEntry | undefined) => {
+    const validity = getLineValidity(line);
+
+    if (validity.pass) {
+        return 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+    }
+
+    if (validity.fail) {
+        return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+    }
+
+    return 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700';
+};
+
+const getTotalPossibleEntries = (daysInMonth: number) =>
+    daysInMonth * FRAME_SEALANT_LINES_PER_SHIFT * FRAME_SEALANT_SHIFTS_PER_DAY;
+
+const getLineRequiredDetails = (line: LineEntry) =>
+    [
+        { label: 'Glass Groove', value: normalizeFieldValue(line.glassGroove) },
+        ...(['length', 'width'] as const).flatMap((division) =>
+        frameDivisionRequiredFields.map(({ key, label }) => ({
+            label: `${frameDivisionLabels[division]} - ${label}`,
+            value: normalizeFieldValue(line[division][key])
+        }))
+    )];
+
+const hasLineDetailInput = (line: LineEntry) =>
+    getLineRequiredDetails(line).some(({ value }) => value !== '') ||
+    normalizeFieldValue(line.remarks) !== '';
+
+const getLineValidationMessage = (line: LineEntry, lineNumber: LineNumber): string | null => {
+    const hasPo = normalizeFieldValue(line.po) !== '';
+    const hasAnyLineInput = hasLineDetailInput(line);
+
+    if (!hasPo && !hasAnyLineInput) {
+        return null;
+    }
+
+    if (!hasPo) {
+        return `Please enter the PO number for Line ${lineNumber} before saving.`;
+    }
+
+    const firstMissingDetail = getLineRequiredDetails(line).find(({ value }) => value === '');
+
+    if (firstMissingDetail) {
+        return `Please complete all mandatory details for Line ${lineNumber} before saving. Missing: ${firstMissingDetail.label}.`;
+    }
+
+    return null;
+};
 
 export default function FrameSealantWeightMeasurement() {
     const navigate = useNavigate();
@@ -199,6 +331,7 @@ export default function FrameSealantWeightMeasurement() {
     const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
         line: lineNum,
         po: '',
+        glassGroove: '',
         length: createEmptyFrameDivision(),
         width: createEmptyFrameDivision(),
         totalSealantWeightPerModule: '',
@@ -329,6 +462,7 @@ export default function FrameSealantWeightMeasurement() {
                         if (!line.length) line.length = createEmptyFrameDivision();
                         if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.glassGroove === undefined) line.glassGroove = '';
                         if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
                         if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
@@ -374,7 +508,7 @@ export default function FrameSealantWeightMeasurement() {
 
                 const newStats = {
                     totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                    totalPossibleEntries: statsData.totalPossibleEntries || new Date(year, month - 1, 0).getDate() * 3 * 2 * 4, // 3 shifts * 2 lines * 4 frames
+                    totalPossibleEntries: statsData.totalPossibleEntries || getTotalPossibleEntries(new Date(year, month, 0).getDate()),
                     filledEntries: statsData.filledEntries || 0,
                     completionRate: statsData.completionRate || 0,
                     passCount: statsData.passCount || 0,
@@ -389,7 +523,7 @@ export default function FrameSealantWeightMeasurement() {
                 const daysInMonth = new Date(year, month - 1, 0).getDate();
                 setMonthlyStats({
                     totalDays: daysInMonth,
-                    totalPossibleEntries: daysInMonth * 3 * 2 * 4, // 3 shifts * 2 lines * 4 frames
+                    totalPossibleEntries: getTotalPossibleEntries(daysInMonth),
                     filledEntries: 0,
                     completionRate: 0,
                     passCount: 0,
@@ -407,7 +541,7 @@ export default function FrameSealantWeightMeasurement() {
             const daysInMonth = new Date(year, month - 1, 0).getDate();
             setMonthlyStats({
                 totalDays: daysInMonth,
-                totalPossibleEntries: daysInMonth * 3 * 2 * 4,
+                totalPossibleEntries: getTotalPossibleEntries(daysInMonth),
                 filledEntries: 0,
                 completionRate: 0,
                 passCount: 0,
@@ -489,6 +623,7 @@ export default function FrameSealantWeightMeasurement() {
                     if (!line.length) line.length = createEmptyFrameDivision();
                     if (!line.width) line.width = createEmptyFrameDivision();
                     if (!line.line) line.line = lineNum;
+                    if (line.glassGroove === undefined) line.glassGroove = '';
                     if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
                     if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                 });
@@ -532,14 +667,12 @@ export default function FrameSealantWeightMeasurement() {
             return;
         }
 
-        // Validate PO for both lines
-        if (!currentEntry.lines['1'].po) {
-            showAlert('error', 'PO number is required for Line 1');
-            return;
-        }
-        if (!currentEntry.lines['2'].po) {
-            showAlert('error', 'PO number is required for Line 2');
-            return;
+        for (const lineNumber of ['1', '2'] as const) {
+            const validationMessage = getLineValidationMessage(currentEntry.lines[lineNumber], lineNumber);
+            if (validationMessage) {
+                showAlert('error', validationMessage);
+                return;
+            }
         }
 
         setIsLoading(true);
@@ -571,6 +704,7 @@ export default function FrameSealantWeightMeasurement() {
                         if (!line.length) line.length = createEmptyFrameDivision();
                         if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.glassGroove === undefined) line.glassGroove = '';
                         if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
                         if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
@@ -630,7 +764,7 @@ export default function FrameSealantWeightMeasurement() {
 
         showConfirm({
             title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines (2 divisions each with 4 frames).`,
+            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines for the selected shift.`,
             type: 'warning',
             confirmText: 'Delete',
             cancelText: 'Cancel',
@@ -832,6 +966,7 @@ export default function FrameSealantWeightMeasurement() {
                         if (!line.length) line.length = createEmptyFrameDivision();
                         if (!line.width) line.width = createEmptyFrameDivision();
                         if (!line.line) line.line = lineNum;
+                        if (line.glassGroove === undefined) line.glassGroove = '';
                         if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
                         if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
                     });
@@ -918,42 +1053,15 @@ export default function FrameSealantWeightMeasurement() {
         }
     }, []);
 
-    const checkFrameValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
-        if (!line) return { pass: false, fail: false, any: false };
-        
-        const frames = [
-            line.length.netSealantWeight1,
-            line.length.netSealantWeight2,
-            line.width.netSealantWeight1,
-            line.width.netSealantWeight2
-        ];
-        
-        let pass = false;
-        let fail = false;
-        let any = false;
-        
-        frames.forEach(weight => {
-            if (weight) {
-                any = true;
-                const weightNum = parseFloat(weight);
-                // Allowable limit based on sealant weight per module (gm)
-                // Using 33-56 range as per original
-                if (weightNum >= 33 && weightNum <= 56) {
-                    pass = true;
-                } else {
-                    fail = true;
-                }
-            }
-        });
-        
-        return { pass, fail, any };
+    const checkLineValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
+        return getLineValidity(line);
     }, []);
 
     const getShiftResultIndicator = useCallback((entry: DailyEntry | undefined) => {
         if (!entry || !entry.lines) return <CircleOff className="w-3 h-3 text-gray-400" />;
 
-        const line1Validity = checkFrameValidity(entry.lines['1']);
-        const line2Validity = checkFrameValidity(entry.lines['2']);
+        const line1Validity = checkLineValidity(entry.lines['1']);
+        const line2Validity = checkLineValidity(entry.lines['2']);
 
         if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail) 
             return <CircleDot className="w-3 h-3 text-green-500" />;
@@ -963,7 +1071,7 @@ export default function FrameSealantWeightMeasurement() {
             return <Circle className="w-3 h-3 text-yellow-500" />;
 
         return <CircleOff className="w-3 h-3 text-gray-400" />;
-    }, [checkFrameValidity]);
+    }, [checkLineValidity]);
 
     const renderCalendarDays = useCallback(() => {
         const year = currentDate.getFullYear();
@@ -991,8 +1099,8 @@ export default function FrameSealantWeightMeasurement() {
 
             Object.values(dayEntries).forEach((shiftEntry: any) => {
                 if (shiftEntry?.lines && typeof shiftEntry === 'object' && 'shift' in shiftEntry) {
-                    const line1Validity = checkFrameValidity(shiftEntry.lines['1']);
-                    const line2Validity = checkFrameValidity(shiftEntry.lines['2']);
+                    const line1Validity = checkLineValidity(shiftEntry.lines['1']);
+                    const line2Validity = checkLineValidity(shiftEntry.lines['2']);
                     
                     if (line1Validity.pass || line2Validity.pass) hasPass = true;
                     if (line1Validity.fail || line2Validity.fail) hasFail = true;
@@ -1048,7 +1156,7 @@ export default function FrameSealantWeightMeasurement() {
             );
         }
         return days;
-    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, checkFrameValidity]);
+    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, checkLineValidity]);
 
     const renderSignatureSection = useCallback(() => {
         if (!currentEntry) return null;
@@ -1188,7 +1296,7 @@ export default function FrameSealantWeightMeasurement() {
                             Sealant Expiry Date
                         </label>
                         <input
-                            type="text"
+                            type="date"
                             value={divisionData.sealantExpiry}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'sealantExpiry', e.target.value)}
                             className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1293,7 +1401,7 @@ export default function FrameSealantWeightMeasurement() {
                 )}
                 <TestHeading
                     heading="Frame Sealant Weight Measurement"
-                    criteria="Allowable Limit: 40±7 gm/m for Glass Groove (5.6±0.15 mm) and 49±7 gm/m for Glass Groove (6.1+0.3/-0 mm)"
+                    criteria="Allowable Limit: Glass Groove (5.6 mm) = 40±7 gm/m and Glass Groove (6.1 mm) = 49±7 gm/m"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
@@ -1319,8 +1427,8 @@ export default function FrameSealantWeightMeasurement() {
                                     const entry = dateEntries[selectedDate]?.[shift];
                                     const isFilled = !!entry;
 
-                                    const line1Validity = entry?.lines['1'] ? checkFrameValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
-                                    const line2Validity = entry?.lines['2'] ? checkFrameValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
+                                    const line1Validity = entry?.lines['1'] ? checkLineValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
+                                    const line2Validity = entry?.lines['2'] ? checkLineValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
 
                                     let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
                                     if (isFilled) {
@@ -1523,7 +1631,7 @@ export default function FrameSealantWeightMeasurement() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number <span className="text-red-500">*</span>
+                                                        PO Number
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1531,8 +1639,24 @@ export default function FrameSealantWeightMeasurement() {
                                                         onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
-                                                        required
                                                     />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Glass Groove
+                                                    </label>
+                                                    <select
+                                                        value={currentEntry.lines['1'].glassGroove}
+                                                        onChange={(e) => handleLineInputChange('1', 'glassGroove', e.target.value)}
+                                                        className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                    >
+                                                        <option value="">Select glass groove</option>
+                                                        {GLASS_GROOVE_OPTIONS.map((option) => (
+                                                            <option key={option} value={option}>
+                                                                {option}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                             
@@ -1573,7 +1697,7 @@ export default function FrameSealantWeightMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['1'].sealantWeightPerModulePerMeter}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['1'])}`}
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
@@ -1601,7 +1725,7 @@ export default function FrameSealantWeightMeasurement() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number <span className="text-red-500">*</span>
+                                                        PO Number
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1609,8 +1733,24 @@ export default function FrameSealantWeightMeasurement() {
                                                         onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
-                                                        required
                                                     />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Glass Groove
+                                                    </label>
+                                                    <select
+                                                        value={currentEntry.lines['2'].glassGroove}
+                                                        onChange={(e) => handleLineInputChange('2', 'glassGroove', e.target.value)}
+                                                        className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                    >
+                                                        <option value="">Select glass groove</option>
+                                                        {GLASS_GROOVE_OPTIONS.map((option) => (
+                                                            <option key={option} value={option}>
+                                                                {option}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                             
@@ -1651,7 +1791,7 @@ export default function FrameSealantWeightMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['2'].sealantWeightPerModulePerMeter}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['2'])}`}
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
@@ -1702,7 +1842,7 @@ export default function FrameSealantWeightMeasurement() {
                                         {monthlyStats.completionRate}%
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">
-                                        {monthlyStats.filledEntries} / {monthlyStats.totalPossibleEntries} entries
+                                        {monthlyStats.filledEntries} / {monthlyStats.totalPossibleEntries} line entries
                                     </div>
                                 </div>
 
@@ -1750,7 +1890,7 @@ export default function FrameSealantWeightMeasurement() {
                                                         <span className="font-medium dark:text-white">Shift {shift}</span>
                                                     </div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {stats.filled} / {monthlyStats.totalDays * 4 * 2} frames
+                                                        {stats.filled} / {monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT} line entries
                                                     </span>
                                                 </div>
                                                 <div className="flex gap-4 text-xs">
@@ -1764,7 +1904,7 @@ export default function FrameSealantWeightMeasurement() {
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
                                                         className="bg-blue-500 h-2 rounded-full transition-all"
-                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 4 * 2)) * 100 : 0}%` }}
+                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT)) * 100 : 0}%` }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -1784,15 +1924,15 @@ export default function FrameSealantWeightMeasurement() {
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Frames)</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Lines)</span>
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Filled Entries</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Filled Entries (Lines)</span>
                                         <span className="font-semibold text-green-600">{monthlyStats.filledEntries}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Missing Entries</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Missing Entries (Lines)</span>
                                         <span className="font-semibold text-red-500">{monthlyStats.totalPossibleEntries - monthlyStats.filledEntries}</span>
                                     </div>
                                 </div>

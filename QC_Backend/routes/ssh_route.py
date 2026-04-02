@@ -6,6 +6,114 @@ import calendar
 
 ssh_router = APIRouter(prefix="/api/ssh-test-reports", tags=["SSH Test Reports"])
 
+SSH_PASS_THRESHOLD = 39
+SHIFT_REQUIRED_FIELDS = [
+    ("po", "PO Number"),
+    ("checkedBy", "Checked By"),
+]
+LINE_REQUIRED_FIELDS = [
+    ("sealantSupplier", "Sealant Supplier"),
+    ("sealantExpDate", "Sealant Expiry Date"),
+    ("sampleTakingTime", "Sample Taking Time"),
+    ("sampleTestingTime", "Sample Testing Time"),
+    ("result", "Result (Shore A)"),
+]
+
+
+def normalize_field_value(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def parse_result_value(value):
+    normalized = normalize_field_value(value)
+    if not normalized:
+        return None
+
+    try:
+        return float(normalized)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_result_pass(value):
+    normalized = normalize_field_value(value).lower()
+    if normalized == "pass":
+        return True
+
+    parsed = parse_result_value(value)
+    return parsed is not None and parsed >= SSH_PASS_THRESHOLD
+
+
+def is_result_fail(value):
+    normalized = normalize_field_value(value).lower()
+    if normalized == "fail":
+        return True
+
+    parsed = parse_result_value(value)
+    return parsed is not None and parsed < SSH_PASS_THRESHOLD
+
+
+def get_line_required_details(line_data, line_num):
+    return [
+        {
+            "label": f"Line {line_num} - {label}",
+            "value": normalize_field_value(line_data.get(key, "")),
+        }
+        for key, label in LINE_REQUIRED_FIELDS
+    ]
+
+
+def get_entry_validation_message(entry):
+    lines = entry.get("lines", {}) if isinstance(entry.get("lines"), dict) else {}
+    line1 = lines.get("1", {}) if isinstance(lines.get("1"), dict) else {}
+    line2 = lines.get("2", {}) if isinstance(lines.get("2"), dict) else {}
+
+    has_po = normalize_field_value(entry.get("po")) != ""
+    has_any_line_input = any(
+        detail["value"] != ""
+        for detail in [
+            *get_line_required_details(line1, "1"),
+            *get_line_required_details(line2, "2"),
+        ]
+    )
+
+    if not has_po and not has_any_line_input:
+        return "Please fill the entry details before saving."
+
+    if not has_po and has_any_line_input:
+        return "Please enter the PO number for this shift before saving."
+
+    required_details = [
+        *[
+            {"label": label, "value": normalize_field_value(entry.get(key, ""))}
+            for key, label in SHIFT_REQUIRED_FIELDS
+        ],
+        *get_line_required_details(line1, "1"),
+        *get_line_required_details(line2, "2"),
+    ]
+
+    first_missing_detail = next((detail for detail in required_details if detail["value"] == ""), None)
+    if first_missing_detail:
+        return f"Please complete all entry fields before saving. Missing: {first_missing_detail['label']}."
+
+    invalid_result = next(
+        (
+            detail
+            for detail in [
+                {"label": "Line 1 - Result (Shore A)", "value": line1.get("result")},
+                {"label": "Line 2 - Result (Shore A)", "value": line2.get("result")},
+            ]
+            if normalize_field_value(detail["value"]) != "" and parse_result_value(detail["value"]) is None
+        ),
+        None,
+    )
+    if invalid_result:
+        return f"Please enter a valid numeric value for {invalid_result['label']}."
+
+    return None
+
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
     if doc is None:
@@ -34,6 +142,84 @@ def serialize_doc(doc):
 def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
+
+
+def build_monthly_stats(year: int, month: int):
+    days_in_month = calendar.monthrange(year, month)[1]
+    entries = SSHDailyEntry.get_month_entries(year, month)
+
+    total_possible_entries = days_in_month * 3 * 2  # 3 shifts * 2 lines per day
+    filled_entries = 0
+    pass_count = 0
+    fail_count = 0
+
+    shift_stats = {
+        "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+        "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+        "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
+    }
+
+    for entry in entries:
+        shift = entry.get("shift")
+        lines = entry.get("lines", {})
+
+        if shift in shift_stats:
+            line1 = lines.get("1", {})
+            if line1.get("result"):
+                filled_entries += 1
+                shift_stats[shift]["filled"] += 1
+                shift_stats[shift]["lines"]["1"] += 1
+
+                if is_result_pass(line1["result"]):
+                    pass_count += 1
+                    shift_stats[shift]["pass"] += 1
+                elif is_result_fail(line1["result"]):
+                    fail_count += 1
+                    shift_stats[shift]["fail"] += 1
+
+            line2 = lines.get("2", {})
+            if line2.get("result"):
+                filled_entries += 1
+                shift_stats[shift]["filled"] += 1
+                shift_stats[shift]["lines"]["2"] += 1
+
+                if is_result_pass(line2["result"]):
+                    pass_count += 1
+                    shift_stats[shift]["pass"] += 1
+                elif is_result_fail(line2["result"]):
+                    fail_count += 1
+                    shift_stats[shift]["fail"] += 1
+
+    completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
+
+    return {
+        "totalDays": days_in_month,
+        "totalPossibleEntries": total_possible_entries,
+        "filledEntries": filled_entries,
+        "completionRate": completion_rate,
+        "passCount": pass_count,
+        "failCount": fail_count,
+        "shiftStats": shift_stats
+    }
+
+
+def build_default_monthly_stats(year: int, month: int):
+    days_in_month = calendar.monthrange(year, month)[1]
+    total_possible_entries = days_in_month * 3 * 2
+
+    return {
+        "totalDays": days_in_month,
+        "totalPossibleEntries": total_possible_entries,
+        "filledEntries": 0,
+        "completionRate": 0,
+        "passCount": 0,
+        "failCount": 0,
+        "shiftStats": {
+            "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
+            "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
+        }
+    }
 
 @ssh_router.get("/entries/monthly")
 async def get_monthly_entries(
@@ -104,91 +290,15 @@ async def get_monthly_stats(
 ):
     """Get statistics for a specific month - counting lines not shifts"""
     try:
-        days_in_month = calendar.monthrange(year, month)[1]
-        
-        # Get all entries for the month
-        entries = SSHDailyEntry.get_month_entries(year, month)
-        
-        # Calculate stats based on lines, not shifts
-        total_possible_entries = days_in_month * 3 * 2  # 3 shifts * 2 lines per day
-        filled_entries = 0
-        pass_count = 0
-        fail_count = 0
-        
-        # Initialize shift stats with lines
-        shift_stats = {
-            "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-            "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-            "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
-        }
-        
-        for entry in entries:
-            shift = entry.get("shift")
-            lines = entry.get("lines", {})
-            
-            if shift in shift_stats:
-                # Process line 1
-                line1 = lines.get("1", {})
-                if line1.get("result"):
-                    filled_entries += 1
-                    shift_stats[shift]["filled"] += 1
-                    shift_stats[shift]["lines"]["1"] += 1
-                    
-                    if line1["result"] == "Pass":
-                        pass_count += 1
-                        shift_stats[shift]["pass"] += 1
-                    elif line1["result"] == "Fail":
-                        fail_count += 1
-                        shift_stats[shift]["fail"] += 1
-                
-                # Process line 2
-                line2 = lines.get("2", {})
-                if line2.get("result"):
-                    filled_entries += 1
-                    shift_stats[shift]["filled"] += 1
-                    shift_stats[shift]["lines"]["2"] += 1
-                    
-                    if line2["result"] == "Pass":
-                        pass_count += 1
-                        shift_stats[shift]["pass"] += 1
-                    elif line2["result"] == "Fail":
-                        fail_count += 1
-                        shift_stats[shift]["fail"] += 1
-        
-        # Calculate completion rate based on lines
-        completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
-        
         return {
             "success": True,
-            "data": {
-                "totalDays": days_in_month,
-                "totalPossibleEntries": total_possible_entries,
-                "filledEntries": filled_entries,
-                "completionRate": completion_rate,
-                "passCount": pass_count,
-                "failCount": fail_count,
-                "shiftStats": shift_stats
-            }
+            "data": build_monthly_stats(year, month)
         }
     except Exception as e:
         # Return default stats on error
-        days_in_month = calendar.monthrange(year, month)[1]
-        total_possible_entries = days_in_month * 3 * 2
         return {
             "success": False,
-            "data": {
-                "totalDays": days_in_month,
-                "totalPossibleEntries": total_possible_entries,
-                "filledEntries": 0,
-                "completionRate": 0,
-                "passCount": 0,
-                "failCount": 0,
-                "shiftStats": {
-                    "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-                    "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
-                    "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
-                }
-            },
+            "data": build_default_monthly_stats(year, month) if 1 <= month <= 12 else {},
             "error": str(e)
         }
 
@@ -197,7 +307,7 @@ async def create_entry(entry: dict):
     """Create or update a daily entry for a specific shift with two lines"""
     try:
         # Validate required fields
-        required_fields = ["date", "testingDate", "shift", "checkedBy", "lines"]
+        required_fields = ["date", "testingDate", "shift", "lines"]
         for field in required_fields:
             if field not in entry or not entry[field]:
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
@@ -209,15 +319,10 @@ async def create_entry(entry: dict):
         # Validate lines structure
         if not isinstance(entry["lines"], dict) or "1" not in entry["lines"] or "2" not in entry["lines"]:
             raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
-        
-        if not entry.get("po"):
-            raise HTTPException(status_code=400, detail="PO number is required")
 
-        for line_num, line_data in entry["lines"].items():
-            if not line_data.get("result"):
-                raise HTTPException(status_code=400, detail=f"Line {line_num} missing Result")
-            if line_data["result"] not in ["Pass", "Fail", ""]:
-                raise HTTPException(status_code=400, detail=f"Invalid result for line {line_num}")
+        validation_message = get_entry_validation_message(entry)
+        if validation_message:
+            raise HTTPException(status_code=400, detail=validation_message)
         
         # Normalize and extract year/month from date
         raw_date = entry.get("date")
@@ -242,13 +347,14 @@ async def create_entry(entry: dict):
         
         # Get the saved entry
         saved_entry = SSHDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
+        stats = build_monthly_stats(date_obj.year, date_obj.month)
         
-        # Return the saved entry without recalculating stats
         return {
             "success": True,
             "message": "Entry saved successfully",
             "data": {
-                "entry": serialize_doc(saved_entry)
+                "entry": serialize_doc(saved_entry),
+                "stats": stats
             }
         }
     except HTTPException:
@@ -275,10 +381,22 @@ async def delete_entry(date: str, shift: str):
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")
+
+        year = entry.get("year")
+        month = entry.get("month")
+        if not year or not month:
+            date_obj = datetime.strptime(date_key, "%Y-%m-%d")
+            year = date_obj.year
+            month = date_obj.month
+
+        stats = build_monthly_stats(year, month)
         
         return {
             "success": True,
-            "message": "Entry deleted successfully"
+            "message": "Entry deleted successfully",
+            "data": {
+                "stats": stats
+            }
         }
     except HTTPException:
         raise

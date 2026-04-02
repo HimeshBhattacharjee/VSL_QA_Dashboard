@@ -44,6 +44,56 @@ const defaultSignature: SignatureData = {
     approvedBy: ''
 };
 
+const entryRequiredFields: Array<{
+    key: keyof Pick<DailyEntry, 'po' | 'moduleType' | 'moduleSerial' | 'jbSupplier' | 'sealantSupplier' | 'backsheetSupplier' | 'result' | 'testDoneBy'>;
+    label: string;
+}> = [
+    { key: 'po', label: 'P.O. Number' },
+    { key: 'moduleType', label: 'Module Type' },
+    { key: 'moduleSerial', label: 'Module Serial No.' },
+    { key: 'jbSupplier', label: 'JB Supplier' },
+    { key: 'sealantSupplier', label: 'Sealant Supplier' },
+    { key: 'backsheetSupplier', label: 'Rear Glass/ Backsheet Supplier' },
+    { key: 'result', label: 'Result' },
+    { key: 'testDoneBy', label: 'Test Done By' }
+];
+
+const normalizeFieldValue = (value?: string) => value?.trim() ?? '';
+
+const getRequiredEntryDetails = (entry: DailyEntry) =>
+    entryRequiredFields.map(({ key, label }) => ({
+        label,
+        value: normalizeFieldValue(entry[key] as string | undefined)
+    }));
+
+const getEntryValidationMessage = (entry: DailyEntry): string | null => {
+    const requiredDetails = getRequiredEntryDetails(entry);
+    const filledDetails = requiredDetails.filter(({ value }) => value !== '');
+
+    if (filledDetails.length === 0) {
+        return 'Please fill the entry details before saving.';
+    }
+
+    if (filledDetails.length !== requiredDetails.length) {
+        const firstMissingDetail = requiredDetails.find(({ value }) => value === '');
+        return `Please complete all entry fields before saving. Missing: ${firstMissingDetail?.label}.`;
+    }
+
+    return null;
+};
+
+const getResultSelectClass = (result: DailyEntry['result']) => {
+    if (result === 'Pass') {
+        return 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+    }
+
+    if (result === 'Fail') {
+        return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+    }
+
+    return 'dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+};
+
 export default function RoTTest() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -275,9 +325,9 @@ export default function RoTTest() {
             return;
         }
 
-        // Validate required fields
-        if (!currentEntry.moduleType || !currentEntry.result) {
-            showAlert('error', 'Module Type and Result are required');
+        const validationMessage = getEntryValidationMessage(currentEntry);
+        if (validationMessage) {
+            showAlert('error', validationMessage);
             return;
         }
 
@@ -845,7 +895,7 @@ export default function RoTTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Module Type <span className="text-red-500">*</span>
+                                                    Module Type
                                                 </label>
                                                 <input
                                                     type="text"
@@ -853,7 +903,6 @@ export default function RoTTest() {
                                                     onChange={(e) => handleInputChange('moduleType', e.target.value)}
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter module type"
-                                                    required
                                                 />
                                             </div>
                                             <div>
@@ -906,17 +955,16 @@ export default function RoTTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Result <span className="text-red-500">*</span>
+                                                    Result
                                                 </label>
                                                 <select
                                                     value={currentEntry.result}
                                                     onChange={(e) => handleInputChange('result', e.target.value as 'Pass' | 'Fail')}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    required
+                                                    className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultSelectClass(currentEntry.result)}`}
                                                 >
                                                     <option value="">Select result</option>
-                                                    <option value="Pass">Pass</option>
-                                                    <option value="Fail">Fail</option>
+                                                    <option value="Pass" className="bg-green-100 text-green-700">Pass</option>
+                                                    <option value="Fail" className="bg-red-100 text-red-700">Fail</option>
                                                 </select>
                                             </div>
                                             <div>

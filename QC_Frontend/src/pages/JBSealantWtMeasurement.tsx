@@ -79,6 +79,9 @@ interface MonthlyStats {
     };
 }
 
+type LineNumber = '1' | '2';
+type JBPositionKey = 'positiveJB' | 'middleJB' | 'negativeJB';
+
 const defaultShiftStats: ShiftStats = {
     filled: 0,
     pass: 0,
@@ -105,6 +108,80 @@ const createEmptyJBPosition = (): JBPositionData => ({
     jbWeightWithSealant: '',
     netSealantWeight: ''
 });
+
+const JB_PASS_MIN = 4;
+const JB_PASS_MAX = 10;
+
+const isNetSealantWeightOutOfRange = (value: string): boolean => {
+    if (!value) return false;
+
+    const weight = parseFloat(value);
+    if (isNaN(weight)) return false;
+
+    return weight < JB_PASS_MIN || weight > JB_PASS_MAX;
+};
+
+const lineRequiredFields: Array<{
+    key: keyof Pick<LineEntry, 'jbSupplier' | 'sealantSupplier' | 'sealantExpiry'>;
+    label: string;
+}> = [
+    { key: 'jbSupplier', label: 'JB Supplier' },
+    { key: 'sealantSupplier', label: 'Sealant Supplier' },
+    { key: 'sealantExpiry', label: 'Sealant Expiry Date' }
+];
+
+const jbPositionRequiredFields: Array<{
+    key: keyof Omit<JBPositionData, 'netSealantWeight'>;
+    label: string;
+}> = [
+    { key: 'jbWeight', label: 'JB Wt' },
+    { key: 'jbWeightWithSealant', label: 'JB Wt with Sealant' }
+];
+
+const jbPositionLabels: Record<JBPositionKey, string> = {
+    positiveJB: 'Positive JB',
+    middleJB: 'Middle JB',
+    negativeJB: 'Negative JB'
+};
+
+const normalizeFieldValue = (value?: string) => value?.trim() ?? '';
+
+const getLineRequiredDetails = (line: LineEntry) => [
+    ...lineRequiredFields.map(({ key, label }) => ({
+        label,
+        value: normalizeFieldValue(line[key])
+    })),
+    ...(['positiveJB', 'middleJB', 'negativeJB'] as const).flatMap((position) =>
+        jbPositionRequiredFields.map(({ key, label }) => ({
+            label: `${jbPositionLabels[position]} - ${label}`,
+            value: normalizeFieldValue(line[position][key])
+        }))
+    )
+];
+
+const hasLineDetailInput = (line: LineEntry) =>
+    getLineRequiredDetails(line).some(({ value }) => value !== '');
+
+const getLineValidationMessage = (line: LineEntry, lineNumber: LineNumber): string | null => {
+    const hasPo = normalizeFieldValue(line.po) !== '';
+    const hasAnyLineInput = hasLineDetailInput(line);
+
+    if (!hasPo && !hasAnyLineInput) {
+        return null;
+    }
+
+    if (!hasPo) {
+        return `Please enter the PO number for Line ${lineNumber} before saving.`;
+    }
+
+    const firstMissingDetail = getLineRequiredDetails(line).find(({ value }) => value === '');
+
+    if (firstMissingDetail) {
+        return `Please complete all mandatory details for Line ${lineNumber} before saving. Missing: ${firstMissingDetail.label}.`;
+    }
+
+    return null;
+};
 
 export default function JBSealantWeightMeasurement() {
     const navigate = useNavigate();
@@ -489,14 +566,12 @@ export default function JBSealantWeightMeasurement() {
             return;
         }
 
-        // Validate PO for both lines
-        if (!currentEntry.lines['1'].po) {
-            showAlert('error', 'PO number is required for Line 1');
-            return;
-        }
-        if (!currentEntry.lines['2'].po) {
-            showAlert('error', 'PO number is required for Line 2');
-            return;
+        for (const lineNumber of ['1', '2'] as const) {
+            const validationMessage = getLineValidationMessage(currentEntry.lines[lineNumber], lineNumber);
+            if (validationMessage) {
+                showAlert('error', validationMessage);
+                return;
+            }
         }
 
         setIsLoading(true);
@@ -890,7 +965,7 @@ export default function JBSealantWeightMeasurement() {
             if (pos.netSealantWeight) {
                 any = true;
                 const weight = parseFloat(pos.netSealantWeight);
-                if (weight >= 4 && weight <= 8) {
+                if (weight >= JB_PASS_MIN && weight <= JB_PASS_MAX) {
                     pass = true;
                 } else {
                     fail = true;
@@ -1090,6 +1165,7 @@ export default function JBSealantWeightMeasurement() {
         if (!currentEntry) return null;
         
         const positionData = currentEntry.lines[line][position];
+        const isNetWeightOutOfRange = isNetSealantWeightOutOfRange(positionData.netSealantWeight);
         
         return (
             <div className="border-l-4 border-violet-500 pl-4 mb-4">
@@ -1127,7 +1203,11 @@ export default function JBSealantWeightMeasurement() {
                             type="text"
                             value={positionData.netSealantWeight}
                             readOnly
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                            className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${
+                                isNetWeightOutOfRange
+                                    ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+                                    : 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700'
+                            }`}
                             placeholder="Auto-calculated"
                         />
                     </div>
@@ -1157,7 +1237,7 @@ export default function JBSealantWeightMeasurement() {
                 )}
                 <TestHeading
                     heading="JB Sealant Weight Measurement"
-                    criteria="Allowable Limit: 6 ± 2 (Range: 4 to 8)"
+                    criteria="Allowable Limit: 7 ± 3 (Range: 4 to 10)"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
@@ -1318,7 +1398,7 @@ export default function JBSealantWeightMeasurement() {
                                 <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (4-8)</span>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range (4-10)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
@@ -1393,7 +1473,7 @@ export default function JBSealantWeightMeasurement() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number <span className="text-red-500">*</span>
+                                                        PO Number
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1401,7 +1481,6 @@ export default function JBSealantWeightMeasurement() {
                                                         onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
-                                                        required
                                                     />
                                                 </div>
                                                 <div>
@@ -1433,7 +1512,7 @@ export default function JBSealantWeightMeasurement() {
                                                         Sealant Expiry Date
                                                     </label>
                                                     <input
-                                                        type="text"
+                                                        type="date"
                                                         value={currentEntry.lines['1'].sealantExpiry}
                                                         onChange={(e) => handleLineInputChange('1', 'sealantExpiry', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1479,7 +1558,7 @@ export default function JBSealantWeightMeasurement() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number <span className="text-red-500">*</span>
+                                                        PO Number
                                                     </label>
                                                     <input
                                                         type="text"
@@ -1487,7 +1566,6 @@ export default function JBSealantWeightMeasurement() {
                                                         onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
-                                                        required
                                                     />
                                                 </div>
                                                 <div>
@@ -1519,7 +1597,7 @@ export default function JBSealantWeightMeasurement() {
                                                         Sealant Expiry Date
                                                     </label>
                                                     <input
-                                                        type="text"
+                                                        type="date"
                                                         value={currentEntry.lines['2'].sealantExpiry}
                                                         onChange={(e) => handleLineInputChange('2', 'sealantExpiry', e.target.value)}
                                                         className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1695,7 +1773,7 @@ export default function JBSealantWeightMeasurement() {
                                 <div className="space-y-4">
                                     <div>
                                         <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-green-600">Within Range (4-8)</span>
+                                            <span className="text-green-600">Within Range (4-10)</span>
                                             <span className="font-medium">{monthlyStats.passCount}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">

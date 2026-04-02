@@ -15,7 +15,7 @@ interface LineEntry {
     sealantExpDate: string;
     sampleTakingTime: string;
     sampleTestingTime: string;
-    result: 'Pass' | 'Fail' | '';
+    result: string;
     remarks?: string;
 }
 
@@ -99,6 +99,123 @@ const defaultMonthlyStats: MonthlyStats = {
 const defaultSignature: SignatureData = {
     preparedBy: '',
     approvedBy: ''
+};
+
+const SSH_PASS_THRESHOLD = 39;
+
+const shiftRequiredFields: Array<{
+    key: keyof Pick<DailyEntry, 'po' | 'checkedBy'>;
+    label: string;
+}> = [
+    { key: 'po', label: 'PO Number' },
+    { key: 'checkedBy', label: 'Checked By' }
+];
+
+const lineRequiredFields: Array<{
+    key: keyof Pick<LineEntry, 'sealantSupplier' | 'sealantExpDate' | 'sampleTakingTime' | 'sampleTestingTime' | 'result'>;
+    label: string;
+}> = [
+    { key: 'sealantSupplier', label: 'Sealant Supplier' },
+    { key: 'sealantExpDate', label: 'Sealant Expiry Date' },
+    { key: 'sampleTakingTime', label: 'Sample Taking Time' },
+    { key: 'sampleTestingTime', label: 'Sample Testing Time' },
+    { key: 'result', label: 'Result (Shore A)' }
+];
+
+const normalizeFieldValue = (value?: string | number) => {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+};
+
+const parseSSHResultValue = (value?: string | number): number | null => {
+    const normalized = normalizeFieldValue(value);
+    if (!normalized) return null;
+
+    const parsed = parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+};
+
+const hasSSHResultValue = (value?: string | number) => normalizeFieldValue(value) !== '';
+
+const isSSHResultPass = (value?: string | number) => {
+    const normalized = normalizeFieldValue(value).toLowerCase();
+    if (normalized === 'pass') return true;
+
+    const parsed = parseSSHResultValue(value);
+    return parsed !== null && parsed >= SSH_PASS_THRESHOLD;
+};
+
+const isSSHResultFail = (value?: string | number) => {
+    const normalized = normalizeFieldValue(value).toLowerCase();
+    if (normalized === 'fail') return true;
+
+    const parsed = parseSSHResultValue(value);
+    return parsed !== null && parsed < SSH_PASS_THRESHOLD;
+};
+
+const getResultInputClass = (value?: string | number) => {
+    const parsed = parseSSHResultValue(value);
+
+    if (parsed !== null && parsed >= SSH_PASS_THRESHOLD) {
+        return 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700';
+    }
+
+    if (parsed !== null && parsed < SSH_PASS_THRESHOLD) {
+        return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+    }
+
+    return 'dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+};
+
+const getResultInputValue = (value?: string | number) => {
+    const parsed = parseSSHResultValue(value);
+    return parsed !== null ? normalizeFieldValue(value) : '';
+};
+
+const getLineRequiredDetails = (line: LineEntry, lineNumber: '1' | '2') =>
+    lineRequiredFields.map(({ key, label }) => ({
+        label: `Line ${lineNumber} - ${label}`,
+        value: normalizeFieldValue(line[key])
+    }));
+
+const getEntryValidationMessage = (entry: DailyEntry): string | null => {
+    const hasPo = normalizeFieldValue(entry.po) !== '';
+    const hasAnyLineInput =
+        getLineRequiredDetails(entry.lines['1'], '1').some(({ value }) => value !== '') ||
+        getLineRequiredDetails(entry.lines['2'], '2').some(({ value }) => value !== '');
+
+    if (!hasPo && !hasAnyLineInput) {
+        return 'Please fill the entry details before saving.';
+    }
+
+    if (!hasPo && hasAnyLineInput) {
+        return 'Please enter the PO number for this shift before saving.';
+    }
+
+    const requiredDetails = [
+        ...shiftRequiredFields.map(({ key, label }) => ({
+            label,
+            value: normalizeFieldValue(entry[key])
+        })),
+        ...getLineRequiredDetails(entry.lines['1'], '1'),
+        ...getLineRequiredDetails(entry.lines['2'], '2')
+    ];
+
+    const firstMissingDetail = requiredDetails.find(({ value }) => value === '');
+    if (firstMissingDetail) {
+        return `Please complete all entry fields before saving. Missing: ${firstMissingDetail.label}.`;
+    }
+
+    const invalidResult = [
+        { label: 'Line 1 - Result (Shore A)', value: entry.lines['1'].result },
+        { label: 'Line 2 - Result (Shore A)', value: entry.lines['2'].result }
+    ].find(({ value }) => normalizeFieldValue(value) !== '' && parseSSHResultValue(value) === null);
+
+    if (invalidResult) {
+        return `Please enter a valid numeric value for ${invalidResult.label}.`;
+    }
+
+    return null;
 };
 
 export default function SSHTest() {
@@ -430,12 +547,10 @@ export default function SSHTest() {
             showAlert('error', 'Please enter a valid date and shift');
             return;
         }
-        if (!currentEntry.po) {
-            showAlert('error', 'PO number is required for this shift');
-            return;
-        }
-        if (!currentEntry.lines['1'].result || !currentEntry.lines['2'].result) {
-            showAlert('error', 'Both lines require a result');
+
+        const validationMessage = getEntryValidationMessage(currentEntry);
+        if (validationMessage) {
+            showAlert('error', validationMessage);
             return;
         }
         setIsLoading(true);
@@ -709,14 +824,14 @@ export default function SSHTest() {
     const getShiftResultIndicator = useCallback((entry: DailyEntry | undefined) => {
         if (!entry || !entry.lines) return <CircleOff className="w-3 h-3 text-gray-400" />;
 
-        const line1Pass = entry.lines['1']?.result === 'Pass';
-        const line2Pass = entry.lines['2']?.result === 'Pass';
-        const line1Fail = entry.lines['1']?.result === 'Fail';
-        const line2Fail = entry.lines['2']?.result === 'Fail';
+        const line1Pass = isSSHResultPass(entry.lines['1']?.result);
+        const line2Pass = isSSHResultPass(entry.lines['2']?.result);
+        const line1Fail = isSSHResultFail(entry.lines['1']?.result);
+        const line2Fail = isSSHResultFail(entry.lines['2']?.result);
 
         if (line1Pass && line2Pass) return <CircleDot className="w-3 h-3 text-green-500" />;
         if (line1Fail || line2Fail) return <Circle className="w-3 h-3 text-red-500" />;
-        if (entry.lines['1']?.result || entry.lines['2']?.result) return <Circle className="w-3 h-3 text-yellow-500" />;
+        if (hasSSHResultValue(entry.lines['1']?.result) || hasSSHResultValue(entry.lines['2']?.result)) return <Circle className="w-3 h-3 text-yellow-500" />;
 
         return <CircleOff className="w-3 h-3 text-gray-400" />;
     }, []);
@@ -752,9 +867,9 @@ export default function SSHTest() {
 
             Object.values(dayEntries).forEach((shiftEntry: DailyEntry) => {
                 if (shiftEntry?.lines) {
-                    if (shiftEntry.lines['1']?.result === 'Pass' || shiftEntry.lines['2']?.result === 'Pass') hasPass = true;
-                    if (shiftEntry.lines['1']?.result === 'Fail' || shiftEntry.lines['2']?.result === 'Fail') hasFail = true;
-                    if (shiftEntry.lines['1']?.result || shiftEntry.lines['2']?.result) hasAny = true;
+                    if (isSSHResultPass(shiftEntry.lines['1']?.result) || isSSHResultPass(shiftEntry.lines['2']?.result)) hasPass = true;
+                    if (isSSHResultFail(shiftEntry.lines['1']?.result) || isSSHResultFail(shiftEntry.lines['2']?.result)) hasFail = true;
+                    if (hasSSHResultValue(shiftEntry.lines['1']?.result) || hasSSHResultValue(shiftEntry.lines['2']?.result)) hasAny = true;
                 }
             });
 
@@ -983,6 +1098,10 @@ export default function SSHTest() {
                                 {(['A', 'B', 'C'] as const).map(shift => {
                                     const entry = dateEntries[selectedDate]?.[shift];
                                     const isFilled = !!entry;
+                                    const line1Pass = isSSHResultPass(entry?.lines['1']?.result);
+                                    const line2Pass = isSSHResultPass(entry?.lines['2']?.result);
+                                    const line1Fail = isSSHResultFail(entry?.lines['1']?.result);
+                                    const line2Fail = isSSHResultFail(entry?.lines['2']?.result);
 
                                     return (
                                         <button
@@ -990,9 +1109,9 @@ export default function SSHTest() {
                                             onClick={() => handleShiftSelect(shift)}
                                             className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3
                                                 ${isFilled
-                                                    ? entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass'
+                                                    ? line1Pass && line2Pass
                                                         ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                                                        : entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail'
+                                                        : line1Fail || line2Fail
                                                             ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                                                             : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                                                     : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'
@@ -1019,9 +1138,9 @@ export default function SSHTest() {
                                             </div>
                                             {isFilled && (
                                                 <div className="flex-shrink-0">
-                                                    {entry?.lines['1']?.result === 'Pass' && entry?.lines['2']?.result === 'Pass' &&
+                                                    {line1Pass && line2Pass &&
                                                         <CheckCircle className="w-5 h-5 text-green-500" />}
-                                                    {(entry?.lines['1']?.result === 'Fail' || entry?.lines['2']?.result === 'Fail') &&
+                                                    {(line1Fail || line2Fail) &&
                                                         <AlertCircle className="w-5 h-5 text-red-500" />}
                                                 </div>
                                             )}
@@ -1193,7 +1312,7 @@ export default function SSHTest() {
                                         </div>
                                         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                PO Number <span className="text-red-500">*</span>
+                                                PO Number
                                             </label>
                                             <input
                                                 type="text"
@@ -1201,7 +1320,6 @@ export default function SSHTest() {
                                                 onChange={(e) => handleInputChange('po', e.target.value)}
                                                 className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="Enter PO number for both lines"
-                                                required
                                             />
                                         </div>
                                         <div className="border-l-4 border-blue-500 pl-4">
@@ -1260,18 +1378,16 @@ export default function SSHTest() {
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Result <span className="text-red-500">*</span>
+                                                        Result (Shore A)
                                                     </label>
-                                                    <select
-                                                        value={currentEntry.lines['1'].result}
-                                                        onChange={(e) => handleLineInputChange('1', 'result', e.target.value as 'Pass' | 'Fail')}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        required
-                                                    >
-                                                        <option value="">Select result</option>
-                                                        <option value="Pass">Pass</option>
-                                                        <option value="Fail">Fail</option>
-                                                    </select>
+                                                    <input
+                                                        type="number"
+                                                        value={getResultInputValue(currentEntry.lines['1'].result)}
+                                                        onChange={(e) => handleLineInputChange('1', 'result', e.target.value)}
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultInputClass(currentEntry.lines['1'].result)}`}
+                                                        placeholder="Enter Shore A value"
+                                                        step="0.01"
+                                                    />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1343,18 +1459,16 @@ export default function SSHTest() {
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Result <span className="text-red-500">*</span>
+                                                        Result (Shore A)
                                                     </label>
-                                                    <select
-                                                        value={currentEntry.lines['2'].result}
-                                                        onChange={(e) => handleLineInputChange('2', 'result', e.target.value as 'Pass' | 'Fail')}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        required
-                                                    >
-                                                        <option value="">Select result</option>
-                                                        <option value="Pass">Pass</option>
-                                                        <option value="Fail">Fail</option>
-                                                    </select>
+                                                    <input
+                                                        type="number"
+                                                        value={getResultInputValue(currentEntry.lines['2'].result)}
+                                                        onChange={(e) => handleLineInputChange('2', 'result', e.target.value)}
+                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultInputClass(currentEntry.lines['2'].result)}`}
+                                                        placeholder="Enter Shore A value"
+                                                        step="0.01"
+                                                    />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

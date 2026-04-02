@@ -52,6 +52,100 @@ const defaultSignature: SignatureData = {
     approvedBy: ''
 };
 
+const WET_LEAKAGE_PASS_THRESHOLD = 40;
+
+const entryRequiredFields: Array<{
+    key: keyof Pick<DailyEntry,
+        'po' |
+        'moduleType' |
+        'moduleNo' |
+        'cellSupplier' |
+        'encapsulantSupplier' |
+        'rearGlassSupplier' |
+        'jbSupplier' |
+        'adhesiveSealantSupplier' |
+        'pottingSealantSupplier' |
+        'waterTemp' |
+        'waterResistivity' |
+        'IR' |
+        'testDoneBy'
+    >;
+    label: string;
+}> = [
+    { key: 'po', label: 'P.O. Number' },
+    { key: 'moduleType', label: 'Module Type' },
+    { key: 'moduleNo', label: 'Module No.' },
+    { key: 'cellSupplier', label: 'Cell Supplier' },
+    { key: 'encapsulantSupplier', label: 'Encapsulant Supplier' },
+    { key: 'rearGlassSupplier', label: 'Rear Glass/ Backsheet Supplier' },
+    { key: 'jbSupplier', label: 'JB Supplier' },
+    { key: 'adhesiveSealantSupplier', label: 'Adhesive Sealant Supplier' },
+    { key: 'pottingSealantSupplier', label: 'Potting Sealant Supplier' },
+    { key: 'waterTemp', label: 'Water Temperature (°C)' },
+    { key: 'waterResistivity', label: 'Water Resistivity (Ω-cm)' },
+    { key: 'IR', label: 'IR (MΩ)' },
+    { key: 'testDoneBy', label: 'Test Done By' }
+];
+
+const normalizeFieldValue = (value?: string | number) => {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+};
+
+const parseIRValue = (value?: string | number): number | null => {
+    const normalized = normalizeFieldValue(value);
+    if (!normalized) return null;
+
+    const parsed = parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+};
+
+const getWetLeakageResult = (irValue?: string | number): DailyEntry['result'] => {
+    const parsed = parseIRValue(irValue);
+    if (parsed === null) return '';
+    return parsed > WET_LEAKAGE_PASS_THRESHOLD ? 'Pass' : 'Fail';
+};
+
+const isWetLeakagePass = (irValue?: string | number) => getWetLeakageResult(irValue) === 'Pass';
+const isWetLeakageFail = (irValue?: string | number) => getWetLeakageResult(irValue) === 'Fail';
+
+const getIRInputClass = (irValue?: string | number) => {
+    if (isWetLeakageFail(irValue)) {
+        return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+    }
+
+    return 'dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+};
+
+const normalizeWetLeakageEntry = (entry: DailyEntry): DailyEntry => ({
+    ...entry,
+    result: getWetLeakageResult(entry.IR)
+});
+
+const getEntryValidationMessage = (entry: DailyEntry): string | null => {
+    const requiredDetails = entryRequiredFields.map(({ key, label }) => ({
+        label,
+        value: normalizeFieldValue(entry[key])
+    }));
+
+    const filledDetails = requiredDetails.filter(({ value }) => value !== '');
+
+    if (filledDetails.length === 0) {
+        return 'Please fill the entry details before saving.';
+    }
+
+    if (filledDetails.length !== requiredDetails.length) {
+        const firstMissingDetail = requiredDetails.find(({ value }) => value === '');
+        return `Please complete all entry fields before saving. Missing: ${firstMissingDetail?.label}.`;
+    }
+
+    if (parseIRValue(entry.IR) === null) {
+        return 'Please enter a valid numeric value for IR (MΩ).';
+    }
+
+    return null;
+};
+
 export default function WetLeakageTest() {
     const navigate = useNavigate();
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -161,10 +255,10 @@ export default function WetLeakageTest() {
             const entriesMap = new Map<string, DailyEntry>();
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
-                entriesMap.set(normalizedDate, {
+                entriesMap.set(normalizedDate, normalizeWetLeakageEntry({
                     ...entry,
                     date: normalizedDate
-                });
+                }));
             });
 
             setMonthlyEntries(entriesMap);
@@ -249,7 +343,7 @@ export default function WetLeakageTest() {
 
         if (entry) {
             console.log('Loading existing entry:', entry);
-            setCurrentEntry(entry);
+            setCurrentEntry(normalizeWetLeakageEntry(entry));
             setIsEditing(true);
         } else {
             console.log('Creating new entry for date:', normalized);
@@ -294,10 +388,13 @@ export default function WetLeakageTest() {
     // Handle form input change
     const handleInputChange = useCallback((field: keyof DailyEntry, value: string) => {
         if (!currentEntry) return;
-        setCurrentEntry({
+
+        const nextEntry: DailyEntry = normalizeWetLeakageEntry({
             ...currentEntry,
             [field]: value
         });
+
+        setCurrentEntry(nextEntry);
         setHasUnsavedChanges(true);
     }, [currentEntry]);
 
@@ -307,20 +404,21 @@ export default function WetLeakageTest() {
             return;
         }
 
-        // Validate required fields
-        if (!currentEntry.moduleType || !currentEntry.result) {
-            showAlert('error', 'Module Type and Result are required');
+        const validationMessage = getEntryValidationMessage(currentEntry);
+        if (validationMessage) {
+            showAlert('error', validationMessage);
             return;
         }
 
         setIsLoading(true);
         try {
-            console.log('Saving entry:', currentEntry);
+            const entryToSave = normalizeWetLeakageEntry(currentEntry);
+            console.log('Saving entry:', entryToSave);
 
             const response = await fetch(`${WET_LEAKAGE_API_BASE_URL}/entries`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(currentEntry),
+                body: JSON.stringify(entryToSave),
             });
 
             if (!response.ok) {
@@ -333,7 +431,7 @@ export default function WetLeakageTest() {
 
             // Update local state with the saved entry
             if (result.data && result.data.entry) {
-                const saved = result.data.entry as DailyEntry;
+                const saved = normalizeWetLeakageEntry(result.data.entry as DailyEntry);
                 const normalized = normalizeDate(saved.date);
                 const updatedEntries = new Map(monthlyEntries);
                 updatedEntries.set(normalized, { ...saved, date: normalized });
@@ -522,10 +620,10 @@ export default function WetLeakageTest() {
             let statusIcon = null;
 
             if (entry) {
-                if (entry.result === 'Pass') {
+                if (isWetLeakagePass(entry.IR)) {
                     statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
                     statusIcon = <CheckCircle className="w-4 h-4 text-green-500" />;
-                } else if (entry.result === 'Fail') {
+                } else if (isWetLeakageFail(entry.IR)) {
                     statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
                     statusIcon = <AlertCircle className="w-4 h-4 text-red-500" />;
                 }
@@ -547,11 +645,6 @@ export default function WetLeakageTest() {
                         <span className="text-sm dark:text-white">{i}</span>
                         {statusIcon}
                     </div>
-                    {entry && (
-                        <div className="mt-1 text-xs text-left truncate max-w-full font-medium dark:text-white">
-                            {entry.moduleType}
-                        </div>
-                    )}
                 </button>
             );
         }
@@ -884,7 +977,7 @@ export default function WetLeakageTest() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Module Type <span className="text-red-500">*</span>
+                                                    Module Type
                                                 </label>
                                                 <input
                                                     type="text"
@@ -892,7 +985,6 @@ export default function WetLeakageTest() {
                                                     onChange={(e) => handleInputChange('moduleType', e.target.value)}
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter module type"
-                                                    required
                                                 />
                                             </div>
                                             <div>
@@ -1008,27 +1100,25 @@ export default function WetLeakageTest() {
                                                     IR (MΩ)
                                                 </label>
                                                 <input
-                                                    type="text"
+                                                    type="number"
                                                     value={currentEntry.IR || ''}
                                                     onChange={(e) => handleInputChange('IR', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    step="0.01"
+                                                    className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getIRInputClass(currentEntry.IR)}`}
                                                     placeholder="Enter IR in MΩ"
                                                 />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Result <span className="text-red-500">*</span>
+                                                    Result
                                                 </label>
-                                                <select
+                                                <input
+                                                    type="text"
                                                     value={currentEntry.result}
-                                                    onChange={(e) => handleInputChange('result', e.target.value as 'Pass' | 'Fail')}
+                                                    readOnly
                                                     className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    required
-                                                >
-                                                    <option value="">Select result</option>
-                                                    <option value="Pass">Pass</option>
-                                                    <option value="Fail">Fail</option>
-                                                </select>
+                                                    placeholder="Auto-calculated from IR"
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

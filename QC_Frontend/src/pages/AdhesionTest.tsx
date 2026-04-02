@@ -13,6 +13,69 @@ interface AdhesionTestReport {
     averages: { [key: string]: string; };
 }
 
+interface AdhesionAverages {
+    frontMinAvg: string;
+    frontMaxAvg: string;
+    backMinAvg: string;
+    backMaxAvg: string;
+}
+
+const FRONT_ADHESION_THRESHOLD = 60;
+const BACK_ADHESION_THRESHOLD = 40;
+
+const DEFAULT_ADHESION_AVERAGES: AdhesionAverages = {
+    frontMinAvg: '0.00',
+    frontMaxAvg: '0.00',
+    backMinAvg: '0.00',
+    backMaxAvg: '0.00',
+};
+
+const calculateAdhesionAverage = (keys: string[], values: { [key: string]: string }): string => {
+    let sum = 0;
+    let count = 0;
+
+    keys.forEach((key) => {
+        const value = values[key];
+        if (value && value !== '-') {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+                sum += numValue;
+                count++;
+            }
+        }
+    });
+
+    return count > 0 ? (sum / count).toFixed(2) : '0.00';
+};
+
+const getAdhesionAverages = (values: { [key: string]: string }): AdhesionAverages => ({
+    frontMinAvg: calculateAdhesionAverage(
+        ['adhesion_data_0', 'adhesion_data_4', 'adhesion_data_8', 'adhesion_data_12', 'adhesion_data_16'],
+        values
+    ),
+    frontMaxAvg: calculateAdhesionAverage(
+        ['adhesion_data_1', 'adhesion_data_5', 'adhesion_data_9', 'adhesion_data_13', 'adhesion_data_17'],
+        values
+    ),
+    backMinAvg: calculateAdhesionAverage(
+        ['adhesion_data_2', 'adhesion_data_6', 'adhesion_data_10', 'adhesion_data_14', 'adhesion_data_18'],
+        values
+    ),
+    backMaxAvg: calculateAdhesionAverage(
+        ['adhesion_data_3', 'adhesion_data_7', 'adhesion_data_11', 'adhesion_data_15', 'adhesion_data_19'],
+        values
+    ),
+});
+
+const isBelowAdhesionThreshold = (value: string, threshold: number): boolean => {
+    if (!value || value === '-') {
+        return false;
+    }
+
+    const numericValue = parseFloat(value);
+    return !isNaN(numericValue) && numericValue < threshold;
+};
+
 export default function AdhesionTest() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
@@ -45,6 +108,7 @@ export default function AdhesionTest() {
     // State for all input values
     const [editableValues, setEditableValues] = useState<{ [key: string]: string }>({});
     const [dataValues, setDataValues] = useState<{ [key: string]: string }>({});
+    const [averages, setAverages] = useState<AdhesionAverages>({ ...DEFAULT_ADHESION_AVERAGES });
 
     // Use ref to store the latest values for real-time calculation
     const dataValuesRef = useRef<{ [key: string]: string }>({});
@@ -154,9 +218,14 @@ export default function AdhesionTest() {
         return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
     }, []);
 
-    const initializeForm = () => { 
-        calculateAverages();
+    const initializeForm = () => {
         initializeDataCellsWithHyphens();
+    };
+
+    const syncDataValues = (nextDataValues: { [key: string]: string }) => {
+        setDataValues(nextDataValues);
+        dataValuesRef.current = nextDataValues;
+        setAverages(getAdhesionAverages(nextDataValues));
     };
 
     const initializeDataCellsWithHyphens = () => {
@@ -164,90 +233,11 @@ export default function AdhesionTest() {
         for (let i = 0; i <= 19; i++) {
             initialData[`adhesion_data_${i}`] = '-';
         }
-        setDataValues(initialData);
-        dataValuesRef.current = { ...initialData };
+        syncDataValues(initialData);
     };
 
     const calculateAverages = () => {
-        // Use the ref to get the latest values
-        const currentDataValues = dataValuesRef.current;
-        
-        // Front Glass to Encapsulant Min (Column B)
-        let frontMinSum = 0;
-        let frontMinCount = 0;
-        for (let i = 0; i <= 4; i++) {
-            const key = `adhesion_data_${i * 4}`;
-            const value = currentDataValues[key];
-            if (value && value !== '-') {
-                const numValue = parseFloat(value);
-                if (!isNaN(numValue)) {
-                    frontMinSum += numValue;
-                    frontMinCount++;
-                }
-            }
-        }
-        const frontMinAvg = frontMinCount > 0 ? (frontMinSum / frontMinCount).toFixed(2) : '-';
-        
-        // Front Glass to Encapsulant Max (Column C)
-        let frontMaxSum = 0;
-        let frontMaxCount = 0;
-        for (let i = 0; i <= 4; i++) {
-            const key = `adhesion_data_${i * 4 + 1}`;
-            const value = currentDataValues[key];
-            if (value && value !== '-') {
-                const numValue = parseFloat(value);
-                if (!isNaN(numValue)) {
-                    frontMaxSum += numValue;
-                    frontMaxCount++;
-                }
-            }
-        }
-        const frontMaxAvg = frontMaxCount > 0 ? (frontMaxSum / frontMaxCount).toFixed(2) : '-';
-        
-        // Backsheet to Encapsulant Min (Column D)
-        let backMinSum = 0;
-        let backMinCount = 0;
-        for (let i = 0; i <= 4; i++) {
-            const key = `adhesion_data_${i * 4 + 2}`;
-            const value = currentDataValues[key];
-            if (value && value !== '-') {
-                const numValue = parseFloat(value);
-                if (!isNaN(numValue)) {
-                    backMinSum += numValue;
-                    backMinCount++;
-                }
-            }
-        }
-        const backMinAvg = backMinCount > 0 ? (backMinSum / backMinCount).toFixed(2) : '-';
-        
-        // Backsheet to Encapsulant Max (Column E)
-        let backMaxSum = 0;
-        let backMaxCount = 0;
-        for (let i = 0; i <= 4; i++) {
-            const key = `adhesion_data_${i * 4 + 3}`;
-            const value = currentDataValues[key];
-            if (value && value !== '-') {
-                const numValue = parseFloat(value);
-                if (!isNaN(numValue)) {
-                    backMaxSum += numValue;
-                    backMaxCount++;
-                }
-            }
-        }
-        const backMaxAvg = backMaxCount > 0 ? (backMaxSum / backMaxCount).toFixed(2) : '-';
-        
-        // Update the DOM elements
-        const frontMinAvgCell = document.querySelector('.front-min-avg');
-        if (frontMinAvgCell) frontMinAvgCell.textContent = frontMinAvg;
-        
-        const frontMaxAvgCell = document.querySelector('.front-max-avg');
-        if (frontMaxAvgCell) frontMaxAvgCell.textContent = frontMaxAvg;
-        
-        const backMinAvgCell = document.querySelector('.back-min-avg');
-        if (backMinAvgCell) backMinAvgCell.textContent = backMinAvg;
-        
-        const backMaxAvgCell = document.querySelector('.back-max-avg');
-        if (backMaxAvgCell) backMaxAvgCell.textContent = backMaxAvg;
+        setAverages(getAdhesionAverages(dataValuesRef.current));
     };
 
     // Calculate process time for a specific laminator
@@ -286,15 +276,8 @@ export default function AdhesionTest() {
     const handleDataChange = (key: string, value: string) => {
         // Allow empty string, hyphen, or numbers
         if (value === '' || value === '-' || !isNaN(parseFloat(value))) {
-            // Update state
-            setDataValues(prev => {
-                const newValues = { ...prev, [key]: value };
-                // Update ref immediately for calculateAverages
-                dataValuesRef.current = newValues;
-                // Calculate averages using the updated values
-                calculateAverages();
-                return newValues;
-            });
+            const newValues = { ...dataValuesRef.current, [key]: value };
+            syncDataValues(newValues);
             setHasUnsavedChanges(true);
             setTimeout(() => saveFormData(), 0);
         } else {
@@ -305,23 +288,16 @@ export default function AdhesionTest() {
     // Handle focus on data input - clear hyphen
     const handleDataFocus = (key: string) => {
         if (dataValues[key] === '-') {
-            setDataValues(prev => {
-                const newValues = { ...prev, [key]: '' };
-                dataValuesRef.current = newValues;
-                return newValues;
-            });
+            const newValues = { ...dataValuesRef.current, [key]: '' };
+            syncDataValues(newValues);
         }
     };
 
     // Handle blur on data input - set hyphen if empty
     const handleDataBlur = (key: string, value: string) => {
         if (value === '' || value === null || value === undefined) {
-            setDataValues(prev => {
-                const newValues = { ...prev, [key]: '-' };
-                dataValuesRef.current = newValues;
-                calculateAverages();
-                return newValues;
-            });
+            const newValues = { ...dataValuesRef.current, [key]: '-' };
+            syncDataValues(newValues);
             setTimeout(() => {
                 saveFormData();
             }, 0);
@@ -538,8 +514,7 @@ export default function AdhesionTest() {
                 dataInputs[key] = '-';
             }
         }
-        setDataValues(dataInputs);
-        dataValuesRef.current = { ...dataInputs };
+        syncDataValues(dataInputs);
 
         if (report.formData.preparedBySignature !== undefined) {
             setPreparedBySignature(report.formData.preparedBySignature as string);
@@ -553,9 +528,7 @@ export default function AdhesionTest() {
             setVerifiedBySignature('');
         }
 
-        setTimeout(() => {
-            calculateAverages();
-        }, 150);
+        calculateAverages();
 
         setTimeout(() => {
             saveFormData();
@@ -635,8 +608,7 @@ export default function AdhesionTest() {
                     dataInputs[key] = '-';
                 }
             }
-            setDataValues(dataInputs);
-            dataValuesRef.current = { ...dataInputs };
+            syncDataValues(dataInputs);
 
             if (formData.preparedBySignature !== undefined) {
                 setPreparedBySignature(formData.preparedBySignature as string);
@@ -645,9 +617,7 @@ export default function AdhesionTest() {
                 setVerifiedBySignature(formData.verifiedBySignature as string);
             }
 
-            setTimeout(() => {
-                calculateAverages();
-            }, 100);
+            calculateAverages();
 
             setHasUnsavedChanges(true);
         } else {
@@ -663,8 +633,7 @@ export default function AdhesionTest() {
         for (let i = 0; i <= 19; i++) {
             initialDataInputs[`adhesion_data_${i}`] = '-';
         }
-        setDataValues(initialDataInputs);
-        dataValuesRef.current = { ...initialDataInputs };
+        syncDataValues(initialDataInputs);
 
         setPreparedBySignature('');
         setVerifiedBySignature('');
@@ -684,11 +653,7 @@ export default function AdhesionTest() {
             sessionStorage.removeItem('editingReportData');
         }
 
-        // Reset average cells
-        const avgCells = document.querySelectorAll('.front-min-avg, .front-max-avg, .back-min-avg, .back-max-avg');
-        avgCells.forEach(cell => {
-            cell.textContent = '-';
-        });
+        setAverages({ ...DEFAULT_ADHESION_AVERAGES });
 
         if (clearEditingState) {
             sessionStorage.removeItem('adhesionTestFormData');
@@ -718,26 +683,13 @@ export default function AdhesionTest() {
 
         try {
             setIsLoading(true);
-
-            const averages: { [key: string]: string } = {};
-
-            const frontMinAvgCell = document.querySelector('.front-min-avg');
-            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '-';
-
-            const frontMaxAvgCell = document.querySelector('.front-max-avg');
-            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '-';
-
-            const backMinAvgCell = document.querySelector('.back-min-avg');
-            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '-';
-
-            const backMaxAvgCell = document.querySelector('.back-max-avg');
-            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '-';
+            const currentAverages = getAdhesionAverages(dataValuesRef.current);
 
             const reportData: Omit<AdhesionTestReport, '_id'> = {
                 name: adhesionReportName,
                 timestamp: new Date().toISOString(),
                 formData: {},
-                averages: averages,
+                averages: { ...currentAverages },
             };
 
             // Save editable text fields
@@ -861,6 +813,7 @@ export default function AdhesionTest() {
     const exportToExcel = async () => {
         try {
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
+            const currentAverages = getAdhesionAverages(dataValuesRef.current);
 
             const formData: { [key: string]: string | boolean } = {};
 
@@ -882,25 +835,11 @@ export default function AdhesionTest() {
             formData.laminationPosition = laminationPosition;
             formData.lamParams = JSON.stringify(lamParams);
 
-            const averages: { [key: string]: string } = {};
-
-            const frontMinAvgCell = document.querySelector('.front-min-avg');
-            averages.frontMinAvg = frontMinAvgCell?.textContent?.trim() || '-';
-
-            const frontMaxAvgCell = document.querySelector('.front-max-avg');
-            averages.frontMaxAvg = frontMaxAvgCell?.textContent?.trim() || '-';
-
-            const backMinAvgCell = document.querySelector('.back-min-avg');
-            averages.backMinAvg = backMinAvgCell?.textContent?.trim() || '-';
-
-            const backMaxAvgCell = document.querySelector('.back-max-avg');
-            averages.backMaxAvg = backMaxAvgCell?.textContent?.trim() || '-';
-
             const adhesionReportData = {
                 report_name: adhesionReportName.trim() || 'Adhesion_Test_Report',
                 timestamp: new Date().toISOString(),
                 form_data: formData,
-                averages: averages,
+                averages: { ...currentAverages },
             };
 
             const response = await fetch(`${ADHESION_API_BASE_URL}/generate-adhesion-report`, {
@@ -1358,13 +1297,13 @@ export default function AdhesionTest() {
 
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Process time (Sec) :</td>
-                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 dark:text-white font-bold">
                                                 {lamParams.lam1.processTime || '-'}
                                             </td>
-                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                            <td colSpan={4} className="p-2 text-center bg-gray-50 dark:bg-gray-800 dark:text-white font-bold">
                                                 {lamParams.lam2.processTime || '-'}
                                             </td>
-                                            <td colSpan={5} className="p-2 text-center bg-gray-50 dark:bg-gray-800 font-bold">
+                                            <td colSpan={5} className="p-2 text-center bg-gray-50 dark:bg-gray-800 dark:text-white font-bold">
                                                 {lamParams.lam3.processTime || '-'}
                                             </td>
                                         </tr>
@@ -1478,6 +1417,10 @@ export default function AdhesionTest() {
                                             const frontMaxValue = dataValues[frontMaxKey];
                                             const backMinValue = dataValues[backMinKey];
                                             const backMaxValue = dataValues[backMaxKey];
+                                            const frontMinFail = isBelowAdhesionThreshold(frontMinValue, FRONT_ADHESION_THRESHOLD);
+                                            const frontMaxFail = isBelowAdhesionThreshold(frontMaxValue, FRONT_ADHESION_THRESHOLD);
+                                            const backMinFail = isBelowAdhesionThreshold(backMinValue, BACK_ADHESION_THRESHOLD);
+                                            const backMaxFail = isBelowAdhesionThreshold(backMaxValue, BACK_ADHESION_THRESHOLD);
                                             
                                             return (
                                                 <tr key={pos}>
@@ -1489,7 +1432,10 @@ export default function AdhesionTest() {
                                                             onChange={(e) => handleDataChange(frontMinKey, e.target.value)}
                                                             onFocus={() => handleDataFocus(frontMinKey)}
                                                             onBlur={(e) => handleDataBlur(frontMinKey, e.target.value)}
-                                                            className="front-min-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            className={`front-min-cell w-full p-2 border rounded text-center ${frontMinFail
+                                                                ? 'border-red-500 bg-red-100 text-red-700 dark:border-red-500 dark:bg-red-900/40 dark:text-red-300'
+                                                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white'
+                                                                }`}
                                                             placeholder="-"
                                                         />
                                                     </td>
@@ -1500,7 +1446,10 @@ export default function AdhesionTest() {
                                                             onChange={(e) => handleDataChange(frontMaxKey, e.target.value)}
                                                             onFocus={() => handleDataFocus(frontMaxKey)}
                                                             onBlur={(e) => handleDataBlur(frontMaxKey, e.target.value)}
-                                                            className="front-max-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            className={`front-max-cell w-full p-2 border rounded text-center ${frontMaxFail
+                                                                ? 'border-red-500 bg-red-100 text-red-700 dark:border-red-500 dark:bg-red-900/40 dark:text-red-300'
+                                                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white'
+                                                                }`}
                                                             placeholder="-"
                                                         />
                                                     </td>
@@ -1511,7 +1460,10 @@ export default function AdhesionTest() {
                                                             onChange={(e) => handleDataChange(backMinKey, e.target.value)}
                                                             onFocus={() => handleDataFocus(backMinKey)}
                                                             onBlur={(e) => handleDataBlur(backMinKey, e.target.value)}
-                                                            className="back-min-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            className={`back-min-cell w-full p-2 border rounded text-center ${backMinFail
+                                                                ? 'border-red-500 bg-red-100 text-red-700 dark:border-red-500 dark:bg-red-900/40 dark:text-red-300'
+                                                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white'
+                                                                }`}
                                                             placeholder="-"
                                                         />
                                                     </td>
@@ -1522,7 +1474,10 @@ export default function AdhesionTest() {
                                                             onChange={(e) => handleDataChange(backMaxKey, e.target.value)}
                                                             onFocus={() => handleDataFocus(backMaxKey)}
                                                             onBlur={(e) => handleDataBlur(backMaxKey, e.target.value)}
-                                                            className="back-max-cell w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white text-center"
+                                                            className={`back-max-cell w-full p-2 border rounded text-center ${backMaxFail
+                                                                ? 'border-red-500 bg-red-100 text-red-700 dark:border-red-500 dark:bg-red-900/40 dark:text-red-300'
+                                                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white'
+                                                                }`}
                                                             placeholder="-"
                                                         />
                                                     </td>
@@ -1531,10 +1486,10 @@ export default function AdhesionTest() {
                                         })}
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">AVERAGE</td>
-                                            <td colSpan={3} className="front-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
-                                            <td colSpan={3} className="front-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
-                                            <td colSpan={3} className="back-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
-                                            <td colSpan={4} className="back-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">-</td>
+                                            <td colSpan={3} className="front-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">{averages.frontMinAvg}</td>
+                                            <td colSpan={3} className="front-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">{averages.frontMaxAvg}</td>
+                                            <td colSpan={3} className="back-min-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">{averages.backMinAvg}</td>
+                                            <td colSpan={4} className="back-max-avg font-bold bg-gray-50 dark:bg-gray-900 p-2 text-center text-gray-800 dark:text-white">{averages.backMaxAvg}</td>
                                         </tr>
                                     </tbody>
                                 </table>

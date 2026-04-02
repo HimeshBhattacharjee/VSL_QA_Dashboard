@@ -155,6 +155,8 @@ class FrameSealantDailyEntry:
                 for line_num in ["1", "2"]:
                     if line_num in entry_data["lines"]:
                         line = entry_data["lines"][line_num]
+                        if "glassGroove" not in line:
+                            line["glassGroove"] = ""
                         # Ensure length and width divisions exist
                         if "length" not in line:
                             line["length"] = {

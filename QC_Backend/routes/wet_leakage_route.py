@@ -6,6 +6,112 @@ import calendar
 
 wet_leakage_router = APIRouter(prefix="/api/wet-leakage-test-reports", tags=["Wet Leakage Test Reports"])
 
+WET_LEAKAGE_PASS_THRESHOLD = 40
+
+ENTRY_REQUIRED_FIELDS = [
+    ("po", "P.O. Number"),
+    ("moduleType", "Module Type"),
+    ("moduleNo", "Module No."),
+    ("cellSupplier", "Cell Supplier"),
+    ("encapsulantSupplier", "Encapsulant Supplier"),
+    ("rearGlassSupplier", "Rear Glass/ Backsheet Supplier"),
+    ("jbSupplier", "JB Supplier"),
+    ("adhesiveSealantSupplier", "Adhesive Sealant Supplier"),
+    ("pottingSealantSupplier", "Potting Sealant Supplier"),
+    ("waterTemp", "Water Temperature (°C)"),
+    ("waterResistivity", "Water Resistivity (Ω-cm)"),
+    ("IR", "IR (MΩ)"),
+    ("testDoneBy", "Test Done By"),
+]
+
+
+def normalize_field_value(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def parse_ir_value(value):
+    normalized = normalize_field_value(value)
+    if not normalized:
+        return None
+
+    try:
+        return float(normalized)
+    except (TypeError, ValueError):
+        return None
+
+
+def derive_result_from_ir(ir_value):
+    parsed = parse_ir_value(ir_value)
+    if parsed is None:
+        return ""
+    return "Pass" if parsed > WET_LEAKAGE_PASS_THRESHOLD else "Fail"
+
+
+def get_entry_result(entry):
+    derived_result = derive_result_from_ir(entry.get("IR"))
+    if derived_result:
+        return derived_result
+
+    stored_result = normalize_field_value(entry.get("result"))
+    return stored_result if stored_result in {"Pass", "Fail"} else ""
+
+
+def normalize_entry(entry):
+    normalized_entry = entry.copy()
+    normalized_entry["result"] = derive_result_from_ir(normalized_entry.get("IR"))
+    return normalized_entry
+
+
+def get_entry_validation_message(entry):
+    required_details = [
+        (label, normalize_field_value(entry.get(key)))
+        for key, label in ENTRY_REQUIRED_FIELDS
+    ]
+
+    filled_details = [(label, value) for label, value in required_details if value != ""]
+
+    if len(filled_details) == 0:
+        return "Please fill the entry details before saving."
+
+    if len(filled_details) != len(required_details):
+        first_missing_detail = next((label for label, value in required_details if value == ""), None)
+        return f"Please complete all entry fields before saving. Missing: {first_missing_detail}."
+
+    if parse_ir_value(entry.get("IR")) is None:
+        return "Please enter a valid numeric value for IR (MΩ)."
+
+    return None
+
+
+def build_default_monthly_stats(year, month):
+    days_in_month = calendar.monthrange(year, month)[1]
+    return {
+        "totalDays": days_in_month,
+        "filledDays": 0,
+        "completionRate": 0,
+        "passCount": 0,
+        "failCount": 0
+    }
+
+
+def build_monthly_stats(year, month):
+    entries = list(wet_leakage_entries_collection.find({"year": year, "month": month}))
+    days_in_month = calendar.monthrange(year, month)[1]
+    filled_days = len(entries)
+    pass_count = sum(1 for entry in entries if get_entry_result(entry) == "Pass")
+    fail_count = sum(1 for entry in entries if get_entry_result(entry) == "Fail")
+    completion_rate = round((filled_days / days_in_month) * 100) if days_in_month > 0 else 0
+
+    return {
+        "totalDays": days_in_month,
+        "filledDays": filled_days,
+        "completionRate": completion_rate,
+        "passCount": pass_count,
+        "failCount": fail_count
+    }
+
 def serialize_doc(doc):
     """Helper function to convert MongoDB document to JSON-serializable format"""
     if doc is None:
@@ -30,6 +136,7 @@ def serialize_doc(doc):
                 doc_copy["testingDate"] = str(doc_copy["testingDate"]).split('T')[0]
     except Exception:
         pass
+    doc_copy["result"] = get_entry_result(doc_copy)
     return doc_copy
 
 def serialize_docs(docs):
@@ -81,41 +188,15 @@ async def get_monthly_stats(
 ):
     """Get statistics for a specific month - always returns 200 with default stats if no data"""
     try:
-        days_in_month = calendar.monthrange(year, month)[1]
-        
-        # Get all entries for the month
-        entries = list(wet_leakage_entries_collection.find(
-            {"year": year, "month": month}
-        ))
-        
-        # Calculate stats
-        filled_days = len(entries)
-        pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-        fail_count = sum(1 for e in entries if e.get("result") == "Fail")
-        completion_rate = round((filled_days / days_in_month) * 100) if days_in_month > 0 else 0
-        
         return {
             "success": True,
-            "data": {
-                "totalDays": days_in_month,
-                "filledDays": filled_days,
-                "completionRate": completion_rate,
-                "passCount": pass_count,
-                "failCount": fail_count
-            }
+            "data": build_monthly_stats(year, month)
         }
     except Exception as e:
         # Return default stats on error
-        days_in_month = calendar.monthrange(year, month)[1]
         return {
             "success": False,
-            "data": {
-                "totalDays": days_in_month,
-                "filledDays": 0,
-                "completionRate": 0,
-                "passCount": 0,
-                "failCount": 0
-            },
+            "data": build_default_monthly_stats(year, month),
             "error": str(e)
         }
 
@@ -124,10 +205,14 @@ async def create_entry(entry: dict):
     """Create or update a daily entry"""
     try:
         # Validate required fields
-        required_fields = ["date", "testingDate", "moduleType", "result"]
+        required_fields = ["date"]
         for field in required_fields:
             if field not in entry or not entry[field]:
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+
+        validation_message = get_entry_validation_message(entry)
+        if validation_message:
+            raise HTTPException(status_code=400, detail=validation_message)
         
         # Normalize and extract year/month from date - accept full ISO strings too
         raw_date = entry.get("date")
@@ -140,6 +225,7 @@ async def create_entry(entry: dict):
             # Try fromisoformat fallback
             date_obj = datetime.fromisoformat(date_key)
 
+        entry = normalize_entry(entry)
         entry["date"] = date_obj.strftime("%Y-%m-%d")
         # ensure testingDate matches normalized date
         entry["testingDate"] = entry.get("testingDate") and str(entry.get("testingDate")).split('T')[0] or entry["date"]
@@ -160,29 +246,14 @@ async def create_entry(entry: dict):
         
         # Get the saved entry
         saved_entry = wet_leakage_entries_collection.find_one({"date": entry["date"]})
-        
-        # Get updated stats for the month
-        entries = list(wet_leakage_entries_collection.find(
-            {"year": date_obj.year, "month": date_obj.month}
-        ))
-        days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
-        filled_days = len(entries)
-        pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-        fail_count = sum(1 for e in entries if e.get("result") == "Fail")
-        completion_rate = round((filled_days / days_in_month) * 100) if days_in_month > 0 else 0
+        stats = build_monthly_stats(date_obj.year, date_obj.month)
         
         return {
             "success": True,
             "message": "Entry saved successfully",
             "data": {
                 "entry": serialize_doc(saved_entry),
-                "stats": {
-                    "totalDays": days_in_month,
-                    "filledDays": filled_days,
-                    "completionRate": completion_rate,
-                    "passCount": pass_count,
-                    "failCount": fail_count
-                }
+                "stats": stats
             }
         }
     except HTTPException:
@@ -211,31 +282,11 @@ async def delete_entry(date: str):
         
         # Get updated stats for the month
         if year and month:
-            entries = list(wet_leakage_entries_collection.find({"year": year, "month": month}))
-            days_in_month = calendar.monthrange(year, month)[1]
-            filled_days = len(entries)
-            pass_count = sum(1 for e in entries if e.get("result") == "Pass")
-            fail_count = sum(1 for e in entries if e.get("result") == "Fail")
-            completion_rate = round((filled_days / days_in_month) * 100) if days_in_month > 0 else 0
-            
-            stats = {
-                "totalDays": days_in_month,
-                "filledDays": filled_days,
-                "completionRate": completion_rate,
-                "passCount": pass_count,
-                "failCount": fail_count
-            }
+            stats = build_monthly_stats(year, month)
         else:
             # If we couldn't get year/month, return default stats for current month
             today = datetime.now()
-            days_in_month = calendar.monthrange(today.year, today.month)[1]
-            stats = {
-                "totalDays": days_in_month,
-                "filledDays": 0,
-                "completionRate": 0,
-                "passCount": 0,
-                "failCount": 0
-            }
+            stats = build_default_monthly_stats(today.year, today.month)
         
         return {
             "success": True,
