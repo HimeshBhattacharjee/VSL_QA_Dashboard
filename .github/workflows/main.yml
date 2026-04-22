@@ -19,7 +19,7 @@ jobs:
           cd ./QC_Backend
           rm -rf .env
           echo "${{ secrets.QP_ENV_BACKEND }}" > .env
-          source venv/bin/activate
+          source .venv/bin/activate
           pip install -r requirements.txt
 
       - name: Frontend build
@@ -38,7 +38,7 @@ jobs:
       - name: Deploy backend
         run: |
           cd ./QC_Backend
-          source venv/bin/activate
+          source .venv/bin/activate
           # pm2 delete qc-backend || true
           pm2 restart qc-backend || pm2 start "python main.py --host 0.0.0.0 --port 8012" --name qc-backend
 
