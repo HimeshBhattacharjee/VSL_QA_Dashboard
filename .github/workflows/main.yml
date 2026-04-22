@@ -17,7 +17,7 @@ jobs:
       - name: Backend build
         run: |
           cd ./QC_Backend
-          python3 -m venv .venv
+          # python3 -m venv .venv
           rm -rf .env
           echo "${{ secrets.QP_ENV_BACKEND }}" > .env
           source .venv/bin/activate
