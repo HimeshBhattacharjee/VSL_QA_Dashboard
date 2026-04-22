@@ -1,0 +1,56 @@
+name: Quality-Portal UAT Deployment
+
+on:
+  push:
+    branches: ["main"]
+  # pull_request:
+  #   branches: ["dev"]
+
+jobs:
+  build:
+    runs-on: [self-hosted, qc-test]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Backend build
+        run: |
+          cd ./QC_Backend
+          rm -rf .env
+          echo "${{ secrets.QP_ENV_BACKEND }}" > .env
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Frontend build
+        run: |
+          cd ./QC_Frontend
+          npm install
+          rm -rf .env
+          echo "${{ secrets.QP_ENV_FRONTEND }}" > .env
+          npm run build
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, qc-test]
+
+    steps:
+      - name: Deploy backend
+        run: |
+          cd ./QC_Backend
+          source venv/bin/activate
+          # pm2 delete qc-backend || true
+          pm2 restart qc-backend || pm2 start "python main.py --host 0.0.0.0 --port 8012" --name qc-backend
+
+      - name: Deploy frontend
+        run: |
+          cd ./QC_Frontend
+          # pm2 delete qc-frontend || true
+          pm2 restart qc-frontend || pm2 start "npx serve -s dist -l 8010" --name qc-frontend
+
+      - name: Save PM2 process list
+        run: |
+          pm2 startup
+          pm2 save
+
+# testing 11
