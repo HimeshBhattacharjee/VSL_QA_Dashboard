@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, qc-test]
+    runs-on: [self-hosted, qp-uat]
 
     steps:
       - name: Checkout repository
@@ -33,7 +33,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: [self-hosted, qc-test]
+    runs-on: [self-hosted, qp-uat]
 
     steps:
       - name: Deploy backend
