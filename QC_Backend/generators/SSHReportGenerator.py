@@ -5,6 +5,9 @@ from datetime import datetime
 import re
 from paths import get_template_key, download_from_s3
 
+def get_display_line_numbers(line_group):
+    return ('3', '4') if line_group == 'Line-II' else ('1', '2')
+
 def fill_ssh_test_data(worksheet, entries):
     try:
         def sort_key(entry):

@@ -6,7 +6,6 @@
             "ES2023"
         ],
         "module": "ESNext",
-        "baseUrl": ".",
         "paths": {
             "@/*": [
                 "./src/*"

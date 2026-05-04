@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from datetime import datetime
 import uvicorn
-import datetime
 import threading
 import os
 from constants import SERVER_URL, PORT
@@ -18,6 +18,7 @@ from routes.frame_sealant_wt_route import frame_sealant_router
 from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
+from routes.task_routes import task_router
 from routes.wet_leakage_route import wet_leakage_router
 from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
@@ -29,13 +30,10 @@ from generators.SSHReportGenerator import generate_ssh_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
 from generators.WetLeakageReportGenerator import generate_wet_leakage_report
-from extractors.qa_extractor import main as qa_main
-from extractors.b_extractor import main as b_main
-from extractors.peel_extractor import main as peel_main
 
 app = FastAPI(
     title="Manufacturing Analytics API",
-    description="Combined API for Quality Analysis, B-Grade Trend data, Peel Test results, User Management, and Audit Reports",
+    description="Combined API for Quality Analysis, B-Grade Trend data, Peel Test results, User Management, Task Management, and Audit Reports",
     version="1.0.0"
 )
 
@@ -65,6 +63,7 @@ app.include_router(frame_sealant_router)
 app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
+app.include_router(task_router)
 app.include_router(wet_leakage_router)
 app.include_router(ipqc_audit_router)
 
@@ -396,6 +395,10 @@ async def root():
                 "base_path": "/user",
                 "description": "User management and authentication"
             },
+            "task_management": {
+                "base_path": "/api/tasks",
+                "description": "Task management board data stored in MongoDB"
+            },
             "gel_test_reports": {
                 "base_path": "/api/gel-test-reports",
                 "description": "Gel test reports management with MongoDB"
@@ -451,18 +454,21 @@ def run_extractors():
     """Run all data extractors in background threads"""
     def run_qa():
         try:
+            from extractors.qa_extractor import main as qa_main
             qa_main()
         except Exception as e:
             print(f"QA extractor failed: {e}")
     
     def run_b():
         try:
+            from extractors.b_extractor import main as b_main
             b_main()
         except Exception as e:
             print(f"B-grade extractor failed: {e}")
     
     def run_peel():
         try:
+            from extractors.peel_extractor import main as peel_main
             peel_main()
         except Exception as e:
             print(f"Peel extractor failed: {e}")
@@ -489,6 +495,7 @@ async def global_health_check():
             "b_grade_trend": "available",
             "peel_test": "available",
             "user_management": "available",
+            "task_management": "available",
             "audit_reports": "available",
             "audit_pdf_reports": "available",
             "gel_test_reports": "available",

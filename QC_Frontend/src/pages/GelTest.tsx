@@ -922,6 +922,22 @@ export default function GelTest() {
         />
     );
 
+    const renderSupplierSelect = (key: string) => (
+        <select
+            value={editableValues[key] || ''}
+            onChange={(e) => handleEditableChange(key, e.target.value)}
+            className={inputClassName}
+        >
+            <option value="">Select</option>
+            <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+            <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+            <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+            <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+            <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+            <option value="N/A">N/A</option>
+        </select>
+    );
+
     const renderDateInput = (key: string) => (
         <input
             type="date"
@@ -1084,7 +1100,7 @@ export default function GelTest() {
                                 Export as Excel
                             </button>
                         </div>
-                        <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg">
+                        <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg custom-scrollbar">
                             <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
                                 <table ref={tableRef} className="w-full table-fixed border-collapse min-w-[1000px] text-xs sm:text-sm">
                                     <tbody>
@@ -1212,7 +1228,7 @@ export default function GelTest() {
                                             <td colSpan={3}>{renderTextInput(buildFieldKey(8))}</td>
                                             <td colSpan={3}>{renderTextInput(buildFieldKey(9))}</td>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Encapsulant Supplier:</td>
-                                            <td colSpan={5}>{renderTextInput(encapsulantSupplierKey, 'Encapsulant Supplier')}</td>
+                                            <td colSpan={5}>{renderSupplierSelect(encapsulantSupplierKey)}</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Venting Time (Sec)</td>
@@ -1353,9 +1369,6 @@ export default function GelTest() {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="controlled-copy text-center text-lg text-red-500 dark:text-red-400 mt-4">
-                                <p>(Controlled Copy)</p>
                             </div>
                         </div>
                     </div>

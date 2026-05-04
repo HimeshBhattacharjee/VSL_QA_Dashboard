@@ -232,7 +232,7 @@ const LineSection = {
                     {children.byLabel('Side')}
                 </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-10 gap-2">
                 {Array.from({ length: 40 }, (_, index) => index + 1).map(position => (
                     <div key={position} className="flex flex-col items-center">
                         <span className="text-xs text-gray-500 mb-1">Pos {position}</span>
@@ -694,7 +694,7 @@ const AutoBussingObservations = {
         );
 
         return (
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4">
                 {lines.map(renderLineSection)}
             </div>
         );

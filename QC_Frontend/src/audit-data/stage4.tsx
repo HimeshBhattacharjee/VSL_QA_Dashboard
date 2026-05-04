@@ -42,6 +42,7 @@ const CellSortingObservations = {
                     <option value="Solar N-Plus">Solar N-Plus</option>
                     <option value="Yingfa">Yingfa</option>
                     <option value="Solar space">Solar space</option>
+                    <option value="Sunsync">Sunsync</option>
                     <option value="N/A">N/A</option>
                 </select>
             </div>

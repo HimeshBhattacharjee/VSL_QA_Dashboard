@@ -895,7 +895,6 @@ export default function AdhesionTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-
             showAlert('success', 'Excel file exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
@@ -907,7 +906,6 @@ export default function AdhesionTest() {
         if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
     }, [adhesionReportName]);
 
-    // Define editable field keys
     const editableFieldKeys = [
         'adhesion_editable_0',  // Type of Test
         'adhesion_editable_1',  // P.O.
@@ -1313,13 +1311,23 @@ export default function AdhesionTest() {
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Front Encapsulant Supplier :</td>
                                             <td colSpan={13}>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={editableValues[editableFieldKeys[19]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[19], e.target.value)}
+                                                    onChange={(e) => {
+                                                        handleEditableChange(editableFieldKeys[19], e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Front Encapsulant Supplier"
-                                                />
+                                                >
+                                                    <option value="">Select Front Encapsulant Supplier</option>
+                                                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                                                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                                                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                                                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                                                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </td>
                                         </tr>
                                         <tr>
@@ -1337,13 +1345,23 @@ export default function AdhesionTest() {
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Back Encapsulant Supplier :</td>
                                             <td colSpan={13}>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={editableValues[editableFieldKeys[21]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[21], e.target.value)}
+                                                    onChange={(e) => {
+                                                        handleEditableChange(editableFieldKeys[21], e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Back Encapsulant Supplier"
-                                                />
+                                                >
+                                                    <option value="">Select Back Encapsulant Supplier</option>
+                                                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                                                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                                                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                                                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                                                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </td>
                                         </tr>
                                         <tr>
@@ -1361,25 +1379,46 @@ export default function AdhesionTest() {
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Back Sheet Supplier :</td>
                                             <td colSpan={13}>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={editableValues[editableFieldKeys[23]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[23], e.target.value)}
+                                                    onChange={(e) => {
+                                                        handleEditableChange(editableFieldKeys[23], e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Back Sheet Supplier"
-                                                />
+                                                >
+                                                    <option value="">Select Back Sheet Supplier</option>
+                                                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                                                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                                                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                                                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                                                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </td>
                                         </tr>
                                         <tr>
                                             <td className="section-title font-bold bg-gray-100 dark:bg-gray-700 text-center p-2 text-gray-800 dark:text-white">Glass Supplier :</td>
                                             <td colSpan={13}>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={editableValues[editableFieldKeys[24]] || ''}
-                                                    onChange={(e) => handleEditableChange(editableFieldKeys[24], e.target.value)}
+                                                    onChange={(e) => {
+                                                        handleEditableChange(editableFieldKeys[24], e.target.value);
+                                                        setHasUnsavedChanges(true);
+                                                        setTimeout(() => saveFormData(), 0);
+                                                    }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                                    placeholder="Glass Supplier"
-                                                />
+                                                >
+                                                    <option value="">Select Glass Supplier</option>
+                                                    <option value="Xinyi Solar">Xinyi Solar</option>
+                                                    <option value="CSG Holding Co., Ltd.">CSG Holding Co., Ltd.</option>
+                                                    <option value="Gurjat Borosil">Gurjat Borosil</option>
+                                                    <option value="Kibing Group">Kibing Group</option>
+                                                    <option value="Flat Glass Group Co., Ltd">Flat Glass Group Co., Ltd</option>
+                                                    <option value="Henan Ancai Hi-Tech Co., Ltd">Henan Ancai Hi-Tech Co., Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </td>
                                         </tr>
                                         <tr>
@@ -1544,9 +1583,6 @@ export default function AdhesionTest() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="controlled-copy text-center text-lg text-red-500 dark:text-red-400 mt-4">
-                                <p>(Controlled Copy)</p>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -1565,3 +1601,4 @@ export default function AdhesionTest() {
         </>
     );
 }
+

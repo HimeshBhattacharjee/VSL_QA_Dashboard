@@ -3,11 +3,18 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
 
+def _normalize_line_group(line_group):
+    return 'Line-II' if line_group == 'Line-II' else 'Line-I'
+
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 ssh_entries_collection = db["ssh_daily_entries"]
 # New index structure: date + shift combination (each document represents one shift with both lines)
-ssh_entries_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], unique=True)
+try:
+    ssh_entries_collection.drop_index("date_1_shift_1")
+except Exception:
+    pass
+ssh_entries_collection.create_index([("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)], unique=True)
 ssh_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
 
 class _InMemoryCursor:
@@ -28,10 +35,14 @@ class _InMemoryCollection:
     def create_index(self, *args, **kwargs):
         return None
 
+    def drop_index(self, *args, **kwargs):
+        return None
+
     def update_one(self, filt, update, upsert=False):
         date_key = filt.get("date")
         shift = filt.get("shift")
-        composite_key = f"{date_key}_{shift}" if date_key and shift else date_key
+        line_group = _normalize_line_group(filt.get("lineGroup"))
+        composite_key = f"{date_key}_{line_group}_{shift}" if date_key and shift else date_key
         doc = self._store.get(composite_key)
         if doc:
             set_doc = update.get("$set", {})
@@ -44,6 +55,7 @@ class _InMemoryCollection:
                 set_doc = update.get("$set", {})
                 set_doc["date"] = date_key
                 set_doc["shift"] = shift
+                set_doc["lineGroup"] = line_group
                 self._store[composite_key] = set_doc
                 class R: upserted_id = composite_key
                 return R()
@@ -54,11 +66,15 @@ class _InMemoryCollection:
         date_key = filt.get("date")
         shift = filt.get("shift")
         if date_key and shift:
-            composite_key = f"{date_key}_{shift}"
-            return self._store.get(composite_key)
+            line_group = _normalize_line_group(filt.get("lineGroup"))
+            composite_key = f"{date_key}_{line_group}_{shift}"
+            doc = self._store.get(composite_key)
+            if doc is None and "lineGroup" not in filt:
+                doc = self._store.get(f"{date_key}_Line-I_{shift}") or self._store.get(f"{date_key}_{shift}")
+            return doc
         if date_key and not shift:
             for key, value in self._store.items():
-                if key.startswith(f"{date_key}_"):
+                if value.get("date") == date_key:
                     return value
             return None
         for v in self._store.values():
@@ -96,7 +112,8 @@ class _InMemoryCollection:
         date_key = filt.get("date")
         shift = filt.get("shift")
         if date_key and shift:
-            composite_key = f"{date_key}_{shift}"
+            line_group = _normalize_line_group(filt.get("lineGroup"))
+            composite_key = f"{date_key}_{line_group}_{shift}"
             if composite_key in self._store:
                 del self._store[composite_key]
                 class R: deleted_count = 1
@@ -129,6 +146,7 @@ class SSHDailyEntry:
                 date_obj = datetime.fromisoformat(date_key)
             
             entry_data["date"] = date_obj.strftime("%Y-%m-%d")
+            entry_data["lineGroup"] = _normalize_line_group(entry_data.get("lineGroup"))
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
@@ -139,24 +157,24 @@ class SSHDailyEntry:
                 del entry_data["_id"]
             
             result = ssh_entries_collection.update_one(
-                {"date": entry_data["date"], "shift": shift},
+                {"date": entry_data["date"], "lineGroup": entry_data["lineGroup"], "shift": shift},
                 {"$set": entry_data},
                 upsert=True
             )
             
             if result.upserted_id:
                 return str(result.upserted_id)
-            existing = ssh_entries_collection.find_one({"date": entry_data["date"], "shift": shift})
+            existing = ssh_entries_collection.find_one({"date": entry_data["date"], "lineGroup": entry_data["lineGroup"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
             print(f"Error in create: {str(e)}")
             raise
     
     @staticmethod
-    def get_by_date_and_shift(date: str, shift: str) -> Optional[Dict[str, Any]]:
+    def get_by_date_and_shift(date: str, shift: str, line_group: str = "Line-I") -> Optional[Dict[str, Any]]:
         try:
             date_key = str(date).split('T')[0]
-            return ssh_entries_collection.find_one({"date": date_key, "shift": shift})
+            return ssh_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group), "shift": shift})
         except Exception as e:
             print(f"Error in get_by_date_and_shift: {str(e)}")
             return None
@@ -183,9 +201,9 @@ class SSHDailyEntry:
             return []
     
     @staticmethod
-    def delete_by_date_and_shift(date: str, shift: str) -> bool:
+    def delete_by_date_and_shift(date: str, shift: str, line_group: str = "Line-I") -> bool:
         try:
-            result = ssh_entries_collection.delete_one({"date": date, "shift": shift})
+            result = ssh_entries_collection.delete_one({"date": date, "lineGroup": _normalize_line_group(line_group), "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
             print(f"Error in delete_by_date_and_shift: {str(e)}")

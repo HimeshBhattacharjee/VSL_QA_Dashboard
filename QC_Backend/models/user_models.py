@@ -4,15 +4,15 @@ from typing import Optional
 class UserCreate(BaseModel):
     name: str
     employeeId: str
-    phone: str
+    phone: Optional[str] = None
     role: str = "Operator"
-    password: str
+    password: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: str
     name: str
     employeeId: str
-    phone: str
+    phone: Optional[str] = None
     role: str
     status: str
     avatar: str
@@ -20,7 +20,7 @@ class UserResponse(BaseModel):
     createdAt: str
     signature: Optional[str] = None
     theme: str = "light"
-    password: str | None = None
+    password: Optional[str] = None
 
 class LoginRequest(BaseModel):
     employeeId: str
@@ -39,6 +39,7 @@ class LoginResponse(BaseModel):
 
 class PasswordChangeRequest(BaseModel):
     employeeId: str
+    oldPassword: Optional[str] = None
     newPassword: str
     isFirstLogin: bool = False
 

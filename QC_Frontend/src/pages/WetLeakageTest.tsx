@@ -831,11 +831,8 @@ export default function WetLeakageTest() {
                 />
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Left Panel - Daily Input */}
                         <div className="lg:col-span-7 space-y-6">
-                            {/* Calendar Section */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                {/* Month/Year Navigation */}
                                 <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6">
                                     <div className="flex gap-1 items-center">
                                         <button
@@ -857,7 +854,6 @@ export default function WetLeakageTest() {
                                                     </option>
                                                 ))}
                                             </select>
-
                                             <select
                                                 value={currentDate.getFullYear()}
                                                 onChange={(e) => handleYearChange(parseInt(e.target.value))}
@@ -900,8 +896,6 @@ export default function WetLeakageTest() {
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Calendar Grid */}
                                 <div className="grid grid-cols-7 gap-2 mb-2">
                                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                                         <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2">
@@ -964,139 +958,171 @@ export default function WetLeakageTest() {
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     P.O. Number
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.po}
                                                     onChange={(e) => handleInputChange('po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter PO number"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Module Type
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.moduleType}
                                                     onChange={(e) => handleInputChange('moduleType', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter module type"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Module No.
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.moduleNo}
                                                     onChange={(e) => handleInputChange('moduleNo', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter module number"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Cell Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.cellSupplier}
                                                     onChange={(e) => handleInputChange('cellSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter cell supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Aiko">Aiko</option>
+                                                    <option value="JTPV">JTPV</option>
+                                                    <option value="Solar N-Plus">Solar N-Plus</option>
+                                                    <option value="Yingfa">Yingfa</option>
+                                                    <option value="Solar space">Solar space</option>
+                                                    <option value="Sunsync">Sunsync</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Encapsulant Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.encapsulantSupplier}
                                                     onChange={(e) => handleInputChange('encapsulantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter encapsulant supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
+                                                    <option value="Vietnam Advance Film Material Company Ltd">Vietnam Advance Film Material Company Ltd</option>
+                                                    <option value="First Material Science (Thailand) Co., Ltd">First Material Science (Thailand) Co., Ltd</option>
+                                                    <option value="Cybrid Technologies Pvt. Ltd">Cybrid Technologies Pvt. Ltd</option>
+                                                    <option value="Cymax PTE. Ltd">Cymax PTE. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Rear Glass/ Backsheet Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.rearGlassSupplier}
                                                     onChange={(e) => handleInputChange('rearGlassSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter rear glass supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Xinyi Solar">Xinyi Solar</option>
+                                                    <option value="CSG Holding Co., Ltd.">CSG Holding Co., Ltd.</option>
+                                                    <option value="Gurjat Borosil">Gurjat Borosil</option>
+                                                    <option value="Kibing Group">Kibing Group</option>
+                                                    <option value="Flat Glass Group Co., Ltd">Flat Glass Group Co., Ltd</option>
+                                                    <option value="Henan Ancai Hi-Tech Co., Ltd">Henan Ancai Hi-Tech Co., Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     JB Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.jbSupplier || ''}
                                                     onChange={(e) => handleInputChange('jbSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter JB supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Suzhou UKT New Energy Technology Co. Ltd">Suzhou UKT New Energy Technology Co. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Adhesive Sealant Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.adhesiveSealantSupplier || ''}
                                                     onChange={(e) => handleInputChange('adhesiveSealantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter adhesive sealant supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Huitan">Huitan</option>
+                                                    <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                                                    <option value="Adarsha Speciality">Adarsha Speciality</option>
+                                                    <option value="Fasto">Fasto</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Potting Sealant Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.pottingSealantSupplier || ''}
                                                     onChange={(e) => handleInputChange('pottingSealantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter potting sealant supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Huitan">Huitan</option>
+                                                    <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                                                    <option value="Adarsha Speciality">Adarsha Speciality</option>
+                                                    <option value="Fasto Advance Materials India Pvt. Ltd.">Fasto Advance Materials India Pvt. Ltd.</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Water Temperature (°C)
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.waterTemp || ''}
                                                     onChange={(e) => handleInputChange('waterTemp', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter water temperature in °C"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Water Resistivity (Ω-cm)
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.waterResistivity || ''}
                                                     onChange={(e) => handleInputChange('waterResistivity', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter water resistivity in Ω-cm"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     IR (MΩ)
                                                 </label>
                                                 <input
@@ -1104,43 +1130,43 @@ export default function WetLeakageTest() {
                                                     value={currentEntry.IR || ''}
                                                     onChange={(e) => handleInputChange('IR', e.target.value)}
                                                     step="0.01"
-                                                    className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getIRInputClass(currentEntry.IR)}`}
+                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getIRInputClass(currentEntry.IR)}`}
                                                     placeholder="Enter IR in MΩ"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Result
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.result}
                                                     readOnly
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Auto-calculated from IR"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Auto-detected from IR"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Test Done By
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.testDoneBy}
                                                     onChange={(e) => handleInputChange('testDoneBy', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter tester name"
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Remarks
                                                 </label>
                                                 <textarea
                                                     value={currentEntry.remarks || ''}
                                                     onChange={(e) => handleInputChange('remarks', e.target.value)}
                                                     rows={2}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Add any remarks"
                                                 />
                                             </div>
@@ -1165,10 +1191,7 @@ export default function WetLeakageTest() {
                                 </div>
                             )}
                         </div>
-
-                        {/* Right Panel - Statistics */}
                         <div className="lg:col-span-5 space-y-6">
-                            {/* Quick Stats Cards */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
@@ -1259,18 +1282,15 @@ export default function WetLeakageTest() {
                         </div>
                     </div>
                 </div>
-
-                {/* Signature Section */}
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">
                         Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Prepared By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.preparedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.preparedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1295,12 +1315,10 @@ export default function WetLeakageTest() {
                                 </button>
                             </div>
                         </div>
-
-                        {/* Reviewed By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">REVIEWED BY:</p>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-2">REVIEWED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.reviewedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.reviewedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1325,12 +1343,10 @@ export default function WetLeakageTest() {
                                 </button>
                             </div>
                         </div>
-
-                        {/* Approved By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
+                            <p className=" text-sm font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.approvedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.approvedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1355,9 +1371,6 @@ export default function WetLeakageTest() {
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    <div className="text-center text-sm text-red-500 dark:text-red-400 mt-4 font-medium">
-                        (Controlled Copy)
                     </div>
                 </div>
             </div>

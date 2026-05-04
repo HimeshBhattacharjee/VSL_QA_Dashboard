@@ -6,6 +6,12 @@ import calendar
 
 ssh_router = APIRouter(prefix="/api/ssh-test-reports", tags=["SSH Test Reports"])
 
+def _normalize_line_group(line_group):
+    return 'Line-II' if line_group == 'Line-II' else 'Line-I'
+
+def _signature_key(date, line_group, shift):
+    return f"{date}_{_normalize_line_group(line_group)}_{shift}"
+
 SSH_PASS_THRESHOLD = 39
 SHIFT_REQUIRED_FIELDS = [
     ("po", "PO Number"),
@@ -19,41 +25,33 @@ LINE_REQUIRED_FIELDS = [
     ("result", "Result (Shore A)"),
 ]
 
-
 def normalize_field_value(value):
     if value is None:
         return ""
     return str(value).strip()
 
-
 def parse_result_value(value):
     normalized = normalize_field_value(value)
     if not normalized:
         return None
-
     try:
         return float(normalized)
     except (TypeError, ValueError):
         return None
 
-
 def is_result_pass(value):
     normalized = normalize_field_value(value).lower()
     if normalized == "pass":
         return True
-
     parsed = parse_result_value(value)
     return parsed is not None and parsed >= SSH_PASS_THRESHOLD
-
 
 def is_result_fail(value):
     normalized = normalize_field_value(value).lower()
     if normalized == "fail":
         return True
-
     parsed = parse_result_value(value)
     return parsed is not None and parsed < SSH_PASS_THRESHOLD
-
 
 def get_line_required_details(line_data, line_num):
     return [
@@ -64,12 +62,10 @@ def get_line_required_details(line_data, line_num):
         for key, label in LINE_REQUIRED_FIELDS
     ]
 
-
 def get_entry_validation_message(entry):
     lines = entry.get("lines", {}) if isinstance(entry.get("lines"), dict) else {}
     line1 = lines.get("1", {}) if isinstance(lines.get("1"), dict) else {}
     line2 = lines.get("2", {}) if isinstance(lines.get("2"), dict) else {}
-
     has_po = normalize_field_value(entry.get("po")) != ""
     has_any_line_input = any(
         detail["value"] != ""
@@ -78,13 +74,10 @@ def get_entry_validation_message(entry):
             *get_line_required_details(line2, "2"),
         ]
     )
-
     if not has_po and not has_any_line_input:
         return "Please fill the entry details before saving."
-
     if not has_po and has_any_line_input:
         return "Please enter the PO number for this shift before saving."
-
     required_details = [
         *[
             {"label": label, "value": normalize_field_value(entry.get(key, ""))}
@@ -93,11 +86,9 @@ def get_entry_validation_message(entry):
         *get_line_required_details(line1, "1"),
         *get_line_required_details(line2, "2"),
     ]
-
     first_missing_detail = next((detail for detail in required_details if detail["value"] == ""), None)
     if first_missing_detail:
         return f"Please complete all entry fields before saving. Missing: {first_missing_detail['label']}."
-
     invalid_result = next(
         (
             detail
@@ -111,7 +102,6 @@ def get_entry_validation_message(entry):
     )
     if invalid_result:
         return f"Please enter a valid numeric value for {invalid_result['label']}."
-
     return None
 
 def serialize_doc(doc):
@@ -143,22 +133,18 @@ def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
-
 def build_monthly_stats(year: int, month: int):
     days_in_month = calendar.monthrange(year, month)[1]
     entries = SSHDailyEntry.get_month_entries(year, month)
-
     total_possible_entries = days_in_month * 3 * 2  # 3 shifts * 2 lines per day
     filled_entries = 0
     pass_count = 0
     fail_count = 0
-
     shift_stats = {
         "A": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
         "B": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}},
         "C": {"filled": 0, "pass": 0, "fail": 0, "lines": {"1": 0, "2": 0}}
     }
-
     for entry in entries:
         shift = entry.get("shift")
         lines = entry.get("lines", {})
@@ -169,14 +155,12 @@ def build_monthly_stats(year: int, month: int):
                 filled_entries += 1
                 shift_stats[shift]["filled"] += 1
                 shift_stats[shift]["lines"]["1"] += 1
-
                 if is_result_pass(line1["result"]):
                     pass_count += 1
                     shift_stats[shift]["pass"] += 1
                 elif is_result_fail(line1["result"]):
                     fail_count += 1
                     shift_stats[shift]["fail"] += 1
-
             line2 = lines.get("2", {})
             if line2.get("result"):
                 filled_entries += 1
@@ -189,9 +173,7 @@ def build_monthly_stats(year: int, month: int):
                 elif is_result_fail(line2["result"]):
                     fail_count += 1
                     shift_stats[shift]["fail"] += 1
-
     completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
-
     return {
         "totalDays": days_in_month,
         "totalPossibleEntries": total_possible_entries,
@@ -202,11 +184,9 @@ def build_monthly_stats(year: int, month: int):
         "shiftStats": shift_stats
     }
 
-
 def build_default_monthly_stats(year: int, month: int):
     days_in_month = calendar.monthrange(year, month)[1]
     total_possible_entries = days_in_month * 3 * 2
-
     return {
         "totalDays": days_in_month,
         "totalPossibleEntries": total_possible_entries,
@@ -265,6 +245,22 @@ async def get_entries_for_date(date: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
+@ssh_router.get("/entries/{date}/{line_group}/{shift}")
+async def get_entry_by_line_group(date: str, line_group: str, shift: str):
+    """Get a single entry by date, line group, and shift."""
+    try:
+        if shift not in ["A", "B", "C"]:
+            raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
+        date_key = date.split('T')[0]
+        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift, line_group)
+        if entry:
+            return serialize_doc(entry)
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entry: {str(e)}")
+
 @ssh_router.get("/entries/{date}/{shift}")
 async def get_entry(date: str, shift: str):
     """Get a single entry by date and shift"""
@@ -274,7 +270,7 @@ async def get_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = date.split('T')[0]
-        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift, "Line-I")
         if entry:
             return serialize_doc(entry)
         return None
@@ -346,7 +342,7 @@ async def create_entry(entry: dict):
         SSHDailyEntry.create(entry)
         
         # Get the saved entry
-        saved_entry = SSHDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
+        saved_entry = SSHDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"], entry.get("lineGroup"))
         stats = build_monthly_stats(date_obj.year, date_obj.month)
         
         return {
@@ -362,6 +358,25 @@ async def create_entry(entry: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save entry: {str(e)}")
 
+@ssh_router.delete("/entries/{date}/{line_group}/{shift}")
+async def delete_entry_by_line_group(date: str, line_group: str, shift: str):
+    """Delete an entry by date, line group, and shift."""
+    try:
+        if shift not in ["A", "B", "C"]:
+            raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
+        date_key = str(date).split('T')[0]
+        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift, line_group)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        deleted = SSHDailyEntry.delete_by_date_and_shift(date_key, shift, line_group)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        return {"success": True, "message": "Entry deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
+
 @ssh_router.delete("/entries/{date}/{shift}")
 async def delete_entry(date: str, shift: str):
     """Delete an entry by date and shift"""
@@ -372,12 +387,12 @@ async def delete_entry(date: str, shift: str):
             
         # Normalize date param and get entry first to know year/month for stats
         date_key = str(date).split('T')[0]
-        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = SSHDailyEntry.get_by_date_and_shift(date_key, shift, "Line-I")
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
         # Delete the entry
-        deleted = SSHDailyEntry.delete_by_date_and_shift(date_key, shift)
+        deleted = SSHDailyEntry.delete_by_date_and_shift(date_key, shift, "Line-I")
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")

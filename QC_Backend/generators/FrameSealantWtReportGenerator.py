@@ -16,6 +16,9 @@ FAIL_FILL = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='sol
 PASS_FONT = Font(color='006100')
 FAIL_FONT = Font(color='9C0006')
 
+def get_display_line_numbers(line_group):
+    return ('3', '4') if line_group == 'Line-II' else ('1', '2')
+
 def apply_line_weight_format(cell, glass_groove, weight_per_meter):
     target_weight = GLASS_GROOVE_TARGETS.get(str(glass_groove).strip())
     if target_weight is None or weight_per_meter in (None, ''):
@@ -90,6 +93,7 @@ def fill_shift_data(worksheet, entry, date, current_row):
     """Helper function to fill data for a single shift at the specified starting row"""
     shift = entry.get('shift', '')
     lines = entry.get('lines', {})
+    display_line_1, display_line_2 = get_display_line_numbers(entry.get('lineGroup'))
     
     def write_line_rows(line_number, line_data, base_row):
         po_number = line_data.get('po', '')
@@ -126,8 +130,8 @@ def fill_shift_data(worksheet, entry, date, current_row):
             line_data.get('sealantWeightPerModulePerMeter', '')
         )
 
-    write_line_rows('1', lines.get('1', {}), current_row)
-    write_line_rows('2', lines.get('2', {}), current_row + 2)
+    write_line_rows(display_line_1, lines.get('1', {}), current_row)
+    write_line_rows(display_line_2, lines.get('2', {}), current_row + 2)
 
 def generate_frame_sealant_report(frame_data):
     """Generate frame sealant weight report with multiple sheets - one sheet per day of the month"""

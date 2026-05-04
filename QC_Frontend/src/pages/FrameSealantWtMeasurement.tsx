@@ -23,6 +23,17 @@ interface FrameDivisionData {
     netSealantWeight2: string;
 }
 
+type LineGroup = 'Line-I' | 'Line-II';
+type Shift = 'A' | 'B' | 'C';
+
+const LINE_GROUPS: LineGroup[] = ['Line-I', 'Line-II'];
+const SHIFTS: Shift[] = ['A', 'B', 'C'];
+const DEFAULT_LINE_GROUP: LineGroup = 'Line-I';
+
+const getEntryKey = (date: string, lineGroup: LineGroup, shift: Shift) => `${date}_${lineGroup}_${shift}`;
+const getDisplayLineNumbers = (lineGroup: LineGroup) => lineGroup === 'Line-I' ? ['1', '2'] : ['3', '4'];
+const getLineGroupLabel = (lineGroup: LineGroup) => `FAB-II ${lineGroup}`;
+const normalizeLineGroup = (lineGroup?: string): LineGroup => lineGroup === 'Line-II' ? 'Line-II' : 'Line-I';
 interface LineEntry {
     line?: string;
     po: string;
@@ -42,7 +53,8 @@ interface Signatures {
 interface DailyEntry {
     date: string;
     testingDate: string;
-    shift: 'A' | 'B' | 'C';
+    shift: Shift;
+    lineGroup: LineGroup;
     lines: {
         '1': LineEntry;
         '2': LineEntry;
@@ -52,11 +64,7 @@ interface DailyEntry {
 }
 
 interface DateEntries {
-    [date: string]: {
-        A?: DailyEntry;
-        B?: DailyEntry;
-        C?: DailyEntry;
-    };
+    [date: string]: Partial<Record<LineGroup, Partial<Record<Shift, DailyEntry>>>>;
 }
 
 interface ShiftLineStats {
@@ -140,15 +148,15 @@ const frameDivisionRequiredFields: Array<{
     key: keyof Omit<FrameDivisionData, 'netSealantWeight1' | 'netSealantWeight2'>;
     label: string;
 }> = [
-    { key: 'frameSupplier', label: 'Frame Supplier' },
-    { key: 'frameSize', label: 'Frame Size' },
-    { key: 'sealantSupplier', label: 'Sealant Supplier' },
-    { key: 'sealantExpiry', label: 'Sealant Expiry Date' },
-    { key: 'frameWithoutSealant1', label: 'Frame 1 (Without sealant)' },
-    { key: 'frameWithoutSealant2', label: 'Frame 2 (Without sealant)' },
-    { key: 'frameWithSealant1', label: 'Frame 1 (With sealant)' },
-    { key: 'frameWithSealant2', label: 'Frame 2 (With sealant)' }
-];
+        { key: 'frameSupplier', label: 'Frame Supplier' },
+        { key: 'frameSize', label: 'Frame Size' },
+        { key: 'sealantSupplier', label: 'Sealant Supplier' },
+        { key: 'sealantExpiry', label: 'Sealant Expiry Date' },
+        { key: 'frameWithoutSealant1', label: 'Frame 1 (Without sealant)' },
+        { key: 'frameWithoutSealant2', label: 'Frame 2 (Without sealant)' },
+        { key: 'frameWithSealant1', label: 'Frame 1 (With sealant)' },
+        { key: 'frameWithSealant2', label: 'Frame 2 (With sealant)' }
+    ];
 
 const frameDivisionLabels: Record<FrameDivisionKey, string> = {
     length: 'Long Frame',
@@ -219,11 +227,11 @@ const getLineRequiredDetails = (line: LineEntry) =>
     [
         { label: 'Glass Groove', value: normalizeFieldValue(line.glassGroove) },
         ...(['length', 'width'] as const).flatMap((division) =>
-        frameDivisionRequiredFields.map(({ key, label }) => ({
-            label: `${frameDivisionLabels[division]} - ${label}`,
-            value: normalizeFieldValue(line[division][key])
-        }))
-    )];
+            frameDivisionRequiredFields.map(({ key, label }) => ({
+                label: `${frameDivisionLabels[division]} - ${label}`,
+                value: normalizeFieldValue(line[division][key])
+            }))
+        )];
 
 const hasLineDetailInput = (line: LineEntry) =>
     getLineRequiredDetails(line).some(({ value }) => value !== '') ||
@@ -258,9 +266,12 @@ export default function FrameSealantWeightMeasurement() {
     const [username, setUsername] = useState<string | null>(null);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedShift, setSelectedShift] = useState<'A' | 'B' | 'C' | null>(null);
-    const [dateSignatures, setDateSignatures] = useState<{ [date: string]: Signatures }>({});
+    const [selectedLineGroup, setSelectedLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
+    const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+    const [dateSignatures, setDateSignatures] = useState<{ [contextKey: string]: Signatures }>({});
     const [showShiftSelector, setShowShiftSelector] = useState(false);
+    const [showExportLineSelector, setShowExportLineSelector] = useState(false);
+    const [selectedExportLineGroup, setSelectedExportLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
@@ -295,12 +306,12 @@ export default function FrameSealantWeightMeasurement() {
         frameWith: string
     ): string => {
         if (!frameWithout || !frameWith) return '';
-        
+
         const without = parseFloat(frameWithout);
         const withSealant = parseFloat(frameWith);
-        
+
         if (isNaN(without) || isNaN(withSealant)) return '';
-        
+
         return (withSealant - without).toFixed(2);
     }, []);
 
@@ -311,7 +322,7 @@ export default function FrameSealantWeightMeasurement() {
             line.width.netSealantWeight1,
             line.width.netSealantWeight2
         ];
-        
+
         let totalGm = 0;
         netWeights.forEach(weight => {
             if (weight) {
@@ -321,10 +332,10 @@ export default function FrameSealantWeightMeasurement() {
                 }
             }
         });
-        
+
         const totalGmStr = totalGm.toFixed(2);
         const totalPerMeter = (totalGm / 6.824).toFixed(2);
-        
+
         return { totalGm: totalGmStr, totalPerMeter };
     }, []);
 
@@ -339,10 +350,11 @@ export default function FrameSealantWeightMeasurement() {
         remarks: ''
     }), []);
 
-    const createEmptyShiftEntry = useCallback((date: string, shift: 'A' | 'B' | 'C'): DailyEntry => ({
+    const createEmptyShiftEntry = useCallback((date: string, shift: Shift, lineGroup: LineGroup = selectedLineGroup): DailyEntry => ({
         date: date,
         testingDate: date,
         shift: shift,
+        lineGroup: lineGroup,
         lines: {
             '1': createEmptyLineEntry('1'),
             '2': createEmptyLineEntry('2')
@@ -363,29 +375,29 @@ export default function FrameSealantWeightMeasurement() {
 
         const updatedLines = { ...currentEntry.lines };
         const updatedDivision = { ...updatedLines[line][division] };
-        
+
         updatedDivision[field] = value;
-        
+
         // Auto-calculate net sealant weights when frame weights change
         if (field === 'frameWithoutSealant1' || field === 'frameWithSealant1') {
             const without = field === 'frameWithoutSealant1' ? value : updatedDivision.frameWithoutSealant1;
             const withSealant = field === 'frameWithSealant1' ? value : updatedDivision.frameWithSealant1;
             updatedDivision.netSealantWeight1 = calculateNetSealantWeight(without, withSealant);
         }
-        
+
         if (field === 'frameWithoutSealant2' || field === 'frameWithSealant2') {
             const without = field === 'frameWithoutSealant2' ? value : updatedDivision.frameWithoutSealant2;
             const withSealant = field === 'frameWithSealant2' ? value : updatedDivision.frameWithSealant2;
             updatedDivision.netSealantWeight2 = calculateNetSealantWeight(without, withSealant);
         }
-        
+
         updatedLines[line][division] = updatedDivision;
-        
+
         // Recalculate line totals
         const { totalGm, totalPerMeter } = calculateLineTotals(updatedLines[line]);
         updatedLines[line].totalSealantWeightPerModule = totalGm;
         updatedLines[line].sealantWeightPerModulePerMeter = totalPerMeter;
-        
+
         setCurrentEntry({
             ...currentEntry,
             lines: updatedLines
@@ -445,11 +457,12 @@ export default function FrameSealantWeightMeasurement() {
 
             const entriesMap = new Map<string, DailyEntry>();
             const dateEntriesObj: DateEntries = {};
-            const dateSigs: { [date: string]: Signatures } = entriesJson.date_signatures || {};
+            const dateSigs: { [contextKey: string]: Signatures } = entriesJson.date_signatures || {};
 
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
-                
+                const entryLineGroup = normalizeLineGroup(entry.lineGroup);
+
                 // Ensure all required fields exist for new structure
                 if (!entry.lines) {
                     entry.lines = {
@@ -469,7 +482,7 @@ export default function FrameSealantWeightMeasurement() {
                 }
 
                 // Use date-level signatures
-                entry.signatures = dateSigs[normalizedDate] || {
+                entry.signatures = dateSigs[getEntryKey(normalizedDate, entryLineGroup, entry.shift)] || dateSigs[normalizedDate] || {
                     preparedBy: '',
                     verifiedBy: ''
                 };
@@ -477,14 +490,18 @@ export default function FrameSealantWeightMeasurement() {
                 const entryWithNormalizedDate = {
                     ...entry,
                     date: normalizedDate,
-                    testingDate: normalizedDate
+                    testingDate: normalizedDate,
+                    lineGroup: entryLineGroup
                 };
 
-                entriesMap.set(`${normalizedDate}_${entry.shift}`, entryWithNormalizedDate);
+                entriesMap.set(getEntryKey(normalizedDate, entryLineGroup, entry.shift), entryWithNormalizedDate);
                 if (!dateEntriesObj[normalizedDate]) {
                     dateEntriesObj[normalizedDate] = {};
                 }
-                dateEntriesObj[normalizedDate][entry.shift] = entryWithNormalizedDate;
+                dateEntriesObj[normalizedDate][entryLineGroup] = {
+                    ...(dateEntriesObj[normalizedDate][entryLineGroup] || {}),
+                    [entry.shift]: entryWithNormalizedDate
+                };
             });
 
             setMonthlyEntries(entriesMap);
@@ -566,6 +583,7 @@ export default function FrameSealantWeightMeasurement() {
     const handlePrevMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -574,6 +592,7 @@ export default function FrameSealantWeightMeasurement() {
     const handleNextMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -582,6 +601,7 @@ export default function FrameSealantWeightMeasurement() {
     const handleMonthChange = useCallback((monthIndex: number) => {
         setCurrentDate(prev => new Date(prev.getFullYear(), monthIndex, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -590,6 +610,7 @@ export default function FrameSealantWeightMeasurement() {
     const handleYearChange = useCallback((year: number) => {
         setCurrentDate(prev => new Date(year, prev.getMonth(), 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -600,14 +621,16 @@ export default function FrameSealantWeightMeasurement() {
         setSelectedDate(normalized);
         setShowShiftSelector(true);
         setCurrentEntry(null);
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
     }, [normalizeDate]);
 
-    const handleShiftSelect = useCallback((shift: 'A' | 'B' | 'C') => {
+    const handleShiftSelect = useCallback((lineGroup: LineGroup, shift: Shift) => {
+        setSelectedLineGroup(lineGroup);
         setSelectedShift(shift);
         setShowShiftSelector(false);
 
-        const entryKey = `${selectedDate}_${shift}`;
+        const entryKey = getEntryKey(selectedDate, lineGroup, shift);
         const entry = monthlyEntries.get(entryKey);
 
         if (entry) {
@@ -638,7 +661,7 @@ export default function FrameSealantWeightMeasurement() {
             setIsEditing(true);
         } else {
             console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
-            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift));
+            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, lineGroup));
             setIsEditing(false);
         }
     }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry]);
@@ -646,6 +669,7 @@ export default function FrameSealantWeightMeasurement() {
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
     }, []);
 
@@ -718,7 +742,9 @@ export default function FrameSealantWeightMeasurement() {
                     };
                 }
 
-                const entryKey = `${normalized}_${saved.shift}`;
+                const savedLineGroup = normalizeLineGroup(saved.lineGroup);
+                saved.lineGroup = savedLineGroup;
+                const entryKey = getEntryKey(normalized, savedLineGroup, saved.shift);
 
                 const updatedEntries = new Map(monthlyEntries);
                 updatedEntries.set(entryKey, { ...saved, date: normalized });
@@ -729,7 +755,10 @@ export default function FrameSealantWeightMeasurement() {
                     ...dateEntries,
                     [normalized]: {
                         ...dateEntries[normalized],
-                        [saved.shift]: { ...saved, date: normalized }
+                        [savedLineGroup]: {
+                            ...(dateEntries[normalized]?.[savedLineGroup] || {}),
+                            [saved.shift]: { ...saved, date: normalized }
+                        }
                     }
                 };
                 setDateEntries(updatedDateEntries);
@@ -773,8 +802,9 @@ export default function FrameSealantWeightMeasurement() {
                 try {
                     const dateKey = normalizeDate(currentEntry.date);
                     const shift = currentEntry.shift;
+                    const lineGroup = normalizeLineGroup(currentEntry.lineGroup);
 
-                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${shift}`, {
+                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${lineGroup}/${shift}`, {
                         method: 'DELETE',
                     });
 
@@ -782,7 +812,7 @@ export default function FrameSealantWeightMeasurement() {
                         throw new Error('Failed to delete entry');
                     }
 
-                    const entryKey = `${dateKey}_${shift}`;
+                    const entryKey = getEntryKey(dateKey, lineGroup, shift);
                     const updatedEntries = new Map(monthlyEntries);
                     updatedEntries.delete(entryKey);
                     setMonthlyEntries(updatedEntries);
@@ -790,7 +820,7 @@ export default function FrameSealantWeightMeasurement() {
                     setDateEntries(prev => {
                         const newDateEntries = { ...prev };
                         if (newDateEntries[dateKey]) {
-                            delete newDateEntries[dateKey][shift];
+                            delete newDateEntries[dateKey]?.[lineGroup]?.[shift];
                             if (Object.keys(newDateEntries[dateKey]).length === 0) {
                                 delete newDateEntries[dateKey];
                             }
@@ -836,7 +866,8 @@ export default function FrameSealantWeightMeasurement() {
         const field = type === 'prepared' ? 'preparedBy' : 'verifiedBy';
 
         // Get current date-level signatures
-        const currentDateSigs = dateSignatures[currentEntry.date] || {
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, currentEntry.shift);
+        const currentDateSigs = dateSignatures[signatureKey] || dateSignatures[currentEntry.date] || {
             preparedBy: '',
             verifiedBy: ''
         };
@@ -857,7 +888,7 @@ export default function FrameSealantWeightMeasurement() {
             // Update all entries for this date in local state
             const updatedDateSigs = {
                 ...dateSignatures,
-                [currentEntry.date]: updatedSignatures
+                [signatureKey]: updatedSignatures
             };
             setDateSignatures(updatedDateSigs);
 
@@ -874,6 +905,8 @@ export default function FrameSealantWeightMeasurement() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         date: currentEntry.date,
+                        lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
+                        shift: currentEntry.shift,
                         signatures: updatedSignatures
                     })
                 });
@@ -907,7 +940,7 @@ export default function FrameSealantWeightMeasurement() {
             // Update all entries for this date in local state
             const updatedDateSigs = {
                 ...dateSignatures,
-                [currentEntry.date]: updatedSignatures
+                [signatureKey]: updatedSignatures
             };
             setDateSignatures(updatedDateSigs);
 
@@ -924,6 +957,8 @@ export default function FrameSealantWeightMeasurement() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         date: currentEntry.date,
+                        lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
+                        shift: currentEntry.shift,
                         signatures: updatedSignatures
                     })
                 });
@@ -940,7 +975,7 @@ export default function FrameSealantWeightMeasurement() {
         }
     }, [username, userRole, currentEntry, dateSignatures, showAlert, API_BASE_URL]);
 
-    const handleExportMonthlyExcel = useCallback(async () => {
+    const handleExportMonthlyExcel = useCallback(async (exportLineGroup: LineGroup = selectedExportLineGroup) => {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
@@ -958,6 +993,8 @@ export default function FrameSealantWeightMeasurement() {
             const monthlyJson = await monthlyResp.json();
 
             let entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
+
+            entriesArray = entriesArray.filter((entry: DailyEntry) => normalizeLineGroup(entry.lineGroup) === exportLineGroup);
 
             entriesArray = entriesArray.map((entry: DailyEntry) => {
                 if (entry.lines) {
@@ -982,6 +1019,7 @@ export default function FrameSealantWeightMeasurement() {
 
             const frameReportData = {
                 entries: entriesArray,
+                lineGroup: exportLineGroup,
                 year,
                 month
             };
@@ -1017,11 +1055,12 @@ export default function FrameSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, API_BASE_URL, showAlert]);
+    }, [currentDate, months, API_BASE_URL, showAlert, selectedExportLineGroup]);
 
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setShowShiftSelector(false);
         setHasUnsavedChanges(false);
@@ -1063,11 +1102,11 @@ export default function FrameSealantWeightMeasurement() {
         const line1Validity = checkLineValidity(entry.lines['1']);
         const line2Validity = checkLineValidity(entry.lines['2']);
 
-        if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail) 
+        if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail)
             return <CircleDot className="w-3 h-3 text-green-500" />;
-        if (line1Validity.fail || line2Validity.fail) 
+        if (line1Validity.fail || line2Validity.fail)
             return <Circle className="w-3 h-3 text-red-500" />;
-        if (line1Validity.any || line2Validity.any) 
+        if (line1Validity.any || line2Validity.any)
             return <Circle className="w-3 h-3 text-yellow-500" />;
 
         return <CircleOff className="w-3 h-3 text-gray-400" />;
@@ -1097,11 +1136,11 @@ export default function FrameSealantWeightMeasurement() {
             let hasAny = false;
             let hasSignatures = false;
 
-            Object.values(dayEntries).forEach((shiftEntry: any) => {
+            Object.values(dayEntries).flatMap(group => Object.values(group || {})).forEach((shiftEntry: any) => {
                 if (shiftEntry?.lines && typeof shiftEntry === 'object' && 'shift' in shiftEntry) {
                     const line1Validity = checkLineValidity(shiftEntry.lines['1']);
                     const line2Validity = checkLineValidity(shiftEntry.lines['2']);
-                    
+
                     if (line1Validity.pass || line2Validity.pass) hasPass = true;
                     if (line1Validity.fail || line2Validity.fail) hasFail = true;
                     if (line1Validity.any || line2Validity.any) hasAny = true;
@@ -1140,8 +1179,8 @@ export default function FrameSealantWeightMeasurement() {
                     </div>
 
                     <div className="flex flex-col gap-1 mt-1">
-                        {(['A', 'B', 'C'] as const).map(shift => {
-                            const entry = dayEntries[shift] as DailyEntry | undefined;
+                        {SHIFTS.map(shift => {
+                            const entry = dateEntries[dateStr]?.[selectedLineGroup]?.[shift] as DailyEntry | undefined;
                             return (
                                 <div key={shift} className="flex flex-col gap-0.5 text-xs">
                                     <div className="flex items-center gap-1">
@@ -1161,7 +1200,8 @@ export default function FrameSealantWeightMeasurement() {
     const renderSignatureSection = useCallback(() => {
         if (!currentEntry) return null;
 
-        const currentDateSigs = dateSignatures[currentEntry.date] || {
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, currentEntry.shift);
+        const currentDateSigs = dateSignatures[signatureKey] || dateSignatures[currentEntry.date] || {
             preparedBy: '',
             verifiedBy: ''
         };
@@ -1174,11 +1214,11 @@ export default function FrameSealantWeightMeasurement() {
         return (
             <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <h4 className="text-md font-semibold mb-3 dark:text-white">
-                    Daily Signatures for {new Date(currentEntry.date).toLocaleDateString()} (Applies to all shifts)
+                    Signatures for {new Date(currentEntry.date).toLocaleDateString()} - {getLineGroupLabel(currentEntry.lineGroup || DEFAULT_LINE_GROUP)} Shift {currentEntry.shift}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Prepared By
                         </label>
                         <div className="flex items-center gap-2">
@@ -1186,13 +1226,13 @@ export default function FrameSealantWeightMeasurement() {
                                 type="text"
                                 value={currentDateSigs.preparedBy || ''}
                                 readOnly
-                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                className="md:w-full p-2 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
                                 placeholder="Not signed"
                             />
                             {canSignPrepared && (
                                 <button
                                     onClick={() => handleSignatureUpdate('prepared')}
-                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
                                 >
                                     <Check className='w-4 h-4' />
                                 </button>
@@ -1200,7 +1240,7 @@ export default function FrameSealantWeightMeasurement() {
                             {canRemovePrepared && (
                                 <button
                                     onClick={() => handleSignatureUpdate('prepared')}
-                                    className="p-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                                 >
                                     <X className='w-4 h-4' />
                                 </button>
@@ -1208,7 +1248,7 @@ export default function FrameSealantWeightMeasurement() {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Verified By
                         </label>
                         <div className="flex items-center gap-2">
@@ -1216,13 +1256,13 @@ export default function FrameSealantWeightMeasurement() {
                                 type="text"
                                 value={currentDateSigs.verifiedBy || ''}
                                 readOnly
-                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                className="md:w-full p-2 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
                                 placeholder="Not signed"
                             />
                             {canSignVerified && (
                                 <button
                                     onClick={() => handleSignatureUpdate('verified')}
-                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
                                 >
                                     <Check className='w-4 h-4' />
                                 </button>
@@ -1230,7 +1270,7 @@ export default function FrameSealantWeightMeasurement() {
                             {canRemoveVerified && (
                                 <button
                                     onClick={() => handleSignatureUpdate('verified')}
-                                    className="px-2 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                    className="px-2 py-2 text-xs text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                                 >
                                     <X className='w-4 h-4' />
                                 </button>
@@ -1248,130 +1288,144 @@ export default function FrameSealantWeightMeasurement() {
         title: string
     ) => {
         if (!currentEntry) return null;
-        
+
         const divisionData = currentEntry.lines[line][division];
-        
+
         return (
             <div className="border-l-4 border-violet-500 pl-4 mb-4">
                 <h5 className="text-sm font-semibold mb-2 dark:text-white">{title}</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame Supplier
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={divisionData.frameSupplier}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameSupplier', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter frame supplier"
-                        />
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">Select</option>
+                            <option value="Taihe new energy">Taihe new energy</option>
+                            <option value="Yuejja Metallic (Davin)">Yuejja Metallic (Davin)</option>
+                            <option value="Anan">Anan</option>
+                            <option value="YONZ TECHNOLOGY">YONZ TECHNOLOGY</option>
+                            <option value="Juixin">Juixin</option>
+                            <option value="Yihua">Yihua</option>
+                            <option value="Ralpro">Ralpro</option>
+                            <option value="Vishakha Renewables">Vishakha Renewables</option>
+                            <option value="N/A">N/A</option>
+                        </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame Size (mm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.frameSize}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameSize', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter frame size"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Sealant Supplier
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={divisionData.sealantSupplier}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'sealantSupplier', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter sealant supplier"
-                        />
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">Select</option>
+                            <option value="Huitan">Huitan</option>
+                            <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                            <option value="Adarsha Speciality">Adarsha Speciality</option>
+                            <option value="Fasto">Fasto</option>
+                            <option value="N/A">N/A</option>
+                        </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Sealant Expiry Date
                         </label>
                         <input
                             type="date"
                             value={divisionData.sealantExpiry}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'sealantExpiry', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="DD.MM.YYYY"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame 1 (Without sealant) (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.frameWithoutSealant1}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant1', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter weight"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame 2 (Without sealant) (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.frameWithoutSealant2}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant2', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter weight"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame 1 (With sealant) (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.frameWithSealant1}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant1', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter weight"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Frame 2 (With sealant) (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.frameWithSealant2}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant2', e.target.value)}
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter weight"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Net Sealant Weight 1 (gm)
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Net Sealant Wt. 1 (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.netSealantWeight1}
                             readOnly
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                             placeholder="Auto-calculated"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Net Sealant Weight 2 (gm)
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Net Sealant Wt. 2 (gm)
                         </label>
                         <input
                             type="text"
                             value={divisionData.netSealantWeight2}
                             readOnly
-                            className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                             placeholder="Auto-calculated"
                         />
                     </div>
@@ -1382,601 +1436,649 @@ export default function FrameSealantWeightMeasurement() {
 
     return (
         <>
-            <div className="mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
+            <div className="text-center mb-2">
+                <button
+                    onClick={handleBackToHome}
+                    className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
+                >
+                    <span className="font-bold text-md">⇐</span> Back to Home
+                </button>
+            </div>
+            {isLoading && (
+                <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
+                    </div>
                 </div>
-                {isLoading && (
-                    <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                            <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
+            )}
+            {showExportLineSelector && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold dark:text-white">Select Line Group</h3>
+                            <button
+                                onClick={() => setShowExportLineSelector(false)}
+                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            >
+                                <X className="w-5 h-5 dark:text-white" />
+                            </button>
+                        </div>
+                        <select
+                            value={selectedExportLineGroup}
+                            onChange={(e) => setSelectedExportLineGroup(e.target.value as LineGroup)}
+                            className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {LINE_GROUPS.map(lineGroup => (
+                                <option key={lineGroup} value={lineGroup}>{getLineGroupLabel(lineGroup)}</option>
+                            ))}
+                        </select>
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setShowExportLineSelector(false)}
+                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowExportLineSelector(false);
+                                    handleExportMonthlyExcel(selectedExportLineGroup);
+                                }}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Export
+                            </button>
                         </div>
                     </div>
-                )}
-                <TestHeading
-                    heading="Frame Sealant Weight Measurement"
-                    criteria="Allowable Limit: Glass Groove (5.6 mm) = 40±7 gm/m and Glass Groove (6.1 mm) = 49±7 gm/m"
-                />
-                {showShiftSelector && selectedDate && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold dark:text-white">
-                                    Select Shift for {new Date(selectedDate).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric'
-                                    })}
-                                </h3>
+                </div>
+            )}
+            <TestHeading
+                heading="Frame Sealant Weight Measurement"
+                criteria="Allowable Limit: Glass Groove (5.6 mm) = 40±7 gm/m and Glass Groove (6.1 mm) = 49±7 gm/m"
+            />
+            {showShiftSelector && selectedDate && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold dark:text-white">
+                                Select Shift for {new Date(selectedDate).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}
+                            </h3>
+                            <button
+                                onClick={handleCloseShiftSelector}
+                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            >
+                                <X className="w-5 h-5 dark:text-white" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                            {LINE_GROUPS.map(lineGroup => (
                                 <button
-                                    onClick={handleCloseShiftSelector}
-                                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                                    key={lineGroup}
+                                    onClick={() => setSelectedLineGroup(lineGroup)}
+                                    className={`p-3 rounded-lg border-2 text-sm font-semibold transition-colors ${selectedLineGroup === lineGroup
+                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300'
+                                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white'}`}
                                 >
-                                    <X className="w-5 h-5 dark:text-white" />
+                                    {getLineGroupLabel(lineGroup)}
                                 </button>
-                            </div>
+                            ))}
+                        </div>
 
-                            <div className="space-y-3">
-                                {(['A', 'B', 'C'] as const).map(shift => {
-                                    const entry = dateEntries[selectedDate]?.[shift];
-                                    const isFilled = !!entry;
+                        <div className="space-y-3">
+                            {SHIFTS.map(shift => {
+                                const entry = dateEntries[selectedDate]?.[selectedLineGroup]?.[shift];
+                                const isFilled = !!entry;
 
-                                    const line1Validity = entry?.lines['1'] ? checkLineValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
-                                    const line2Validity = entry?.lines['2'] ? checkLineValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
+                                const line1Validity = entry?.lines['1'] ? checkLineValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
+                                const line2Validity = entry?.lines['2'] ? checkLineValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
 
-                                    let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
-                                    if (isFilled) {
-                                        if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail) {
-                                            statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
-                                        } else if (line1Validity.fail || line2Validity.fail) {
-                                            statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
-                                        } else {
-                                            statusClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
-                                        }
+                                let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+                                if (isFilled) {
+                                    if ((line1Validity.pass || line2Validity.pass) && !line1Validity.fail && !line2Validity.fail) {
+                                        statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+                                    } else if (line1Validity.fail || line2Validity.fail) {
+                                        statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
+                                    } else {
+                                        statusClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
                                     }
+                                }
 
-                                    return (
-                                        <button
-                                            key={shift}
-                                            onClick={() => handleShiftSelect(shift)}
-                                            className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${statusClass}`}
-                                        >
-                                            <div className="flex-shrink-0">
-                                                {shift === 'A' && <Sun className="w-6 h-6 text-amber-500" />}
-                                                {shift === 'B' && <Sunset className="w-6 h-6 text-orange-500" />}
-                                                {shift === 'C' && <Moon className="w-6 h-6 text-indigo-500" />}
-                                            </div>
-                                            <div className="flex-grow text-left">
-                                                <div className="font-semibold dark:text-white">Shift {shift}</div>
-                                                {isFilled ? (
-                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                        <div>Line 1 PO: {entry?.lines['1']?.po}</div>
-                                                        <div>Line 2 PO: {entry?.lines['2']?.po}</div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-sm text-gray-500 dark:text-gray-500">
-                                                        No entry yet
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {isFilled && (
-                                                <div className="flex-shrink-0">
-                                                    {line1Validity.pass && line2Validity.pass && !line1Validity.fail && !line2Validity.fail &&
-                                                        <CheckCircle className="w-5 h-5 text-green-500" />}
-                                                    {(line1Validity.fail || line2Validity.fail) &&
-                                                        <AlertCircle className="w-5 h-5 text-red-500" />}
+                                return (
+                                    <button
+                                        key={shift}
+                                        onClick={() => handleShiftSelect(selectedLineGroup, shift)}
+                                        className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${statusClass}`}
+                                    >
+                                        <div className="flex-shrink-0">
+                                            {shift === 'A' && <Sun className="w-6 h-6 text-amber-500" />}
+                                            {shift === 'B' && <Sunset className="w-6 h-6 text-orange-500" />}
+                                            {shift === 'C' && <Moon className="w-6 h-6 text-indigo-500" />}
+                                        </div>
+                                        <div className="flex-grow text-left">
+                                            <div className="font-semibold dark:text-white">Shift {shift}</div>
+                                            {isFilled ? (
+                                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                    <div>Line 1 PO: {entry?.lines['1']?.po}</div>
+                                                    <div>Line 2 PO: {entry?.lines['2']?.po}</div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-sm text-gray-500 dark:text-gray-500">
+                                                    No entry yet
                                                 </div>
                                             )}
+                                        </div>
+                                        {isFilled && (
+                                            <div className="flex-shrink-0">
+                                                {line1Validity.pass && line2Validity.pass && !line1Validity.fail && !line2Validity.fail &&
+                                                    <CheckCircle className="w-5 h-5 text-green-500" />}
+                                                {(line1Validity.fail || line2Validity.fail) &&
+                                                    <AlertCircle className="w-5 h-5 text-red-500" />}
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-7 space-y-6">
+                        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                            <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6">
+                                <div className="flex gap-1 items-center">
+                                    <button
+                                        onClick={handlePrevMonth}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                                    >
+                                        <ChevronLeft className="w-5 h-5 dark:text-white" />
+                                    </button>
+
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={currentDate.getMonth()}
+                                            onChange={(e) => handleMonthChange(parseInt(e.target.value))}
+                                            className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                        >
+                                            {months.map((month, index) => (
+                                                <option key={month} value={index}>
+                                                    {month}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        <select
+                                            value={currentDate.getFullYear()}
+                                            onChange={(e) => handleYearChange(parseInt(e.target.value))}
+                                            className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                        >
+                                            {years.map(year => (
+                                                <option key={year} value={year}>
+                                                    {year}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        onClick={handleNextMonth}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                                    >
+                                        <ChevronRight className="w-5 h-5 dark:text-white" />
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleTodayEntry}
+                                        className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                    >
+                                        Today
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowExportLineSelector(true)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
+                                        title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
+                                    >
+                                        <img
+                                            src="/IMAGES/Excel.svg"
+                                            alt="Excel"
+                                            className="w-6 h-6 filter brightness-0 invert dark:brightness-0 dark:invert"
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-7 gap-2 mb-2">
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                    <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2">
+                                        {day}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-2">
+                                {renderCalendarDays()}
+                            </div>
+                            <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">Within Range</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">Out of Range</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded bg-gray-200 border border-gray-500"></div>
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">No Entry</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <Sun className="w-3 h-3 text-amber-500" />
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">A</span>
+                                    <Sunset className="w-3 h-3 text-orange-500 ml-2" />
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">B</span>
+                                    <Moon className="w-3 h-3 text-indigo-500 ml-2" />
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">C</span>
+                                </div>
+                            </div>
+                        </div>
+                        {currentEntry && selectedShift && (
+                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-semibold dark:text-white">
+                                        {isEditing ? 'Edit Entry' : 'New Entry'} - {new Date(currentEntry.testingDate).toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        })} (Shift {currentEntry.shift})
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        {isEditing && (
+                                            <button
+                                                onClick={handleDeleteEntry}
+                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={handleReset}
+                                            className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                                            title="Cancel"
+                                        >
+                                            <X className="w-4 h-4" />
                                         </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            {currentEntry.shift === 'A' && <Sun className="w-5 h-5 text-amber-500" />}
+                                            {currentEntry.shift === 'B' && <Sunset className="w-5 h-5 text-orange-500" />}
+                                            {currentEntry.shift === 'C' && <Moon className="w-5 h-5 text-indigo-500" />}
+                                            <span className="font-medium dark:text-white">Shift {currentEntry.shift}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Line 1 */}
+                                    <div className="border-l-4 border-blue-500 pl-4">
+                                        <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
+                                            Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]} Details
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    PO Number
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['1'].po}
+                                                    onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter PO number"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Glass Groove
+                                                </label>
+                                                <select
+                                                    value={currentEntry.lines['1'].glassGroove}
+                                                    onChange={(e) => handleLineInputChange('1', 'glassGroove', e.target.value)}
+                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                >
+                                                    <option value="">Select glass groove</option>
+                                                    {GLASS_GROOVE_OPTIONS.map((option) => (
+                                                        <option key={option} value={option}>
+                                                            {option}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Long Frame Section */}
+                                        <div className="mt-4">
+                                            <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                Long Frame
+                                            </h5>
+                                            {renderFrameDivisionFields('1', 'length', 'Long Frame Details')}
+                                        </div>
+
+                                        {/* Short Frame Section */}
+                                        <div className="mt-4">
+                                            <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                Short Frame
+                                            </h5>
+                                            {renderFrameDivisionFields('1', 'width', 'Short Frame Details')}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sealant Wt./Module (gm)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['1'].totalSealantWeightPerModule}
+                                                    readOnly
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                    placeholder="Auto-calculated"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sealant Wt./Module (gm/m)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['1'].sealantWeightPerModulePerMeter}
+                                                    readOnly
+                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['1'])}`}
+                                                    placeholder="Auto-calculated"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Remarks (Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]})
+                                                </label>
+                                                <textarea
+                                                    value={currentEntry.lines['1'].remarks || ''}
+                                                    onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
+                                                    rows={2}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Add any remarks for Line 1"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Line 2 */}
+                                    <div className="border-l-4 border-green-500 pl-4 mt-6">
+                                        <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
+                                            Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[1]} Details
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    PO Number
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['2'].po}
+                                                    onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter PO number"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Glass Groove
+                                                </label>
+                                                <select
+                                                    value={currentEntry.lines['2'].glassGroove}
+                                                    onChange={(e) => handleLineInputChange('2', 'glassGroove', e.target.value)}
+                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                >
+                                                    <option value="">Select glass groove</option>
+                                                    {GLASS_GROOVE_OPTIONS.map((option) => (
+                                                        <option key={option} value={option}>
+                                                            {option}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Long Frame Section */}
+                                        <div className="mt-4">
+                                            <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                Long Frame
+                                            </h5>
+                                            {renderFrameDivisionFields('2', 'length', 'Long Frame Details')}
+                                        </div>
+
+                                        {/* Short Frame Section */}
+                                        <div className="mt-4">
+                                            <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                Short Frame
+                                            </h5>
+                                            {renderFrameDivisionFields('2', 'width', 'Short Frame Details')}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sealant Wt./Module (gm)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['2'].totalSealantWeightPerModule}
+                                                    readOnly
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                    placeholder="Auto-calculated"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Sealant Wt./Module (gm/m)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={currentEntry.lines['2'].sealantWeightPerModulePerMeter}
+                                                    readOnly
+                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['2'])}`}
+                                                    placeholder="Auto-calculated"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Remarks (Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[1]})
+                                                </label>
+                                                <textarea
+                                                    value={currentEntry.lines['2'].remarks || ''}
+                                                    onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
+                                                    rows={2}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Add any remarks for Line 2"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {renderSignatureSection()}
+                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <button
+                                            onClick={handleReset}
+                                            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleSaveEntry}
+                                            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Save className="w-4 h-4" />
+                                            {isEditing ? 'Update Entry' : 'Save Entry'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Panel - Statistics */}
+                    <div className="lg:col-span-5 space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <Percent className="w-5 h-5 text-blue-500" />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">Completion</span>
+                                </div>
+                                <div className="text-2xl font-bold text-gray-800 dark:text-white">
+                                    {monthlyStats.completionRate}%
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    {monthlyStats.filledEntries} / {monthlyStats.totalPossibleEntries} line entries
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <Target className="w-5 h-5 text-green-500" />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">Within Range</span>
+                                </div>
+                                <div className="text-2xl font-bold text-gray-800 dark:text-white">
+                                    {monthlyStats.filledEntries > 0
+                                        ? Math.round((monthlyStats.passCount / monthlyStats.filledEntries) * 100)
+                                        : 0}%
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    {monthlyStats.passCount} within range
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                            <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
+                                <Clock className="w-4 h-4 text-blue-500" />
+                                Shift-wise Statistics
+                            </h3>
+                            <div className="space-y-4">
+                                {SHIFTS.map(shift => {
+                                    const stats = monthlyStats.shiftStats?.[shift] || {
+                                        filled: 0,
+                                        pass: 0,
+                                        fail: 0,
+                                        lines: { '1': 0, '2': 0 }
+                                    };
+
+                                    const lines = stats.lines || { '1': 0, '2': 0 };
+
+                                    const shiftIcon = shift === 'A' ? <Sun className="w-4 h-4 text-amber-500" /> :
+                                        shift === 'B' ? <Sunset className="w-4 h-4 text-orange-500" /> :
+                                            <Moon className="w-4 h-4 text-indigo-500" />;
+
+                                    return (
+                                        <div key={shift} className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    {shiftIcon}
+                                                    <span className="font-medium dark:text-white">Shift {shift}</span>
+                                                </div>
+                                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                    {stats.filled} / {monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT} line entries
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-4 text-xs">
+                                                <span className="text-green-600">Within Range: {stats.pass}</span>
+                                                <span className="text-red-600">Out of Range: {stats.fail}</span>
+                                            </div>
+                                            <div className="flex gap-2 text-[10px] text-gray-500">
+                                                <span>Line 1: {lines['1']}</span>
+                                                <span>Line 2: {lines['2']}</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                <div
+                                                    className="bg-blue-500 h-2 rounded-full transition-all"
+                                                    style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT)) * 100 : 0}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
                                     );
                                 })}
                             </div>
                         </div>
-                    </div>
-                )}
 
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        <div className="lg:col-span-7 space-y-6">
-                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6">
-                                    <div className="flex gap-1 items-center">
-                                        <button
-                                            onClick={handlePrevMonth}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                                        >
-                                            <ChevronLeft className="w-5 h-5 dark:text-white" />
-                                        </button>
-
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={currentDate.getMonth()}
-                                                onChange={(e) => handleMonthChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-                                            >
-                                                {months.map((month, index) => (
-                                                    <option key={month} value={index}>
-                                                        {month}
-                                                    </option>
-                                                ))}
-                                            </select>
-
-                                            <select
-                                                value={currentDate.getFullYear()}
-                                                onChange={(e) => handleYearChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-                                            >
-                                                {years.map(year => (
-                                                    <option key={year} value={year}>
-                                                        {year}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <button
-                                            onClick={handleNextMonth}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                                        >
-                                            <ChevronRight className="w-5 h-5 dark:text-white" />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleTodayEntry}
-                                            className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                                        >
-                                            Today
-                                        </button>
-
-                                        <button
-                                            onClick={handleExportMonthlyExcel}
-                                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
-                                            title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
-                                        >
-                                            <img
-                                                src="/IMAGES/Excel.svg"
-                                                alt="Excel"
-                                                className="w-6 h-6 filter brightness-0 invert dark:brightness-0 dark:invert"
-                                            />
-                                        </button>
-                                    </div>
+                        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                            <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
+                                <BarChart3 className="w-4 h-4 text-blue-500" />
+                                {months[currentDate.getMonth()]} {currentDate.getFullYear()} Summary
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                                    <span className="text-gray-600 dark:text-gray-400">Total Days</span>
+                                    <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                 </div>
-                                <div className="grid grid-cols-7 gap-2 mb-2">
-                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                        <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2">
-                                            {day}
-                                        </div>
-                                    ))}
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                                    <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Lines)</span>
+                                    <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
                                 </div>
-                                <div className="grid grid-cols-7 gap-2">
-                                    {renderCalendarDays()}
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                                    <span className="text-gray-600 dark:text-gray-400">Filled Entries (Lines)</span>
+                                    <span className="font-semibold text-green-600">{monthlyStats.filledEntries}</span>
                                 </div>
-                                <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-green-200 border border-green-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Within Range</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-red-200 border border-red-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">Out of Range</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-gray-200 border border-gray-500"></div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">No Entry</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Sun className="w-3 h-3 text-amber-500" />
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">A</span>
-                                        <Sunset className="w-3 h-3 text-orange-500 ml-2" />
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">B</span>
-                                        <Moon className="w-3 h-3 text-indigo-500 ml-2" />
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">C</span>
-                                    </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                                    <span className="text-gray-600 dark:text-gray-400">Missing Entries (Lines)</span>
+                                    <span className="font-semibold text-red-500">{monthlyStats.totalPossibleEntries - monthlyStats.filledEntries}</span>
                                 </div>
                             </div>
-                            {currentEntry && selectedShift && (
-                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-semibold dark:text-white">
-                                            {isEditing ? 'Edit Entry' : 'New Entry'} - {new Date(currentEntry.testingDate).toLocaleDateString('en-US', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric'
-                                            })} (Shift {currentEntry.shift})
-                                        </h3>
-                                        <div className="flex gap-2">
-                                            {isEditing && (
-                                                <button
-                                                    onClick={handleDeleteEntry}
-                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={handleReset}
-                                                className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                                                title="Cancel"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                            <div className="flex items-center gap-2">
-                                                {currentEntry.shift === 'A' && <Sun className="w-5 h-5 text-amber-500" />}
-                                                {currentEntry.shift === 'B' && <Sunset className="w-5 h-5 text-orange-500" />}
-                                                {currentEntry.shift === 'C' && <Moon className="w-5 h-5 text-indigo-500" />}
-                                                <span className="font-medium dark:text-white">Shift {currentEntry.shift}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Line 1 */}
-                                        <div className="border-l-4 border-blue-500 pl-4">
-                                            <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
-                                                <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
-                                                Line 1 Details
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].po}
-                                                        onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter PO number"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Glass Groove
-                                                    </label>
-                                                    <select
-                                                        value={currentEntry.lines['1'].glassGroove}
-                                                        onChange={(e) => handleLineInputChange('1', 'glassGroove', e.target.value)}
-                                                        className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-                                                    >
-                                                        <option value="">Select glass groove</option>
-                                                        {GLASS_GROOVE_OPTIONS.map((option) => (
-                                                            <option key={option} value={option}>
-                                                                {option}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Long Frame Section */}
-                                            <div className="mt-4">
-                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Long Frame
-                                                </h5>
-                                                {renderFrameDivisionFields('1', 'length', 'Long Frame Details')}
-                                            </div>
-                                            
-                                            {/* Short Frame Section */}
-                                            <div className="mt-4">
-                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Short Frame
-                                                </h5>
-                                                {renderFrameDivisionFields('1', 'width', 'Short Frame Details')}
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Weight/Module (gm)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].totalSealantWeightPerModule}
-                                                        readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
-                                                        placeholder="Auto-calculated"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Weight/Module (gm/m)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['1'].sealantWeightPerModulePerMeter}
-                                                        readOnly
-                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['1'])}`}
-                                                        placeholder="Auto-calculated"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Remarks (Line 1)
-                                                    </label>
-                                                    <textarea
-                                                        value={currentEntry.lines['1'].remarks || ''}
-                                                        onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
-                                                        rows={2}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Add any remarks for Line 1"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Line 2 */}
-                                        <div className="border-l-4 border-green-500 pl-4 mt-6">
-                                            <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
-                                                <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
-                                                Line 2 Details
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        PO Number
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].po}
-                                                        onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter PO number"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Glass Groove
-                                                    </label>
-                                                    <select
-                                                        value={currentEntry.lines['2'].glassGroove}
-                                                        onChange={(e) => handleLineInputChange('2', 'glassGroove', e.target.value)}
-                                                        className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-                                                    >
-                                                        <option value="">Select glass groove</option>
-                                                        {GLASS_GROOVE_OPTIONS.map((option) => (
-                                                            <option key={option} value={option}>
-                                                                {option}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Long Frame Section */}
-                                            <div className="mt-4">
-                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Long Frame
-                                                </h5>
-                                                {renderFrameDivisionFields('2', 'length', 'Long Frame Details')}
-                                            </div>
-                                            
-                                            {/* Short Frame Section */}
-                                            <div className="mt-4">
-                                                <h5 className="text-md font-semibold mb-3 dark:text-white bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                                                    Short Frame
-                                                </h5>
-                                                {renderFrameDivisionFields('2', 'width', 'Short Frame Details')}
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Weight/Module (gm)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].totalSealantWeightPerModule}
-                                                        readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
-                                                        placeholder="Auto-calculated"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Sealant Weight/Module (gm/m)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentEntry.lines['2'].sealantWeightPerModulePerMeter}
-                                                        readOnly
-                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${getSealantWeightPerMeterClass(currentEntry.lines['2'])}`}
-                                                        placeholder="Auto-calculated"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Remarks (Line 2)
-                                                    </label>
-                                                    <textarea
-                                                        value={currentEntry.lines['2'].remarks || ''}
-                                                        onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
-                                                        rows={2}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Add any remarks for Line 2"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {renderSignatureSection()}
-                                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                            <button
-                                                onClick={handleReset}
-                                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={handleSaveEntry}
-                                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                            >
-                                                <Save className="w-4 h-4" />
-                                                {isEditing ? 'Update Entry' : 'Save Entry'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
-                        {/* Right Panel - Statistics */}
-                        <div className="lg:col-span-5 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <Percent className="w-5 h-5 text-blue-500" />
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">Completion</span>
+                        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                            <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
+                                <TrendingUp className="w-4 h-4 text-blue-500" />
+                                Weight Range Breakdown
+                            </h3>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-green-600">Within Range</span>
+                                        <span className="font-medium">{monthlyStats.passCount}</span>
                                     </div>
-                                    <div className="text-2xl font-bold text-gray-800 dark:text-white">
-                                        {monthlyStats.completionRate}%
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {monthlyStats.filledEntries} / {monthlyStats.totalPossibleEntries} line entries
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                        <div
+                                            className="bg-green-500 h-2 rounded-full transition-all"
+                                            style={{ width: `${monthlyStats.filledEntries > 0 ? (monthlyStats.passCount / monthlyStats.filledEntries) * 100 : 0}%` }}
+                                        ></div>
                                     </div>
                                 </div>
-
-                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <Target className="w-5 h-5 text-green-500" />
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">Within Range</span>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-red-600">Out of Range</span>
+                                        <span className="font-medium">{monthlyStats.failCount}</span>
                                     </div>
-                                    <div className="text-2xl font-bold text-gray-800 dark:text-white">
-                                        {monthlyStats.filledEntries > 0
-                                            ? Math.round((monthlyStats.passCount / monthlyStats.filledEntries) * 100)
-                                            : 0}%
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {monthlyStats.passCount} within range
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <Clock className="w-4 h-4 text-blue-500" />
-                                    Shift-wise Statistics
-                                </h3>
-                                <div className="space-y-4">
-                                    {(['A', 'B', 'C'] as const).map(shift => {
-                                        const stats = monthlyStats.shiftStats?.[shift] || {
-                                            filled: 0,
-                                            pass: 0,
-                                            fail: 0,
-                                            lines: { '1': 0, '2': 0 }
-                                        };
-
-                                        const lines = stats.lines || { '1': 0, '2': 0 };
-
-                                        const shiftIcon = shift === 'A' ? <Sun className="w-4 h-4 text-amber-500" /> :
-                                            shift === 'B' ? <Sunset className="w-4 h-4 text-orange-500" /> :
-                                                <Moon className="w-4 h-4 text-indigo-500" />;
-
-                                        return (
-                                            <div key={shift} className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        {shiftIcon}
-                                                        <span className="font-medium dark:text-white">Shift {shift}</span>
-                                                    </div>
-                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {stats.filled} / {monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT} line entries
-                                                    </span>
-                                                </div>
-                                                <div className="flex gap-4 text-xs">
-                                                    <span className="text-green-600">Within Range: {stats.pass}</span>
-                                                    <span className="text-red-600">Out of Range: {stats.fail}</span>
-                                                </div>
-                                                <div className="flex gap-2 text-[10px] text-gray-500">
-                                                    <span>Line 1: {lines['1']}</span>
-                                                    <span>Line 2: {lines['2']}</span>
-                                                </div>
-                                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                    <div
-                                                        className="bg-blue-500 h-2 rounded-full transition-all"
-                                                        style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * FRAME_SEALANT_LINES_PER_SHIFT)) * 100 : 0}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <BarChart3 className="w-4 h-4 text-blue-500" />
-                                    {months[currentDate.getMonth()]} {currentDate.getFullYear()} Summary
-                                </h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Days</span>
-                                        <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Possible Entries (Lines)</span>
-                                        <span className="font-semibold dark:text-white">{monthlyStats.totalPossibleEntries}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Filled Entries (Lines)</span>
-                                        <span className="font-semibold text-green-600">{monthlyStats.filledEntries}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Missing Entries (Lines)</span>
-                                        <span className="font-semibold text-red-500">{monthlyStats.totalPossibleEntries - monthlyStats.filledEntries}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <TrendingUp className="w-4 h-4 text-blue-500" />
-                                    Weight Range Breakdown
-                                </h3>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-green-600">Within Range</span>
-                                            <span className="font-medium">{monthlyStats.passCount}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                            <div
-                                                className="bg-green-500 h-2 rounded-full transition-all"
-                                                style={{ width: `${monthlyStats.filledEntries > 0 ? (monthlyStats.passCount / monthlyStats.filledEntries) * 100 : 0}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-red-600">Out of Range</span>
-                                            <span className="font-medium">{monthlyStats.failCount}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                            <div
-                                                className="bg-red-500 h-2 rounded-full transition-all"
-                                                style={{ width: `${monthlyStats.filledEntries > 0 ? (monthlyStats.failCount / monthlyStats.filledEntries) * 100 : 0}%` }}
-                                            ></div>
-                                        </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                        <div
+                                            className="bg-red-500 h-2 rounded-full transition-all"
+                                            style={{ width: `${monthlyStats.filledEntries > 0 ? (monthlyStats.failCount / monthlyStats.filledEntries) * 100 : 0}%` }}
+                                        ></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
-                    <div className="text-center text-sm text-red-500 dark:text-red-400 font-medium">
-                        (Controlled Copy)
                     </div>
                 </div>
             </div>

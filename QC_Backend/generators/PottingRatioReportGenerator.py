@@ -5,6 +5,9 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 
+def get_display_line_numbers(line_group):
+    return ('3', '4') if line_group == 'Line-II' else ('1', '2')
+
 def fill_potting_data_in_sheet(worksheet, entries, date):
     """Fill potting ratio data for a specific date into a worksheet"""
     try:
@@ -17,6 +20,7 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
         for entry in sorted_entries:
             shift = entry.get('shift', '')
             lines = entry.get('lines', {})
+            display_line_1, display_line_2 = get_display_line_numbers(entry.get('lineGroup'))
             entry_signatures = entry.get('signatures', {})
             
             # Set date in B column

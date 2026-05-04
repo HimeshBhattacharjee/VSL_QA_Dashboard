@@ -74,6 +74,8 @@ const TabbingStringingObservations = {
                     <option value="Reality chemical">Reality chemical</option>
                     <option value="Arbital Solutions Pvt Ltd.">Arbital Solutions Pvt Ltd.</option>
                     <option value="Kester">Kester</option>
+                    <option value="HuiHui">HuiHui</option>
+                    <option value="Khanna Traders & Engg.">Khanna Traders & Engg.</option>
                     <option value="N/A">N/A</option>
                 </select>
             </div>

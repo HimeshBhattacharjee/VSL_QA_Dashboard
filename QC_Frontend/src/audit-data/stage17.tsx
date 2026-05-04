@@ -234,6 +234,7 @@ const AutoFramingObservations = {
                                         { value: "Huitan", label: "Huitan" },
                                         { value: "Tonsan (HB fuller)", label: "Tonsan (HB fuller)" },
                                         { value: "Adarsha Speciality", label: "Adarsha Speciality" },
+                                        { value: "Fasto", label: "Fasto" },
                                         { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"

@@ -6,11 +6,10 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 users_collection = db["users"]
 
-def generate_password(name: str, employee_id: str, phone: str) -> str:
-    first_two_letters = ''.join([word[0] for word in name.split()])[:2]
+def generate_password(name: str, employee_id: str) -> str:
+    first_two_letters = ''.join([word[0] for word in name.split() if word])[:2]
     last_four_employee = employee_id[-4:]
-    last_four_phone = phone[-4:]
-    return f"{first_two_letters}{last_four_employee}{last_four_phone}"
+    return f"{first_two_letters}{last_four_employee}"
 
 def create_initial_admin():
     admin_exists = users_collection.find_one({"role": "Admin"})

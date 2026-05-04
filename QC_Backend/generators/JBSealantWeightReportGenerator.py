@@ -8,6 +8,9 @@ from paths import get_template_key, download_from_s3
 JB_PASS_MIN = 4
 JB_PASS_MAX = 10
 
+def get_display_line_numbers(line_group):
+    return ('3', '4') if line_group == 'Line-II' else ('1', '2')
+
 def apply_weight_fill(cell, net_weight):
     try:
         if net_weight:
@@ -31,6 +34,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
         for entry in sorted_entries:
             shift = entry.get('shift', '')
             lines = entry.get('lines', {})
+            display_line_1, display_line_2 = get_display_line_numbers(entry.get('lineGroup'))
             
             # Set date and shift for the 6 rows that will be filled for this shift (3 rows per line)
             for i in range(6):
@@ -39,7 +43,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             
             # Process Line 1 (first 3 rows)
             line1_data = lines.get('1', {})
-            line1_number = line1_data.get('line', '1')
+            line1_number = display_line_1
             
             # Get JB position data for Line 1
             line1_positive_jb = line1_data.get('positiveJB', {})
@@ -96,7 +100,7 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             
             # Process Line 2 (next 3 rows)
             line2_data = lines.get('2', {})
-            line2_number = line2_data.get('line', '2')
+            line2_number = display_line_2
             
             # Get JB position data for Line 2
             line2_positive_jb = line2_data.get('positiveJB', {})

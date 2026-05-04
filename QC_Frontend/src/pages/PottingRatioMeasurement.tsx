@@ -9,6 +9,17 @@ import {
     Circle, CircleDot, CircleOff, Check
 } from 'lucide-react';
 
+type LineGroup = 'Line-I' | 'Line-II';
+type Shift = 'A' | 'B' | 'C';
+
+const LINE_GROUPS: LineGroup[] = ['Line-I', 'Line-II'];
+const SHIFTS: Shift[] = ['A', 'B', 'C'];
+const DEFAULT_LINE_GROUP: LineGroup = 'Line-I';
+
+const getEntryKey = (date: string, lineGroup: LineGroup, shift: Shift) => `${date}_${lineGroup}_${shift}`;
+const getDisplayLineNumbers = (lineGroup: LineGroup) => lineGroup === 'Line-I' ? ['1', '2'] : ['3', '4'];
+const getLineGroupLabel = (lineGroup: LineGroup) => `FAB-II ${lineGroup}`;
+const normalizeLineGroup = (lineGroup?: string): LineGroup => lineGroup === 'Line-II' ? 'Line-II' : 'Line-I';
 interface LineEntry {
     line?: string;
     po: string;
@@ -28,7 +39,8 @@ interface Signatures {
 interface DailyEntry {
     date: string;
     testingDate: string;
-    shift: 'A' | 'B' | 'C';
+    shift: Shift;
+    lineGroup: LineGroup;
     lines: {
         '1': LineEntry;
         '2': LineEntry;
@@ -38,11 +50,7 @@ interface DailyEntry {
 }
 
 interface DateEntries {
-    [date: string]: {
-        A?: DailyEntry;
-        B?: DailyEntry;
-        C?: DailyEntry;
-    };
+    [date: string]: Partial<Record<LineGroup, Partial<Record<Shift, DailyEntry>>>>;
 }
 
 interface ShiftLineStats {
@@ -109,9 +117,12 @@ export default function PottingRatioMeasurement() {
     const [username, setUsername] = useState<string | null>(null);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedShift, setSelectedShift] = useState<'A' | 'B' | 'C' | null>(null);
-    const [dateSignatures, setDateSignatures] = useState<{ [date: string]: Signatures }>({});
+    const [selectedLineGroup, setSelectedLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
+    const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+    const [dateSignatures, setDateSignatures] = useState<{ [contextKey: string]: Signatures }>({});
     const [showShiftSelector, setShowShiftSelector] = useState(false);
+    const [showExportLineSelector, setShowExportLineSelector] = useState(false);
+    const [selectedExportLineGroup, setSelectedExportLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
@@ -152,10 +163,11 @@ export default function PottingRatioMeasurement() {
         remarks: ''
     }), []);
 
-    const createEmptyShiftEntry = useCallback((date: string, shift: 'A' | 'B' | 'C'): DailyEntry => ({
+    const createEmptyShiftEntry = useCallback((date: string, shift: Shift, lineGroup: LineGroup = selectedLineGroup): DailyEntry => ({
         date: date,
         testingDate: date,
         shift: shift,
+        lineGroup: lineGroup,
         lines: {
             '1': createEmptyLineEntry('1'),
             '2': createEmptyLineEntry('2')
@@ -211,10 +223,11 @@ export default function PottingRatioMeasurement() {
 
             const entriesMap = new Map<string, DailyEntry>();
             const dateEntriesObj: DateEntries = {};
-            const dateSigs: { [date: string]: Signatures } = entriesJson.date_signatures || {};
+            const dateSigs: { [contextKey: string]: Signatures } = entriesJson.date_signatures || {};
 
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
+                const entryLineGroup = normalizeLineGroup(entry.lineGroup);
                 if (!entry.lines) {
                     entry.lines = {
                         '1': createEmptyLineEntry('1'),
@@ -230,7 +243,7 @@ export default function PottingRatioMeasurement() {
                 }
 
                 // Use date-level signatures
-                entry.signatures = dateSigs[normalizedDate] || {
+                entry.signatures = dateSigs[getEntryKey(normalizedDate, entryLineGroup, entry.shift)] || dateSigs[normalizedDate] || {
                     preparedBy: '',
                     verifiedBy: ''
                 };
@@ -238,14 +251,18 @@ export default function PottingRatioMeasurement() {
                 const entryWithNormalizedDate = {
                     ...entry,
                     date: normalizedDate,
-                    testingDate: normalizedDate
+                    testingDate: normalizedDate,
+                    lineGroup: entryLineGroup
                 };
 
-                entriesMap.set(`${normalizedDate}_${entry.shift}`, entryWithNormalizedDate);
+                entriesMap.set(getEntryKey(normalizedDate, entryLineGroup, entry.shift), entryWithNormalizedDate);
                 if (!dateEntriesObj[normalizedDate]) {
                     dateEntriesObj[normalizedDate] = {};
                 }
-                dateEntriesObj[normalizedDate][entry.shift] = entryWithNormalizedDate;
+                dateEntriesObj[normalizedDate][entryLineGroup] = {
+                    ...(dateEntriesObj[normalizedDate][entryLineGroup] || {}),
+                    [entry.shift]: entryWithNormalizedDate
+                };
             });
 
             setMonthlyEntries(entriesMap);
@@ -327,6 +344,7 @@ export default function PottingRatioMeasurement() {
     const handlePrevMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -335,6 +353,7 @@ export default function PottingRatioMeasurement() {
     const handleNextMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -343,6 +362,7 @@ export default function PottingRatioMeasurement() {
     const handleMonthChange = useCallback((monthIndex: number) => {
         setCurrentDate(prev => new Date(prev.getFullYear(), monthIndex, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -351,6 +371,7 @@ export default function PottingRatioMeasurement() {
     const handleYearChange = useCallback((year: number) => {
         setCurrentDate(prev => new Date(year, prev.getMonth(), 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
@@ -361,14 +382,16 @@ export default function PottingRatioMeasurement() {
         setSelectedDate(normalized);
         setShowShiftSelector(true);
         setCurrentEntry(null);
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
     }, [normalizeDate]);
 
-    const handleShiftSelect = useCallback((shift: 'A' | 'B' | 'C') => {
+    const handleShiftSelect = useCallback((lineGroup: LineGroup, shift: Shift) => {
+        setSelectedLineGroup(lineGroup);
         setSelectedShift(shift);
         setShowShiftSelector(false);
 
-        const entryKey = `${selectedDate}_${shift}`;
+        const entryKey = getEntryKey(selectedDate, lineGroup, shift);
         const entry = monthlyEntries.get(entryKey);
 
         if (entry) {
@@ -396,7 +419,7 @@ export default function PottingRatioMeasurement() {
             setIsEditing(true);
         } else {
             console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
-            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift));
+            setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, lineGroup));
             setIsEditing(false);
         }
     }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry]);
@@ -404,6 +427,7 @@ export default function PottingRatioMeasurement() {
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
     }, []);
 
@@ -505,7 +529,9 @@ export default function PottingRatioMeasurement() {
                     };
                 }
 
-                const entryKey = `${normalized}_${saved.shift}`;
+                const savedLineGroup = normalizeLineGroup(saved.lineGroup);
+                saved.lineGroup = savedLineGroup;
+                const entryKey = getEntryKey(normalized, savedLineGroup, saved.shift);
 
                 const updatedEntries = new Map(monthlyEntries);
                 updatedEntries.set(entryKey, { ...saved, date: normalized });
@@ -516,7 +542,10 @@ export default function PottingRatioMeasurement() {
                     ...dateEntries,
                     [normalized]: {
                         ...dateEntries[normalized],
-                        [saved.shift]: { ...saved, date: normalized }
+                        [savedLineGroup]: {
+                            ...(dateEntries[normalized]?.[savedLineGroup] || {}),
+                            [saved.shift]: { ...saved, date: normalized }
+                        }
                     }
                 };
                 setDateEntries(updatedDateEntries);
@@ -560,8 +589,9 @@ export default function PottingRatioMeasurement() {
                 try {
                     const dateKey = normalizeDate(currentEntry.date);
                     const shift = currentEntry.shift;
+                    const lineGroup = normalizeLineGroup(currentEntry.lineGroup);
 
-                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${shift}`, {
+                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${lineGroup}/${shift}`, {
                         method: 'DELETE',
                     });
 
@@ -569,7 +599,7 @@ export default function PottingRatioMeasurement() {
                         throw new Error('Failed to delete entry');
                     }
 
-                    const entryKey = `${dateKey}_${shift}`;
+                    const entryKey = getEntryKey(dateKey, lineGroup, shift);
                     const updatedEntries = new Map(monthlyEntries);
                     updatedEntries.delete(entryKey);
                     setMonthlyEntries(updatedEntries);
@@ -577,7 +607,7 @@ export default function PottingRatioMeasurement() {
                     setDateEntries(prev => {
                         const newDateEntries = { ...prev };
                         if (newDateEntries[dateKey]) {
-                            delete newDateEntries[dateKey][shift];
+                            delete newDateEntries[dateKey]?.[lineGroup]?.[shift];
                             if (Object.keys(newDateEntries[dateKey]).length === 0) {
                                 delete newDateEntries[dateKey];
                             }
@@ -623,7 +653,8 @@ export default function PottingRatioMeasurement() {
         const field = type === 'prepared' ? 'preparedBy' : 'verifiedBy';
 
         // Get current date-level signatures
-        const currentDateSigs = dateSignatures[currentEntry.date] || {
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, currentEntry.shift);
+        const currentDateSigs = dateSignatures[signatureKey] || dateSignatures[currentEntry.date] || {
             preparedBy: '',
             verifiedBy: ''
         };
@@ -644,7 +675,7 @@ export default function PottingRatioMeasurement() {
             // Update all entries for this date in local state
             const updatedDateSigs = {
                 ...dateSignatures,
-                [currentEntry.date]: updatedSignatures
+                [signatureKey]: updatedSignatures
             };
             setDateSignatures(updatedDateSigs);
 
@@ -661,6 +692,8 @@ export default function PottingRatioMeasurement() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         date: currentEntry.date,
+                        lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
+                        shift: currentEntry.shift,
                         signatures: updatedSignatures
                     })
                 });
@@ -694,7 +727,7 @@ export default function PottingRatioMeasurement() {
             // Update all entries for this date in local state
             const updatedDateSigs = {
                 ...dateSignatures,
-                [currentEntry.date]: updatedSignatures
+                [signatureKey]: updatedSignatures
             };
             setDateSignatures(updatedDateSigs);
 
@@ -711,6 +744,8 @@ export default function PottingRatioMeasurement() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         date: currentEntry.date,
+                        lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
+                        shift: currentEntry.shift,
                         signatures: updatedSignatures
                     })
                 });
@@ -727,7 +762,7 @@ export default function PottingRatioMeasurement() {
         }
     }, [username, userRole, currentEntry, dateSignatures, showAlert, API_BASE_URL]);
 
-    const handleExportMonthlyExcel = useCallback(async () => {
+    const handleExportMonthlyExcel = useCallback(async (exportLineGroup: LineGroup = selectedExportLineGroup) => {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
@@ -745,6 +780,8 @@ export default function PottingRatioMeasurement() {
             const monthlyJson = await monthlyResp.json();
 
             let entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
+
+            entriesArray = entriesArray.filter((entry: DailyEntry) => normalizeLineGroup(entry.lineGroup) === exportLineGroup);
 
             entriesArray = entriesArray.map((entry: DailyEntry) => {
                 if (entry.lines) {
@@ -766,6 +803,7 @@ export default function PottingRatioMeasurement() {
 
             const pottingReportData = {
                 entries: entriesArray,
+                lineGroup: exportLineGroup,
                 year,
                 month
             };
@@ -801,11 +839,12 @@ export default function PottingRatioMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, API_BASE_URL, showAlert]);
+    }, [currentDate, months, API_BASE_URL, showAlert, selectedExportLineGroup]);
 
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setShowShiftSelector(false);
         setHasUnsavedChanges(false);
@@ -877,7 +916,7 @@ export default function PottingRatioMeasurement() {
             let hasAny = false;
             let hasSignatures = false;
 
-            Object.values(dayEntries).forEach((shiftEntry: any) => {
+            Object.values(dayEntries).flatMap(group => Object.values(group || {})).forEach((shiftEntry: any) => {
                 if (shiftEntry?.lines && typeof shiftEntry === 'object' && 'shift' in shiftEntry) {
                     const line1Ratio = shiftEntry.lines['1']?.ratio;
                     const line2Ratio = shiftEntry.lines['2']?.ratio;
@@ -923,8 +962,8 @@ export default function PottingRatioMeasurement() {
                     </div>
 
                     <div className="flex flex-col gap-1 mt-1">
-                        {(['A', 'B', 'C'] as const).map(shift => {
-                            const entry = dayEntries[shift] as DailyEntry | undefined;
+                        {SHIFTS.map(shift => {
+                            const entry = dateEntries[dateStr]?.[selectedLineGroup]?.[shift] as DailyEntry | undefined;
                             return (
                                 <div key={shift} className="flex flex-col gap-0.5 text-xs">
                                     <div className="flex items-center gap-1">
@@ -944,7 +983,8 @@ export default function PottingRatioMeasurement() {
     const renderSignatureSection = useCallback(() => {
         if (!currentEntry) return null;
 
-        const currentDateSigs = dateSignatures[currentEntry.date] || {
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, currentEntry.shift);
+        const currentDateSigs = dateSignatures[signatureKey] || dateSignatures[currentEntry.date] || {
             preparedBy: '',
             verifiedBy: ''
         };
@@ -957,11 +997,11 @@ export default function PottingRatioMeasurement() {
         return (
             <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <h4 className="text-md font-semibold mb-3 dark:text-white">
-                    Daily Signatures for {new Date(currentEntry.date).toLocaleDateString()} (Applies to all shifts)
+                    Signatures for {new Date(currentEntry.date).toLocaleDateString()} - {getLineGroupLabel(currentEntry.lineGroup || DEFAULT_LINE_GROUP)} Shift {currentEntry.shift}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Prepared By
                         </label>
                         <div className="flex items-center gap-2">
@@ -969,13 +1009,13 @@ export default function PottingRatioMeasurement() {
                                 type="text"
                                 value={currentDateSigs.preparedBy || ''}
                                 readOnly
-                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                className="md:w-full p-2 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
                                 placeholder="Not signed"
                             />
                             {canSignPrepared && (
                                 <button
                                     onClick={() => handleSignatureUpdate('prepared')}
-                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
                                 >
                                     <Check className='w-4 h-4'/>
                                 </button>
@@ -983,7 +1023,7 @@ export default function PottingRatioMeasurement() {
                             {canRemovePrepared && (
                                 <button
                                     onClick={() => handleSignatureUpdate('prepared')}
-                                    className="p-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                                 >
                                     <X className='w-4 h-4'/>
                                 </button>
@@ -991,7 +1031,7 @@ export default function PottingRatioMeasurement() {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Verified By
                         </label>
                         <div className="flex items-center gap-2">
@@ -999,13 +1039,13 @@ export default function PottingRatioMeasurement() {
                                 type="text"
                                 value={currentDateSigs.verifiedBy || ''}
                                 readOnly
-                                className="md:w-full p-2 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
+                                className="md:w-full p-2 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 cursor-default"
                                 placeholder="Not signed"
                             />
                             {canSignVerified && (
                                 <button
                                     onClick={() => handleSignatureUpdate('verified')}
-                                    className="p-2 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
+                                    className="p-2 text-xs text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors"
                                 >
                                     <Check className='w-4 h-4'/>
                                 </button>
@@ -1013,7 +1053,7 @@ export default function PottingRatioMeasurement() {
                             {canRemoveVerified && (
                                 <button
                                     onClick={() => handleSignatureUpdate('verified')}
-                                    className="px-2 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                                    className="px-2 py-2 text-xs text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                                 >
                                     <X className='w-4 h-4'/>
                                 </button>
@@ -1044,12 +1084,53 @@ export default function PottingRatioMeasurement() {
                         </div>
                     </div>
                 )}
+                {showExportLineSelector && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold dark:text-white">Select Line Group</h3>
+                                <button
+                                    onClick={() => setShowExportLineSelector(false)}
+                                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                                >
+                                    <X className="w-5 h-5 dark:text-white" />
+                                </button>
+                            </div>
+                            <select
+                                value={selectedExportLineGroup}
+                                onChange={(e) => setSelectedExportLineGroup(e.target.value as LineGroup)}
+                                className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {LINE_GROUPS.map(lineGroup => (
+                                    <option key={lineGroup} value={lineGroup}>{getLineGroupLabel(lineGroup)}</option>
+                                ))}
+                            </select>
+                            <div className="flex justify-end gap-3 mt-5">
+                                <button
+                                    onClick={() => setShowExportLineSelector(false)}
+                                    className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowExportLineSelector(false);
+                                        handleExportMonthlyExcel(selectedExportLineGroup);
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <TestHeading
                     heading="Potting Ratio Measurement"
                     criteria="Part A & B ratio is 5:1 ±1 (Range: 4:1 to 6:1)"
                 />
                 {showShiftSelector && selectedDate && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-semibold dark:text-white">
@@ -1067,9 +1148,23 @@ export default function PottingRatioMeasurement() {
                                 </button>
                             </div>
 
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                {LINE_GROUPS.map(lineGroup => (
+                                    <button
+                                        key={lineGroup}
+                                        onClick={() => setSelectedLineGroup(lineGroup)}
+                                        className={`p-3 rounded-lg border-2 text-sm font-semibold transition-colors ${selectedLineGroup === lineGroup
+                                            ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300'
+                                            : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white'}`}
+                                    >
+                                        {getLineGroupLabel(lineGroup)}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="space-y-3">
-                                {(['A', 'B', 'C'] as const).map(shift => {
-                                    const entry = dateEntries[selectedDate]?.[shift];
+                                {SHIFTS.map(shift => {
+                                    const entry = dateEntries[selectedDate]?.[selectedLineGroup]?.[shift];
                                     const isFilled = !!entry;
 
                                     const line1Ratio = entry?.lines['1']?.ratio;
@@ -1091,7 +1186,7 @@ export default function PottingRatioMeasurement() {
                                     return (
                                         <button
                                             key={shift}
-                                            onClick={() => handleShiftSelect(shift)}
+                                            onClick={() => handleShiftSelect(selectedLineGroup, shift)}
                                             className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${statusClass}`}
                                         >
                                             <div className="flex-shrink-0">
@@ -1186,7 +1281,7 @@ export default function PottingRatioMeasurement() {
                                         </button>
 
                                         <button
-                                            onClick={handleExportMonthlyExcel}
+                                            onClick={() => setShowExportLineSelector(true)}
                                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
                                             title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
                                         >
@@ -1280,67 +1375,72 @@ export default function PottingRatioMeasurement() {
                                         <div className="border-l-4 border-blue-500 pl-4">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
-                                                Line 1 Details
+                                                Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]} Details
                                             </h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         PO Number <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['1'].po}
                                                         onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
                                                         required
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Potting Supplier
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <select
                                                         value={currentEntry.lines['1'].pottingSupplier}
                                                         onChange={(e) => handleLineInputChange('1', 'pottingSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter potting supplier"
-                                                    />
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    >
+                                                        <option value="">Select</option>
+                                                        <option value="Huitan">Huitan</option>
+                                                        <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                                                        <option value="Adarsha Speciality">Adarsha Speciality</option>
+                                                        <option value="Fasto Advance Materials India Pvt. Ltd.">Fasto Advance Materials India Pvt. Ltd.</option>
+                                                        <option value="N/A">N/A</option>
+                                                    </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Part A (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part A (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['1'].partA}
                                                         onChange={(e) => handleLineInputChange('1', 'partA', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter Part A weight"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Part B (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part B (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['1'].partB}
                                                         onChange={(e) => handleLineInputChange('1', 'partB', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter Part B weight"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Ratio (A:B)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['1'].ratio ? `${currentEntry.lines['1'].ratio}:1` : ''}
                                                         readOnly
-                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['1'].ratio)
+                                                        className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['1'].ratio)
                                                             ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
                                                             : 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700'
                                                             }`}
@@ -1348,26 +1448,26 @@ export default function PottingRatioMeasurement() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total Weight (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Total Weight (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['1'].totalWeight}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Remarks (Line 1)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Remarks (Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]})
                                                     </label>
                                                     <textarea
                                                         value={currentEntry.lines['1'].remarks || ''}
                                                         onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
                                                         rows={2}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Add any remarks for Line 1"
                                                     />
                                                 </div>
@@ -1376,67 +1476,72 @@ export default function PottingRatioMeasurement() {
                                         <div className="border-l-4 border-green-500 pl-4 mt-6">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
-                                                Line 2 Details
+                                                Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[1]} Details
                                             </h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         PO Number <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['2'].po}
                                                         onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter PO number"
                                                         required
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Potting Supplier
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <select
                                                         value={currentEntry.lines['2'].pottingSupplier}
                                                         onChange={(e) => handleLineInputChange('2', 'pottingSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="Enter potting supplier"
-                                                    />
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    >
+                                                        <option value="">Select</option>
+                                                        <option value="Huitan">Huitan</option>
+                                                        <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                                                        <option value="Adarsha Speciality">Adarsha Speciality</option>
+                                                        <option value="Fasto Advance Materials India Pvt. Ltd.">Fasto Advance Materials India Pvt. Ltd.</option>
+                                                        <option value="N/A">N/A</option>
+                                                    </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Part A (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part A (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['2'].partA}
                                                         onChange={(e) => handleLineInputChange('2', 'partA', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter Part A weight"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Part B (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Part B (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['2'].partB}
                                                         onChange={(e) => handleLineInputChange('2', 'partB', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Enter Part B weight"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Ratio (A:B)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['2'].ratio ? `${currentEntry.lines['2'].ratio}:1` : ''}
                                                         readOnly
-                                                        className={`w-full p-2.5 rounded-lg border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['2'].ratio)
+                                                        className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none cursor-default ${isRatioOutOfRange(currentEntry.lines['2'].ratio)
                                                             ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
                                                             : 'dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border-gray-200 dark:border-gray-700'
                                                             }`}
@@ -1444,26 +1549,26 @@ export default function PottingRatioMeasurement() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Total Weight (g)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Total Weight (gm)
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentEntry.lines['2'].totalWeight}
                                                         readOnly
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 focus:outline-none cursor-default"
                                                         placeholder="Auto-calculated"
                                                     />
                                                 </div>
                                                 <div className="md:col-span-2 lg:col-span-3">
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Remarks (Line 2)
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Remarks (Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[1]})
                                                     </label>
                                                     <textarea
                                                         value={currentEntry.lines['2'].remarks || ''}
                                                         onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
                                                         rows={2}
-                                                        className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="Add any remarks for Line 2"
                                                     />
                                                 </div>
@@ -1528,7 +1633,7 @@ export default function PottingRatioMeasurement() {
                                     Shift-wise Statistics
                                 </h3>
                                 <div className="space-y-4">
-                                    {(['A', 'B', 'C'] as const).map(shift => {
+                                    {SHIFTS.map(shift => {
                                         const stats = monthlyStats.shiftStats?.[shift] || {
                                             filled: 0,
                                             pass: 0,
@@ -1633,11 +1738,6 @@ export default function PottingRatioMeasurement() {
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
-                    <div className="text-center text-sm text-red-500 dark:text-red-400 font-medium">
-                        (Controlled Copy)
                     </div>
                 </div>
             </div>

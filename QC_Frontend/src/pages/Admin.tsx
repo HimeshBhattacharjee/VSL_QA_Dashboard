@@ -7,7 +7,6 @@ interface User {
     id: string;
     name: string;
     employeeId: string;
-    phone: string;
     role: string;
     status: string;
     avatar: string;
@@ -16,11 +15,19 @@ interface User {
     createdAt: string;
 }
 
+const DEFAULT_NEW_USER = {
+    name: '',
+    employeeId: '',
+    role: 'Operator',
+    password: ''
+};
+
 const Admin = () => {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
-    const [newUser, setNewUser] = useState({ name: '', employeeId: '', phone: '', role: 'Operator', password: '' });
+    const [newUser, setNewUser] = useState(DEFAULT_NEW_USER);
+    const [searchQuery, setSearchQuery] = useState('');
     const [visiblePasswords, setVisiblePasswords] = useState<{ [key: string]: boolean }>({});
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -48,21 +55,28 @@ const Admin = () => {
         fetchUsers();
     }, []);
 
-    const generatePassword = (name: string, employeeId: string, phone: string) => {
-        if (!name || !employeeId || !phone) return '';
-        const firstTwoLetters = name.split(' ').map(n => n[0]).join('').slice(0, 2);
-        const lastFourEmployeeId = employeeId.slice(-4);
-        const lastFourPhone = phone.slice(-4);
-        return `${firstTwoLetters}${lastFourEmployeeId}${lastFourPhone}`;
+    const generatePassword = (name: string, employeeId: string) => {
+        const trimmedName = name.trim();
+        const trimmedEmployeeId = employeeId.trim();
+
+        if (!trimmedName || !trimmedEmployeeId) return '';
+
+        const firstTwoLetters = trimmedName
+            .split(/\s+/)
+            .map((word) => word[0] ?? '')
+            .join('')
+            .slice(0, 2);
+        const lastFourEmployeeId = trimmedEmployeeId.slice(-4);
+
+        return `${firstTwoLetters}${lastFourEmployeeId}`;
     };
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
-        const generatedPassword = generatePassword(newUser.name, newUser.employeeId, newUser.phone);
+        const generatedPassword = generatePassword(newUser.name, newUser.employeeId);
         const userData = {
-            name: newUser.name,
-            employeeId: newUser.employeeId,
-            phone: newUser.phone,
+            name: newUser.name.trim(),
+            employeeId: newUser.employeeId.trim(),
             role: newUser.role,
             password: generatedPassword
         };
@@ -76,7 +90,7 @@ const Admin = () => {
             if (response.ok) {
                 const savedUser = await response.json();
                 setUsers([...users, savedUser]);
-                setNewUser({ name: '', employeeId: '', phone: '', role: 'Operator', password: '' });
+                setNewUser(DEFAULT_NEW_USER);
                 showAlert('success', 'User created successfully!');
                 setActiveTab(null);
             } else {
@@ -92,9 +106,9 @@ const Admin = () => {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         const updatedUser = { ...newUser, [name]: value };
-        if (name === 'name' || name === 'employeeId' || name === 'phone') {
-            if (updatedUser.name && updatedUser.employeeId && updatedUser.phone) {
-                updatedUser.password = generatePassword(updatedUser.name, updatedUser.employeeId, updatedUser.phone);
+        if (name === 'name' || name === 'employeeId') {
+            if (updatedUser.name && updatedUser.employeeId) {
+                updatedUser.password = generatePassword(updatedUser.name, updatedUser.employeeId);
             } else updatedUser.password = '';
         }
         setNewUser(updatedUser);
@@ -111,8 +125,6 @@ const Admin = () => {
 
             if (response.ok) {
                 const result = await response.json();
-
-                // Update local state
                 setUsers(users.map(user =>
                     user.id === userId
                         ? { ...user, status: result.newStatus }
@@ -122,7 +134,6 @@ const Admin = () => {
             } else {
                 const errorData = await response.json();
                 showAlert('error', errorData.detail || 'Failed to update user status');
-                // Reload users to sync with server
                 await fetchUsers();
             }
         } catch (error) {
@@ -148,7 +159,8 @@ const Admin = () => {
                         setUsers(users.filter(user => user.id !== userId));
                         showAlert('success', 'User deleted successfully!');
                     } else {
-                        showAlert('error', 'Failed to delete user');
+                        const errorData = await response.json();
+                        showAlert('error', errorData.detail || 'Failed to delete user');
                     }
                 } catch (error) {
                     console.error('Error deleting user:', error);
@@ -165,6 +177,15 @@ const Admin = () => {
         }));
     };
 
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    const filteredUsers = users.filter((user) => {
+        if (!normalizedSearchQuery) return true;
+
+        return [user.name, user.employeeId, user.role].some((value) =>
+            value.toLowerCase().includes(normalizedSearchQuery)
+        );
+    });
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 flex items-center justify-center">
@@ -180,12 +201,9 @@ const Admin = () => {
                 <div className="absolute -bottom-40 -left-32 w-80 h-80 bg-blue-500 rounded-full blur-3xl opacity-20 animate-pulse delay-1000"></div>
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500 rounded-full blur-3xl opacity-10 animate-pulse delay-500"></div>
             </div>
-            
             <Header onToggleSidebar={() => {}} />
-            
             <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
                 <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 py-4">
-                    {/* Create Users Card */}
                     <div
                         className={`relative transition-all duration-1000 ease-out w-full ${activeTab === null
                             ? 'lg:w-1/3 lg:mx-4 transform hover:scale-105'
@@ -251,21 +269,6 @@ const Admin = () => {
 
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                        Phone Number
-                                                    </label>
-                                                    <input
-                                                        type="tel"
-                                                        name="phone"
-                                                        value={newUser.phone}
-                                                        onChange={handleInputChange}
-                                                        required
-                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-cyan-500 dark:focus:border-cyan-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
-                                                        placeholder="Enter phone number"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                                         Role
                                                     </label>
                                                     <select
@@ -277,7 +280,6 @@ const Admin = () => {
                                                         <option value="Operator">Operator</option>
                                                         <option value="Supervisor">Supervisor</option>
                                                         <option value="Manager">Manager</option>
-                                                        <option value="Admin">Admin</option>
                                                     </select>
                                                 </div>
 
@@ -294,7 +296,7 @@ const Admin = () => {
                                                         placeholder="Password will be generated automatically"
                                                     />
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                                        Password format: First 2 letters of name + last 4 digits of Employee ID + last 4 digits of phone
+                                                        Password format: First 2 letters of name + last 4 digits of Employee ID
                                                     </p>
                                                 </div>
                                             </div>
@@ -367,16 +369,38 @@ const Admin = () => {
                                 }`}>
                                 {activeTab === 'manage' && (
                                     <div className="max-w-6xl mx-auto">
+                                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">User Directory</h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    Search by name, employee ID, or role.
+                                                </p>
+                                            </div>
+                                            <div className="relative w-full sm:max-w-md">
+                                                <input
+                                                    type="text"
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                    placeholder="Search users"
+                                                    className="w-full rounded-xl border-2 border-gray-200 bg-white py-3 pl-11 pr-4 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:focus:border-purple-400"
+                                                />
+                                                <svg
+                                                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+                                                </svg>
+                                            </div>
+                                        </div>
                                         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-md dark:shadow-gray-900 shadow-gray-200 overflow-hidden">
                                             <div className="overflow-x-auto">
-                                                <table className="user-table w-full min-w-[600px]">
+                                                <table className="user-table w-full min-w-[560px]">
                                                     <thead className="bg-gray-100 dark:bg-slate-900">
                                                         <tr>
                                                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 tracking-wider">
                                                                 User
-                                                            </th>
-                                                            <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 tracking-wider">
-                                                                Phone
                                                             </th>
                                                             <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 tracking-wider">
                                                                 Password
@@ -396,7 +420,7 @@ const Admin = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                        {users.map((user) => (
+                                                        {filteredUsers.map((user) => (
                                                             <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors duration-200">
                                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                                     <div className="flex items-center">
@@ -410,14 +434,11 @@ const Admin = () => {
                                                                         </div>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                                                    {user.phone}
-                                                                </td>
                                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                                     <div className="flex items-center space-x-2">
                                                                         <span className="text-sm text-gray-900 dark:text-white font-mono">
                                                                             {visiblePasswords[user.id]
-                                                                                ? (user.password ?? 'N/A') : '•'.repeat(8)
+                                                                                ? (user.password ?? 'N/A') : '\u2022'.repeat(8)
                                                                             }
                                                                         </span>
                                                                         <button
@@ -462,21 +483,29 @@ const Admin = () => {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-3 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button
-                                                                        onClick={() => toggleUserStatus(user.id)}
-                                                                        className={`${user.status === 'Active'
-                                                                            ? 'text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-300'
-                                                                            : 'text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-300'
-                                                                            } transition-colors duration-200 font-semibold cursor-pointer`}
-                                                                    >
-                                                                        {user.status === 'Active' ? 'Deactivate' : 'Activate'}
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => deleteUser(user.id)}
-                                                                        className="text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-300 transition-colors duration-200 font-semibold cursor-pointer ml-3"
-                                                                    >
-                                                                        Delete
-                                                                    </button>
+                                                                    {user.role === 'Admin' ? (
+                                                                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                                                                            Protected
+                                                                        </span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => toggleUserStatus(user.id)}
+                                                                                className={`${user.status === 'Active'
+                                                                                    ? 'text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-300'
+                                                                                    : 'text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-300'
+                                                                                    } transition-colors duration-200 font-semibold cursor-pointer`}
+                                                                            >
+                                                                                {user.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => deleteUser(user.id)}
+                                                                                className="text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-300 transition-colors duration-200 font-semibold cursor-pointer ml-3"
+                                                                            >
+                                                                                Delete
+                                                                            </button>
+                                                                        </>
+                                                                    )}
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -490,6 +519,15 @@ const Admin = () => {
                                                     </svg>
                                                     <h3 className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">No users found</h3>
                                                     <p className="mt-2 text-gray-500 dark:text-gray-400">Get started by creating a new user.</p>
+                                                </div>
+                                            )}
+                                            {users.length > 0 && filteredUsers.length === 0 && (
+                                                <div className="text-center py-12">
+                                                    <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+                                                    </svg>
+                                                    <h3 className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">No matching users</h3>
+                                                    <p className="mt-2 text-gray-500 dark:text-gray-400">Try another name, employee ID, or role.</p>
                                                 </div>
                                             )}
                                         </div>

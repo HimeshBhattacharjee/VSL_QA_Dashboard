@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { initialStages } from '../audit-data';
 import { AuditData, StageData } from '../types/audit';
@@ -82,11 +82,18 @@ export default function QualityAudit() {
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isAutoSaving, setIsAutoSaving] = useState(false);
     const [auditBySignature, setAuditBySignature] = useState<string>('');
     const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    
+    // Ref to track if auto-save is in progress to avoid loops
+    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSavedDataRef = useRef<string>('');
+    
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
+    
     const apiService = {
         getAllAudits: async (): Promise<any[]> => {
             const response = await fetch(`${IPQC_API_BASE_URL}?include_data=true`);
@@ -172,157 +179,27 @@ export default function QualityAudit() {
         loadSavedChecksheets();
     }, []);
 
-    const handleAddSignature = async (section: 'audit' | 'reviewed') => {
-        if (!username) {
-            showAlert('error', 'User not logged in');
-            return;
-        }
-        let currentSignature = '';
-        switch (section) {
-            case 'audit':
-                currentSignature = auditBySignature;
-                break;
-            case 'reviewed':
-                currentSignature = reviewedBySignature;
-                break;
-        }
+    const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
 
-        if (currentSignature.trim()) {
-            showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
-            return;
-        }
+    const [auditData, setAuditData] = useState<AuditData>({
+        lineNumber: '',
+        date: new Date().toISOString().split('T')[0],
+        shift: '',
+        productionOrderNo: '',
+        moduleType: '',
+        customerSpecAvailable: false,
+        specificationSignedOff: false,
+        stages: lineDependentStages,
+        signatures: { auditBy: '', reviewedBy: '' }
+    });
 
-        if (section === 'audit' && userRole !== 'Operator') {
-            showAlert('error', 'Only Operators can add signature to Audit By section');
-            return;
-        }
+    // Helper functions
+    const generateChecksheetName = useCallback((lineNumber: string, date: string, shift: string) => {
+        return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
+    }, []);
 
-        if (section === 'reviewed' && !['Supervisor', 'Manager'].includes(userRole || '')) {
-            showAlert('error', 'Only Supervisors or Managers can add signature to Reviewed By section');
-            return;
-        }
-
-        const signatureText = `${username}`;
-
+    const loadSavedChecksheets = useCallback(async () => {
         try {
-            setIsLoading(true);
-            const newAuditSig = section === 'audit' ? signatureText : auditBySignature;
-            const newReviewedSig = section === 'reviewed' ? signatureText : reviewedBySignature;
-            switch (section) {
-                case 'audit':
-                    setAuditBySignature(signatureText);
-                    break;
-                case 'reviewed':
-                    setReviewedBySignature(signatureText);
-                    break;
-            }
-            setHasUnsavedChanges(true);
-            if (auditData.lineNumber && auditData.date && auditData.shift) {
-                await saveSignaturesImmediately({
-                    auditBy: newAuditSig,
-                    reviewedBy: newReviewedSig
-                });
-                showAlert('success', `Signature added to ${section} section and saved!`);
-            } else {
-                showAlert('success', `Signature added to ${section} section`);
-            }
-        } catch (error) {
-            console.error('Error adding signature:', error);
-            showAlert('error', 'Failed to add signature');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleRemoveSignature = async (section: 'audit' | 'reviewed') => {
-        if (!username) {
-            showAlert('error', 'User not logged in');
-            return;
-        }
-        let currentSignature = '';
-        switch (section) {
-            case 'audit':
-                currentSignature = auditBySignature;
-                break;
-            case 'reviewed':
-                currentSignature = reviewedBySignature;
-                break;
-        }
-        if (!currentSignature.includes(username)) {
-            showAlert('error', 'You can only remove your own signature');
-            return;
-        }
-        try {
-            setIsLoading(true);
-            const newAuditSig = section === 'audit' ? '' : auditBySignature;
-            const newReviewedSig = section === 'reviewed' ? '' : reviewedBySignature;
-            switch (section) {
-                case 'audit':
-                    setAuditBySignature('');
-                    break;
-                case 'reviewed':
-                    setReviewedBySignature('');
-                    break;
-            }
-            setHasUnsavedChanges(true);
-            if (auditData.lineNumber && auditData.date && auditData.shift) {
-                await saveSignaturesImmediately({
-                    auditBy: newAuditSig,
-                    reviewedBy: newReviewedSig
-                });
-                showAlert('info', `Signature removed from ${section} section and saved!`);
-            } else {
-                showAlert('info', `Signature removed from ${section} section`);
-            }
-        } catch (error) {
-            console.error('Error removing signature:', error);
-            showAlert('error', 'Failed to remove signature');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const canRemoveSignature = (section: 'audit' | 'reviewed') => {
-        if (!username) return false;
-        let currentSignature = '';
-        switch (section) {
-            case 'audit':
-                currentSignature = auditBySignature;
-                break;
-            case 'reviewed':
-                currentSignature = reviewedBySignature;
-                break;
-        }
-        return currentSignature.includes(username);
-    };
-
-    const canAddSignature = (section: 'audit' | 'reviewed') => {
-        if (!username) return false;
-        let currentSignature = '';
-        switch (section) {
-            case 'audit':
-                currentSignature = auditBySignature;
-                break;
-            case 'reviewed':
-                currentSignature = reviewedBySignature;
-                break;
-        }
-        if (currentSignature.trim()) {
-            return false;
-        }
-        switch (section) {
-            case 'audit':
-                return userRole === 'Operator';
-            case 'reviewed':
-                return ['Supervisor', 'Manager'].includes(userRole || '');
-            default:
-                return false;
-        }
-    };
-
-    const loadSavedChecksheets = async () => {
-        try {
-            setIsLoading(true);
             const audits = await apiService.getAllAudits();
             console.log('Loaded audits from MongoDB:', audits);
             const checksheets = audits.map(audit => {
@@ -341,25 +218,120 @@ export default function QualityAudit() {
             setSavedChecksheets(checksheets);
         } catch (error) {
             console.error('Error loading audits:', error);
-            showAlert('error', 'Failed to load saved audits');
-        } finally {
-            setIsLoading(false);
         }
-    };
+    }, []);
 
-    const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
+    // Define performAutoSave after auditData is defined
+    const performAutoSave = useCallback(async () => {
+        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
+            return;
+        }
 
-    const [auditData, setAuditData] = useState<AuditData>({
-        lineNumber: '',
-        date: new Date().toISOString().split('T')[0],
-        shift: '',
-        productionOrderNo: '',
-        moduleType: '',
-        customerSpecAvailable: false,
-        specificationSignedOff: false,
-        stages: lineDependentStages,
-        signatures: { auditBy: '', reviewedBy: '' }
-    });
+        setIsAutoSaving(true);
+        
+        try {
+            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
+            const checksheetData = {
+                name: checksheetName,
+                timestamp: new Date().toISOString(),
+                data: {
+                    ...auditData,
+                    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+                }
+            };
+
+            let savedId = currentChecksheetId;
+            
+            if (currentChecksheetId) {
+                await apiService.updateAudit(currentChecksheetId, checksheetData);
+            } else {
+                const result = await apiService.createAudit(checksheetData);
+                savedId = result._id!;
+                setCurrentChecksheetId(savedId);
+            }
+
+            // Update the last saved data reference
+            lastSavedDataRef.current = JSON.stringify({
+                lineNumber: auditData.lineNumber,
+                date: auditData.date,
+                shift: auditData.shift,
+                productionOrderNo: auditData.productionOrderNo,
+                moduleType: auditData.moduleType,
+                customerSpecAvailable: auditData.customerSpecAvailable,
+                specificationSignedOff: auditData.specificationSignedOff,
+                stages: auditData.stages.map(stage => ({
+                    id: stage.id,
+                    parameters: stage.parameters.map(param => ({
+                        id: param.id,
+                        observations: param.observations
+                    }))
+                })),
+                signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+            });
+
+            setHasUnsavedChanges(false);
+            
+            // Reload saved checksheets list in background
+            await loadSavedChecksheets();
+            
+        } catch (error) {
+            console.error('Auto-save error:', error);
+        } finally {
+            setIsAutoSaving(false);
+        }
+    }, [auditData, auditBySignature, reviewedBySignature, currentChecksheetId, generateChecksheetName, loadSavedChecksheets]);
+
+    // Auto-save effect - triggers whenever relevant data changes
+    useEffect(() => {
+        // Don't auto-save if basic info is incomplete
+        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
+            return;
+        }
+
+        // Don't auto-save if we're currently loading or auto-saving
+        if (isLoading || isAutoSaving) {
+            return;
+        }
+
+        // Create a string representation of current data to compare
+        const currentDataString = JSON.stringify({
+            lineNumber: auditData.lineNumber,
+            date: auditData.date,
+            shift: auditData.shift,
+            productionOrderNo: auditData.productionOrderNo,
+            moduleType: auditData.moduleType,
+            customerSpecAvailable: auditData.customerSpecAvailable,
+            specificationSignedOff: auditData.specificationSignedOff,
+            stages: auditData.stages.map(stage => ({
+                id: stage.id,
+                parameters: stage.parameters.map(param => ({
+                    id: param.id,
+                    observations: param.observations
+                }))
+            })),
+            signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+        });
+
+        // Don't auto-save if data hasn't changed
+        if (currentDataString === lastSavedDataRef.current) {
+            return;
+        }
+
+        // Debounce auto-save
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            performAutoSave();
+        }, 1000);
+
+        return () => {
+            if (autoSaveTimeoutRef.current) {
+                clearTimeout(autoSaveTimeoutRef.current);
+            }
+        };
+    }, [auditData, auditBySignature, reviewedBySignature, isLoading, isAutoSaving, performAutoSave]);
 
     useEffect(() => {
         setAuditData(prev => ({ ...prev, stages: lineDependentStages }));
@@ -368,6 +340,7 @@ export default function QualityAudit() {
     const handleLineChange = (line: string) => {
         setLineNumber(line);
         setAuditData(prev => ({ ...prev, lineNumber: line }));
+        setHasUnsavedChanges(true);
     };
 
     useEffect(() => {
@@ -415,8 +388,28 @@ export default function QualityAudit() {
                             setAuditBySignature('');
                             setReviewedBySignature('');
                         }
+                        
+                        // Update last saved data reference
+                        lastSavedDataRef.current = JSON.stringify({
+                            lineNumber: mergedData.lineNumber,
+                            date: mergedData.date,
+                            shift: mergedData.shift,
+                            productionOrderNo: mergedData.productionOrderNo,
+                            moduleType: mergedData.moduleType,
+                            customerSpecAvailable: mergedData.customerSpecAvailable,
+                            specificationSignedOff: mergedData.specificationSignedOff,
+                            stages: mergedData.stages.map(stage => ({
+                                id: stage.id,
+                                parameters: stage.parameters.map(param => ({
+                                    id: param.id,
+                                    observations: param.observations
+                                }))
+                            })),
+                            signatures: loadedSignatures
+                        });
                     } else {
                         setCurrentChecksheetId(null);
+                        lastSavedDataRef.current = '';
                     }
                 } catch (error) {
                     console.error('Error checking existing checksheet:', error);
@@ -427,11 +420,7 @@ export default function QualityAudit() {
         checkExistingChecksheet();
     }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages]);
 
-    const generateChecksheetName = (lineNumber: string, date: string, shift: string) => {
-        return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
-    };
-
-    const saveChecksheet = async () => {
+    const manualSaveChecksheet = async () => {
         if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
             showAlert('error', 'Line number, date, and shift are required to save checksheet.');
             return;
@@ -439,26 +428,8 @@ export default function QualityAudit() {
 
         try {
             setIsLoading(true);
-            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
-            const checksheetData = {
-                name: checksheetName,
-                timestamp: new Date().toISOString(),
-                data: {
-                    ...auditData,
-                    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
-                }
-            };
-            if (currentChecksheetId) {
-                await apiService.updateAudit(currentChecksheetId, checksheetData);
-                showAlert('success', 'Checksheet updated successfully!');
-            } else {
-                const result = await apiService.createAudit(checksheetData);
-                setCurrentChecksheetId(result._id!);
-                showAlert('success', 'Checksheet saved successfully!');
-            }
-            setHasUnsavedChanges(false);
-            setStageChanges(new Set());
-            await loadSavedChecksheets();
+            await performAutoSave();
+            showAlert('success', 'Checksheet saved successfully!');
         } catch (error) {
             console.error('Error saving checksheet:', error);
             showAlert('error', 'Failed to save checksheet');
@@ -467,41 +438,131 @@ export default function QualityAudit() {
         }
     };
 
-    const autoSaveChecksheet = () => {
-        if (auditData.lineNumber && auditData.date && auditData.shift) {
-            saveChecksheet();
+    const handleAddSignature = async (section: 'audit' | 'reviewed') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
         }
-    };
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
 
-    const saveSignaturesImmediately = async (signatures: { auditBy: string; reviewedBy: string }) => {
-        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
+        if (currentSignature.trim()) {
+            showAlert('error', `Signature already exists in ${section} section. Please remove it first.`);
             return;
         }
 
+        if (section === 'audit' && userRole !== 'Operator') {
+            showAlert('error', 'Only Operators can add signature to Audit By section');
+            return;
+        }
+
+        if (section === 'reviewed' && !['Supervisor', 'Manager'].includes(userRole || '')) {
+            showAlert('error', 'Only Supervisors or Managers can add signature to Reviewed By section');
+            return;
+        }
+
+        const signatureText = `${username}`;
+
         try {
-            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
-            const checksheetData = {
-                name: checksheetName,
-                timestamp: new Date().toISOString(),
-                data: {
-                    ...auditData,
-                    signatures: { auditBy: signatures.auditBy, reviewedBy: signatures.reviewedBy }
-                }
-            };
-
-            if (currentChecksheetId) {
-                // Update existing checksheet
-                await apiService.updateAudit(currentChecksheetId, checksheetData);
-            } else {
-                // Create new checksheet if it doesn't exist
-                const result = await apiService.createAudit(checksheetData);
-                setCurrentChecksheetId(result._id!);
+            setIsLoading(true);
+            switch (section) {
+                case 'audit':
+                    setAuditBySignature(signatureText);
+                    break;
+                case 'reviewed':
+                    setReviewedBySignature(signatureText);
+                    break;
             }
-
-            setHasUnsavedChanges(false);
-            await loadSavedChecksheets(); // Reload the list
+            setHasUnsavedChanges(true);
+            showAlert('success', `Signature added to ${section} section`);
         } catch (error) {
-            console.error('Error saving signatures:', error);
+            console.error('Error adding signature:', error);
+            showAlert('error', 'Failed to add signature');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRemoveSignature = async (section: 'audit' | 'reviewed') => {
+        if (!username) {
+            showAlert('error', 'User not logged in');
+            return;
+        }
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+        if (!currentSignature.includes(username)) {
+            showAlert('error', 'You can only remove your own signature');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            switch (section) {
+                case 'audit':
+                    setAuditBySignature('');
+                    break;
+                case 'reviewed':
+                    setReviewedBySignature('');
+                    break;
+            }
+            setHasUnsavedChanges(true);
+            showAlert('info', `Signature removed from ${section} section`);
+        } catch (error) {
+            console.error('Error removing signature:', error);
+            showAlert('error', 'Failed to remove signature');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const canRemoveSignature = (section: 'audit' | 'reviewed') => {
+        if (!username) return false;
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+        return currentSignature.includes(username);
+    };
+
+    const canAddSignature = (section: 'audit' | 'reviewed') => {
+        if (!username) return false;
+        let currentSignature = '';
+        switch (section) {
+            case 'audit':
+                currentSignature = auditBySignature;
+                break;
+            case 'reviewed':
+                currentSignature = reviewedBySignature;
+                break;
+        }
+        if (currentSignature.trim()) {
+            return false;
+        }
+        switch (section) {
+            case 'audit':
+                return userRole === 'Operator';
+            case 'reviewed':
+                return ['Supervisor', 'Manager'].includes(userRole || '');
+            default:
+                return false;
         }
     };
 
@@ -514,7 +575,7 @@ export default function QualityAudit() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: () => {
-                    setLineNumber(''); // Clear line number
+                    setLineNumber('');
                     setAuditData({
                         lineNumber: '',
                         date: new Date().toISOString().split('T')[0],
@@ -536,11 +597,12 @@ export default function QualityAudit() {
                     setStageChanges(new Set());
                     setCurrentView('basicInfo');
                     setSelectedStageId(null);
+                    lastSavedDataRef.current = '';
                     navigate('/home');
                 }
             });
         } else {
-            setLineNumber(''); // Clear line number
+            setLineNumber('');
             navigate('/home');
         }
     };
@@ -566,8 +628,17 @@ export default function QualityAudit() {
         setStageChanges(prev => new Set(prev).add(stageId));
     };
 
+    const updateBasicInfo = (field: keyof AuditData, value: any) => {
+        setAuditData(prev => ({ ...prev, [field]: value }));
+        setHasUnsavedChanges(true);
+    };
+
     const generateExcelReport = async () => {
         try {
+            if (auditData.lineNumber && auditData.date && auditData.shift) {
+                await performAutoSave();
+            }
+            
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
             console.log('Generating Excel with data:', auditData);
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
@@ -582,14 +653,12 @@ export default function QualityAudit() {
                 throw new Error('Failed to generate report');
             }
 
-            // Create blob from response and trigger download
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
 
-            // Generate filename based on audit data
             const filename = `Quality_Audit_Line${auditData.lineNumber}_${auditData.date.replace(/-/g, '')}_Shift${auditData.shift}.xlsx`;
             a.download = filename;
 
@@ -628,14 +697,12 @@ export default function QualityAudit() {
                 throw new Error('Failed to generate report');
             }
 
-            // Create blob from response and trigger download
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
 
-            // Generate filename based on the saved checksheet data
             const filename = `Quality_Audit_Line${checksheet.data.lineNumber}_${checksheet.data.date.replace(/-/g, '')}_Shift${checksheet.data.shift}.xlsx`;
             a.download = filename;
 
@@ -664,7 +731,6 @@ export default function QualityAudit() {
 
     const handleNextFromBasicInfo = () => {
         if (isBasicInfoComplete()) {
-            autoSaveChecksheet(); // Auto-save when moving to next section
             setCurrentView('stageSelection');
         } else if (auditData.lineNumber === '') {
             showAlert('error', 'Please select the line number.');
@@ -691,16 +757,10 @@ export default function QualityAudit() {
         if (stageChanges.has(selectedStageId!)) {
             showConfirm({
                 title: 'Unsaved Changes',
-                message: 'You have unsaved changes in this stage. Are you sure you want to leave? Your changes will be lost.',
+                message: 'You have unsaved changes in this stage. Changes will be auto-saved. Are you sure you want to leave?',
                 type: 'warning',
-                confirmText: 'Close',
+                confirmText: 'Leave',
                 onConfirm: () => {
-                    if (currentChecksheetId) {
-                        const savedChecksheet = savedChecksheets.find(sheet => sheet.id === currentChecksheetId);
-                        if (savedChecksheet) {
-                            setAuditData(savedChecksheet.data);
-                        }
-                    }
                     setStageChanges(prev => {
                         const newSet = new Set(prev);
                         newSet.delete(selectedStageId!);
@@ -718,7 +778,13 @@ export default function QualityAudit() {
     };
 
     const handleSaveStage = () => {
-        autoSaveChecksheet(); // Save the current state
+        if (auditData.lineNumber && auditData.date && auditData.shift) {
+            if (autoSaveTimeoutRef.current) {
+                clearTimeout(autoSaveTimeoutRef.current);
+            }
+            performAutoSave();
+            showAlert('success', 'Stage data saved!');
+        }
         setStageChanges(prev => {
             const newSet = new Set(prev);
             newSet.delete(selectedStageId!);
@@ -736,10 +802,8 @@ export default function QualityAudit() {
                 return;
             }
 
-            // Fetch complete audit data from S3 using getAuditById
             const fullAudit = await apiService.getAuditById(checksheet.id);
 
-            // Reset to basic info view and load the saved data
             setAuditData(fullAudit.data);
             setCurrentChecksheetId(fullAudit._id);
             setActiveTab('create-edit');
@@ -747,8 +811,6 @@ export default function QualityAudit() {
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
 
-            // Load signatures if they exist
-            // Robust signature loading
             const loadedSignatures = fullAudit.data.signatures ||
                 fullAudit.data.data?.signatures ||
                 { auditBy: fullAudit.data.auditBy, reviewedBy: fullAudit.data.reviewedBy };
@@ -761,8 +823,25 @@ export default function QualityAudit() {
                 setReviewedBySignature('');
             }
 
-            // Set the line number context
             setLineNumber(fullAudit.data.lineNumber);
+            
+            lastSavedDataRef.current = JSON.stringify({
+                lineNumber: fullAudit.data.lineNumber,
+                date: fullAudit.data.date,
+                shift: fullAudit.data.shift,
+                productionOrderNo: fullAudit.data.productionOrderNo,
+                moduleType: fullAudit.data.moduleType,
+                customerSpecAvailable: fullAudit.data.customerSpecAvailable,
+                specificationSignedOff: fullAudit.data.specificationSignedOff,
+                stages: fullAudit.data.stages.map((stage: StageData) => ({
+                    id: stage.id,
+                    parameters: stage.parameters.map(param => ({
+                        id: param.id,
+                        observations: param.observations
+                    }))
+                })),
+                signatures: loadedSignatures
+            });
 
             showAlert('info', `Editing ${fullAudit.name}`);
         } catch (error) {
@@ -796,6 +875,7 @@ export default function QualityAudit() {
                 });
                 setAuditBySignature('');
                 setReviewedBySignature('');
+                lastSavedDataRef.current = '';
             }
             showAlert('success', 'Checksheet deleted successfully!');
         } catch (error) {
@@ -814,14 +894,23 @@ export default function QualityAudit() {
     return (
         <div>
             <div className="max-w-7xl mx-auto">
-                {isLoading && (
+                {(isLoading || isAutoSaving) && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 dark:border-blue-400 mx-auto"></div>
-                            <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
+                            <p className="mt-2 text-gray-700 dark:text-gray-300">
+                                {isAutoSaving ? 'Auto-saving...' : 'Loading...'}
+                            </p>
                         </div>
                     </div>
                 )}
+                
+                {isAutoSaving && (
+                    <div className="fixed bottom-4 right-4 bg-green-500 text-white px-3 py-1 rounded-lg text-sm z-40">
+                        Saving...
+                    </div>
+                )}
+                
                 <div className="text-center mb-2">
                     <button
                         onClick={handleBackToHome}
@@ -864,7 +953,6 @@ export default function QualityAudit() {
                                                     className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                 >
                                                     <option value="">Select</option>
-                                                    {/* <option value="I">I</option> */}
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>
@@ -874,9 +962,7 @@ export default function QualityAudit() {
                                             <input
                                                 type="date"
                                                 value={auditData.date}
-                                                onChange={(e) =>
-                                                    setAuditData({ ...auditData, date: e.target.value })
-                                                }
+                                                onChange={(e) => updateBasicInfo('date', e.target.value)}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
@@ -884,9 +970,7 @@ export default function QualityAudit() {
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shift</label>
                                             <select
                                                 value={auditData.shift}
-                                                onChange={(e) =>
-                                                    setAuditData({ ...auditData, shift: e.target.value })
-                                                }
+                                                onChange={(e) => updateBasicInfo('shift', e.target.value)}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             >
                                                 <option value="">Select Shift</option>
@@ -903,9 +987,7 @@ export default function QualityAudit() {
                                             <input
                                                 type="text"
                                                 value={auditData.productionOrderNo}
-                                                onChange={(e) =>
-                                                    setAuditData({ ...auditData, productionOrderNo: e.target.value })
-                                                }
+                                                onChange={(e) => updateBasicInfo('productionOrderNo', e.target.value)}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
@@ -914,9 +996,7 @@ export default function QualityAudit() {
                                             <input
                                                 type="text"
                                                 value={auditData.moduleType}
-                                                onChange={(e) =>
-                                                    setAuditData({ ...auditData, moduleType: e.target.value })
-                                                }
+                                                onChange={(e) => updateBasicInfo('moduleType', e.target.value)}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                             />
                                         </div>
@@ -925,9 +1005,7 @@ export default function QualityAudit() {
                                                 <input
                                                     type="checkbox"
                                                     checked={auditData.customerSpecAvailable}
-                                                    onChange={(e) =>
-                                                        setAuditData({ ...auditData, customerSpecAvailable: e.target.checked })
-                                                    }
+                                                    onChange={(e) => updateBasicInfo('customerSpecAvailable', e.target.checked)}
                                                     className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Customer Specification Available</span>
@@ -936,9 +1014,7 @@ export default function QualityAudit() {
                                                 <input
                                                     type="checkbox"
                                                     checked={auditData.specificationSignedOff}
-                                                    onChange={(e) =>
-                                                        setAuditData({ ...auditData, specificationSignedOff: e.target.checked })
-                                                    }
+                                                    onChange={(e) => updateBasicInfo('specificationSignedOff', e.target.checked)}
                                                     className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Specification Signed Off With Customer</span>
@@ -1055,7 +1131,7 @@ export default function QualityAudit() {
                                     <h2 className="text-lg sm:text-xl font-semibold">
                                         {auditData.stages.find(stage => stage.id === selectedStageId)?.name || `Stage ${selectedStageId}`}
                                         {stageChanges.has(selectedStageId) && (
-                                            <span className="ml-2 text-yellow-300 dark:text-yellow-400 text-xs sm:text-sm">• Unsaved changes</span>
+                                            <span className="ml-2 text-yellow-300 dark:text-yellow-400 text-xs sm:text-sm">• Unsaved changes (auto-saving)</span>
                                         )}
                                     </h2>
                                     <div className="flex gap-2 self-end sm:self-auto">
@@ -1063,7 +1139,7 @@ export default function QualityAudit() {
                                             onClick={handleSaveStage}
                                             className="bg-green-500 dark:bg-green-600 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-green-600 dark:hover:bg-gray-800 dark:hover:text-green-400"
                                         >
-                                            Save
+                                            Save Now
                                         </button>
                                         <button
                                             onClick={handleBackToStageSelection}
@@ -1131,7 +1207,6 @@ export default function QualityAudit() {
                                                                     <td colSpan={4} className="px-4 sm:px-6 py-3 sm:py-4 border border-gray-200 dark:border-gray-700">
                                                                         <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 w-full">
                                                                             {param.observations.map((obs) => {
-                                                                                // Get the saved observation value
                                                                                 const savedObservation = savedParam?.observations.find(
                                                                                     o => o.timeSlot === obs.timeSlot
                                                                                 );
@@ -1156,7 +1231,6 @@ export default function QualityAudit() {
                                                                                             })
                                                                                         ) : (
                                                                                             <div className="w-full flex justify-center">
-                                                                                                {/* Handle both string and object values */}
                                                                                                 {typeof (savedObservation?.value || obs.value) === 'string' ? (
                                                                                                     <input
                                                                                                         type="text"

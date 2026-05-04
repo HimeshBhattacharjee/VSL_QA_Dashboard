@@ -847,8 +847,6 @@ export default function RoTTest() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Entry Form */}
                             {currentEntry && (
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                     <div className="flex items-center justify-between mb-4">
@@ -882,85 +880,99 @@ export default function RoTTest() {
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     P.O. Number
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.po}
                                                     onChange={(e) => handleInputChange('po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter PO number"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Module Type
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.moduleType}
                                                     onChange={(e) => handleInputChange('moduleType', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter module type"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Module Serial No.
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.moduleSerial}
                                                     onChange={(e) => handleInputChange('moduleSerial', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter serial number"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     JB Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.jbSupplier}
                                                     onChange={(e) => handleInputChange('jbSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter JB supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Suzhou UKT New Energy Technology Co. Ltd">Suzhou UKT New Energy Technology Co. Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Sealant Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.sealantSupplier}
                                                     onChange={(e) => handleInputChange('sealantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter sealant supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Huitan">Huitan</option>
+                                                    <option value="Tonsan (HB fuller)">Tonsan (HB fuller)</option>
+                                                    <option value="Adarsha Speciality">Adarsha Speciality</option>
+                                                    <option value="Fasto">Fasto</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Rear Glass/ Backsheet Supplier
                                                 </label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={currentEntry.backsheetSupplier}
                                                     onChange={(e) => handleInputChange('backsheetSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter supplier"
-                                                />
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Xinyi Solar">Xinyi Solar</option>
+                                                    <option value="CSG Holding Co., Ltd.">CSG Holding Co., Ltd.</option>
+                                                    <option value="Gurjat Borosil">Gurjat Borosil</option>
+                                                    <option value="Kibing Group">Kibing Group</option>
+                                                    <option value="Flat Glass Group Co., Ltd">Flat Glass Group Co., Ltd</option>
+                                                    <option value="Henan Ancai Hi-Tech Co., Ltd">Henan Ancai Hi-Tech Co., Ltd</option>
+                                                    <option value="N/A">N/A</option>
+                                                </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Result
                                                 </label>
                                                 <select
                                                     value={currentEntry.result}
                                                     onChange={(e) => handleInputChange('result', e.target.value as 'Pass' | 'Fail')}
-                                                    className={`w-full p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultSelectClass(currentEntry.result)}`}
+                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultSelectClass(currentEntry.result)}`}
                                                 >
                                                     <option value="">Select result</option>
                                                     <option value="Pass" className="bg-green-100 text-green-700">Pass</option>
@@ -968,26 +980,26 @@ export default function RoTTest() {
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Test Done By
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={currentEntry.testDoneBy}
                                                     onChange={(e) => handleInputChange('testDoneBy', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Enter tester name"
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Remarks
                                                 </label>
                                                 <textarea
                                                     value={currentEntry.remarks || ''}
                                                     onChange={(e) => handleInputChange('remarks', e.target.value)}
                                                     rows={2}
-                                                    className="w-full p-2.5 rounded-lg dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Add any remarks"
                                                 />
                                             </div>
@@ -1012,10 +1024,7 @@ export default function RoTTest() {
                                 </div>
                             )}
                         </div>
-
-                        {/* Right Panel - Statistics */}
                         <div className="lg:col-span-5 space-y-6">
-                            {/* Quick Stats Cards */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
@@ -1045,8 +1054,6 @@ export default function RoTTest() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Month Summary */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
                                     <BarChart3 className="w-4 h-4 text-blue-500" />
@@ -1067,8 +1074,6 @@ export default function RoTTest() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Results Breakdown */}
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
                                     <TrendingUp className="w-4 h-4 text-blue-500" />
@@ -1106,18 +1111,15 @@ export default function RoTTest() {
                         </div>
                     </div>
                 </div>
-
-                {/* Signature Section */}
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">
                         Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Prepared By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-2">PREPARED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.preparedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.preparedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1142,12 +1144,10 @@ export default function RoTTest() {
                                 </button>
                             </div>
                         </div>
-
-                        {/* Reviewed By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">REVIEWED BY:</p>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-2">REVIEWED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.reviewedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.reviewedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1172,12 +1172,10 @@ export default function RoTTest() {
                                 </button>
                             </div>
                         </div>
-
-                        {/* Approved By */}
                         <div className="text-center">
-                            <p className="font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-2">APPROVED BY:</p>
                             <div className="w-full min-h-20 border-2 border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                                <span className="text-gray-800 dark:text-white text-lg font-semibold">{currentMonthSignatures.approvedBy}</span>
+                                <span className="text-gray-800 dark:text-white text-md font-semibold">{currentMonthSignatures.approvedBy}</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 mt-3">
                                 <button
@@ -1202,9 +1200,6 @@ export default function RoTTest() {
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    <div className="text-center text-sm text-red-500 dark:text-red-400 mt-4 font-medium">
-                        (Controlled Copy)
                     </div>
                 </div>
             </div>

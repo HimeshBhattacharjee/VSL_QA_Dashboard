@@ -23,6 +23,12 @@ import Visual from './pages/Visual';
 import LamQC from './pages/LamQC';
 import FQC from './pages/FQC';
 import QualityAudit from './pages/QualityAudit';
+import DailyMeetingPage from './pages/DailyMeetingPage';
+import GoalMeetingPage from './pages/GoalMeetingPage';
+import {
+    getCurrentTaskManagementRole,
+    getTaskManagementPermissions,
+} from './utilities/taskAccess';
 
 function UserRoute({ children }: { children: React.ReactNode }) {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
@@ -40,6 +46,18 @@ function AdminRoute() {
     if (!isLoggedIn) return <Navigate to="/login" replace />;
     if (userRole !== 'Admin') return <Navigate to="/home" replace />;
     return <Admin />;
+}
+
+function TaskManagementRoute({ children }: { children: React.ReactNode }) {
+    const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+    const userRole = sessionStorage.getItem('userRole');
+    const taskRole = getCurrentTaskManagementRole();
+    const permissions = getTaskManagementPermissions(taskRole);
+
+    if (!isLoggedIn) return <Navigate to="/login" replace />;
+    if (userRole === 'Admin') return <Navigate to="/admin" replace />;
+    if (!permissions.canAccessTaskManagement) return <Navigate to="/home" replace />;
+    return <>{children}</>;
 }
 
 function AppProviders({ children }: { children: React.ReactNode }) {
@@ -70,6 +88,16 @@ export default function App() {
                                 <UserRoute>
                                     <Home />
                                 </UserRoute>
+                            } />
+                            <Route path="/daily-meeting" element={
+                                <TaskManagementRoute>
+                                    <DailyMeetingPage />
+                                </TaskManagementRoute>
+                            } />
+                            <Route path="/goal-meeting" element={
+                                <TaskManagementRoute>
+                                    <GoalMeetingPage />
+                                </TaskManagementRoute>
                             } />
                             <Route path="/gel-test" element={
                                 <UserRoute>

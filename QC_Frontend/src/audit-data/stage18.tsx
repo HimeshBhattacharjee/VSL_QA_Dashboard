@@ -160,7 +160,7 @@ const JunctionBoxFixingObservations = {
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
                 lines.flatMap(line =>
-                    ['supplier', 'type', 'diode', 'maxVoltage', 'maxCurrent', 'diodeType'].map(field =>
+                    ['supplier', 'type', 'maxCurrent'].map(field =>
                         [`${line}-${field}`, ""]
                     )
                 )
@@ -171,7 +171,7 @@ const JunctionBoxFixingObservations = {
             const updatedValue = { ...sampleValue, [`${line}-${field}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
-
+        const fixedTypeValue = "TM4545-30U/TM3045-30U/XND-18-V100C/TM45100-30U";
         return (
             <div className="flex justify-between gap-4">
                 {lines.map(line => (
@@ -181,7 +181,7 @@ const JunctionBoxFixingObservations = {
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 gap-2">
                             <div className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500">Supplier</span>
                                 <InputComponents.TextInput
@@ -194,28 +194,11 @@ const JunctionBoxFixingObservations = {
                             <div className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500">Type</span>
                                 <InputComponents.TextInput
-                                    value={sampleValue[`${line}-type`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'type', value)}
+                                    value={fixedTypeValue}
+                                    onChange={() => { }}
                                     placeholder=""
                                     type="measurement"
-                                />
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500">Blocking Diode</span>
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-diode`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'diode', value)}
-                                    placeholder=""
-                                    type="measurement"
-                                />
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500">Max Voltage</span>
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-maxVoltage`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'maxVoltage', value)}
-                                    placeholder=""
-                                    type="measurement"
+                                    className="cursor-not-allowed"
                                 />
                             </div>
                             <div className="flex flex-col items-center">
@@ -223,15 +206,6 @@ const JunctionBoxFixingObservations = {
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-maxCurrent`] || ''}
                                     onChange={(value) => handleUpdate(line, 'maxCurrent', value)}
-                                    placeholder=""
-                                    type="measurement"
-                                />
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500">Diode Type</span>
-                                <InputComponents.TextInput
-                                    value={sampleValue[`${line}-diodeType`] || ''}
-                                    onChange={(value) => handleUpdate(line, 'diodeType', value)}
                                     placeholder=""
                                     type="measurement"
                                 />
@@ -272,11 +246,14 @@ const JunctionBoxFixingObservations = {
                         <div className="flex gap-2">
                             <div className="flex flex-col items-center gap-2">
                                 <span className="text-xs text-gray-500">Cable Supplier</span>
-                                <InputComponents.TextInput
+                                <InputComponents.Select
                                     value={sampleValue[`${line}-cableSupplier`] || ''}
                                     onChange={(value) => handleUpdate(line, 'cableSupplier', value)}
-                                    placeholder=""
-                                    type="measurement"
+                                    options={[
+                                        { value: "Suzhou UKT New Energy Technology Co. Ltd", label: "Suzhou UKT New Energy Technology Co. Ltd" },
+                                        { value: "N/A", label: "N/A" }
+                                    ]}
+                                    type="status"
                                 />
                             </div>
                             <div className="flex flex-col items-center gap-2">
@@ -331,6 +308,7 @@ const JunctionBoxFixingObservations = {
                                         { value: "Huitan", label: "Huitan" },
                                         { value: "Tonsan (HB fuller)", label: "Tonsan (HB fuller)" },
                                         { value: "Adarsha Speciality", label: "Adarsha Speciality" },
+                                        { value: "Fasto", label: "Fasto" },
                                         { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"

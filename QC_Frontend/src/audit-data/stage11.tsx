@@ -49,6 +49,30 @@ const RearGlassLoadingObservations = {
         );
     },
 
+    renderType: (props: ObservationRenderProps) => {
+        const isNA = (value: string) => value === 'N/A';
+
+        const getBackgroundColor = (value: string) => {
+            if (isNA(value)) return 'bg-yellow-100';
+            return 'bg-white';
+        };
+
+        return (
+            <div className="flex flex-col space-y-1">
+                <select
+                    value={props.value as string}
+                    onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                >
+                    <option value="">Select</option>
+                    <option value="White Mess">White Mess</option>
+                    <option value="Non-White Mess">Non-White Mess</option>
+                    <option value="N/A">N/A</option>
+                </select>
+            </div>
+        );
+    },
+
     renderExpiryDate: (props: ObservationRenderProps) => {
         const getBackgroundColor = (value: string) => {
             if (value) {
@@ -237,6 +261,7 @@ export const rearGlassLoadingStage: StageData = {
             ],
             renderObservation: (props: ObservationRenderProps) => {
                 if (props.timeSlot === "Supplier") return RearGlassLoadingObservations.renderSupplier(props);
+                else if (props.timeSlot === "Type") return RearGlassLoadingObservations.renderType(props);
                 else if (props.timeSlot === "Expiry Date") return RearGlassLoadingObservations.renderExpiryDate(props);
                 return RearGlassLoadingObservations.renderRearGlassLoadingStatus(props);
             }

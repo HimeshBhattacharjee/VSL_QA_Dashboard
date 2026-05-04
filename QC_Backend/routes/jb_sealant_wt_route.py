@@ -7,6 +7,12 @@ from generators.JBSealantWeightReportGenerator import generate_jb_sealant_report
 
 jb_sealant_router = APIRouter(prefix="/api/jb-sealant-weight-reports", tags=["JB Sealant Weight Reports"])
 
+def _normalize_line_group(line_group):
+    return 'Line-II' if line_group == 'Line-II' else 'Line-I'
+
+def _signature_key(date, line_group, shift):
+    return f"{date}_{_normalize_line_group(line_group)}_{shift}"
+
 JB_PASS_MIN = 4
 JB_PASS_MAX = 10
 
@@ -125,7 +131,7 @@ async def get_monthly_entries(
             
             # Collect signatures (all shifts on same date should have same signatures)
             if entry.get("signatures") and (entry["signatures"].get("preparedBy") or entry["signatures"].get("verifiedBy")):
-                date_signatures[date] = entry["signatures"]
+                date_signatures[_signature_key(date, entry.get("lineGroup"), entry.get("shift"))] = entry["signatures"]
         
         return {
             "success": True,
@@ -148,7 +154,7 @@ async def get_entries_for_date(date: str):
     try:
         date_key = date.split('T')[0]
         entries = JBSealantDailyEntry.get_all_for_date(date_key)
-        date_signatures = JBSealantDailyEntry.get_date_signatures(date_key)
+        date_signatures = JBSealantDailyEntry.get_context_signatures(date_key, "Line-I", "A")
         return {
             "success": True,
             "data": serialize_docs(entries),
@@ -156,6 +162,22 @@ async def get_entries_for_date(date: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
+
+@jb_sealant_router.get("/entries/{date}/{line_group}/{shift}")
+async def get_entry_by_line_group(date: str, line_group: str, shift: str):
+    """Get a single entry by date, line group, and shift."""
+    try:
+        if shift not in ["A", "B", "C"]:
+            raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
+        date_key = date.split('T')[0]
+        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift, line_group)
+        if entry:
+            return serialize_doc(entry)
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entry: {str(e)}")
 
 @jb_sealant_router.get("/entries/{date}/{shift}")
 async def get_entry(date: str, shift: str):
@@ -165,7 +187,7 @@ async def get_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = date.split('T')[0]
-        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift, "Line-I")
         if entry:
             return serialize_doc(entry)
         return None
@@ -326,10 +348,11 @@ async def create_entry(entry: dict):
         entry["testingDate"] = entry.get("testingDate") and str(entry.get("testingDate")).split('T')[0] or entry["date"]
         entry["year"] = date_obj.year
         entry["month"] = date_obj.month
+        entry["lineGroup"] = _normalize_line_group(entry.get("lineGroup"))
         entry["updated_at"] = datetime.now().isoformat()
         
-        # Get existing date signatures if any
-        date_signatures = JBSealantDailyEntry.get_date_signatures(entry["date"])
+        # Get existing context signatures if any
+        date_signatures = JBSealantDailyEntry.get_context_signatures(entry["date"], entry.get("lineGroup"), entry["shift"])
         
         # Preserve signatures if they exist at date level, otherwise initialize
         if "signatures" not in entry or not entry["signatures"].get("preparedBy"):
@@ -343,7 +366,7 @@ async def create_entry(entry: dict):
         JBSealantDailyEntry.create(entry)
         
         # Get the saved entry
-        saved_entry = JBSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"])
+        saved_entry = JBSealantDailyEntry.get_by_date_and_shift(entry["date"], entry["shift"], entry.get("lineGroup"))
         
         return {
             "success": True,
@@ -363,12 +386,14 @@ async def update_signatures(payload: dict):
     try:
         date = payload.get("date")
         signatures = payload.get("signatures", {})
+        line_group = _normalize_line_group(payload.get("lineGroup"))
+        shift = payload.get("shift", "A")
         
         if not date:
             raise HTTPException(status_code=400, detail="Date is required")
         
-        # Update signatures for all shifts on this date
-        success = JBSealantDailyEntry.update_date_signatures(date, signatures)
+        # Update signatures only for the selected line group and shift.
+        success = JBSealantDailyEntry.update_context_signatures(date, line_group, shift, signatures)
         
         if not success:
             # If no entries exist, create a placeholder entry for Shift A with signatures
@@ -376,7 +401,8 @@ async def update_signatures(payload: dict):
             placeholder_entry = {
                 "date": date,
                 "testingDate": date,
-                "shift": "A",  # Use Shift A as the placeholder
+                "shift": shift,
+                "lineGroup": line_group,
                 "lines": {
                     "1": {
                         "po": "", "jbSupplier": "", "sealantSupplier": "", "sealantExpiry": "",
@@ -408,6 +434,25 @@ async def update_signatures(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update signatures: {str(e)}")
 
+@jb_sealant_router.delete("/entries/{date}/{line_group}/{shift}")
+async def delete_entry_by_line_group(date: str, line_group: str, shift: str):
+    """Delete an entry by date, line group, and shift."""
+    try:
+        if shift not in ["A", "B", "C"]:
+            raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
+        date_key = str(date).split('T')[0]
+        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift, line_group)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        deleted = JBSealantDailyEntry.delete_by_date_and_shift(date_key, shift, line_group)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        return {"success": True, "message": "Entry deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
+
 @jb_sealant_router.delete("/entries/{date}/{shift}")
 async def delete_entry(date: str, shift: str):
     """Delete an entry by date and shift"""
@@ -416,11 +461,11 @@ async def delete_entry(date: str, shift: str):
             raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
             
         date_key = str(date).split('T')[0]
-        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift)
+        entry = JBSealantDailyEntry.get_by_date_and_shift(date_key, shift, "Line-I")
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        deleted = JBSealantDailyEntry.delete_by_date_and_shift(date_key, shift)
+        deleted = JBSealantDailyEntry.delete_by_date_and_shift(date_key, shift, "Line-I")
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Entry not found")

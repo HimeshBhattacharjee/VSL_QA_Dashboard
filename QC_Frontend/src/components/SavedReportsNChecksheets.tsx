@@ -1,4 +1,3 @@
-import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useState, useMemo } from 'react';
 
 export interface SavedReport {
@@ -41,7 +40,6 @@ export default function SavedReportsNChecksheets({
     reports,
     onExportExcel,
     onEdit,
-    onDelete,
     emptyMessage = {
         title: 'No saved reports found.',
         description: 'Create and save your first report in the "Edit Report" tab.'
@@ -56,7 +54,6 @@ export default function SavedReportsNChecksheets({
     onSearch,
     onFilter
 }: SavedReportsProps) {
-    const { showConfirm } = useConfirmModal();
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
     const [showFilters, setShowFilters] = useState(false);
@@ -98,18 +95,6 @@ export default function SavedReportsNChecksheets({
 
         return filtered;
     }, [reports, searchTerm, activeFilters, filterConfigs]);
-
-    const handleDelete = (index: number, reportName: string) => {
-        // Find the original index in the unfiltered reports array
-        const originalIndex = reports.findIndex(r => r.id === filteredReports[index].id);
-        showConfirm({
-            title: 'Delete Report',
-            message: `Are you sure you want to delete "${reportName}"? This action cannot be undone.`,
-            type: 'warning',
-            confirmText: 'Delete',
-            onConfirm: () => onDelete(originalIndex)
-        });
-    };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
@@ -307,13 +292,13 @@ export default function SavedReportsNChecksheets({
                                         Edit
                                     </button>
                                     {customActions && customActions(report, reports.findIndex(r => r.id === report.id))}
-                                    <button
+                                    {/* <button
                                         className="delete-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-red-500 dark:bg-red-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-red-600 dark:hover:bg-red-700 hover:scale-105 active:scale-95 whitespace-nowrap"
                                         onClick={() => handleDelete(index, report.name)}
                                         aria-label={`Delete ${report.name}`}
                                     >
                                         Delete
-                                    </button>
+                                    </button> */}
                                 </div>
                             </div>
                         </div>

@@ -161,6 +161,7 @@ const AutoPottingObservations = {
                                         { value: "Huitan", label: "Huitan" },
                                         { value: "Tonsan (HB fuller)", label: "Tonsan (HB fuller)" },
                                         { value: "Adarsha Speciality", label: "Adarsha Speciality" },
+                                        { value: "Fasto Advance Materials India Pvt. Ltd.", label: "Fasto Advance Materials India Pvt. Ltd." },
                                         { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"
@@ -191,6 +192,7 @@ const AutoPottingObservations = {
                                         { value: "Huitan", label: "Huitan" },
                                         { value: "Tonsan (HB fuller)", label: "Tonsan (HB fuller)" },
                                         { value: "Adarsha Speciality", label: "Adarsha Speciality" },
+                                        { value: "Fasto Advance Materials India Pvt. Ltd.", label: "Fasto Advance Materials India Pvt. Ltd." },
                                         { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"

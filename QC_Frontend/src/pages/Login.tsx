@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAlert } from '../context/AlertContext';
 import { useTheme } from '../context/ThemeContext';
+import { PASSWORD_REQUIREMENTS, validatePassword } from '../utilities/passwordValidation';
 
 const PasswordInput = ({
     value,
@@ -67,30 +68,12 @@ export default function Login() {
         sessionStorage.removeItem("isLoggedIn");
         sessionStorage.removeItem("username");
         sessionStorage.removeItem("userRole");
+        sessionStorage.removeItem("employeeId");
     }, []);
 
     const handleTogglePassword = useCallback(() => setShowPassword(prev => !prev), []);
     const handleToggleNewPassword = useCallback(() => setShowNewPassword(prev => !prev), []);
     const handleToggleConfirmPassword = useCallback(() => setShowConfirmPassword(prev => !prev), []);
-
-    const validatePassword = (password: string): string | null => {
-        if (password.length < 8) {
-            return "Password must be at least 8 characters long";
-        }
-        if (!/(?=.*[a-z])/.test(password)) {
-            return "Password must contain at least one lowercase letter";
-        }
-        if (!/(?=.*[A-Z])/.test(password)) {
-            return "Password must contain at least one uppercase letter";
-        }
-        if (!/(?=.*\d)/.test(password)) {
-            return "Password must contain at least one digit";
-        }
-        if (!/(?=.*[@#$&!_])/.test(password)) {
-            return "Password must contain at least one special character (@, #, $, &, !, _)";
-        }
-        return null;
-    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -115,6 +98,7 @@ export default function Login() {
                     sessionStorage.setItem("isLoggedIn", "true");
                     sessionStorage.setItem("username", user.name);
                     sessionStorage.setItem("userRole", user.role);
+                    sessionStorage.setItem("employeeId", user.employeeId);
                     if (user.theme) {
                         try { setTheme(user.theme, false); } catch (e) { }
                     }
@@ -149,6 +133,11 @@ export default function Login() {
             setLoading(false);
             return;
         }
+        if (newPassword === password) {
+            showAlert('error', 'New password cannot be the same as old password');
+            setLoading(false);
+            return;
+        }
 
         const passwordError = validatePassword(newPassword);
         if (passwordError) {
@@ -156,7 +145,6 @@ export default function Login() {
             setLoading(false);
             return;
         }
-        `After analyzing all the files and folders, it should help me by making all the selectors have the default value as "OK" so that "Checked OK" is selected by default in the audit sections with options as Checked OK, Checked Not OK, OFF. In case of new audit check sheet creation, all the selectors should have "Checked OK" as default value. In case of existing audit check sheet, the selectors should have the value as per the last saved value. The change should reflect well everywhere in the application where the selectors are used as well as in the database.`
         try {
             const response = await fetch(`${USER_API_BASE_URL}/auth/change-password`, {
                 method: 'POST',
@@ -165,38 +153,27 @@ export default function Login() {
                 },
                 body: JSON.stringify({
                     employeeId,
+                    oldPassword: password,
                     newPassword,
                     isFirstLogin: true
                 }),
             });
 
             if (response.ok) {
-                showAlert('success', 'Password changed successfully!');
+                showAlert('success', 'Password changed successfully. Please login with your new password.');
                 setIsFirstLogin(false);
-
-                const loginResponse = await fetch(`${USER_API_BASE_URL}/auth/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ employeeId, password: newPassword }),
-                });
-
-                if (loginResponse.ok) {
-                    const user = await loginResponse.json();
-                    sessionStorage.setItem("isLoggedIn", "true");
-                    sessionStorage.setItem("username", user.name);
-                    sessionStorage.setItem("userRole", user.role);
-                    if (user.theme) {
-                        try { setTheme(user.theme, false); } catch (e) { }
-                    }
-
-                    if (user.role === 'Admin') {
-                        navigate("/admin");
-                    } else {
-                        navigate("/home");
-                    }
-                }
+                setPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setEmployeeId("");
+                setShowPassword(false);
+                setShowNewPassword(false);
+                setShowConfirmPassword(false);
+                sessionStorage.removeItem("isLoggedIn");
+                sessionStorage.removeItem("username");
+                sessionStorage.removeItem("userRole");
+                sessionStorage.removeItem("employeeId");
+                navigate("/login");
             } else {
                 const errorData = await response.json();
                 showAlert('error', errorData.detail || 'Failed to change password');
@@ -267,30 +244,14 @@ export default function Login() {
                         Password Requirements:
                     </p>
                     <ul className="text-xs text-gray-600 dark:text-gray-400 mt-1 space-y-1">
-                        <li className="flex items-center">
-                            <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            At least 8 characters
-                        </li>
-                        <li className="flex items-center">
-                            <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Uppercase & lowercase letters
-                        </li>
-                        <li className="flex items-center">
-                            <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            At least one digit
-                        </li>
-                        <li className="flex items-center">
-                            <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Special character (@, #, $, &, !, _)
-                        </li>
+                        {PASSWORD_REQUIREMENTS.map((requirement) => (
+                            <li key={requirement} className="flex items-center">
+                                <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                {requirement}
+                            </li>
+                        ))}
                     </ul>
                 </div>
             </div>

@@ -11,18 +11,26 @@ from users.user_db import users_collection, generate_password
 
 user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
+MANAGEABLE_ROLES = {"Manager", "Supervisor", "Operator"}
+
 @user_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate):
-    existing_user = users_collection.find_one({"employeeId": user.employeeId})
+    name = user.name.strip()
+    employee_id = user.employeeId.strip()
+    role = user.role.strip()
+
+    existing_user = users_collection.find_one({"employeeId": employee_id})
     if existing_user:
         raise HTTPException(status_code=400, detail="Employee ID already exists")
-    avatar = ''.join([word[0] for word in user.name.split()]).upper()
+    if role not in MANAGEABLE_ROLES:
+        raise HTTPException(status_code=400, detail="Role must be Manager, Supervisor, or Operator")
+
+    avatar = ''.join([word[0] for word in name.split() if word]).upper()
     user_data = {
-        "name": user.name,
-        "employeeId": user.employeeId,
-        "phone": user.phone,
-        "role": user.role,
-        "password": user.password,
+        "name": name,
+        "employeeId": employee_id,
+        "role": role,
+        "password": generate_password(name, employee_id),
         "status": "Active",
         "avatar": avatar,
         "isDefaultPassword": True,
@@ -46,12 +54,18 @@ async def get_users():
 @user_router.delete("/users/{user_id}")
 async def delete_user(user_id: str):
     try:
-        result = users_collection.delete_one({"_id": ObjectId(user_id)})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-        return {"message": "User deleted successfully"}
-    except Exception as e:
+        object_id = ObjectId(user_id)
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    user = users_collection.find_one({"_id": object_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "Admin":
+        raise HTTPException(status_code=403, detail="System Administrator cannot be deleted")
+
+    users_collection.delete_one({"_id": object_id})
+    return {"message": "User deleted successfully"}
 
 @user_router.post("/auth/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
@@ -83,9 +97,18 @@ async def change_password(password_data: PasswordChangeRequest):
     user = users_collection.find_one({"employeeId": password_data.employeeId})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    current_password = user.get("password", "")
+    old_password = password_data.oldPassword
+    if not password_data.isFirstLogin and not old_password:
+        raise HTTPException(status_code=400, detail="Old password is required")
+    if old_password and old_password != current_password:
+        raise HTTPException(status_code=401, detail="Old password is incorrect")
+
     # Validate password criteria
     new_password = password_data.newPassword
+    if new_password == current_password:
+        raise HTTPException(status_code=400, detail="New password cannot be the same as old password")
     if len(new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
     if not any(c.islower() for c in new_password):
@@ -110,20 +133,24 @@ async def change_password(password_data: PasswordChangeRequest):
 @user_router.patch("/users/{user_id}/status")
 async def update_user_status(user_id: str):
     try:
-        user = users_collection.find_one({"_id": ObjectId(user_id)})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        new_status = "Inactive" if user["status"] == "Active" else "Active"
-        
-        users_collection.update_one(
-            {"_id": ObjectId(user_id)},
-            {"$set": {"status": new_status}}
-        )
-        
-        return {"message": f"User status updated to {new_status}", "newStatus": new_status}
-    except Exception as e:
+        object_id = ObjectId(user_id)
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    user = users_collection.find_one({"_id": object_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "Admin":
+        raise HTTPException(status_code=403, detail="System Administrator status cannot be changed")
+
+    new_status = "Inactive" if user["status"] == "Active" else "Active"
+
+    users_collection.update_one(
+        {"_id": object_id},
+        {"$set": {"status": new_status}}
+    )
+
+    return {"message": f"User status updated to {new_status}", "newStatus": new_status}
 
 @user_router.post("/signature/upload")
 async def upload_signature(
@@ -238,7 +265,7 @@ async def get_current_user(employeeId: str):
             "id": str(user["_id"]),
             "name": user["name"],
             "employeeId": user["employeeId"],
-            "phone": user["phone"],
+            "phone": user.get("phone"),
             "role": user["role"],
             "status": user["status"],
             "avatar": user["avatar"],
@@ -283,7 +310,7 @@ async def get_current_user_by_name(name: str):
             "id": str(user["_id"]),
             "name": user["name"],
             "employeeId": user["employeeId"],
-            "phone": user["phone"],
+            "phone": user.get("phone"),
             "role": user["role"],
             "status": user["status"],
             "avatar": user["avatar"],

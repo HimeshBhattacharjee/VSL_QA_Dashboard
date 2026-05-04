@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 interface Child {
     id: string;
     label: string;
-    path: string;
+    path: string | null;
+    children?: Child[] | null;
 }
 
 interface SidebarItemProps {
@@ -29,6 +31,7 @@ export default function SidebarItem({
     onItemClick,
 }: SidebarItemProps) {
     const location = useLocation();
+    const [expandedChildren, setExpandedChildren] = useState<Set<string>>(new Set());
     const hasChildren = item.children && item.children.length > 0;
 
     const handleParentClick = () => {
@@ -36,8 +39,99 @@ export default function SidebarItem({
         else onItemClick(item.path);
     };
 
-    const isChildActive = (childPath: string): boolean => {
-        return location.pathname === childPath;
+    const isNodeActive = (node: Child): boolean => {
+        if (node.path === location.pathname) {
+            return true;
+        }
+
+        return Boolean(node.children?.some(isNodeActive));
+    };
+
+    const isNodeExpanded = (node: Child): boolean => {
+        return expandedChildren.has(node.id) || Boolean(node.children?.some(isNodeActive));
+    };
+
+    const toggleChildExpand = (childId: string) => {
+        setExpandedChildren((currentExpanded) => {
+            const nextExpanded = new Set(currentExpanded);
+
+            if (nextExpanded.has(childId)) {
+                nextExpanded.delete(childId);
+            } else {
+                nextExpanded.add(childId);
+            }
+
+            return nextExpanded;
+        });
+    };
+
+    const renderChildren = (children: Child[], depth = 0) => {
+        const wrapperClass = depth === 0 ? "mt-2 ml-11 flex flex-col gap-1" : "mt-1 ml-4 flex flex-col gap-1";
+
+        return (
+            <div className={wrapperClass}>
+                {children.map((child) => {
+                    const hasNestedChildren = Boolean(child.children?.length);
+                    const active = isNodeActive(child);
+                    const expanded = hasNestedChildren ? isNodeExpanded(child) : false;
+
+                    return (
+                        <div key={child.id} className="flex flex-col">
+                            <button
+                                onClick={() => {
+                                    if (hasNestedChildren) {
+                                        toggleChildExpand(child.id);
+                                        return;
+                                    }
+
+                                    onItemClick(child.path);
+                                }}
+                                aria-expanded={hasNestedChildren ? expanded : undefined}
+                                className={`
+                  group flex items-center gap-2
+                  px-3 py-2 rounded-xl
+                  text-left text-[13px]
+                  transition-all duration-300
+                  ${active
+                                        ? `
+                      bg-indigo-500/10 dark:bg-indigo-400/15
+                      text-indigo-700 dark:text-indigo-200
+                      shadow-sm
+                    `
+                                        : `
+                      text-slate-600 dark:text-slate-300
+                      hover:bg-slate-100/70 dark:hover:bg-slate-800/60
+                      hover:text-slate-900 dark:hover:text-white
+                    `}
+                `}
+                                style={depth > 0 ? { paddingLeft: `${12 + depth * 12}px` } : undefined}
+                            >
+                                <span
+                                    className={`
+                    h-2 w-2 rounded-full
+                    transition-all duration-300
+                    ${active
+                                            ? "bg-indigo-600 dark:bg-indigo-300 scale-110"
+                                            : "bg-slate-300 dark:bg-slate-600 group-hover:bg-indigo-400"}
+                  `}
+                                />
+                                <span className="flex-1">{child.label}</span>
+                                {hasNestedChildren && (
+                                    <ChevronDown
+                                        size={16}
+                                        className={`
+                      text-slate-500 transition-transform duration-300 dark:text-slate-300
+                      ${expanded ? "rotate-180" : "rotate-0"}
+                    `}
+                                    />
+                                )}
+                            </button>
+                            {hasNestedChildren && expanded && child.children && renderChildren(child.children, depth + 1)}
+                        </div>
+                    );
+                })}
+            </div>
+        );
     };
 
     return (
@@ -83,12 +177,10 @@ export default function SidebarItem({
                     {item.icon}
                 </span>
 
-                {/* Label */}
                 <span className="flex-1 text-[14px] tracking-wide">
                     {item.label}
                 </span>
 
-                {/* Chevron */}
                 {hasChildren && (
                     <ChevronDown
                         size={18}
@@ -102,52 +194,7 @@ export default function SidebarItem({
                 )}
             </button>
 
-            {/* Children */}
-            {hasChildren && isExpanded && item.children && (
-                <div className="mt-2 ml-11 flex flex-col gap-1">
-                    {item.children.map((child) => {
-                        const active = isChildActive(child.path);
-
-                        return (
-                            <button
-                                key={child.id}
-                                onClick={() => onItemClick(child.path)}
-                                className={`
-                  group flex items-center gap-2
-                  px-3 py-2 rounded-xl
-                  text-left text-[13px]
-                  transition-all duration-300
-                  ${active
-                                        ? `
-                      bg-indigo-500/10 dark:bg-indigo-400/15
-                      text-indigo-700 dark:text-indigo-200
-                      shadow-sm
-                    `
-                                        : `
-                      text-slate-600 dark:text-slate-300
-                      hover:bg-slate-100/70 dark:hover:bg-slate-800/60
-                      hover:text-slate-900 dark:hover:text-white
-                    `}
-                `}
-                            >
-                                {/* Dot */}
-                                <span
-                                    className={`
-                    h-2 w-2 rounded-full
-                    transition-all duration-300
-                    ${active
-                                            ? "bg-indigo-600 dark:bg-indigo-300 scale-110"
-                                            : "bg-slate-300 dark:bg-slate-600 group-hover:bg-indigo-400"}
-                  `}
-                                />
-
-                                {/* Child label */}
-                                <span className="flex-1">{child.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+            {hasChildren && isExpanded && item.children && renderChildren(item.children)}
         </div>
     );
 }

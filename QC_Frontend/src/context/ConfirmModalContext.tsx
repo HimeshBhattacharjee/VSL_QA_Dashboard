@@ -47,7 +47,7 @@ export const ConfirmModalProvider: React.FC<ConfirmModalProviderProps> = ({ chil
             {children}
             {isVisible && confirmOptions && (
                 <div
-                    className="custom-confirm-modal fixed inset-0 bg-[rgba(0,0,0,0.7)] flex items-center justify-center z-50"
+                    className="custom-confirm-modal fixed inset-0 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm z-110"
                     onClick={handleBackdropClick}
                 >
                     <div className="custom-confirm-content bg-white rounded-lg shadow-lg max-w-sm">

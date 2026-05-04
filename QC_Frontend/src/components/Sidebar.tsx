@@ -2,11 +2,16 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import SidebarItem from './SidebarItem';
+import {
+    getCurrentTaskManagementRole,
+    getTaskManagementPermissions,
+} from '../utilities/taskAccess';
 
 interface ChildItem {
     id: string;
     label: string;
-    path: string;
+    path: string | null;
+    children?: ChildItem[] | null;
 }
 
 interface MenuItem {
@@ -22,13 +27,31 @@ interface SidebarProps {
     onClose: () => void;
 }
 
+const hasActiveChildPath = (children: ChildItem[] | null, pathname: string): boolean => {
+    if (!children) {
+        return false;
+    }
+
+    return children.some((child) => child.path === pathname || hasActiveChildPath(child.children || null, pathname));
+};
+
 const MENU_ITEMS: MenuItem[] = [
     {
         id: 'home',
         label: 'Home',
-        icon: '📊',
+        icon: '🏠',
         path: '/home',
         children: null,
+    },
+    {
+        id: 'task-management',
+        label: 'Task Management',
+        icon: '🗂️',
+        path: null,
+        children: [
+            { id: 'daily-meeting', label: 'Daily Meeting', path: '/daily-meeting' },
+            { id: 'goal-meeting', label: 'Goal Meeting', path: '/goal-meeting' },
+        ],
     },
     {
         id: 'quality-tests',
@@ -75,6 +98,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     const location = useLocation();
     const navigate = useNavigate();
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const currentUserRole = getCurrentTaskManagementRole();
+    const permissions = getTaskManagementPermissions(currentUserRole);
+    const visibleMenuItems = permissions.canAccessTaskManagement
+        ? MENU_ITEMS
+        : MENU_ITEMS.filter((item) => item.id !== 'task-management');
 
     useEffect(() => {
         const handleResize = () => {
@@ -85,15 +113,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     }, []);
 
     useEffect(() => {
+        const nextMenuItems = permissions.canAccessTaskManagement
+            ? MENU_ITEMS
+            : MENU_ITEMS.filter((item) => item.id !== 'task-management');
         const newExpanded = new Set<string>();
-        MENU_ITEMS.forEach((item) => {
+        nextMenuItems.forEach((item) => {
             if (item.children) {
-                const hasActiveChild = item.children.some((child) => child.path === location.pathname);
+                const hasActiveChild = hasActiveChildPath(item.children, location.pathname);
                 if (hasActiveChild) newExpanded.add(item.id);
             }
         });
         setExpandedItems(newExpanded);
-    }, [location.pathname]);
+    }, [location.pathname, permissions.canAccessTaskManagement]);
 
     const toggleExpand = (itemId: string) => {
         const newExpanded = new Set(expandedItems);
@@ -111,7 +142,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
     const isItemActive = (item: MenuItem): boolean => {
         if (item.path === location.pathname) return true;
-        if (item.children) return item.children.some((child) => child.path === location.pathname);
+        if (item.children) return hasActiveChildPath(item.children, location.pathname);
         return false;
     };
 
@@ -121,7 +152,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <>
             {isMobile && isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+                    className="fixed inset-0 bg-black/50 z-45 transition-opacity duration-300"
                     onClick={onClose}
                 />
             )}
@@ -153,7 +184,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     )}
                 </div>
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar text-slate-900 dark:text-white">
-                    {MENU_ITEMS.map((item) => (
+                    {visibleMenuItems.map((item) => (
                         <SidebarItem
                             key={item.id}
                             item={item}
