@@ -434,7 +434,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     const canManageSignature = isLoggedIn && userRole !== 'Admin';
 
     return (
-        <div className={`sticky top-0 h-16 ${isMobile ? 'z-40' : 'z-60'} bg-slate-200/20 dark:bg-slate-800/30`}>
+        <div className={`sticky top-0 h-16 ${isMobile ? 'z-40' : 'z-50'} bg-slate-200/20 dark:bg-slate-800/30`}>
             {signatureModalOpen && (
                 <div className="fixed inset-0 z-105 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
                     <div className="flex flex-col items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-lg p-6 w-96 max-w-full mx-4 shadow-2xl">

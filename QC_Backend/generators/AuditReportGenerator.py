@@ -5,6 +5,14 @@ import io
 from openpyxl.cell.cell import MergedCell
 from paths import get_template_key, download_from_s3
 
+DYNAMIC_LINE_PARAMETER_IDS = {
+    '2-4', '2-5', '2-6',
+    '3-7', '3-8', '3-9',
+    '9-6', '9-7', '9-8',
+    '10-4', '10-5', '10-6',
+    '11-3', '11-4', '11-5',
+}
+
 def get_writable_cell(worksheet, cell_ref):
     cell = worksheet[cell_ref]
     if isinstance(cell, MergedCell):
@@ -2339,6 +2347,8 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                     
                     for observation in observations:
                         time_slot = observation.get('timeSlot', '')
+                        selected_line = observation.get('selectedLine')
+                        line_time_slot = f"Line-{selected_line}" if selected_line else time_slot
                         value = observation.get('value', '')
                         if param_id in ['2-2', '3-6', '9-5', '11-2']:
                             # Sample-based parameters (Sample-1, Sample-2, etc.)
@@ -2347,7 +2357,8 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                         elif param_id in ['2-4', '2-5', '2-6', '9-6', '9-7', '9-8', '10-4', '10-5', '10-6', 
                                          '11-3', '11-4', '11-5', '12-1', '12-2', '16-1', '23-1', '27-1', '29-1']:
                             # Line-based sample parameters
-                            handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_mapping)
+                            mapped_time_slot = line_time_slot if param_id in DYNAMIC_LINE_PARAMETER_IDS and line_time_slot in param_mapping else time_slot
+                            handle_line_sample_parameter(worksheet, param_id, mapped_time_slot, value, param_mapping)
                         
                         elif param_id in ['5-4-laser-power', '5-5-cell-appearance']:
                             # Stringer unit parameters

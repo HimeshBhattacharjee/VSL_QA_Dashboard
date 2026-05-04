@@ -21,6 +21,30 @@ import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
 
+const DYNAMIC_LINE_STAGE_IDS = new Set([2, 3, 9, 10, 11]);
+
+const getDynamicLineOptions = (lineNumber: string) => lineNumber === 'II' ? ['3', '4'] : ['1', '2'];
+
+const getSelectedLineFromSlot = (timeSlot: string) => timeSlot.replace('Line-', '');
+
+const getAuditSnapshot = (auditData: AuditData, auditBySignature: string, reviewedBySignature: string) => JSON.stringify({
+    lineNumber: auditData.lineNumber,
+    date: auditData.date,
+    shift: auditData.shift,
+    productionOrderNo: auditData.productionOrderNo,
+    moduleType: auditData.moduleType,
+    customerSpecAvailable: auditData.customerSpecAvailable,
+    specificationSignedOff: auditData.specificationSignedOff,
+    stages: auditData.stages.map(stage => ({
+        id: stage.id,
+        parameters: stage.parameters.map(param => ({
+            id: param.id,
+            observations: param.observations
+        }))
+    })),
+    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+});
+
 interface SavedChecksheet {
     _id?: string;
     id: string;
@@ -58,7 +82,8 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
                             ...param,
                             observations: lineOptions.map((option: string) => ({
                                 timeSlot: option,
-                                value: ""
+                                value: "",
+                                selectedLine: DYNAMIC_LINE_STAGE_IDS.has(stage.id) ? getSelectedLineFromSlot(option) : undefined
                             }))
                         };
                     }
@@ -82,7 +107,8 @@ export default function QualityAudit() {
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [isAutoSaving, setIsAutoSaving] = useState(false);
+    const [, setIsAutoSaving] = useState(false);
+    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [auditBySignature, setAuditBySignature] = useState<string>('');
     const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -91,6 +117,10 @@ export default function QualityAudit() {
     // Ref to track if auto-save is in progress to avoid loops
     const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedDataRef = useRef<string>('');
+    const latestSaveRequestRef = useRef(0);
+    const saveInProgressRef = useRef(false);
+    const pendingSaveRef = useRef(false);
+    const currentChecksheetIdRef = useRef<string | null>(null);
     
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
     
@@ -192,11 +222,43 @@ export default function QualityAudit() {
         stages: lineDependentStages,
         signatures: { auditBy: '', reviewedBy: '' }
     });
+    const latestAuditDataRef = useRef(auditData);
+    const latestAuditBySignatureRef = useRef(auditBySignature);
+    const latestReviewedBySignatureRef = useRef(reviewedBySignature);
+
+    useEffect(() => {
+        latestAuditDataRef.current = auditData;
+        latestAuditBySignatureRef.current = auditBySignature;
+        latestReviewedBySignatureRef.current = reviewedBySignature;
+        currentChecksheetIdRef.current = currentChecksheetId;
+    }, [auditData, auditBySignature, reviewedBySignature, currentChecksheetId]);
 
     // Helper functions
     const generateChecksheetName = useCallback((lineNumber: string, date: string, shift: string) => {
         return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
     }, []);
+
+    const mergeStageObservations = useCallback((stage: StageData, savedStage?: StageData) => ({
+        ...stage,
+        parameters: stage.parameters.map(param => {
+            const savedParam = savedStage?.parameters.find((p: any) => p.id === param.id);
+            if (!savedParam) return param;
+
+            return {
+                ...param,
+                observations: param.observations.map(obs => {
+                    const savedObservation = savedParam.observations.find((savedObs: any) => savedObs.timeSlot === obs.timeSlot);
+                    return {
+                        ...obs,
+                        ...savedObservation,
+                        selectedLine: obs.timeSlot.startsWith('Line-')
+                            ? savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot)
+                            : savedObservation?.selectedLine
+                    };
+                })
+            };
+        })
+    }), []);
 
     const loadSavedChecksheets = useCallback(async () => {
         try {
@@ -223,63 +285,63 @@ export default function QualityAudit() {
 
     // Define performAutoSave after auditData is defined
     const performAutoSave = useCallback(async () => {
-        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
+        if (saveInProgressRef.current) {
+            pendingSaveRef.current = true;
             return;
         }
 
+        const dataToSave = latestAuditDataRef.current;
+        const auditBy = latestAuditBySignatureRef.current;
+        const reviewedBy = latestReviewedBySignatureRef.current;
+        const checksheetId = currentChecksheetIdRef.current;
+
+        if (!dataToSave.lineNumber || !dataToSave.date || !dataToSave.shift) {
+            return;
+        }
+
+        saveInProgressRef.current = true;
         setIsAutoSaving(true);
         
         try {
-            const checksheetName = generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift);
+            const checksheetName = generateChecksheetName(dataToSave.lineNumber, dataToSave.date, dataToSave.shift);
             const checksheetData = {
                 name: checksheetName,
                 timestamp: new Date().toISOString(),
                 data: {
-                    ...auditData,
-                    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+                    ...dataToSave,
+                    signatures: { auditBy, reviewedBy }
                 }
             };
 
-            let savedId = currentChecksheetId;
-            
-            if (currentChecksheetId) {
-                await apiService.updateAudit(currentChecksheetId, checksheetData);
+            if (checksheetId) {
+                await apiService.updateAudit(checksheetId, checksheetData);
             } else {
                 const result = await apiService.createAudit(checksheetData);
-                savedId = result._id!;
-                setCurrentChecksheetId(savedId);
+                currentChecksheetIdRef.current = result._id!;
+                setCurrentChecksheetId(result._id!);
             }
 
-            // Update the last saved data reference
-            lastSavedDataRef.current = JSON.stringify({
-                lineNumber: auditData.lineNumber,
-                date: auditData.date,
-                shift: auditData.shift,
-                productionOrderNo: auditData.productionOrderNo,
-                moduleType: auditData.moduleType,
-                customerSpecAvailable: auditData.customerSpecAvailable,
-                specificationSignedOff: auditData.specificationSignedOff,
-                stages: auditData.stages.map(stage => ({
-                    id: stage.id,
-                    parameters: stage.parameters.map(param => ({
-                        id: param.id,
-                        observations: param.observations
-                    }))
-                })),
-                signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
-            });
+            lastSavedDataRef.current = getAuditSnapshot(dataToSave, auditBy, reviewedBy);
 
             setHasUnsavedChanges(false);
+            setStageChanges(new Set());
+            setAutoSaveStatus('saved');
             
             // Reload saved checksheets list in background
             await loadSavedChecksheets();
             
         } catch (error) {
             console.error('Auto-save error:', error);
+            throw error;
         } finally {
+            saveInProgressRef.current = false;
             setIsAutoSaving(false);
+            if (pendingSaveRef.current) {
+                pendingSaveRef.current = false;
+                setTimeout(() => performAutoSave(), 0);
+            }
         }
-    }, [auditData, auditBySignature, reviewedBySignature, currentChecksheetId, generateChecksheetName, loadSavedChecksheets]);
+    }, [generateChecksheetName, loadSavedChecksheets]);
 
     // Auto-save effect - triggers whenever relevant data changes
     useEffect(() => {
@@ -288,29 +350,11 @@ export default function QualityAudit() {
             return;
         }
 
-        // Don't auto-save if we're currently loading or auto-saving
-        if (isLoading || isAutoSaving) {
+        if (isLoading) {
             return;
         }
 
-        // Create a string representation of current data to compare
-        const currentDataString = JSON.stringify({
-            lineNumber: auditData.lineNumber,
-            date: auditData.date,
-            shift: auditData.shift,
-            productionOrderNo: auditData.productionOrderNo,
-            moduleType: auditData.moduleType,
-            customerSpecAvailable: auditData.customerSpecAvailable,
-            specificationSignedOff: auditData.specificationSignedOff,
-            stages: auditData.stages.map(stage => ({
-                id: stage.id,
-                parameters: stage.parameters.map(param => ({
-                    id: param.id,
-                    observations: param.observations
-                }))
-            })),
-            signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
-        });
+        const currentDataString = getAuditSnapshot(auditData, auditBySignature, reviewedBySignature);
 
         // Don't auto-save if data hasn't changed
         if (currentDataString === lastSavedDataRef.current) {
@@ -323,19 +367,39 @@ export default function QualityAudit() {
         }
 
         autoSaveTimeoutRef.current = setTimeout(() => {
-            performAutoSave();
-        }, 1000);
+            const requestId = latestSaveRequestRef.current + 1;
+            latestSaveRequestRef.current = requestId;
+            setAutoSaveStatus('saving');
+            const saveWithRetry = async (attempt = 0): Promise<void> => {
+                try {
+                    await performAutoSave();
+                } catch {
+                    if (attempt < 2 && requestId === latestSaveRequestRef.current) {
+                        setTimeout(() => saveWithRetry(attempt + 1), 500);
+                        return;
+                    }
+                    setAutoSaveStatus('error');
+                }
+            };
+            saveWithRetry();
+        }, 500);
 
         return () => {
             if (autoSaveTimeoutRef.current) {
                 clearTimeout(autoSaveTimeoutRef.current);
             }
         };
-    }, [auditData, auditBySignature, reviewedBySignature, isLoading, isAutoSaving, performAutoSave]);
+    }, [auditData, auditBySignature, reviewedBySignature, isLoading, performAutoSave]);
 
     useEffect(() => {
-        setAuditData(prev => ({ ...prev, stages: lineDependentStages }));
-    }, [lineDependentStages]);
+        setAuditData(prev => ({
+            ...prev,
+            stages: lineDependentStages.map(stage => mergeStageObservations(
+                stage,
+                prev.stages.find(savedStage => savedStage.id === stage.id)
+            ))
+        }));
+    }, [lineDependentStages, mergeStageObservations]);
 
     const handleLineChange = (line: string) => {
         setLineNumber(line);
@@ -360,19 +424,7 @@ export default function QualityAudit() {
                             ...existingAudit.data,
                             stages: lineDependentStages.map(stage => {
                                 const savedStage = existingAudit.data.stages.find((s: StageData) => s.id === stage.id);
-                                if (savedStage) {
-                                    return {
-                                        ...stage,
-                                        parameters: stage.parameters.map(param => {
-                                            const savedParam = savedStage.parameters.find((p: any) => p.id === param.id);
-                                            if (savedParam) {
-                                                return { ...param, observations: savedParam.observations };
-                                            }
-                                            return param;
-                                        })
-                                    };
-                                }
-                                return stage;
+                                return mergeStageObservations(stage, savedStage);
                             })
                         };
                         setAuditData(mergedData);
@@ -390,23 +442,7 @@ export default function QualityAudit() {
                         }
                         
                         // Update last saved data reference
-                        lastSavedDataRef.current = JSON.stringify({
-                            lineNumber: mergedData.lineNumber,
-                            date: mergedData.date,
-                            shift: mergedData.shift,
-                            productionOrderNo: mergedData.productionOrderNo,
-                            moduleType: mergedData.moduleType,
-                            customerSpecAvailable: mergedData.customerSpecAvailable,
-                            specificationSignedOff: mergedData.specificationSignedOff,
-                            stages: mergedData.stages.map(stage => ({
-                                id: stage.id,
-                                parameters: stage.parameters.map(param => ({
-                                    id: param.id,
-                                    observations: param.observations
-                                }))
-                            })),
-                            signatures: loadedSignatures
-                        });
+                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '');
                     } else {
                         setCurrentChecksheetId(null);
                         lastSavedDataRef.current = '';
@@ -418,25 +454,7 @@ export default function QualityAudit() {
         };
 
         checkExistingChecksheet();
-    }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages]);
-
-    const manualSaveChecksheet = async () => {
-        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
-            showAlert('error', 'Line number, date, and shift are required to save checksheet.');
-            return;
-        }
-
-        try {
-            setIsLoading(true);
-            await performAutoSave();
-            showAlert('success', 'Checksheet saved successfully!');
-        } catch (error) {
-            console.error('Error saving checksheet:', error);
-            showAlert('error', 'Failed to save checksheet');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages, mergeStageObservations]);
 
     const handleAddSignature = async (section: 'audit' | 'reviewed') => {
         if (!username) {
@@ -628,6 +646,27 @@ export default function QualityAudit() {
         setStageChanges(prev => new Set(prev).add(stageId));
     };
 
+    const updateObservationLineSelection = (stageId: number, paramId: string, timeSlot: string, selectedLine: string) => {
+        setAuditData(prev => ({
+            ...prev,
+            stages: prev.stages.map(stage =>
+                stage.id === stageId ? {
+                    ...stage,
+                    parameters: stage.parameters.map(param =>
+                        param.id === paramId ? {
+                            ...param,
+                            observations: param.observations.map(obs =>
+                                obs.timeSlot === timeSlot ? { ...obs, selectedLine } : obs
+                            )
+                        } : param
+                    )
+                } : stage
+            )
+        }));
+        setHasUnsavedChanges(true);
+        setStageChanges(prev => new Set(prev).add(stageId));
+    };
+
     const updateBasicInfo = (field: keyof AuditData, value: any) => {
         setAuditData(prev => ({ ...prev, [field]: value }));
         setHasUnsavedChanges(true);
@@ -777,22 +816,6 @@ export default function QualityAudit() {
         }
     };
 
-    const handleSaveStage = () => {
-        if (auditData.lineNumber && auditData.date && auditData.shift) {
-            if (autoSaveTimeoutRef.current) {
-                clearTimeout(autoSaveTimeoutRef.current);
-            }
-            performAutoSave();
-            showAlert('success', 'Stage data saved!');
-        }
-        setStageChanges(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(selectedStageId!);
-            return newSet;
-        });
-        setHasUnsavedChanges(Array.from(stageChanges).some(stageId => stageId !== selectedStageId));
-    };
-
     const editSavedChecksheet = async (index: number) => {
         try {
             setIsLoading(true);
@@ -894,20 +917,20 @@ export default function QualityAudit() {
     return (
         <div>
             <div className="max-w-7xl mx-auto">
-                {(isLoading || isAutoSaving) && (
+                {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 dark:border-blue-400 mx-auto"></div>
                             <p className="mt-2 text-gray-700 dark:text-gray-300">
-                                {isAutoSaving ? 'Auto-saving...' : 'Loading...'}
+                                Loading...
                             </p>
                         </div>
                     </div>
                 )}
                 
-                {isAutoSaving && (
-                    <div className="fixed bottom-4 right-4 bg-green-500 text-white px-3 py-1 rounded-lg text-sm z-40">
-                        Saving...
+                {autoSaveStatus !== 'idle' && (
+                    <div className={`fixed bottom-0 right-0 text-white rounded-sm px-3 py-1 text-xs z-40 ${autoSaveStatus === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+                        {autoSaveStatus === 'saving' ? 'Saving...' : autoSaveStatus === 'saved' ? 'Saved' : 'Auto-save failed'}
                     </div>
                 )}
                 
@@ -953,6 +976,7 @@ export default function QualityAudit() {
                                                     className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                 >
                                                     <option value="">Select</option>
+                                                    <option value="I">I</option>
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>
@@ -1136,12 +1160,6 @@ export default function QualityAudit() {
                                     </h2>
                                     <div className="flex gap-2 self-end sm:self-auto">
                                         <button
-                                            onClick={handleSaveStage}
-                                            className="bg-green-500 dark:bg-green-600 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-green-600 dark:hover:bg-gray-800 dark:hover:text-green-400"
-                                        >
-                                            Save Now
-                                        </button>
-                                        <button
                                             onClick={handleBackToStageSelection}
                                             className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
                                         >
@@ -1219,7 +1237,22 @@ export default function QualityAudit() {
                                                                                                 param.observations.length === 3 ? 'sm:w-1/3' :
                                                                                                     'sm:w-1/4'}`}
                                                                                     >
-                                                                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">{obs.timeSlot}</label>
+                                                                                        {DYNAMIC_LINE_STAGE_IDS.has(selectedStageId) && obs.timeSlot.startsWith('Line-') ? (
+                                                                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                                                                                                <span>Line -</span>
+                                                                                                <select
+                                                                                                    value={savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot)}
+                                                                                                    onChange={(e) => updateObservationLineSelection(selectedStageId, param.id, obs.timeSlot, e.target.value)}
+                                                                                                    className="px-1 py-0.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                                >
+                                                                                                    {getDynamicLineOptions(auditData.lineNumber).map(line => (
+                                                                                                        <option key={line} value={line}>{line}</option>
+                                                                                                    ))}
+                                                                                                </select>
+                                                                                            </label>
+                                                                                        ) : (
+                                                                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">{obs.timeSlot}</label>
+                                                                                        )}
                                                                                         {param.renderObservation ? (
                                                                                             param.renderObservation({
                                                                                                 stageId: selectedStageId,

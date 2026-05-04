@@ -136,30 +136,30 @@ async def update_ipqc_audit(audit_id: str, audit_data: dict):
         if not existing_audit:
             raise HTTPException(status_code=404, detail="Audit not found")
 
-        # Validate required fields
-        required_fields = ["name", "timestamp", "data"]
-        for field in required_fields:
-            if field not in audit_data:
-                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        existing_ipqc_audit = IPQCAudit.from_dict(existing_audit)
+        existing_data = existing_ipqc_audit.get_data()
+        updated_data = {**existing_data, **audit_data.get("data", {})}
+        updated_name = audit_data.get("name", existing_audit["name"])
+        updated_timestamp = audit_data.get("timestamp", existing_audit["timestamp"])
 
         # Create IPQCAudit instance
         ipqc_audit = IPQCAudit(
             _id=str(existing_audit["_id"]),
-            name=audit_data["name"],
-            timestamp=audit_data["timestamp"],
+            name=updated_name,
+            timestamp=updated_timestamp,
             s3_key=existing_audit["s3_key"]
         )
 
         # Update data in S3
-        success = ipqc_audit.save_data(data=audit_data["data"])
+        success = ipqc_audit.save_data(data=updated_data)
 
         if not success:
             raise HTTPException(status_code=500, detail="Failed to save audit data to S3")
 
         # Update metadata in MongoDB
         update_data = {
-            "name": audit_data["name"],
-            "timestamp": audit_data["timestamp"]
+            "name": updated_name,
+            "timestamp": updated_timestamp
         }
 
         ipqc_audit_collection.update_one(
@@ -170,9 +170,9 @@ async def update_ipqc_audit(audit_id: str, audit_data: dict):
         # Return the updated audit
         return {
             "_id": audit_id,
-            "name": audit_data["name"],
-            "timestamp": audit_data["timestamp"],
-            "data": audit_data["data"],
+            "name": updated_name,
+            "timestamp": updated_timestamp,
+            "data": updated_data,
             "s3_key": existing_audit["s3_key"]
         }
 

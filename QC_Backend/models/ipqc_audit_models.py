@@ -7,6 +7,26 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 ipqc_audit_collection = db["ipqc_audits"]
 
+DYNAMIC_LINE_PARAMETER_IDS = {
+    "2-4", "2-5", "2-6",
+    "3-7", "3-8", "3-9",
+    "9-6", "9-7", "9-8",
+    "10-4", "10-5", "10-6",
+    "11-3", "11-4", "11-5",
+}
+
+def normalize_dynamic_line_selections(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Backfill selectedLine for older audits while preserving existing payload shape."""
+    for stage in data.get("stages", []):
+        for parameter in stage.get("parameters", []):
+            if parameter.get("id") not in DYNAMIC_LINE_PARAMETER_IDS:
+                continue
+            for observation in parameter.get("observations", []):
+                time_slot = observation.get("timeSlot", "")
+                if "selectedLine" not in observation and isinstance(time_slot, str) and time_slot.startswith("Line-"):
+                    observation["selectedLine"] = time_slot.replace("Line-", "")
+    return data
+
 class IPQCAudit:
     def __init__(self, name: str, timestamp: str, s3_key: str, _id: Optional[str] = None):
         self._id = _id
@@ -17,7 +37,7 @@ class IPQCAudit:
 
     def get_data(self) -> Dict[str, Any]:
         try:
-            return self.s3_service.download_json(self.s3_key)
+            return normalize_dynamic_line_selections(self.s3_service.download_json(self.s3_key))
         except Exception as e:
             print(f"Error retrieving IPQC audit data from S3 (key: {self.s3_key}): {str(e)}")
             import traceback
@@ -26,7 +46,7 @@ class IPQCAudit:
 
     def save_data(self, data: Dict[str, Any]) -> bool:
         try:
-            return self.s3_service.uploadOrOverwriteJson(self.s3_key, data)
+            return self.s3_service.uploadOrOverwriteJson(self.s3_key, normalize_dynamic_line_selections(data))
         except Exception as e:
             print(f"Error saving IPQC audit data to S3 (key: {self.s3_key}): {str(e)}")
             import traceback
@@ -58,7 +78,7 @@ class IPQCAudit:
         s3_service = S3Service()
         s3_key = s3_service.generate_fixed_s3_key('ipqc-audit', mongo_id)
         audit = IPQCAudit(name=name, timestamp=timestamp, s3_key=s3_key)
-        success = s3_service.uploadOrOverwriteJson(s3_key, data)
+        success = s3_service.uploadOrOverwriteJson(s3_key, normalize_dynamic_line_selections(data))
         if not success:
             raise Exception("Failed to upload IPQC audit data to S3")
         return audit

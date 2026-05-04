@@ -35,6 +35,7 @@ export interface ObservationData {
     timeSlot: string;
     value: string | Record<string, string> | Record<string, Record<string, string>>;
     sampleReadings?: string[];
+    selectedLine?: string;
 }
 
 export interface ObservationRenderProps {
