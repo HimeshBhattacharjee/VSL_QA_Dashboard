@@ -1,9 +1,11 @@
+import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useState, useMemo } from 'react';
 
 export interface SavedReport {
     id?: string;
     name: string;
     timestamp: string | number;
+    updatedTimestamp?: string | number;
     shift?: string;
     date?: string;
     [key: string]: any;
@@ -36,10 +38,13 @@ interface SavedReportsProps {
     onFilter?: (filterType: string, filterValue: string) => void; // Optional callback for external filter handling
 }
 
+type SortOption = 'newest-created' | 'oldest-created' | 'recently-updated' | 'least-recently-updated' | 'name-asc' | 'name-desc';
+
 export default function SavedReportsNChecksheets({
     reports,
     onExportExcel,
     onEdit,
+    onDelete,
     emptyMessage = {
         title: 'No saved reports found.',
         description: 'Create and save your first report in the "Edit Report" tab.'
@@ -54,11 +59,18 @@ export default function SavedReportsNChecksheets({
     onSearch,
     onFilter
 }: SavedReportsProps) {
+    const { showConfirm } = useConfirmModal();
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
     const [showFilters, setShowFilters] = useState(false);
+    const [sortOption, setSortOption] = useState<SortOption>('newest-created');
 
-    // Filter and search reports
+    const getTimeValue = (value: string | number | undefined) => {
+        if (!value) return 0;
+        return new Date(value).getTime();
+    };
+
+    // Filter, search, and sort reports without changing the source order.
     const filteredReports = useMemo(() => {
         let filtered = [...reports];
 
@@ -93,8 +105,38 @@ export default function SavedReportsNChecksheets({
             });
         });
 
+        filtered.sort((a, b) => {
+            switch (sortOption) {
+                case 'oldest-created':
+                    return getTimeValue(a.timestamp) - getTimeValue(b.timestamp);
+                case 'recently-updated':
+                    return getTimeValue(b.updatedTimestamp || b.timestamp) - getTimeValue(a.updatedTimestamp || a.timestamp);
+                case 'least-recently-updated':
+                    return getTimeValue(a.updatedTimestamp || a.timestamp) - getTimeValue(b.updatedTimestamp || b.timestamp);
+                case 'name-asc':
+                    return a.name.localeCompare(b.name);
+                case 'name-desc':
+                    return b.name.localeCompare(a.name);
+                case 'newest-created':
+                default:
+                    return getTimeValue(b.timestamp) - getTimeValue(a.timestamp);
+            }
+        });
+
         return filtered;
-    }, [reports, searchTerm, activeFilters, filterConfigs]);
+    }, [reports, searchTerm, activeFilters, filterConfigs, sortOption]);
+
+    const handleDelete = (index: number, reportName: string) => {
+        // Find the original index in the unfiltered reports array
+        const originalIndex = reports.findIndex(r => r.id === filteredReports[index].id);
+        showConfirm({
+            title: 'Delete Report',
+            message: `Are you sure you want to delete "${reportName}"? This action cannot be undone.`,
+            type: 'warning',
+            confirmText: 'Delete',
+            onConfirm: () => onDelete(originalIndex)
+        });
+    };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
@@ -176,6 +218,22 @@ export default function SavedReportsNChecksheets({
                                 </div>
                             </div>
                         )}
+
+                        <div className="sm:w-56">
+                            <select
+                                value={sortOption}
+                                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                aria-label="Sort saved reports"
+                            >
+                                <option value="newest-created">Newest Created</option>
+                                <option value="oldest-created">Oldest Created</option>
+                                <option value="recently-updated">Recently Updated</option>
+                                <option value="least-recently-updated">Least Recently Updated</option>
+                                <option value="name-asc">Alphabetical (A - Z)</option>
+                                <option value="name-desc">Alphabetical (Z - A)</option>
+                            </select>
+                        </div>
                         
                         {enableFilters && filterConfigs.length > 0 && (
                             <button
@@ -292,13 +350,13 @@ export default function SavedReportsNChecksheets({
                                         Edit
                                     </button>
                                     {customActions && customActions(report, reports.findIndex(r => r.id === report.id))}
-                                    {/* <button
+                                    <button
                                         className="delete-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-red-500 dark:bg-red-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-red-600 dark:hover:bg-red-700 hover:scale-105 active:scale-95 whitespace-nowrap"
                                         onClick={() => handleDelete(index, report.name)}
                                         aria-label={`Delete ${report.name}`}
                                     >
                                         Delete
-                                    </button> */}
+                                    </button>
                                 </div>
                             </div>
                         </div>

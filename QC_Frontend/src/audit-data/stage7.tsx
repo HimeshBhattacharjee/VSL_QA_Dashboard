@@ -81,28 +81,40 @@ const LineSection = {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
-        children: (label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date') => React.ReactNode;
+        children: (label: 'Supplier' | 'Width Top & Bottom' | 'Width Middle' | 'Thickness Top & Bottom' | 'Thickness Middle' | 'Expiry Date Top & Bottom' | 'Expiry Date Middle') => React.ReactNode;
     }) => (
         <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2 justify-between">
+            <div className="flex flex-col mb-2 items-center">
+                <span className="text-xs text-gray-500 mb-1">Supplier</span>
+                {children('Supplier')}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500 mb-1">Supplier</span>
-                    {children('Supplier')}
+                    <span className="text-xs text-gray-500 mb-1">Width (Top & Bottom)</span>
+                    {children('Width Top & Bottom')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500 mb-1">Width</span>
-                    {children('Width')}
+                    <span className="text-xs text-gray-500 mb-1">Width (Middle)</span>
+                    {children('Width Middle')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500 mb-1">Thickness</span>
-                    {children('Thickness')}
+                    <span className="text-xs text-gray-500 mb-1">Thickness (Top & Bottom)</span>
+                    {children('Thickness Top & Bottom')}
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500 mb-1">Expiry Date</span>
-                    {children('Expiry Date')}
+                    <span className="text-xs text-gray-500 mb-1">Thickness (Middle)</span>
+                    {children('Thickness Middle')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">Expiry Date (Top & Bottom)</span>
+                    {children('Expiry Date Top & Bottom')}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">Expiry Date (Middle)</span>
+                    {children('Expiry Date Middle')}
                 </div>
             </div>
         </div>
@@ -118,7 +130,7 @@ const LineSection = {
             <div className="text-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Auto Bussing - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2 justify-between">
+            <div className="grid grid-cols-3 gap-2 justify-between">
                 <div className="flex flex-col items-center">
                     <span className="text-xs text-gray-500 mb-1">Front TCA 1</span>
                     {children('Front TCA 1 L')}
@@ -210,7 +222,7 @@ const LineSection = {
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: {
-            byPosition: (position: number) => React.ReactNode;
+            byPosition: (displayPosition: number, storagePosition: number) => React.ReactNode;
             byLabel: (label: 'Line' | 'Position' | 'Side') => React.ReactNode;
         };
     }) => (
@@ -233,10 +245,13 @@ const LineSection = {
                 </div>
             </div>
             <div className="grid grid-cols-10 gap-2">
-                {Array.from({ length: 40 }, (_, index) => index + 1).map(position => (
-                    <div key={position} className="flex flex-col items-center">
-                        <span className="text-xs text-gray-500 mb-1">Pos {position}</span>
-                        {children.byPosition(position)}
+                {Array.from({ length: 40 }, (_, index) => ({
+                    displayPosition: index < 20 ? index + 1 : index - 19,
+                    storagePosition: index + 1
+                })).map(({ displayPosition, storagePosition }) => (
+                    <div key={storagePosition} className="flex flex-col items-center">
+                        <span className="text-xs text-gray-500 mb-1">Pos {displayPosition}</span>
+                        {children.byPosition(displayPosition, storagePosition)}
                     </div>
                 ))}
             </div>
@@ -302,14 +317,14 @@ const AutoBussingObservations = {
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
                 lines.flatMap(line =>
-                    ['Supplier', 'Width', 'Thickness', 'Expiry Date'].map(label =>
+                    ['Supplier', 'Width Top & Bottom', 'Width Middle', 'Thickness Top & Bottom', 'Thickness Middle', 'Expiry Date Top & Bottom', 'Expiry Date Middle'].map(label =>
                         [`${line}-${label}`, ""]
                     )
                 )
             )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: string, label: 'Supplier' | 'Width' | 'Thickness' | 'Expiry Date', value: string) => {
+        const handleUpdate = (line: string, label: 'Supplier' | 'Width Top & Bottom' | 'Width Middle' | 'Thickness Top & Bottom' | 'Thickness Middle' | 'Expiry Date Top & Bottom' | 'Expiry Date Middle', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${label}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
@@ -335,14 +350,14 @@ const AutoBussingObservations = {
                                 ]}
                                 type="status"
                             />
-                        ) : (label === 'Expiry Date') ? (
+                        ) : (label === 'Expiry Date Top & Bottom' || label === 'Expiry Date Middle') ? (
                             <InputComponents.DateInput
-                                value={sampleValue[`${line}-${label}`] || ''}
+                                value={sampleValue[`${line}-${label}`] || (label === 'Expiry Date Top & Bottom' ? sampleValue[`${line}-Expiry Date`] : '') || ''}
                                 onChange={(value) => handleUpdate(line, label, value)}
                             />
                         ) : (
                             <InputComponents.TextInput
-                                value={sampleValue[`${line}-${label}`] || ''}
+                                value={sampleValue[`${line}-${label}`] || (label === 'Width Top & Bottom' ? sampleValue[`${line}-Width`] : label === 'Thickness Top & Bottom' ? sampleValue[`${line}-Thickness`] : '') || ''}
                                 onChange={(value) => handleUpdate(line, label, value)}
                                 placeholder=""
                                 type="measurement"
@@ -643,7 +658,7 @@ const AutoBussingObservations = {
                 lines.flatMap(line =>
                     [
                         ['Line', ''], ['Position', ''], ['Side', ''],
-                        ...Array.from({ length: 20 }, (_, i) => [`Pos${i + 1}`, ''])
+                        ...Array.from({ length: 40 }, (_, i) => [`Pos${i + 1}`, ''])
                     ].map(([key]) => [`${line}-${key}`, ""])
                 )
             )
@@ -681,10 +696,10 @@ const AutoBussingObservations = {
                             type="status"
                         />
                     ),
-                    byPosition: (position) => (
+                    byPosition: (_displayPosition, storagePosition) => (
                         <InputComponents.TextInput
-                            value={sampleValue[`${line}-Pos${position}`] || ''}
-                            onChange={(value) => handleUpdate(`${line}-Pos${position}`, value)}
+                            value={sampleValue[`${line}-Pos${storagePosition}`] || ''}
+                            onChange={(value) => handleUpdate(`${line}-Pos${storagePosition}`, value)}
                             placeholder=""
                             type="measurement"
                         />

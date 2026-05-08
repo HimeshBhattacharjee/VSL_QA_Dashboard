@@ -12,6 +12,8 @@ export interface AuditData {
     signatures?: {
         auditBy: string;
         reviewedBy: string;
+        auditByImage?: string;
+        reviewedByImage?: string;
     };
 }
 
@@ -36,6 +38,7 @@ export interface ObservationData {
     value: string | Record<string, string> | Record<string, Record<string, string>>;
     sampleReadings?: string[];
     selectedLine?: string;
+    lineMapping?: Record<string, string>;
 }
 
 export interface ObservationRenderProps {
@@ -45,4 +48,6 @@ export interface ObservationRenderProps {
     value: string | Record<string, string> | Record<string, Record<string, string>>;
     observationData: ObservationData;
     onUpdate: (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string> | Record<string, Record<string, string>>) => void;
+    lineOptions?: string[];
+    onLineMappingUpdate?: (stageId: number, paramId: string, timeSlot: string, groupKey: string, selectedLine: string) => void;
 }

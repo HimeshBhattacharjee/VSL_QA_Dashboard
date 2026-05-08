@@ -1,64 +1,9 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
+import { renderGroupedSampleInputs } from './sampleGroupedInputs';
 
 const LaminateInspectionObservations = {
     renderSerialNumbers: (props: ObservationRenderProps) => {
-        const sampleValue = typeof props.value === 'string'
-            ? {
-                "Sample-1": "", "Sample-2": "", "Sample-3": "", "Sample-4": "", "Sample-5": "",
-                "Sample-6": "", "Sample-7": "", "Sample-8": "", "Sample-9": "", "Sample-10": ""
-            }
-            : props.value as Record<string, string>;
-
-        return (
-            <div className="flex flex-col rounded-lg bg-white shadow-sm border border-gray-400">
-                <div className="flex flex-row justify-between p-2 gap-2">
-                    {['Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5'].map((sample) => {
-                        const value = sampleValue[sample] || '';
-                        const isOff = value.toLowerCase() === 'off';
-                        
-                        return (
-                            <div key={sample} className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500 mb-1">{sample}</span>
-                                <input
-                                    type="text"
-                                    value={value}
-                                    onChange={(e) => {
-                                        const updatedValue = { ...sampleValue, [sample]: e.target.value };
-                                        props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                                    }}
-                                    className={`w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${
-                                        isOff ? 'bg-yellow-200' : 'bg-white'
-                                    }`}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="flex flex-row justify-between gap-2 p-2">
-                    {['Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10'].map((sample) => {
-                        const value = sampleValue[sample] || '';
-                        const isOff = value.toLowerCase() === 'off';
-                        
-                        return (
-                            <div key={sample} className="flex flex-col items-center">
-                                <span className="text-xs text-gray-500 mb-1">{sample}</span>
-                                <input
-                                    type="text"
-                                    value={value}
-                                    onChange={(e) => {
-                                        const updatedValue = { ...sampleValue, [sample]: e.target.value };
-                                        props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-                                    }}
-                                    className={`w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${
-                                        isOff ? 'bg-yellow-200' : 'bg-white'
-                                    }`}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
+        return renderGroupedSampleInputs(props, (value) => value.toLowerCase() === 'off' ? 'bg-yellow-200' : 'bg-white');
     },
 
     renderInputNumber: (props: ObservationRenderProps) => {

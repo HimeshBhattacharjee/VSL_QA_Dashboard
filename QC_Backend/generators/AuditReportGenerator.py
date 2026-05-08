@@ -1,8 +1,13 @@
 from openpyxl import load_workbook
-from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
+from openpyxl.styles import (PatternFill, Alignment, NamedStyle)
 from openpyxl.utils import get_column_letter
+import base64
 import io
+import os
+import urllib.request
+import re
 from openpyxl.cell.cell import MergedCell
+from openpyxl.drawing.image import Image as OpenpyxlImage
 from paths import get_template_key, download_from_s3
 
 DYNAMIC_LINE_PARAMETER_IDS = {
@@ -11,7 +16,173 @@ DYNAMIC_LINE_PARAMETER_IDS = {
     '9-6', '9-7', '9-8',
     '10-4', '10-5', '10-6',
     '11-3', '11-4', '11-5',
+    '12-1', '12-2', '16-1', '23-1', '27-1', '29-1',
 }
+
+GROUPED_SAMPLE_PARAMETER_IDS = {'12-1', '12-2', '16-1', '23-1', '27-1', '29-1'}
+SAMPLE_GROUPS = {
+    '2h': [('Sample-1', 'Sample-1'), ('Sample-2', 'Sample-2'), ('Sample-3', 'Sample-3'), ('Sample-4', 'Sample-4'), ('Sample-5', 'Sample-5')],
+    '4h': [('Sample-6', 'Sample-6'), ('Sample-7', 'Sample-7'), ('Sample-8', 'Sample-8'), ('Sample-9', 'Sample-9'), ('Sample-10', 'Sample-10')],
+    '6h': [('Sample-11', 'Sample-1'), ('Sample-12', 'Sample-2'), ('Sample-13', 'Sample-3'), ('Sample-14', 'Sample-4'), ('Sample-15', 'Sample-5')],
+    '8h': [('Sample-16', 'Sample-6'), ('Sample-17', 'Sample-7'), ('Sample-18', 'Sample-8'), ('Sample-19', 'Sample-9'), ('Sample-20', 'Sample-10')],
+}
+LINE_SELECTION_CELL_MAPPINGS = {
+    '2-4': {'4h': 'M16', '8h': 'Y16'}, '2-5': {'4h': 'M16', '8h': 'Y16'}, '2-6': {'4h': 'M16', '8h': 'Y16'},
+    '3-7': {'4h': 'M27', '8h': 'Y27'}, '3-8': {'4h': 'M27', '8h': 'Y27'}, '3-9': {'4h': 'M27', '8h': 'Y27'},
+    '9-6': {'4h': 'M191', '8h': 'Y191'}, '9-7': {'4h': 'M191', '8h': 'Y191'}, '9-8': {'4h': 'M191', '8h': 'Y191'},
+    '10-4': {'4h': 'M199', '8h': 'Y199'}, '10-5': {'4h': 'M199', '8h': 'Y199'}, '10-6': {'4h': 'M199', '8h': 'Y199'},
+    '11-3': {'4h': 'M203', '8h': 'Y203'}, '11-4': {'4h': 'M203', '8h': 'Y203'}, '11-5': {'4h': 'M203', '8h': 'Y203'},
+}
+GROUPED_LINE_SELECTION_CELL_MAPPINGS = {
+    '12-1': {'2h': 'J211', '4h': 'P211', '6h': 'V211', '8h': 'AB211'},
+    '12-2': {'2h': 'J211', '4h': 'P211', '6h': 'V211', '8h': 'AB211'},
+    '16-1': {'2h': 'J250', '4h': 'P250', '6h': 'V250', '8h': 'AB250'},
+    '23-1': {'2h': 'J332', '4h': 'P332', '6h': 'V332', '8h': 'AB332'},
+    '27-1': {'2h': 'J375', '4h': 'P375', '6h': 'V375', '8h': 'AB375'}
+}
+SIMPLE_DEFAULTS = {
+    '1-3': 'Checked OK', '2-3': 'Checked OK', '3-4': 'New Box Open',
+    '4-2': 'New Box Open', '4-3': 'Stacked two box of cells', '4-4': 'Checked OK',
+    '5-2': 'Checked OK',
+    '6-1': 'Checked OK', '13-1': 'Checked OK', '13-2': 'Checked OK',
+    '13-4': 'Checked OK', '25-1': 'Checked OK', '25-2': 'Checked OK',
+    '25-3': 'Checked OK', '28-1': 'Checked OK', '29-2': 'Checked OK', '30-1': 'Checked OK',
+    '30-2': 'Checked OK',
+}
+SAMPLE_KEY_DEFAULTS = {
+    '2-2': 'Checked OK', '3-6': 'Checked OK', '9-5': 'Checked OK', '11-2': 'Checked OK',
+}
+LINE_KEY_DEFAULTS = {
+    '7-5': 'Checked OK', '8-1': 'Checked OK', '8-2': 'Outside RFID',
+    '8-3': 'Checked OK', '8-4': 'Checked OK', '8-5': 'Checked OK',
+    '15-1': 'Checked OK',
+    '15-2': 'Checked OK', '20-2': 'Checked OK', '20-4': 'Checked OK',
+    '21-5': 'Checked OK', '22-1': 'Checked OK', '22-2': 'Checked OK',
+    '17-3': 'Both side of length', '17-4': 'Checked OK',
+    '18-4': 'Checked OK', '19-1': 'ESD band used',
+    '24-2': 'Checked OK', '24-3': 'Checked OK', '24-8': 'Checked OK',
+    '24-9': 'Checked OK', '26-1': 'Pass', '26-3': 'Pass',
+}
+TIME_SLOT_DEFAULTS = {
+    '10-1': 'OFF', '10-2': 'OFF', '10-3': 'OFF',
+    '31-2': 'Checked OK', '31-3': 'Checked OK', '31-4': 'Checked OK',
+    '31-5': 'Checked OK', '31-6': 'Checked OK', '31-7': 'Checked OK',
+    '31-8': 'Vertically', '31-10': 'Checked OK', '31-11': 'Checked OK',
+    '31-12': 'Checked OK', '31-13': 'Checked OK',
+}
+SAMPLE_OFF_DEFAULTS = {'10-4', '10-5', '10-6'}
+COMPONENT_FIELD_DEFAULTS = {
+    '18-1': {
+        'type': 'TM4545-30U/TM3045-30U/XND-18-V100C/TM45100-30U'
+    }
+}
+PRELAM_GROUPED_PARAMETER_IDS = {'12-1', '12-2'}
+PRELAM_GROUP_TARGETS = {
+    '2h': ('Line-3', ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')),
+    '4h': ('Line-3', ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')),
+    '6h': ('Line-4', ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')),
+    '8h': ('Line-4', ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')),
+}
+NESTED_STRING_DEFAULTS = {
+    '5-5-cell-appearance': 'Checked OK',
+    '5-15-el-inspection': 'Checked OK',
+}
+NUMERIC_PATTERN = re.compile(r'^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$')
+
+def is_empty_value(value):
+    return value is None or value == ''
+
+def apply_export_defaults(param_id, value, param_mapping):
+    """Match frontend selector defaults during export without overwriting user input."""
+    if param_id in SIMPLE_DEFAULTS and is_empty_value(value):
+        return SIMPLE_DEFAULTS[param_id]
+    if param_id in SAMPLE_KEY_DEFAULTS:
+        normalized_value = {} if not isinstance(value, dict) else dict(value)
+        for sample_key in ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5', 'Sample-6'):
+            if is_empty_value(normalized_value.get(sample_key)):
+                normalized_value[sample_key] = SAMPLE_KEY_DEFAULTS[param_id]
+        return normalized_value
+    if param_id in SAMPLE_OFF_DEFAULTS:
+        normalized_value = {} if not isinstance(value, dict) else dict(value)
+        for line_mapping in param_mapping.values():
+            if not isinstance(line_mapping, dict):
+                continue
+            for sample_key in line_mapping:
+                if is_empty_value(normalized_value.get(sample_key)):
+                    normalized_value[sample_key] = 'OFF'
+        return normalized_value
+    if param_id in TIME_SLOT_DEFAULTS and is_empty_value(value):
+        return TIME_SLOT_DEFAULTS[param_id]
+    if param_id in COMPONENT_FIELD_DEFAULTS and isinstance(param_mapping, dict):
+        normalized_value = {} if not isinstance(value, dict) else dict(value)
+        for key in param_mapping:
+            for field_name, default_value in COMPONENT_FIELD_DEFAULTS[param_id].items():
+                if key.endswith(f"-{field_name}") and is_empty_value(normalized_value.get(key)):
+                    normalized_value[key] = default_value
+        return normalized_value
+    if param_id in NESTED_STRING_DEFAULTS and isinstance(param_mapping, dict):
+        return apply_nested_string_default(value, param_mapping, NESTED_STRING_DEFAULTS[param_id])
+    if param_id not in LINE_KEY_DEFAULTS or not isinstance(param_mapping, dict):
+        return value
+
+    normalized_value = {} if not isinstance(value, dict) else dict(value)
+    default_value = LINE_KEY_DEFAULTS[param_id]
+    for key in param_mapping:
+        if key.startswith('moduleId'):
+            continue
+        if is_empty_value(normalized_value.get(key)):
+            normalized_value[key] = default_value
+    return normalized_value
+
+def apply_nested_string_default(value, param_mapping, default_value):
+    """Hydrate known nested selector defaults while preserving explicit values."""
+    normalized_value = {} if not isinstance(value, dict) else dict(value)
+    for outer_key, inner_mapping in param_mapping.items():
+        if not isinstance(inner_mapping, dict):
+            continue
+        current_inner = normalized_value.get(outer_key)
+        current_inner = dict(current_inner) if isinstance(current_inner, dict) else {}
+        for inner_key in inner_mapping:
+            if is_empty_value(current_inner.get(inner_key)):
+                current_inner[inner_key] = default_value
+        normalized_value[outer_key] = current_inner
+    return normalized_value
+
+def combine_result_with_module_id(result, module_id):
+    if module_id:
+        return f"{result} - {module_id}" if result else module_id
+    return result
+
+def parse_numeric(value):
+    """Write numeric-only strings to Excel as real numeric cells."""
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or not NUMERIC_PATTERN.fullmatch(stripped):
+            return value
+        return float(stripped) if '.' in stripped else int(stripped)
+    return value
+
+def set_cell_value(cell, value):
+    cell.value = parse_numeric(value)
+
+def set_cell_raw_value(cell, value):
+    cell.value = value
+
+def extract_safety_module_ids(stages):
+    for stage in stages:
+        if stage.get('id') != 26:
+            continue
+        for parameter in stage.get('parameters', []):
+            if parameter.get('id') != '26-1':
+                continue
+            for observation in parameter.get('observations', []):
+                value = observation.get('value', {})
+                if isinstance(value, dict):
+                    return {
+                        'moduleId4Hours': value.get('moduleId4Hours', ''),
+                        'moduleId8Hours': value.get('moduleId8Hours', ''),
+                    }
+    return {}
 
 def get_writable_cell(worksheet, cell_ref):
     cell = worksheet[cell_ref]
@@ -21,58 +192,46 @@ def get_writable_cell(worksheet, cell_ref):
                 return worksheet[merged_range.coord.split(":")[0]]
     return cell
 
+def insert_signature_image(worksheet, cell_ref, image_source):
+    """Insert URL, data URI, raw base64, or file-path signature images."""
+    if not image_source:
+        return False
+    try:
+        if isinstance(image_source, str) and image_source.startswith(('http://', 'https://')):
+            with urllib.request.urlopen(image_source, timeout=10) as response:
+                image_bytes = io.BytesIO(response.read())
+        elif isinstance(image_source, str) and os.path.exists(image_source):
+            image_bytes = image_source
+        else:
+            encoded_image = image_source.split(',', 1)[1] if isinstance(image_source, str) and ',' in image_source else image_source
+            image_bytes = io.BytesIO(base64.b64decode(encoded_image))
+        signature_image = OpenpyxlImage(image_bytes)
+        signature_image.height = 45
+        signature_image.width = 120
+        worksheet.add_image(signature_image, cell_ref)
+        return True
+    except Exception as e:
+        print(f"Unable to insert signature image at {cell_ref}: {str(e)}")
+        return False
+
 def setup_cell_styles(workbook):
     header_style = NamedStyle(name="header_style")
-    header_style.font = Font(name='Calibri', size=18, bold=True, color='FFFFFF')
     header_style.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
     header_style.alignment = Alignment(horizontal='center', vertical='center')
-    header_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
     data_style = NamedStyle(name="data_style")
-    data_style.font = Font(name='Calibri', size=16)
     data_style.alignment = Alignment(horizontal='center', vertical='center')
-    data_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
     important_style = NamedStyle(name="important_style")
-    important_style.font = Font(name='Calibri', size=16, bold=True, color='000000')
     important_style.alignment = Alignment(horizontal='center', vertical='center')
-    important_style.border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
     for style in [header_style, data_style, important_style]:
         if style.name not in workbook.named_styles:
             workbook.add_named_style(style)
 
-def apply_cell_formatting(cell, style_type='data', font_size=16, bold=False, text_color='000000', horizontal='center', vertical='center'):
-    cell.font = Font(
-        name='Calibri',
-        size=font_size,
-        bold=bold,
-        color=text_color
-    )
+def apply_cell_formatting(cell, horizontal='center', vertical='center', **_format_options):
     cell.alignment = Alignment(
         horizontal=horizontal,
         vertical=vertical,
         wrap_text=True
     )
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    cell.border = thin_border
 
 def get_template_config(line_number):
     if line_number == 'I':
@@ -80,14 +239,12 @@ def get_template_config(line_number):
         template_path = download_from_s3(template_key)
         field_config = {
             'date': {
-                'cell': 'C5', 
+                'cell': 'C5',
                 'label': 'Date',
-                'format': {'font_size': 16}
             },
             'shift': {
                 'cell': 'E5',
-                'label': 'Shift', 
-                'format': {'font_size': 16}
+                'label': 'Shift',
             },
             'production_order': {
                 'cell': 'J5',
@@ -613,8 +770,12 @@ def get_template_config(line_number):
                 'Stringer-12': {'4 hours': 'G131', '8 hours': 'S131'},
             },
             '7-1': {
-                'Line-4-Supplier': 'I133', 'Line-4-Width': 'O133', 'Line-4-Thickness': 'U133', 'Line-4-Expiry Date': 'AA133',
-                'Line-5-Supplier': 'I145', 'Line-5-Width': 'O145', 'Line-5-Thickness': 'U145', 'Line-5-Expiry Date': 'AA145'
+                'Line-4-Supplier': 'I133', 'Line-4-Width Top & Bottom': 'O133', 'Line-4-Width Middle': 'P133',
+                'Line-4-Thickness Top & Bottom': 'U133', 'Line-4-Thickness Middle': 'V133',
+                'Line-4-Expiry Date Top & Bottom': 'AA133', 'Line-4-Expiry Date Middle': 'AB133',
+                'Line-5-Supplier': 'I145', 'Line-5-Width Top & Bottom': 'O145', 'Line-5-Width Middle': 'P145',
+                'Line-5-Thickness Top & Bottom': 'U145', 'Line-5-Thickness Middle': 'V145',
+                'Line-5-Expiry Date Top & Bottom': 'AA145', 'Line-5-Expiry Date Middle': 'AB145'
             },
             '7-2': {
                 'Line-4-Front TCA 1 L': 'I134', 'Line-4-Middle TCA 1 L': 'M134', 'Line-4-Back TCA 1 L': 'Q134',
@@ -1139,6 +1300,7 @@ def get_template_config(line_number):
                 'Line-4-2-contact-block': 'V365', 'Line-4-2-positive': 'Z365', 'Line-4-2-negative': 'AD365'
             },
             '26-1': {
+                'moduleId4Hours': 'L369', 'moduleId8Hours': 'X369',
                 'Line-3-4hrs': 'G369', 'Line-3-8hrs': 'S369',
                 'Line-4-4hrs': 'G372', 'Line-4-8hrs': 'S372'
             },
@@ -1214,7 +1376,12 @@ def get_template_config(line_number):
                 'cell': 'O405',
                 'label': 'Reviewed By:',
                 'format': {'font_size': 16, 'bold': True}
-            }
+            },
+            'reviewedByImage': {
+                'cell': 'O407',
+                'label': 'Reviewed By Signature:',
+                'format': {'font_size': 16, 'bold': True}
+            },
         }
         observation_cell_mapping = {
             '1-1': { '4 hrs': 'G9', '8 hrs': 'S9' },
@@ -1249,7 +1416,7 @@ def get_template_config(line_number):
             '10-1': { 'Supplier': 'I196', 'Type': 'N196', 'Lot No.': 'T196', 'Expiry Date': 'Z196' },
             '10-2': { '': 'G197' },
             '10-3': { '4 hours': 'G198', '8 hours': 'S198' },
-            '11-1': { 'Supplier': 'I203', 'Type': 'N203', 'Lot No.': 'T203', 'Expiry Date': 'Z203' },
+            '11-1': { 'Supplier': 'I204', 'Type': 'N204', 'Lot No.': 'T204', 'Expiry Date': 'Z204' },
             '11-6': { '4 hours': 'G210', '8 hours': 'S210' },
             '13-1': { '4 hrs': 'G222', '8 hrs': 'S222' },
             '13-2': { '': 'G223' },
@@ -1709,8 +1876,12 @@ def get_template_config(line_number):
                 'Stringer-12': {'4 hours': 'G131', '8 hours': 'S131'},
             },
             '7-1': {
-                'Line-4-Supplier': 'I133', 'Line-4-Width': 'O133', 'Line-4-Thickness': 'U133', 'Line-4-Expiry Date': 'AA133',
-                'Line-5-Supplier': 'I145', 'Line-5-Width': 'O145', 'Line-5-Thickness': 'U145', 'Line-5-Expiry Date': 'AA145'
+                'Line-4-Supplier': 'I133', 'Line-4-Width Top & Bottom': 'O133', 'Line-4-Width Middle': 'P133',
+                'Line-4-Thickness Top & Bottom': 'U133', 'Line-4-Thickness Middle': 'V133',
+                'Line-4-Expiry Date Top & Bottom': 'AA133', 'Line-4-Expiry Date Middle': 'AB133',
+                'Line-5-Supplier': 'I145', 'Line-5-Width Top & Bottom': 'O145', 'Line-5-Width Middle': 'P145',
+                'Line-5-Thickness Top & Bottom': 'U145', 'Line-5-Thickness Middle': 'V145',
+                'Line-5-Expiry Date Top & Bottom': 'AA145', 'Line-5-Expiry Date Middle': 'AB145'
             },
             '7-2': {
                 'Line-4-Front TCA 1 L': 'I134', 'Line-4-Middle TCA 1 L': 'M134', 'Line-4-Back TCA 1 L': 'Q134',
@@ -2015,11 +2186,11 @@ def get_template_config(line_number):
             '16-1': {
                 'Line-3': {
                     'Sample-1': 'G251', 'Sample-2': 'G252', 'Sample-3': 'G253', 'Sample-4': 'G254', 'Sample-5': 'G255',
-                    'Sample-6': 'M251', 'Sample-7': 'M252', 'Sample-8': 'M253', 'Sample-9': 'M254', 'Sample-10': 'M255'
+                    'Sample-6': 'Y251', 'Sample-7': 'Y252', 'Sample-8': 'Y253', 'Sample-9': 'Y254', 'Sample-10': 'Y255'
                 },
                 'Line-4': {
                     'Sample-1': 'S251', 'Sample-2': 'S252', 'Sample-3': 'S253', 'Sample-4': 'S254', 'Sample-5': 'S255',
-                    'Sample-6': 'Y251', 'Sample-7': 'Y252', 'Sample-8': 'Y253', 'Sample-9': 'Y254', 'Sample-10': 'Y255'
+                    'Sample-6': 'M251', 'Sample-7': 'M252', 'Sample-8': 'M253', 'Sample-9': 'M254', 'Sample-10': 'M255'
                 }
             },
             '17-1': {
@@ -2080,9 +2251,8 @@ def get_template_config(line_number):
                 'Line-4-4hrs': 'G287', 'Line-4-8hrs': 'S287'
             },
             '18-1': {
-                'Line-3-supplier': 'I288', 'Line-3-type': 'L288', 'Line-3-diode': 'R288', 'Line-3-maxVoltage': 'U288',
-                'Line-3-maxCurrent': 'Y288', 'Line-3-diodeType': 'AB288', 'Line-4-supplier': 'I295', 'Line-4-type': 'L295',
-                'Line-4-diode': 'R295', 'Line-4-maxVoltage': 'U295', 'Line-4-maxCurrent': 'Y295', 'Line-4-diodeType': 'AB295'
+                'Line-3-supplier': 'I288', 'Line-3-type': 'N288', 'Line-3-maxCurrent': 'AB288',
+                'Line-4-supplier': 'I295', 'Line-4-type': 'N295', 'Line-4-maxCurrent': 'AB295'
             },
             '18-2': {
                 'Line-3-cableSupplier': 'J289', 'Line-3-connectorType': 'Z289',
@@ -2176,11 +2346,11 @@ def get_template_config(line_number):
             },
             '23-1': {
                 'Line-3': {
-                    'Sample-1': 'G333', 'Sample-2': 'G334', 'Sample-3': 'G335', 'Sample-4': 'G336', 'Sample-5': 'G337',
+                    'Sample-1': 'S333', 'Sample-2': 'S334', 'Sample-3': 'S335', 'Sample-4': 'S336', 'Sample-5': 'S337',
                     'Sample-6': 'M333', 'Sample-7': 'M334', 'Sample-8': 'M335', 'Sample-9': 'M336', 'Sample-10': 'M337'
                 },
                 'Line-4': {
-                    'Sample-1': 'S333', 'Sample-2': 'S334', 'Sample-3': 'S335', 'Sample-4': 'S336', 'Sample-5': 'S337',
+                    'Sample-1': 'G333', 'Sample-2': 'G334', 'Sample-3': 'G335', 'Sample-4': 'G336', 'Sample-5': 'G337',
                     'Sample-6': 'Y333', 'Sample-7': 'Y334', 'Sample-8': 'Y335', 'Sample-9': 'Y336', 'Sample-10': 'Y337'
                 }
             },
@@ -2235,6 +2405,7 @@ def get_template_config(line_number):
                 'Line-4-2-contact-block': 'V365', 'Line-4-2-positive': 'Z365', 'Line-4-2-negative': 'AD365'
             },
             '26-1': {
+                'moduleId4Hours': 'L369', 'moduleId8Hours': 'X369',
                 'Line-3-4hrs': 'G369', 'Line-3-8hrs': 'S369',
                 'Line-4-4hrs': 'G372', 'Line-4-8hrs': 'S372'
             },
@@ -2249,27 +2420,98 @@ def get_template_config(line_number):
             '27-1': {
                 'Line-3': {
                     'Sample-1': 'G376', 'Sample-2': 'G377', 'Sample-3': 'G378', 'Sample-4': 'G379', 'Sample-5': 'G380',
-                    'Sample-6': 'M376', 'Sample-7': 'M377', 'Sample-8': 'M378', 'Sample-9': 'M379', 'Sample-10': 'M380'
+                    'Sample-6': 'Y376', 'Sample-7': 'Y377', 'Sample-8': 'Y378', 'Sample-9': 'Y379', 'Sample-10': 'Y380'
                 },
                 'Line-4': {
                     'Sample-1': 'S376', 'Sample-2': 'S377', 'Sample-3': 'S378', 'Sample-4': 'S379', 'Sample-5': 'S380',
-                    'Sample-6': 'Y376', 'Sample-7': 'Y377', 'Sample-8': 'Y378', 'Sample-9': 'Y379', 'Sample-10': 'Y380'
+                    'Sample-6': 'M376', 'Sample-7': 'M377', 'Sample-8': 'M378', 'Sample-9': 'M379', 'Sample-10': 'M380'
                 }
             },
             '29-1': {
                 'Line-3': {
                     'Sample-1': 'G382', 'Sample-2': 'G383', 'Sample-3': 'G384', 'Sample-4': 'G385', 'Sample-5': 'G386',
-                    'Sample-6': 'M382', 'Sample-7': 'M383', 'Sample-8': 'M384', 'Sample-9': 'M385', 'Sample-10': 'M386'
+                    'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
                 },
                 'Line-4': {
                     'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
-                    'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
+                    'Sample-6': 'M382', 'Sample-7': 'M383', 'Sample-8': 'M384', 'Sample-9': 'M385', 'Sample-10': 'M386'
                 }
             }
         }
     else:
         raise ValueError(f"Unsupported line number: {line_number}")
     return template_path, field_config, observation_cell_mapping
+
+def resolve_signature(audit_data, signature_key):
+    """Read current and legacy signature shapes without requiring schema changes."""
+    signatures = audit_data.get('signatures') or audit_data.get('data', {}).get('signatures') or {}
+    image_key = f"{signature_key}Image"
+    signature_value = signatures.get(signature_key) or audit_data.get(signature_key)
+    image_value = signatures.get(image_key) or audit_data.get(image_key)
+
+    if isinstance(signature_value, dict):
+        text_value = signature_value.get('name') or signature_value.get('text') or signature_value.get('value') or ''
+        image_value = image_value or signature_value.get('signature') or signature_value.get('image') or signature_value.get('photo')
+    else:
+        text_value = signature_value or ''
+
+    return text_value, image_value
+
+def write_signature(worksheet, text_cell_ref, image_cell_ref, text_value, image_value, format_options):
+    if text_value:
+        text_cell = get_writable_cell(worksheet, text_cell_ref)
+        text_cell.value = text_value
+        apply_cell_formatting(text_cell, **format_options)
+
+    if image_value:
+        image_cell = get_writable_cell(worksheet, image_cell_ref)
+        if insert_signature_image(worksheet, image_cell_ref, image_value):
+            image_cell.value = None
+            apply_cell_formatting(image_cell, **format_options)
+
+def normalize_line_value(line_value):
+    if line_value is None:
+        return ''
+    line_text = str(line_value).strip()
+    return line_text.replace('Line-', '', 1) if line_text.startswith('Line-') else line_text
+
+def format_line_key(line_value):
+    normalized_value = normalize_line_value(line_value)
+    return f"Line-{normalized_value}" if normalized_value else ''
+
+def get_line_selection_bucket(time_slot):
+    selected_slot = normalize_line_value(time_slot)
+    if selected_slot in ('1', '3'):
+        return '4h'
+    if selected_slot in ('2', '4'):
+        return '8h'
+    return ''
+
+def fill_line_dropdown_values(worksheet, audit_data):
+    """Export selected line dropdowns into their template header cells."""
+    for stage in audit_data.get('stages', []):
+        for parameter in stage.get('parameters', []):
+            param_id = parameter.get('id', '')
+            for observation in parameter.get('observations', []):
+                selected_line = observation.get('selectedLine')
+                line_cells = LINE_SELECTION_CELL_MAPPINGS.get(param_id)
+                if selected_line and line_cells:
+                    bucket = get_line_selection_bucket(observation.get('timeSlot', ''))
+                    cell_ref = line_cells.get(bucket)
+                    if cell_ref:
+                        cell = get_writable_cell(worksheet, cell_ref)
+                        set_cell_raw_value(cell, normalize_line_value(selected_line))
+                        apply_cell_formatting(cell, horizontal='center')
+
+                line_mapping = observation.get('lineMapping')
+                group_cells = GROUPED_LINE_SELECTION_CELL_MAPPINGS.get(param_id)
+                if isinstance(line_mapping, dict) and group_cells:
+                    for group_key, line_value in line_mapping.items():
+                        cell_ref = group_cells.get(group_key)
+                        if line_value and cell_ref:
+                            cell = get_writable_cell(worksheet, cell_ref)
+                            set_cell_raw_value(cell, normalize_line_value(line_value))
+                            apply_cell_formatting(cell, horizontal='center')
 
 def fill_basic_info(worksheet, audit_data, field_config):
     try:
@@ -2298,17 +2540,11 @@ def fill_basic_info(worksheet, audit_data, field_config):
             cell.value = audit_data['moduleType']
             apply_cell_formatting(cell, **field_config['module_type']['format'])
 
-        if audit_data.get('signatures', {}).get('auditBy'):
-            cell_ref = field_config['audit_by']['cell']
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = audit_data['signatures']['auditBy']
-            apply_cell_formatting(cell, **field_config['audit_by']['format'])
+        audit_by_text, audit_by_image = resolve_signature(audit_data, 'auditBy')
+        write_signature(worksheet, 'C405', 'C407', audit_by_text, audit_by_image, field_config['audit_by']['format'])
 
-        if audit_data.get('signatures', {}).get('reviewedBy'):
-            cell_ref = field_config['reviewed_by']['cell']
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = audit_data['signatures']['reviewedBy']
-            apply_cell_formatting(cell, **field_config['reviewed_by']['format'])
+        reviewed_by_text, reviewed_by_image = resolve_signature(audit_data, 'reviewedBy')
+        write_signature(worksheet, 'O405', 'O407', reviewed_by_text, reviewed_by_image, field_config['reviewed_by']['format'])
 
         customer_spec = 'Yes' if audit_data.get('customerSpecAvailable') else 'No'
         spec_signed = 'Yes' if audit_data.get('specificationSignedOff') else 'No'
@@ -2335,6 +2571,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
         if not stages:
             print("No stages data found for observations")
             return
+        safety_module_ids = extract_safety_module_ids(stages)
         
         for stage in stages:
             parameters = stage.get('parameters', [])
@@ -2348,8 +2585,8 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                     for observation in observations:
                         time_slot = observation.get('timeSlot', '')
                         selected_line = observation.get('selectedLine')
-                        line_time_slot = f"Line-{selected_line}" if selected_line else time_slot
-                        value = observation.get('value', '')
+                        line_time_slot = format_line_key(selected_line) if selected_line else time_slot
+                        value = apply_export_defaults(param_id, observation.get('value', ''), param_mapping)
                         if param_id in ['2-2', '3-6', '9-5', '11-2']:
                             # Sample-based parameters (Sample-1, Sample-2, etc.)
                             handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping)
@@ -2358,7 +2595,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                                          '11-3', '11-4', '11-5', '12-1', '12-2', '16-1', '23-1', '27-1', '29-1']:
                             # Line-based sample parameters
                             mapped_time_slot = line_time_slot if param_id in DYNAMIC_LINE_PARAMETER_IDS and line_time_slot in param_mapping else time_slot
-                            handle_line_sample_parameter(worksheet, param_id, mapped_time_slot, value, param_mapping)
+                            handle_line_sample_parameter(worksheet, param_id, mapped_time_slot, value, param_mapping, observation.get('lineMapping'))
                         
                         elif param_id in ['5-4-laser-power', '5-5-cell-appearance']:
                             # Stringer unit parameters
@@ -2410,7 +2647,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                                          '17-10', '17-11', '17-12-coating-thickness', '19-1', '19-2', '20-5', '26-1',
                                          '26-2', '26-3']:
                             # Time-based line parameters
-                            handle_time_based_line_parameter(worksheet, param_id, value, param_mapping)
+                            handle_time_based_line_parameter(worksheet, param_id, value, param_mapping, safety_module_ids)
                         
                         elif param_id in ['8-6', '17-1', '17-2', '18-1', '18-2', '18-3', '20-1']:
                             # Component status parameters
@@ -2445,16 +2682,16 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                             if time_slot in param_mapping:
                                 cell_ref = param_mapping[time_slot]
                                 cell = get_writable_cell(worksheet, cell_ref)
-                                cell.value = value
-                                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                                set_cell_value(cell, value)
+                                apply_cell_formatting(cell, horizontal='center')
                         
                         else:
                             # Default handling for simple timeSlot-value pairs
                             if time_slot in param_mapping:
                                 cell_ref = param_mapping[time_slot]
                                 cell = get_writable_cell(worksheet, cell_ref)
-                                cell.value = value
-                                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                                set_cell_value(cell, value)
+                                apply_cell_formatting(cell, horizontal='center')
                                 print(f"Filled observation {value} for parameter {param_id} at {time_slot} in cell {cell_ref}")
         
         print("Observations data filled successfully")
@@ -2469,19 +2706,51 @@ def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_m
             if sample_key in param_mapping.get(time_slot, {}):
                 cell_ref = param_mapping[time_slot][sample_key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = sample_value
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, sample_value)
+                apply_cell_formatting(cell, horizontal='center')
                 print(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
 
-def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_mapping):
+def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_mapping, line_mapping=None):
     """Handle line-based sample parameters"""
     if isinstance(value, dict):
+        if param_id in PRELAM_GROUPED_PARAMETER_IDS:
+            # Pre-Lam rows use 2h/4h/6h/8h as fixed column groups; selected line is exported separately in the header.
+            for group_key, sample_pairs in SAMPLE_GROUPS.items():
+                target_line, target_samples = PRELAM_GROUP_TARGETS[group_key]
+                for (source_sample, _), target_sample in zip(sample_pairs, target_samples):
+                    if value.get(source_sample, '') == '':
+                        continue
+                    if target_line in param_mapping and target_sample in param_mapping[target_line]:
+                        cell_ref = param_mapping[target_line][target_sample]
+                        cell = get_writable_cell(worksheet, cell_ref)
+                        set_cell_value(cell, value.get(source_sample, ''))
+                        apply_cell_formatting(cell, horizontal='center')
+                        print(f"Filled observation {value.get(source_sample, '')} for parameter {param_id} at {source_sample} in cell {cell_ref}")
+            return
+
+        if param_id in GROUPED_SAMPLE_PARAMETER_IDS and isinstance(line_mapping, dict):
+            for group_key, sample_pairs in SAMPLE_GROUPS.items():
+                selected_line = line_mapping.get(group_key)
+                mapped_time_slot = format_line_key(selected_line) if selected_line else time_slot
+                if mapped_time_slot not in param_mapping:
+                    mapped_time_slot = time_slot
+                for source_sample, target_sample in sample_pairs:
+                    if value.get(source_sample, '') == '':
+                        continue
+                    if mapped_time_slot in param_mapping and target_sample in param_mapping[mapped_time_slot]:
+                        cell_ref = param_mapping[mapped_time_slot][target_sample]
+                        cell = get_writable_cell(worksheet, cell_ref)
+                        set_cell_value(cell, value.get(source_sample, ''))
+                        apply_cell_formatting(cell, horizontal='center')
+                        print(f"Filled observation {value.get(source_sample, '')} for parameter {param_id} at {source_sample} in cell {cell_ref}")
+            return
+
         for sample_key, sample_value in value.items():
             if time_slot in param_mapping and sample_key in param_mapping[time_slot]:
                 cell_ref = param_mapping[time_slot][sample_key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = sample_value
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, sample_value)
+                apply_cell_formatting(cell, horizontal='center')
                 print(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
 
 def handle_stringer_unit_parameter(worksheet, param_id, value, param_mapping):
@@ -2493,8 +2762,8 @@ def handle_stringer_unit_parameter(worksheet, param_id, value, param_mapping):
                     if unit_key in param_mapping[stringer_key]:
                         cell_ref = param_mapping[stringer_key][unit_key]
                         cell = get_writable_cell(worksheet, cell_ref)
-                        cell.value = unit_value
-                        apply_cell_formatting(cell, font_size=16, horizontal='center')
+                        set_cell_value(cell, unit_value)
+                        apply_cell_formatting(cell, horizontal='center')
                         print(f"Filled observation {unit_value} for parameter {param_id} at {stringer_key}_{unit_key} in cell {cell_ref}")
 
 def handle_cell_width_parameter(worksheet, value, param_mapping):
@@ -2506,8 +2775,8 @@ def handle_cell_width_parameter(worksheet, value, param_mapping):
                     if position_key in param_mapping[stringer_key]:
                         cell_ref = param_mapping[stringer_key][position_key]
                         cell = get_writable_cell(worksheet, cell_ref)
-                        cell.value = position_value
-                        apply_cell_formatting(cell, font_size=16, horizontal='center')
+                        set_cell_value(cell, position_value)
+                        apply_cell_formatting(cell, horizontal='center')
 
 def handle_groove_length_parameter(worksheet, value, param_mapping):
     """Handle groove length measurements"""
@@ -2518,8 +2787,8 @@ def handle_groove_length_parameter(worksheet, value, param_mapping):
                     if groove_key in param_mapping[stringer_key]:
                         cell_ref = param_mapping[stringer_key][groove_key]
                         cell = get_writable_cell(worksheet, cell_ref)
-                        cell.value = groove_value
-                        apply_cell_formatting(cell, font_size=16, horizontal='center')
+                        set_cell_value(cell, groove_value)
+                        apply_cell_formatting(cell, horizontal='center')
 
 def handle_machine_temp_parameter(worksheet, value, param_mapping):
     """Handle machine temperature setup"""
@@ -2532,8 +2801,8 @@ def handle_machine_temp_parameter(worksheet, value, param_mapping):
                             if temp_key in param_mapping[stringer_key][unit_key]:
                                 cell_ref = param_mapping[stringer_key][unit_key][temp_key]
                                 cell = get_writable_cell(worksheet, cell_ref)
-                                cell.value = temp_value
-                                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                                set_cell_value(cell, temp_value)
+                                apply_cell_formatting(cell, horizontal='center')
 
 def handle_light_intensity_parameter(worksheet, value, param_mapping):
     """Handle light intensity and time parameters"""
@@ -2546,8 +2815,8 @@ def handle_light_intensity_parameter(worksheet, value, param_mapping):
                             if light_key in param_mapping[stringer_key][unit_key]:
                                 cell_ref = param_mapping[stringer_key][unit_key][light_key]
                                 cell = get_writable_cell(worksheet, cell_ref)
-                                cell.value = light_value
-                                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                                set_cell_value(cell, light_value)
+                                apply_cell_formatting(cell, horizontal='center')
 
 def handle_peel_strength_parameter(worksheet, value, param_mapping):
     """Handle peel strength parameters"""
@@ -2557,28 +2826,28 @@ def handle_peel_strength_parameter(worksheet, value, param_mapping):
                 if 'frontUnit' in param_mapping[stringer_key]:
                     cell_ref = param_mapping[stringer_key]['frontUnit']
                     cell = get_writable_cell(worksheet, cell_ref)
-                    cell.value = stringer_value.get('frontUnit', '')
-                    apply_cell_formatting(cell, font_size=16, horizontal='center')
+                    set_cell_value(cell, stringer_value.get('frontUnit', ''))
+                    apply_cell_formatting(cell, horizontal='center')
 
                 if 'backUnit' in param_mapping[stringer_key]:
                     cell_ref = param_mapping[stringer_key]['backUnit']
                     cell = get_writable_cell(worksheet, cell_ref)
-                    cell.value = stringer_value.get('backUnit', '')
-                    apply_cell_formatting(cell, font_size=16, horizontal='center')
+                    set_cell_value(cell, stringer_value.get('backUnit', ''))
+                    apply_cell_formatting(cell, horizontal='center')
                 front_side = stringer_value.get('frontSide', {})
                 for pos_key, pos_value in front_side.items():
                     if pos_key in param_mapping[stringer_key].get('frontSide', {}):
                         cell_ref = param_mapping[stringer_key]['frontSide'][pos_key]
                         cell = get_writable_cell(worksheet, cell_ref)
-                        cell.value = pos_value
-                        apply_cell_formatting(cell, font_size=16, horizontal='center')
+                        set_cell_value(cell, pos_value)
+                        apply_cell_formatting(cell, horizontal='center')
                 back_side = stringer_value.get('backSide', {})
                 for pos_key, pos_value in back_side.items():
                     if pos_key in param_mapping[stringer_key].get('backSide', {}):
                         cell_ref = param_mapping[stringer_key]['backSide'][pos_key]
                         cell = get_writable_cell(worksheet, cell_ref)
-                        cell.value = pos_value
-                        apply_cell_formatting(cell, font_size=16, horizontal='center')
+                        set_cell_value(cell, pos_value)
+                        apply_cell_formatting(cell, horizontal='center')
 
 def handle_stringer_based_parameter(worksheet, param_id, value, param_mapping):
     """Handle stringer-based parameters"""
@@ -2591,24 +2860,39 @@ def handle_stringer_based_parameter(worksheet, param_id, value, param_mapping):
                         if time_key in param_mapping[stringer_key]:
                             cell_ref = param_mapping[stringer_key][time_key]
                             cell = get_writable_cell(worksheet, cell_ref)
-                            cell.value = time_value
-                            apply_cell_formatting(cell, font_size=16, horizontal='center')
+                            set_cell_value(cell, time_value)
+                            apply_cell_formatting(cell, horizontal='center')
                 else:
                     # For simple stringer values
                     cell_ref = param_mapping[stringer_key]
                     cell = get_writable_cell(worksheet, cell_ref)
-                    cell.value = stringer_value
-                    apply_cell_formatting(cell, font_size=16, horizontal='center')
+                    set_cell_value(cell, stringer_value)
+                    apply_cell_formatting(cell, horizontal='center')
 
 def handle_bus_ribbon_status(worksheet, value, param_mapping):
     """Handle BUS ribbon status"""
     if isinstance(value, dict):
-        for key, val in value.items():
+        normalized_value = dict(value)
+        line_prefixes = {key.rsplit('-', 1)[0] for key in param_mapping if key.endswith('-Supplier')}
+        for line_prefix in line_prefixes:
+            for base_label in ('Width', 'Thickness', 'Expiry Date'):
+                top_bottom_key = f"{line_prefix}-{base_label} Top & Bottom"
+                middle_key = f"{line_prefix}-{base_label} Middle"
+                old_key = f"{line_prefix}-{base_label}"
+                if is_empty_value(normalized_value.get(top_bottom_key)) and old_key in normalized_value:
+                    normalized_value[top_bottom_key] = normalized_value.get(old_key)
+                if top_bottom_key in normalized_value or middle_key in normalized_value:
+                    top_bottom_value = normalized_value.get(top_bottom_key, '')
+                    middle_value = normalized_value.get(middle_key, '')
+                    normalized_value[top_bottom_key] = f"{top_bottom_value} & {middle_value}"
+                    normalized_value.pop(middle_key, None)
+
+        for key, val in normalized_value.items():
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_soldering_time(worksheet, value, param_mapping):
     """Handle soldering time parameters"""
@@ -2617,8 +2901,8 @@ def handle_soldering_time(worksheet, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_line_measurements(worksheet, param_id, value, param_mapping):
     """Handle line-based measurement parameters"""
@@ -2627,8 +2911,8 @@ def handle_line_measurements(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_bus_peel_strength(worksheet, value, param_mapping):
     """Handle bus ribbon peel strength"""
@@ -2637,18 +2921,25 @@ def handle_bus_peel_strength(worksheet, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
-def handle_time_based_line_parameter(worksheet, param_id, value, param_mapping):
+def handle_time_based_line_parameter(worksheet, param_id, value, param_mapping, safety_module_ids=None):
     """Handle time-based line parameters"""
     if isinstance(value, dict):
+        safety_module_ids = safety_module_ids or {}
         for key, val in value.items():
+            if param_id == '26-1' and key.startswith('moduleId'):
+                continue
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                if param_id in ('26-1', '26-3'):
+                    module_id_key = 'moduleId4Hours' if key.endswith('-4hrs') else 'moduleId8Hours'
+                    source = value if param_id == '26-1' else safety_module_ids
+                    val = combine_result_with_module_id(val, source.get(module_id_key, ''))
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_component_status(worksheet, param_id, value, param_mapping):
     """Handle component status parameters"""
@@ -2657,8 +2948,8 @@ def handle_component_status(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_laminator_parameter(worksheet, param_id, value, param_mapping):
     """Handle laminator parameters"""
@@ -2669,8 +2960,8 @@ def handle_laminator_parameter(worksheet, param_id, value, param_mapping):
             if key in param_mapping.get('upper', {}):
                 cell_ref = param_mapping['upper'][key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
         # Handle lower chamber
         lower_data = value.get('lower', {})
@@ -2678,15 +2969,15 @@ def handle_laminator_parameter(worksheet, param_id, value, param_mapping):
             if key in param_mapping.get('lower', {}):
                 cell_ref = param_mapping['lower'][key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
         # Handle selected recipe
         if 'selectedRecipe' in param_mapping:
             cell_ref = param_mapping['selectedRecipe']
             cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = value.get('selectedRecipe', '')
-            apply_cell_formatting(cell, font_size=16, horizontal='center')
+            set_cell_value(cell, value.get('selectedRecipe', ''))
+            apply_cell_formatting(cell, horizontal='center')
 
 def handle_sample_line_parameter(worksheet, param_id, value, param_mapping):
     """Handle sample-based line parameters"""
@@ -2695,8 +2986,8 @@ def handle_sample_line_parameter(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_frame_sealant_weight(worksheet, value, param_mapping):
     """Handle frame sealant weight"""
@@ -2705,8 +2996,8 @@ def handle_frame_sealant_weight(worksheet, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_jb_measurements(worksheet, param_id, value, param_mapping):
     """Handle junction box measurements"""
@@ -2715,8 +3006,8 @@ def handle_jb_measurements(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_complex_measurements(worksheet, param_id, value, param_mapping):
     """Handle complex measurement parameters"""
@@ -2725,8 +3016,8 @@ def handle_complex_measurements(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def handle_environmental_parameters(worksheet, param_id, value, param_mapping):
     """Handle environmental parameters"""
@@ -2735,8 +3026,8 @@ def handle_environmental_parameters(worksheet, param_id, value, param_mapping):
             if key in param_mapping:
                 cell_ref = param_mapping[key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                cell.value = val
-                apply_cell_formatting(cell, font_size=16, horizontal='center')
+                set_cell_value(cell, val)
+                apply_cell_formatting(cell, horizontal='center')
 
 def adjust_column_widths(worksheet, min_width=8, max_width=50):
     """
@@ -2778,6 +3069,7 @@ def generate_audit_report(audit_data):
         ws = wb.active
         fill_basic_info(ws, audit_data, field_config)
         fill_observations_data(ws, audit_data, observation_cell_mapping)
+        fill_line_dropdown_values(ws, audit_data)
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)

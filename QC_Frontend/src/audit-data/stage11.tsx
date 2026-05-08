@@ -65,8 +65,8 @@ const RearGlassLoadingObservations = {
                     className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
-                    <option value="White Mess">White Mess</option>
-                    <option value="Non-White Mess">Non-White Mess</option>
+                    <option value="White Mesh">White Mesh</option>
+                    <option value="Non-White Mesh">Non-White Mesh</option>
                     <option value="N/A">N/A</option>
                 </select>
             </div>

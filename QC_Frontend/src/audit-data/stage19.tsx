@@ -124,7 +124,7 @@ const AutoJBSolderingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'ESD band used'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "ESD band used", label: "ESD band used" },

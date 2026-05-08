@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit
+from models.ipqc_audit_models import ipqc_audit_collection, IPQCAudit, normalize_ipqc_audit_data
 from bson import ObjectId
 from typing import List, Optional
 import json
@@ -26,6 +26,7 @@ async def get_all_ipqc_audits(
                     "_id": str(audit["_id"]),
                     "name": audit["name"],
                     "timestamp": audit["timestamp"],
+                    "updated_timestamp": audit.get("updated_timestamp", audit["timestamp"]),
                     "data": audit_data.get("data", {}),
                     "s3_key": audit["s3_key"]
                 }
@@ -34,6 +35,7 @@ async def get_all_ipqc_audits(
                     "_id": str(audit["_id"]),
                     "name": audit["name"],
                     "timestamp": audit["timestamp"],
+                    "updated_timestamp": audit.get("updated_timestamp", audit["timestamp"]),
                     "s3_key": audit["s3_key"]
                 }
 
@@ -62,6 +64,7 @@ async def get_ipqc_audit(audit_id: str):
             "_id": str(audit["_id"]),
             "name": audit["name"],
             "timestamp": audit["timestamp"],
+            "updated_timestamp": audit.get("updated_timestamp", audit["timestamp"]),
             "data": audit_data.get("data", {}),
             "s3_key": audit["s3_key"]
         }
@@ -91,17 +94,20 @@ async def create_ipqc_audit(audit_data: dict):
         mongo_data = {
             "name": audit_data["name"],
             "timestamp": audit_data["timestamp"],
+            "updated_timestamp": audit_data.get("updated_timestamp", audit_data["timestamp"]),
             "s3_key": ""  # Will be updated after S3 upload
         }
         result = ipqc_audit_collection.insert_one(mongo_data)
         mongo_id = str(result.inserted_id)
+
+        normalized_data = normalize_ipqc_audit_data(audit_data["data"])
 
         # Now create the audit with S3 storage using the MongoDB _id
         ipqc_audit = IPQCAudit.create_from_data(
             name=audit_data["name"],
             timestamp=audit_data["timestamp"],
             mongo_id=mongo_id,
-            data=audit_data["data"]
+            data=normalized_data
         )
 
         # Update MongoDB with the correct s3_key
@@ -115,7 +121,8 @@ async def create_ipqc_audit(audit_data: dict):
             "_id": mongo_id,
             "name": ipqc_audit.name,
             "timestamp": ipqc_audit.timestamp,
-            "data": audit_data["data"],
+            "updated_timestamp": mongo_data["updated_timestamp"],
+            "data": normalized_data,
             "s3_key": ipqc_audit.s3_key
         }
 
@@ -138,9 +145,10 @@ async def update_ipqc_audit(audit_id: str, audit_data: dict):
 
         existing_ipqc_audit = IPQCAudit.from_dict(existing_audit)
         existing_data = existing_ipqc_audit.get_data()
-        updated_data = {**existing_data, **audit_data.get("data", {})}
+        updated_data = normalize_ipqc_audit_data({**existing_data, **audit_data.get("data", {})})
         updated_name = audit_data.get("name", existing_audit["name"])
-        updated_timestamp = audit_data.get("timestamp", existing_audit["timestamp"])
+        updated_timestamp = existing_audit["timestamp"]
+        updated_modified_timestamp = audit_data.get("updated_timestamp", audit_data.get("timestamp", existing_audit.get("updated_timestamp", existing_audit["timestamp"])))
 
         # Create IPQCAudit instance
         ipqc_audit = IPQCAudit(
@@ -159,7 +167,8 @@ async def update_ipqc_audit(audit_id: str, audit_data: dict):
         # Update metadata in MongoDB
         update_data = {
             "name": updated_name,
-            "timestamp": updated_timestamp
+            "timestamp": updated_timestamp,
+            "updated_timestamp": updated_modified_timestamp
         }
 
         ipqc_audit_collection.update_one(
@@ -172,6 +181,7 @@ async def update_ipqc_audit(audit_id: str, audit_data: dict):
             "_id": audit_id,
             "name": updated_name,
             "timestamp": updated_timestamp,
+            "updated_timestamp": updated_modified_timestamp,
             "data": updated_data,
             "s3_key": existing_audit["s3_key"]
         }
@@ -244,6 +254,7 @@ async def search_audits_by_filters(
                     "_id": str(audit["_id"]),
                     "name": audit["name"],
                     "timestamp": audit["timestamp"],
+                    "updated_timestamp": audit.get("updated_timestamp", audit["timestamp"]),
                     "data": data,
                     "s3_key": audit["s3_key"]
                 }

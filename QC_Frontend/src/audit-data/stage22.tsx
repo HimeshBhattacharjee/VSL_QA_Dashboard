@@ -118,7 +118,7 @@ const AutoFilingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },
@@ -157,7 +157,7 @@ const AutoFilingObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[line] || ''}
+                            value={sampleValue[line] || 'Checked OK'}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },

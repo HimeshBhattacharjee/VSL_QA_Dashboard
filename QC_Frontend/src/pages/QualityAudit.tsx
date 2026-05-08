@@ -20,14 +20,42 @@ import { createCuringStage } from '../audit-data/stage21';
 import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { createTwentySampleValue } from '../audit-data/sampleGroupedInputs';
 
-const DYNAMIC_LINE_STAGE_IDS = new Set([2, 3, 9, 10, 11]);
+const DYNAMIC_LINE_STAGE_IDS = new Set([2, 3, 9, 10, 11, 12, 16, 23, 27, 29]);
+const SAMPLE_GROUPED_STAGE_IDS = new Set([12, 16, 23, 27, 29]);
+const SAMPLE_GROUP_KEYS = ["2h", "4h", "6h", "8h"] as const;
 
 const getDynamicLineOptions = (lineNumber: string) => lineNumber === 'II' ? ['3', '4'] : ['1', '2'];
 
 const getSelectedLineFromSlot = (timeSlot: string) => timeSlot.replace('Line-', '');
 
-const getAuditSnapshot = (auditData: AuditData, auditBySignature: string, reviewedBySignature: string) => JSON.stringify({
+const getDefaultLineMapping = (lineOptions: string[]) => {
+    const firstLine = getSelectedLineFromSlot(lineOptions[0] || '');
+    const secondLine = getSelectedLineFromSlot(lineOptions[1] || lineOptions[0] || '');
+    return { "2h": firstLine, "4h": firstLine, "6h": secondLine, "8h": secondLine };
+};
+
+const hydrateStage5Defaults = (paramId: string, defaultValue: any, savedValue: any) => {
+    if (!['5-5-cell-appearance', '5-15-el-inspection'].includes(paramId) || typeof defaultValue !== 'object' || defaultValue === null) {
+        return savedValue ?? defaultValue;
+    }
+
+    return Object.entries(defaultValue).reduce<Record<string, any>>((merged, [stringerKey, stringerDefaults]) => {
+        const savedStringer = savedValue?.[stringerKey];
+        if (typeof stringerDefaults === 'object' && stringerDefaults !== null) {
+            merged[stringerKey] = Object.entries(stringerDefaults).reduce<Record<string, string>>((inner, [fieldKey, fieldDefault]) => {
+                const savedFieldValue = typeof savedStringer === 'object' && savedStringer !== null ? savedStringer[fieldKey] : undefined;
+                inner[fieldKey] = savedFieldValue === undefined || savedFieldValue === null || savedFieldValue === '' ? fieldDefault as string : savedFieldValue;
+                return inner;
+            }, {});
+        }
+        return merged;
+    }, {});
+};
+
+const getAuditSnapshot = (auditData: AuditData, auditBySignature: string, reviewedBySignature: string, auditBySignatureImage = '', reviewedBySignatureImage = '') => JSON.stringify({
     lineNumber: auditData.lineNumber,
     date: auditData.date,
     shift: auditData.shift,
@@ -42,7 +70,7 @@ const getAuditSnapshot = (auditData: AuditData, auditBySignature: string, review
             observations: param.observations
         }))
     })),
-    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature }
+    signatures: { auditBy: auditBySignature, reviewedBy: reviewedBySignature, auditByImage: auditBySignatureImage, reviewedByImage: reviewedBySignatureImage }
 });
 
 interface SavedChecksheet {
@@ -50,6 +78,7 @@ interface SavedChecksheet {
     id: string;
     name: string;
     timestamp: number;
+    updatedTimestamp?: number;
     data: AuditData;
 }
 
@@ -74,10 +103,23 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
             if (!stageConfig) return stage;
             const lineOptions = stageConfig.lineMapping[lineNumber];
             if (!lineOptions || !Array.isArray(lineOptions)) return stage;
+            const defaultLine = getSelectedLineFromSlot(lineOptions[0]);
+            const defaultLineMapping = getDefaultLineMapping(lineOptions);
             return {
                 ...stage,
                 parameters: stage.parameters.map(param => {
                     if (stageConfig.parameters.includes(param.id)) {
+                        if (SAMPLE_GROUPED_STAGE_IDS.has(stage.id)) {
+                            return {
+                                ...param,
+                                observations: [{
+                                    timeSlot: lineOptions[0],
+                                    value: createTwentySampleValue(),
+                                    selectedLine: defaultLine,
+                                    lineMapping: defaultLineMapping
+                                }]
+                            };
+                        }
                         return {
                             ...param,
                             observations: lineOptions.map((option: string) => ({
@@ -111,10 +153,11 @@ export default function QualityAudit() {
     const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [auditBySignature, setAuditBySignature] = useState<string>('');
     const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
+    const [auditBySignatureImage, setAuditBySignatureImage] = useState<string>('');
+    const [reviewedBySignatureImage, setReviewedBySignatureImage] = useState<string>('');
+    const [currentUserSignatureImage, setCurrentUserSignatureImage] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
-    
-    // Ref to track if auto-save is in progress to avoid loops
     const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedDataRef = useRef<string>('');
     const latestSaveRequestRef = useRef(0);
@@ -123,6 +166,7 @@ export default function QualityAudit() {
     const currentChecksheetIdRef = useRef<string | null>(null);
     
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
+    const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
     
     const apiService = {
         getAllAudits: async (): Promise<any[]> => {
@@ -206,8 +250,36 @@ export default function QualityAudit() {
     }, []);
 
     useEffect(() => {
+        const employeeId = sessionStorage.getItem('employeeId');
+        if (!employeeId) return;
+
+        const fetchStoredSignature = async () => {
+            try {
+                const response = await fetch(`${USER_API_BASE_URL}/signature/${employeeId}`);
+                if (!response.ok) return;
+                const data = await response.json();
+                setCurrentUserSignatureImage(data.signature || '');
+            } catch (error) {
+                console.error('Error fetching stored signature:', error);
+            }
+        };
+
+        fetchStoredSignature();
+    }, [USER_API_BASE_URL]);
+
+    useEffect(() => {
         loadSavedChecksheets();
     }, []);
+
+    useEffect(() => {
+        if (!currentUserSignatureImage || !username) return;
+        if (auditBySignature.includes(username) && !auditBySignatureImage) {
+            setAuditBySignatureImage(currentUserSignatureImage);
+        }
+        if (reviewedBySignature.includes(username) && !reviewedBySignatureImage) {
+            setReviewedBySignatureImage(currentUserSignatureImage);
+        }
+    }, [currentUserSignatureImage, username, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage]);
 
     const lineDependentStages = useLineDependentStages(initialStages, lineNumber);
 
@@ -225,13 +297,17 @@ export default function QualityAudit() {
     const latestAuditDataRef = useRef(auditData);
     const latestAuditBySignatureRef = useRef(auditBySignature);
     const latestReviewedBySignatureRef = useRef(reviewedBySignature);
+    const latestAuditBySignatureImageRef = useRef(auditBySignatureImage);
+    const latestReviewedBySignatureImageRef = useRef(reviewedBySignatureImage);
 
     useEffect(() => {
         latestAuditDataRef.current = auditData;
         latestAuditBySignatureRef.current = auditBySignature;
         latestReviewedBySignatureRef.current = reviewedBySignature;
+        latestAuditBySignatureImageRef.current = auditBySignatureImage;
+        latestReviewedBySignatureImageRef.current = reviewedBySignatureImage;
         currentChecksheetIdRef.current = currentChecksheetId;
-    }, [auditData, auditBySignature, reviewedBySignature, currentChecksheetId]);
+    }, [auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage, currentChecksheetId]);
 
     // Helper functions
     const generateChecksheetName = useCallback((lineNumber: string, date: string, shift: string) => {
@@ -247,18 +323,33 @@ export default function QualityAudit() {
             return {
                 ...param,
                 observations: param.observations.map(obs => {
-                    const savedObservation = savedParam.observations.find((savedObs: any) => savedObs.timeSlot === obs.timeSlot);
+                    const savedObservation = savedParam.observations.find((savedObs: any) => savedObs.timeSlot === obs.timeSlot)
+                        || (SAMPLE_GROUPED_STAGE_IDS.has(stage.id) ? savedParam.observations.find((savedObs: any) => typeof savedObs.timeSlot === 'string' && savedObs.timeSlot.startsWith('Line-')) : undefined);
+                    const selectedLine = savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot);
+                    const lineOptions = getDynamicLineOptions(lineNumber);
+                    const normalizedSelectedLine = lineOptions.includes(selectedLine) ? selectedLine : lineOptions[0];
+                    const defaultGroupLineMapping = getDefaultLineMapping(lineOptions);
+                    const savedLineMapping = savedObservation?.lineMapping || obs.lineMapping || {};
+                    const normalizedLineMapping = SAMPLE_GROUP_KEYS.reduce<Record<string, string>>((mapping, groupKey) => {
+                        const groupLine = savedLineMapping[groupKey] || defaultGroupLineMapping[groupKey] || normalizedSelectedLine;
+                        mapping[groupKey] = lineOptions.includes(groupLine) ? groupLine : normalizedSelectedLine;
+                        return mapping;
+                    }, {});
                     return {
                         ...obs,
                         ...savedObservation,
+                        value: hydrateStage5Defaults(param.id, obs.value, savedObservation?.value),
                         selectedLine: obs.timeSlot.startsWith('Line-')
-                            ? savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot)
-                            : savedObservation?.selectedLine
+                            ? normalizedSelectedLine
+                            : savedObservation?.selectedLine,
+                        lineMapping: obs.timeSlot.startsWith('Line-')
+                            ? normalizedLineMapping
+                            : savedObservation?.lineMapping
                     };
                 })
             };
         })
-    }), []);
+    }), [lineNumber]);
 
     const loadSavedChecksheets = useCallback(async () => {
         try {
@@ -274,6 +365,7 @@ export default function QualityAudit() {
                     id: audit._id || '',
                     name: audit.name,
                     timestamp: new Date(audit.timestamp).getTime(),
+                    updatedTimestamp: audit.updated_timestamp ? new Date(audit.updated_timestamp).getTime() : undefined,
                     data: audit.data
                 };
             }).filter(Boolean) as SavedChecksheet[];
@@ -293,6 +385,8 @@ export default function QualityAudit() {
         const dataToSave = latestAuditDataRef.current;
         const auditBy = latestAuditBySignatureRef.current;
         const reviewedBy = latestReviewedBySignatureRef.current;
+        const auditByImage = latestAuditBySignatureImageRef.current;
+        const reviewedByImage = latestReviewedBySignatureImageRef.current;
         const checksheetId = currentChecksheetIdRef.current;
 
         if (!dataToSave.lineNumber || !dataToSave.date || !dataToSave.shift) {
@@ -306,10 +400,13 @@ export default function QualityAudit() {
             const checksheetName = generateChecksheetName(dataToSave.lineNumber, dataToSave.date, dataToSave.shift);
             const checksheetData = {
                 name: checksheetName,
-                timestamp: new Date().toISOString(),
+                timestamp: checksheetId
+                    ? new Date(savedChecksheets.find(sheet => sheet.id === checksheetId)?.timestamp || Date.now()).toISOString()
+                    : new Date().toISOString(),
+                updated_timestamp: new Date().toISOString(),
                 data: {
                     ...dataToSave,
-                    signatures: { auditBy, reviewedBy }
+                    signatures: { auditBy, reviewedBy, auditByImage, reviewedByImage }
                 }
             };
 
@@ -321,7 +418,7 @@ export default function QualityAudit() {
                 setCurrentChecksheetId(result._id!);
             }
 
-            lastSavedDataRef.current = getAuditSnapshot(dataToSave, auditBy, reviewedBy);
+            lastSavedDataRef.current = getAuditSnapshot(dataToSave, auditBy, reviewedBy, auditByImage, reviewedByImage);
 
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
@@ -341,7 +438,7 @@ export default function QualityAudit() {
                 setTimeout(() => performAutoSave(), 0);
             }
         }
-    }, [generateChecksheetName, loadSavedChecksheets]);
+    }, [generateChecksheetName, loadSavedChecksheets, savedChecksheets]);
 
     // Auto-save effect - triggers whenever relevant data changes
     useEffect(() => {
@@ -354,7 +451,7 @@ export default function QualityAudit() {
             return;
         }
 
-        const currentDataString = getAuditSnapshot(auditData, auditBySignature, reviewedBySignature);
+        const currentDataString = getAuditSnapshot(auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage);
 
         // Don't auto-save if data hasn't changed
         if (currentDataString === lastSavedDataRef.current) {
@@ -382,14 +479,14 @@ export default function QualityAudit() {
                 }
             };
             saveWithRetry();
-        }, 500);
+        }, 2000);
 
         return () => {
             if (autoSaveTimeoutRef.current) {
                 clearTimeout(autoSaveTimeoutRef.current);
             }
         };
-    }, [auditData, auditBySignature, reviewedBySignature, isLoading, performAutoSave]);
+    }, [auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage, isLoading, performAutoSave]);
 
     useEffect(() => {
         setAuditData(prev => ({
@@ -436,13 +533,17 @@ export default function QualityAudit() {
                         if (loadedSignatures) {
                             setAuditBySignature(loadedSignatures.auditBy || '');
                             setReviewedBySignature(loadedSignatures.reviewedBy || '');
+                            setAuditBySignatureImage(loadedSignatures.auditByImage || '');
+                            setReviewedBySignatureImage(loadedSignatures.reviewedByImage || '');
                         } else {
                             setAuditBySignature('');
                             setReviewedBySignature('');
+                            setAuditBySignatureImage('');
+                            setReviewedBySignatureImage('');
                         }
                         
                         // Update last saved data reference
-                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '');
+                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '', loadedSignatures.auditByImage || '', loadedSignatures.reviewedByImage || '');
                     } else {
                         setCurrentChecksheetId(null);
                         lastSavedDataRef.current = '';
@@ -493,9 +594,11 @@ export default function QualityAudit() {
             switch (section) {
                 case 'audit':
                     setAuditBySignature(signatureText);
+                    setAuditBySignatureImage(currentUserSignatureImage);
                     break;
                 case 'reviewed':
                     setReviewedBySignature(signatureText);
+                    setReviewedBySignatureImage(currentUserSignatureImage);
                     break;
             }
             setHasUnsavedChanges(true);
@@ -531,9 +634,11 @@ export default function QualityAudit() {
             switch (section) {
                 case 'audit':
                     setAuditBySignature('');
+                    setAuditBySignatureImage('');
                     break;
                 case 'reviewed':
                     setReviewedBySignature('');
+                    setReviewedBySignatureImage('');
                     break;
             }
             setHasUnsavedChanges(true);
@@ -609,7 +714,9 @@ export default function QualityAudit() {
                         }
                     });
                     setAuditBySignature('');
+                    setAuditBySignatureImage('');
                     setReviewedBySignature('');
+                    setReviewedBySignatureImage('');
                     setCurrentChecksheetId(null);
                     setHasUnsavedChanges(false);
                     setStageChanges(new Set());
@@ -657,6 +764,33 @@ export default function QualityAudit() {
                             ...param,
                             observations: param.observations.map(obs =>
                                 obs.timeSlot === timeSlot ? { ...obs, selectedLine } : obs
+                            )
+                        } : param
+                    )
+                } : stage
+            )
+        }));
+        setHasUnsavedChanges(true);
+        setStageChanges(prev => new Set(prev).add(stageId));
+    };
+
+    const updateObservationLineMapping = (stageId: number, paramId: string, timeSlot: string, groupKey: string, selectedLine: string) => {
+        setAuditData(prev => ({
+            ...prev,
+            stages: prev.stages.map(stage =>
+                stage.id === stageId ? {
+                    ...stage,
+                    parameters: stage.parameters.map(param =>
+                        param.id === paramId ? {
+                            ...param,
+                            observations: param.observations.map(obs =>
+                                obs.timeSlot === timeSlot ? {
+                                    ...obs,
+                                    lineMapping: {
+                                        ...(obs.lineMapping || {}),
+                                        [groupKey]: selectedLine
+                                    }
+                                } : obs
                             )
                         } : param
                     )
@@ -792,6 +926,25 @@ export default function QualityAudit() {
         setCurrentView('stageDetail');
     };
 
+    const handleStageNavigation = (targetStageId: number) => {
+        if (!selectedStageId) return;
+
+        const navigateToStage = () => setSelectedStageId(targetStageId);
+
+        if (stageChanges.has(selectedStageId)) {
+            showConfirm({
+                title: 'Unsaved Changes',
+                message: 'You have unsaved changes in this stage. Changes will be auto-saved. Are you sure you want to leave?',
+                type: 'warning',
+                confirmText: 'Leave',
+                cancelText: 'Stay',
+                onConfirm: navigateToStage
+            });
+        } else {
+            navigateToStage();
+        }
+    };
+
     const handleBackToStageSelection = () => {
         if (stageChanges.has(selectedStageId!)) {
             showConfirm({
@@ -841,30 +994,18 @@ export default function QualityAudit() {
             if (loadedSignatures) {
                 setAuditBySignature(loadedSignatures.auditBy || '');
                 setReviewedBySignature(loadedSignatures.reviewedBy || '');
+                setAuditBySignatureImage(loadedSignatures.auditByImage || '');
+                setReviewedBySignatureImage(loadedSignatures.reviewedByImage || '');
             } else {
                 setAuditBySignature('');
                 setReviewedBySignature('');
+                setAuditBySignatureImage('');
+                setReviewedBySignatureImage('');
             }
 
             setLineNumber(fullAudit.data.lineNumber);
             
-            lastSavedDataRef.current = JSON.stringify({
-                lineNumber: fullAudit.data.lineNumber,
-                date: fullAudit.data.date,
-                shift: fullAudit.data.shift,
-                productionOrderNo: fullAudit.data.productionOrderNo,
-                moduleType: fullAudit.data.moduleType,
-                customerSpecAvailable: fullAudit.data.customerSpecAvailable,
-                specificationSignedOff: fullAudit.data.specificationSignedOff,
-                stages: fullAudit.data.stages.map((stage: StageData) => ({
-                    id: stage.id,
-                    parameters: stage.parameters.map(param => ({
-                        id: param.id,
-                        observations: param.observations
-                    }))
-                })),
-                signatures: loadedSignatures
-            });
+            lastSavedDataRef.current = getAuditSnapshot(fullAudit.data, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '', loadedSignatures.auditByImage || '', loadedSignatures.reviewedByImage || '');
 
             showAlert('info', `Editing ${fullAudit.name}`);
         } catch (error) {
@@ -897,7 +1038,9 @@ export default function QualityAudit() {
                     }
                 });
                 setAuditBySignature('');
+                setAuditBySignatureImage('');
                 setReviewedBySignature('');
+                setReviewedBySignatureImage('');
                 lastSavedDataRef.current = '';
             }
             showAlert('success', 'Checksheet deleted successfully!');
@@ -1082,7 +1225,14 @@ export default function QualityAudit() {
                                                     {auditBySignature || 'No signature'}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-center gap-2">
+                                            {auditBySignatureImage && (
+                                                <img
+                                                    src={auditBySignatureImage}
+                                                    alt="Audit by signature preview"
+                                                    className="mx-auto mb-2 h-14 max-w-full object-contain rounded border border-gray-200 dark:border-gray-600 bg-white"
+                                                />
+                                            )}
+                                            <div className="flex flex-wrap justify-center gap-2">
                                                 <button
                                                     className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canAddSignature('audit') ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleAddSignature('audit')}
@@ -1106,7 +1256,14 @@ export default function QualityAudit() {
                                                     {reviewedBySignature || 'No signature'}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-center gap-2">
+                                            {reviewedBySignatureImage && (
+                                                <img
+                                                    src={reviewedBySignatureImage}
+                                                    alt="Reviewed by signature preview"
+                                                    className="mx-auto mb-2 h-14 max-w-full object-contain rounded border border-gray-200 dark:border-gray-600 bg-white"
+                                                />
+                                            )}
+                                            <div className="flex flex-wrap justify-center gap-2">
                                                 <button
                                                     className={`px-2 sm:px-3 py-1 text-white rounded text-xs sm:text-sm font-medium transition-colors ${canAddSignature('reviewed') ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-500 cursor-pointer' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                                     onClick={() => handleAddSignature('reviewed')}
@@ -1150,25 +1307,49 @@ export default function QualityAudit() {
                             </div>
                         )}
                         {currentView === 'stageDetail' && selectedStageId && (
-                            <div className="bg-transparent dark:bg-gray-800 rounded-lg overflow-hidden animate-fade-in">
-                                <div className="bg-blue-600 dark:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                            <div className="bg-transparent dark:bg-gray-800 rounded-lg overflow-hidden animate-fade-in max-h-[calc(100vh-7rem)] flex flex-col min-h-0">
+                                <div className="sticky top-0 z-30 bg-blue-600 dark:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">
                                     <h2 className="text-lg sm:text-xl font-semibold">
                                         {auditData.stages.find(stage => stage.id === selectedStageId)?.name || `Stage ${selectedStageId}`}
                                         {stageChanges.has(selectedStageId) && (
                                             <span className="ml-2 text-yellow-300 dark:text-yellow-400 text-xs sm:text-sm">• Unsaved changes (auto-saving)</span>
                                         )}
                                     </h2>
-                                    <div className="flex gap-2 self-end sm:self-auto">
+                                    <div className="flex flex-wrap gap-2 self-end sm:self-auto">
+                                        {(() => {
+                                            const currentStageIndex = auditData.stages.findIndex(stage => stage.id === selectedStageId);
+                                            const previousStage = currentStageIndex > 0 ? auditData.stages[currentStageIndex - 1] : null;
+                                            const nextStage = currentStageIndex >= 0 && currentStageIndex < auditData.stages.length - 1 ? auditData.stages[currentStageIndex + 1] : null;
+
+                                            return (
+                                                <>
+                                                    <button
+                                                        onClick={() => previousStage && handleStageNavigation(previousStage.id)}
+                                                        disabled={!previousStage}
+                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
+                                                    >
+                                                        <ChevronLeft />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => nextStage && handleStageNavigation(nextStage.id)}
+                                                        disabled={!nextStage}
+                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
+                                                    >
+                                                        <ChevronRight />
+                                                    </button>
+                                                </>
+                                            );
+                                        })()}
                                         <button
                                             onClick={handleBackToStageSelection}
                                             className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
                                         >
-                                            Close
+                                            <X />
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                <div className="flex-1 min-h-0 overflow-auto -mx-4 sm:mx-0">
                                     <div className="min-w-full inline-block align-middle">
                                         {auditData.stages
                                             .find(stage => stage.id === selectedStageId)
@@ -1180,16 +1361,16 @@ export default function QualityAudit() {
                                                         <table className="w-full">
                                                             <thead className="bg-gray-50 dark:bg-gray-900">
                                                                 <tr>
-                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
                                                                         Parameters
                                                                     </th>
-                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
                                                                         Criteria
                                                                     </th>
-                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
                                                                         Type of Inspection
                                                                     </th>
-                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                                                                    <th className="px-4 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-gray-200 dark:border-gray-700">
                                                                         Inspection Frequency
                                                                     </th>
                                                                 </tr>
@@ -1228,16 +1409,17 @@ export default function QualityAudit() {
                                                                                 const savedObservation = savedParam?.observations.find(
                                                                                     o => o.timeSlot === obs.timeSlot
                                                                                 );
+                                                                                const isGroupedSampleRow = SAMPLE_GROUPED_STAGE_IDS.has(selectedStageId) && obs.timeSlot.startsWith('Line-');
 
                                                                                 return (
                                                                                     <div
                                                                                         key={obs.timeSlot}
-                                                                                        className={`flex flex-col items-center ${param.observations.length === 1 ? 'w-full' :
+                                                                                        className={`flex flex-col items-center ${isGroupedSampleRow || param.observations.length === 1 ? 'w-full' :
                                                                                             param.observations.length === 2 ? 'sm:w-1/2' :
                                                                                                 param.observations.length === 3 ? 'sm:w-1/3' :
                                                                                                     'sm:w-1/4'}`}
                                                                                     >
-                                                                                        {DYNAMIC_LINE_STAGE_IDS.has(selectedStageId) && obs.timeSlot.startsWith('Line-') ? (
+                                                                                        {DYNAMIC_LINE_STAGE_IDS.has(selectedStageId) && obs.timeSlot.startsWith('Line-') && !isGroupedSampleRow ? (
                                                                                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
                                                                                                 <span>Line -</span>
                                                                                                 <select
@@ -1260,7 +1442,9 @@ export default function QualityAudit() {
                                                                                                 timeSlot: obs.timeSlot,
                                                                                                 value: savedObservation?.value || obs.value,
                                                                                                 observationData: savedObservation || obs,
-                                                                                                onUpdate: updateObservation
+                                                                                                onUpdate: updateObservation,
+                                                                                                lineOptions: getDynamicLineOptions(auditData.lineNumber),
+                                                                                                onLineMappingUpdate: updateObservationLineMapping
                                                                                             })
                                                                                         ) : (
                                                                                             <div className="w-full flex justify-center">
@@ -1301,7 +1485,8 @@ export default function QualityAudit() {
                         <SavedReportsNChecksheets
                             reports={savedChecksheets.map(sheet => ({
                                 ...sheet,
-                                timestamp: sheet.timestamp
+                                timestamp: sheet.timestamp,
+                                updatedTimestamp: sheet.updatedTimestamp
                             }))}
                             onExportExcel={exportSavedReportToExcel}
                             onEdit={editSavedChecksheet}

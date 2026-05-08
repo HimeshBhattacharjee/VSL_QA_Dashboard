@@ -181,7 +181,7 @@ const JunctionBoxFixingObservations = {
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
-                        <div className="grid grid-cols-1 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <div className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500">Supplier</span>
                                 <InputComponents.TextInput
@@ -194,11 +194,10 @@ const JunctionBoxFixingObservations = {
                             <div className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500">Type</span>
                                 <InputComponents.TextInput
-                                    value={fixedTypeValue}
-                                    onChange={() => { }}
+                                    value={sampleValue[`${line}-type`] || fixedTypeValue}
+                                    onChange={(value) => handleUpdate(line, 'type', value)}
                                     placeholder=""
                                     type="measurement"
-                                    className="cursor-not-allowed"
                                 />
                             </div>
                             <div className="flex flex-col items-center">

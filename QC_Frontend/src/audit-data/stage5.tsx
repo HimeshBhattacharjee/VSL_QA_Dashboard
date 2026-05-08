@@ -91,7 +91,7 @@ const TabbingStringingObservations = {
 
         return (
             <select
-                value={props.value as string}
+                value={props.value as string || 'Checked OK'}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                 className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
@@ -222,10 +222,41 @@ const TabbingStringingObservations = {
     },
 
     renderCombinedStringerSectionWithLine: (props: ObservationRenderProps & { lineNumber: string }) => {
-        const allStringerData = props.value as Record<string, Record<string, string>>;
         const { lineNumber } = props;
         const lineConfig = LINE_DEPENDENT_CONFIG[5]?.lineMapping[lineNumber as keyof typeof LINE_DEPENDENT_CONFIG[5]['lineMapping']] ||
             LINE_DEPENDENT_CONFIG[5]?.lineMapping['I']; // Default to Line I
+
+        const createDefaultStringerData = () => {
+            const defaultData: Record<string, Record<string, string>> = {};
+            if (lineConfig && 'stringers' in lineConfig) {
+                lineConfig.stringers.forEach(stringerNumber => {
+                    if (props.paramId.includes('cell-width')) {
+                        defaultData[`Stringer-${stringerNumber}`] = {
+                            "Upper-A-L": "", "Upper-A-R": "", "Lower-A-L": "", "Lower-A-R": "",
+                            "Upper-B-L": "", "Upper-B-R": "", "Lower-B-L": "", "Lower-B-R": ""
+                        };
+                    } else if (props.paramId.includes('groove-length')) {
+                        defaultData[`Stringer-${stringerNumber}`] = {
+                            "Unit A - Upper Half": "",
+                            "Unit A - Lower Half": "",
+                            "Unit B - Upper Half": "",
+                            "Unit B - Lower Half": ""
+                        };
+                    } else {
+                        defaultData[`Stringer-${stringerNumber}`] = { "Unit A": "", "Unit B": "" };
+                    }
+                });
+            }
+            return defaultData;
+        };
+
+        const savedStringerData = typeof props.value === 'object' && props.value !== null
+            ? props.value as Record<string, Record<string, string>>
+            : {};
+        const allStringerData = Object.entries(createDefaultStringerData()).reduce<Record<string, Record<string, string>>>((merged, [stringerKey, defaultValues]) => {
+            merged[stringerKey] = { ...defaultValues, ...(savedStringerData[stringerKey] || {}) };
+            return merged;
+        }, {});
 
         const getBackgroundColorForValue = (value: string, paramId: string) => {
             const isOff = value.toUpperCase() === 'OFF';
@@ -1130,7 +1161,7 @@ const createGrooveLengthParameters = (lineNumber: string = 'I') => {
     return allStringersData;
 };
 
-const createCombinedStringerParameters = (lineNumber: string = 'I') => {
+const createCombinedStringerParameters = (lineNumber: string = 'I', defaultValue: string = '') => {
     const lineConfig = LINE_DEPENDENT_CONFIG[5]?.lineMapping[lineNumber as keyof typeof LINE_DEPENDENT_CONFIG[5]['lineMapping']] ||
         LINE_DEPENDENT_CONFIG[5]?.lineMapping['I'];
 
@@ -1138,12 +1169,12 @@ const createCombinedStringerParameters = (lineNumber: string = 'I') => {
 
     if (lineConfig && 'stringers' in lineConfig) {
         lineConfig.stringers.forEach(stringerNumber => {
-            allStringersData[`Stringer-${stringerNumber}`] = { "Unit A": "", "Unit B": "" };
+            allStringersData[`Stringer-${stringerNumber}`] = { "Unit A": defaultValue, "Unit B": defaultValue };
         });
     } else {
         // Fallback to default (Line I)
         for (let i = 1; i <= 6; i++) {
-            allStringersData[`Stringer-${i}`] = { "Unit A": "", "Unit B": "" };
+            allStringersData[`Stringer-${i}`] = { "Unit A": defaultValue, "Unit B": defaultValue };
         }
     }
 
@@ -1298,7 +1329,7 @@ const createSingleInputPerStringerParameters = (lineNumber: string = 'I') => {
     return stringerData;
 };
 
-const createDoubleTimeSlotPerStringerParameters = (lineNumber: string = 'I') => {
+const createDoubleTimeSlotPerStringerParameters = (lineNumber: string = 'I', defaultValue: string = '') => {
     const lineConfig = LINE_DEPENDENT_CONFIG[5]?.lineMapping[lineNumber as keyof typeof LINE_DEPENDENT_CONFIG[5]['lineMapping']] ||
         LINE_DEPENDENT_CONFIG[5]?.lineMapping['I'];
 
@@ -1307,16 +1338,16 @@ const createDoubleTimeSlotPerStringerParameters = (lineNumber: string = 'I') => 
     if (lineConfig && 'stringers' in lineConfig) {
         lineConfig.stringers.forEach(stringerNumber => {
             stringerData[`Stringer-${stringerNumber}`] = {
-                '4 hours': "",
-                '8 hours': ""
+                '4 hours': defaultValue,
+                '8 hours': defaultValue
             };
         });
     } else {
         // Fallback to default (Line I)
         for (let i = 1; i <= 6; i++) {
             stringerData[`Stringer-${i}`] = {
-                '4 hours': "",
-                '8 hours': ""
+                '4 hours': defaultValue,
+                '8 hours': defaultValue
             };
         }
     }
@@ -1390,7 +1421,7 @@ export const createTabbingStringingStage = (lineNumber: string = 'I'): StageData
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every shift",
             observations: [
-                { timeSlot: "", value: createCombinedStringerParameters(lineNumber) }
+                { timeSlot: "", value: createCombinedStringerParameters(lineNumber, 'Checked OK') }
             ],
             renderObservation: TabbingStringingObservations.renderCombinedStringerSection
         },
@@ -1530,7 +1561,7 @@ export const createTabbingStringingStage = (lineNumber: string = 'I'): StageData
             typeOfInspection: "Aesthetics",
             inspectionFrequency: "Every 4 hrs",
             observations: [
-                { timeSlot: "", value: createDoubleTimeSlotPerStringerParameters(lineNumber) }
+                { timeSlot: "", value: createDoubleTimeSlotPerStringerParameters(lineNumber, 'Checked OK') }
             ],
             renderObservation: (props: ObservationRenderProps) => (
                 <TabbingStringingObservations.renderDoubleTimeSlotPerStringer

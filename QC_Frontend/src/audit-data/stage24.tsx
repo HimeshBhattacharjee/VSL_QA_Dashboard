@@ -183,7 +183,7 @@ const SunSimulatorObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[line] || ''}
+                            value={sampleValue[line] || 'Checked OK'}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },
@@ -219,7 +219,7 @@ const SunSimulatorObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[line] || ''}
+                            value={sampleValue[line] || 'Checked OK'}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },
@@ -491,7 +491,7 @@ const SunSimulatorObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[line] || ''}
+                            value={sampleValue[line] || 'Checked OK'}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },
@@ -527,7 +527,7 @@ const SunSimulatorObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         <InputComponents.Select
-                            value={sampleValue[line] || ''}
+                            value={sampleValue[line] || 'Checked OK'}
                             onChange={(value) => handleUpdate(line, value)}
                             options={[
                                 { value: "Checked OK", label: "Checked OK" },

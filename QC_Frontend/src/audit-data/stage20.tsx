@@ -250,7 +250,7 @@ const AutoPottingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },
@@ -411,7 +411,7 @@ const AutoPottingObservations = {
                     >
                         {(timeSlot) => (
                             <InputComponents.Select
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Checked OK'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
                                 options={[
                                     { value: "Checked OK", label: "Checked OK" },

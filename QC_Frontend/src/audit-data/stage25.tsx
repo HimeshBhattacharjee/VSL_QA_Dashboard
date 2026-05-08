@@ -13,7 +13,7 @@ const RFIDObservations = {
         return (
             <div className="w-full flex justify-center">
                 <select
-                    value={props.value as string}
+                    value={props.value as string || 'Checked OK'}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
                     className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
