@@ -19,6 +19,7 @@ from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router
 from routes.rot_route import rot_router
 from routes.task_routes import task_router
+from routes.goal_routes import goal_router
 from routes.wet_leakage_route import wet_leakage_router
 from routes.ipqc_audit_route import ipqc_audit_router
 from generators.AuditReportGenerator import generate_audit_report
@@ -64,6 +65,7 @@ app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
 app.include_router(task_router)
+app.include_router(goal_router)
 app.include_router(wet_leakage_router)
 app.include_router(ipqc_audit_router)
 

@@ -45,7 +45,7 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
     return (
         <AlertContext.Provider value={{ showAlert }}>
             {children}
-            <div ref={alertContainerRef} className="fixed top-4 right-4 z-50 w-80"></div>
+            <div ref={alertContainerRef} className="fixed top-4 right-4 z-120 w-80"></div>
         </AlertContext.Provider>
     );
 };

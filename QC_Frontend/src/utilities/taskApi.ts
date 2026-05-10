@@ -1,4 +1,5 @@
 import { type TaskCardData } from '../components/TaskCard';
+import { normalizeAssignedTo } from './taskAssignments';
 
 const TASK_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/tasks';
 export const FIXED_TASK_ASSIGNED_BY = 'Sanjit Basu';
@@ -87,6 +88,7 @@ const normalizeDeadline = (value?: string | null) => {
 
 const normalizeTask = (task: TaskApiRecord): TaskCardData => ({
     ...task,
+    assignedTo: normalizeAssignedTo(task.assignedTo),
     deadline: normalizeDeadline(task.deadline),
     remarks: task.remarks ?? undefined,
 });
@@ -96,7 +98,7 @@ const buildTaskRequestBody = (task: TaskMutationPayload) => ({
     title: task.title.trim(),
     description: task.description.trim(),
     assignedBy: task.assignedBy.trim(),
-    assignedTo: task.assignedTo,
+    assignedTo: normalizeAssignedTo(task.assignedTo),
     remarks: task.remarks?.trim() || null,
     deadline: task.deadline ? `${task.deadline}T00:00:00.000Z` : null,
 });

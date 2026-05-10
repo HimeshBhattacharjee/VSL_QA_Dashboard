@@ -3,6 +3,7 @@ import { type TaskCardData, type TaskStatus } from './TaskCard';
 import {
     formatAssignedToSummary,
     getUserInitials,
+    sortUserNamesByDisplayName,
 } from '../utilities/taskAssignments';
 
 interface MeetingModeTableProps {
@@ -44,8 +45,8 @@ export default function MeetingModeTable({
     onEditTask,
 }: MeetingModeTableProps) {
     return (
-        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80 sm:p-6">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="rounded-3xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80 sm:p-4">
+            <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                 <span className="flex-shrink-0 mr-2 w-2.5 h-2.5 rounded-full bg-green-600 dark:bg-green-400 shadow-[0_0_0_3px_rgba(37,99,235,0.2)] dark:shadow-[0_0_0_3px_rgba(96,165,250,0.3)] animate-pulse" />
                     {tasks.length} active task{tasks.length === 1 ? '' : 's'}
@@ -79,7 +80,7 @@ export default function MeetingModeTable({
                     <tbody>
                         {tasks.length > 0 ? (
                             tasks.map((task) => {
-                                const visibleAssignees = task.assignedTo.slice(0, 2);
+                                const visibleAssignees = sortUserNamesByDisplayName(task.assignedTo).slice(0, 2);
                                 const remainingAssigneeCount =
                                     task.assignedTo.length - visibleAssignees.length;
 

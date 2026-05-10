@@ -3,6 +3,7 @@ import { CalendarDays } from 'lucide-react';
 import {
     formatAssignedToSummary,
     getUserInitials,
+    sortUserNamesByDisplayName,
 } from '../utilities/taskAssignments';
 
 export type TaskPriority = 'Low' | 'Medium' | 'High';
@@ -57,7 +58,7 @@ export default function TaskCard({
     onDoubleClick,
 }: TaskCardProps) {
     const statusStyle = statusStyles[task.status];
-    const visibleAssignees = task.assignedTo.slice(0, 2);
+    const visibleAssignees = sortUserNamesByDisplayName(task.assignedTo).slice(0, 2);
     const remainingAssigneeCount = task.assignedTo.length - visibleAssignees.length;
     const assigneeSummary = formatAssignedToSummary(task.assignedTo);
 
@@ -66,7 +67,7 @@ export default function TaskCard({
             {...dragHandleProps}
             onDoubleClick={onDoubleClick}
             className={`
-                rounded-xl border border-slate-200 bg-white dark:bg-gray-800 p-4 shadow-sm
+                rounded-xl border border-slate-200 bg-white dark:bg-gray-800 p-2 shadow-sm
                 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md
                 ${dragHandleProps ? 'cursor-grab active:cursor-grabbing touch-none' : ''}
                 ${isDragging ? 'opacity-60 shadow-xl' : ''}
@@ -74,25 +75,29 @@ export default function TaskCard({
             `}
         >
             <header className="flex items-start justify-between gap-3">
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${priorityStyles[task.priority]}`}>
-                    {task.priority} Priority
-                </span>
-
+                <div className="flex justify-items-start gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${priorityStyles[task.priority]}`}>
+                        {task.priority} Priority
+                    </span>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                        Created {formatDate(task.createdAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                </div>
                 <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusStyle.pill}`}>
                     <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
                     <span>{task.status}</span>
                 </div>
             </header>
 
-            <div className="mt-2">
+            <div className="mt-2 ml-2">
                 <p className="overflow-hidden text-sm font-bold text-slate-900 dark:text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
                     {task.title}
                 </p>
             </div>
 
-            <footer className="pt-3">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-center gap-3">
+            <footer className="pt-2">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                         <div className="flex shrink-0 items-center">
                             {visibleAssignees.length > 0 ? (
                                 visibleAssignees.map((assignee) => (
@@ -129,9 +134,6 @@ export default function TaskCard({
                             )}
                         </div>
                     </div>
-                </div>
-                <div className="mt-3 text-[11px] text-slate-400">
-                    Created {formatDate(task.createdAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </div>
             </footer>
         </article>

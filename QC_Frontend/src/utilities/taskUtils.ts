@@ -66,13 +66,6 @@ const normalizeTaskSignature = (tasks: TaskCardData[]) =>
 export const getTasksByStatus = (tasks: TaskCardData[], status: TaskStatus) =>
     tasks.filter((task) => task.status === status);
 
-export const getTaskAssigneeOptions = (tasks: TaskCardData[]) =>
-    Array.from(
-        new Set(
-            tasks.flatMap((task) => task.assignedTo.filter((assignee) => assignee.trim())),
-        ),
-    ).sort((left, right) => left.localeCompare(right));
-
 export const moveTaskToStatus = (
     tasks: TaskCardData[],
     taskId: string,

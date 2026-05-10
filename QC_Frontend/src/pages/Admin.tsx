@@ -185,6 +185,8 @@ const Admin = () => {
             value.toLowerCase().includes(normalizedSearchQuery)
         );
     });
+    const collapseActivePanel = () => setActiveTab(null);
+    const topBackButtonClass = 'inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-x-0.5 hover:bg-white/18 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60';
 
     if (loading) {
         return (
@@ -217,11 +219,24 @@ const Admin = () => {
                                 }`}
                             onClick={() => !activeTab && setActiveTab('create')}
                         >
-                            <div className={`p-6 md:p-8 text-center ${activeTab === 'create'
+                            <div className={`p-6 md:p-8 ${activeTab === 'create' ? 'text-left' : 'text-center'} ${activeTab === 'create'
                                 ? 'bg-gradient-to-r from-cyan-500 to-blue-500'
                                 : 'bg-gradient-to-r from-cyan-600 to-blue-600'
                                 }`}>
-                                <div className="flex items-center justify-center">
+                                <div className={`flex flex-wrap items-center gap-4 ${activeTab === 'create' ? 'justify-start' : 'justify-center'}`}>
+                                    {activeTab === 'create' && (
+                                        <button
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                collapseActivePanel();
+                                            }}
+                                            className={`${topBackButtonClass} hover:shadow-cyan-900/30`}
+                                        >
+                                            <span className="text-base leading-none">←</span>
+                                            Back
+                                        </button>
+                                    )}
                                     <div className={`p-2 rounded-2xl bg-white/20 ${activeTab === 'create' ? 'scale-110' : ''
                                         } transition-transform duration-300`}>
                                         <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,7 +325,7 @@ const Admin = () => {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setActiveTab(null)}
+                                                    onClick={collapseActivePanel}
                                                     className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-semibold py-3 px-6 sm:px-8 rounded-xl transition-all duration-300 border border-gray-300 dark:border-slate-600 cursor-pointer w-full sm:w-auto"
                                                 >
                                                     Back
@@ -349,11 +364,24 @@ const Admin = () => {
                                 }`}
                             onClick={() => !activeTab && setActiveTab('manage')}
                         >
-                            <div className={`p-6 md:p-8 text-center ${activeTab === 'manage'
+                            <div className={`p-6 md:p-8 ${activeTab === 'manage' ? 'text-left' : 'text-center'} ${activeTab === 'manage'
                                 ? 'bg-gradient-to-r from-purple-500 to-pink-500'
                                 : 'bg-gradient-to-r from-purple-600 to-pink-600'
                                 }`}>
-                                <div className="flex items-center justify-center">
+                                <div className={`flex flex-wrap items-center gap-4 ${activeTab === 'manage' ? 'justify-start' : 'justify-center'}`}>
+                                    {activeTab === 'manage' && (
+                                        <button
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                collapseActivePanel();
+                                            }}
+                                            className={`${topBackButtonClass} hover:shadow-purple-900/30`}
+                                        >
+                                            <span className="text-base leading-none">←</span>
+                                            Back
+                                        </button>
+                                    )}
                                     <div className={`p-2 rounded-2xl bg-white/20 ${activeTab === 'manage' ? 'scale-110' : ''
                                         } transition-transform duration-300`}>
                                         <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -533,7 +561,7 @@ const Admin = () => {
                                         </div>
                                         <div className="flex justify-center mt-6">
                                             <button
-                                                onClick={() => setActiveTab(null)}
+                                                onClick={collapseActivePanel}
                                                 className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 border border-gray-300 dark:border-slate-600 cursor-pointer"
                                             >
                                                 Back

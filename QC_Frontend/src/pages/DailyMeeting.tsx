@@ -6,8 +6,13 @@ import TaskEditModal, {
     type TaskFormValues,
 } from '../components/TaskEditModal';
 import { type TaskCardData } from '../components/TaskCard';
+import UserSingleSelect from '../components/UserSingleSelect';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import {
+    fetchAssignmentUsers,
+    type AssignmentUserOption,
+} from '../utilities/assignmentUsers';
 import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
     getCurrentTaskManagementRole,
@@ -18,7 +23,6 @@ import {
     DEFAULT_TASK_FILTERS,
     DEFAULT_TASK_SORT_OPTION,
     areTasksEqual,
-    getTaskAssigneeOptions,
     getTasksByStatus,
     moveTaskToStatus,
     processTasks,
@@ -47,7 +51,7 @@ interface TaskViewControlsProps {
     searchQuery: string;
     sortOption: TaskSortOption;
     filters: TaskFilters;
-    assigneeOptions: string[];
+    assigneeOptions: AssignmentUserOption[];
     onSearchChange: (value: string) => void;
     onSortChange: (value: TaskSortOption) => void;
     onPriorityChange: (value: TaskFilters['priority']) => void;
@@ -82,10 +86,10 @@ function TaskViewControls({
     onAssigneeChange,
 }: TaskViewControlsProps) {
     return (
-        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80 sm:p-6">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Search
                     </label>
                     <input
@@ -93,18 +97,18 @@ function TaskViewControls({
                         value={searchQuery}
                         onChange={(event) => onSearchChange(event.target.value)}
                         placeholder="Search by task title or assignee"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     />
                 </div>
 
                 <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Sort
                     </label>
                     <select
                         value={sortOption}
                         onChange={(event) => onSortChange(event.target.value as TaskSortOption)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
                         <option value="createdAt">Creation Date</option>
                         <option value="priority">Priority</option>
@@ -113,13 +117,13 @@ function TaskViewControls({
                 </div>
 
                 <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Priority
                     </label>
                     <select
                         value={filters.priority}
                         onChange={(event) => onPriorityChange(event.target.value as TaskFilters['priority'])}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
                         <option value="All">All Priorities</option>
                         <option value="High">High</option>
@@ -129,21 +133,18 @@ function TaskViewControls({
                 </div>
 
                 <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Assigned User
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Assigned Employee
                     </label>
-                    <select
+                    <UserSingleSelect
+                        options={assigneeOptions}
                         value={filters.assignedUser}
-                        onChange={(event) => onAssigneeChange(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    >
-                        <option value={ALL_ASSIGNEES_FILTER_VALUE}>All Employees</option>
-                        {assigneeOptions.map((assignee) => (
-                            <option key={assignee} value={assignee}>
-                                {assignee}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={onAssigneeChange}
+                        allOptionLabel="All Employees"
+                        allOptionValue={ALL_ASSIGNEES_FILTER_VALUE}
+                        placeholder="Filter by employee"
+                        searchPlaceholder="Search employees"
+                    />
                 </div>
             </div>
         </section>
@@ -152,6 +153,7 @@ function TaskViewControls({
 
 export default function DailyMeetingPage() {
     const [tasks, setTasks] = useState<TaskCardData[]>([]);
+    const [assigneeOptions, setAssigneeOptions] = useState<AssignmentUserOption[]>([]);
     const [modalState, setModalState] = useState<TaskModalState | null>(null);
     const [isMeetingMode, setIsMeetingMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -166,7 +168,6 @@ export default function DailyMeetingPage() {
 
     const currentUserRole = getCurrentTaskManagementRole();
     const permissions = getTaskManagementPermissions(currentUserRole);
-    const assigneeOptions = getTaskAssigneeOptions(tasks);
     const meetingModeTasks = processTasks(
         getTasksByStatus(tasks, 'To Do'),
         searchQuery,
@@ -205,6 +206,30 @@ export default function DailyMeetingPage() {
         return () => {
             isActive = false;
             window.clearInterval(pollTimer);
+        };
+    }, [showAlert]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadAssignableUsers = async () => {
+            try {
+                const users = await fetchAssignmentUsers('daily');
+                if (!isActive) {
+                    return;
+                }
+
+                setAssigneeOptions(users);
+            } catch (error) {
+                console.error('Failed to load assignable users:', error);
+                showAlert('error', 'Failed to load employee options.');
+            }
+        };
+
+        void loadAssignableUsers();
+
+        return () => {
+            isActive = false;
         };
     }, [showAlert]);
 
@@ -402,12 +427,12 @@ export default function DailyMeetingPage() {
     }
 
     return (
-        <div className="relative min-h-[85vh] overflow-hidden rounded-3xl bg-slate-50 p-4 transition-colors duration-300 dark:bg-slate-900 sm:p-6">
+        <div className="relative min-h-[85vh] overflow-hidden rounded-3xl bg-slate-50 p-2 transition-colors duration-300 dark:bg-slate-900 sm:p-4">
             <div className="pointer-events-none absolute left-[-10%] top-[-5%] h-72 w-72 rounded-full bg-red-500/15 blur-[90px] dark:bg-red-400/20" />
             <div className="pointer-events-none absolute bottom-[-15%] right-[-5%] h-80 w-80 rounded-full bg-blue-500/10 blur-[110px] dark:bg-blue-400/10" />
 
-            <div className="relative z-10 mx-auto flex h-full max-w-[96rem] flex-col gap-4 custom-scrollbar">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative z-10 mx-auto flex h-full max-w-[96rem] flex-col gap-2 custom-scrollbar">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
                         Daily Meeting
                     </h1>
@@ -483,6 +508,7 @@ export default function DailyMeetingPage() {
                 task={modalState?.task ?? null}
                 role={currentUserRole}
                 fixedAssignedBy={FIXED_ASSIGNED_BY}
+                assigneeOptions={assigneeOptions}
                 onClose={handleCloseModal}
                 onCreateTask={handleCreateTask}
                 onUpdateTask={handleUpdateTask}

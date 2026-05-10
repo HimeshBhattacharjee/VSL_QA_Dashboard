@@ -1,32 +1,17 @@
 import { useState } from 'react';
 import {
-    DndContext,
-    DragOverlay,
-    PointerSensor,
-    closestCorners,
-    useDroppable,
-    useSensor,
-    useSensors,
-    type DragEndEvent,
-    type DragStartEvent,
-    type UniqueIdentifier,
+    DndContext, DragOverlay, PointerSensor, closestCorners, useDroppable, useSensor, useSensors,
+    type DragEndEvent, type DragStartEvent, type UniqueIdentifier
 } from '@dnd-kit/core';
-import {
-    SortableContext,
-    useSortable,
-    verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import TaskCard, { type TaskCardData, type TaskStatus } from './TaskCard';
-import {
-    getTasksByStatus,
-    processTasks,
-    type TaskFilters,
-    type TaskSortOption,
-} from '../utilities/taskUtils';
+import { formatAssignedToGroupLabel, getAssignedToGroupKey } from '../utilities/taskAssignments';
+import { getTasksByStatus, processTasks, type TaskFilters, type TaskSortOption } from '../utilities/taskUtils';
 
 interface EmployeeTaskSection {
-    employeeName: string;
+    groupKey: string;
+    label: string;
     tasks: TaskCardData[];
 }
 
@@ -60,41 +45,47 @@ const initialCollapsedState: Record<TaskStatus, boolean> = {
     'To Do': false,
     Done: false,
 };
-const UNASSIGNED_GROUP = 'Unassigned';
-
-const getPrimaryAssignee = (assignedTo: string[]) =>
-    assignedTo.find((name) => name.trim())?.trim() ?? UNASSIGNED_GROUP;
+const UNASSIGNED_GROUP_KEY = 'Unassigned';
 
 const groupTasksByEmployee = (tasks: TaskCardData[]): EmployeeTaskSection[] => {
-    const sections = new Map<string, TaskCardData[]>();
+    const sections = new Map<string, EmployeeTaskSection>();
 
     tasks.forEach((task) => {
-        const employeeName = getPrimaryAssignee(task.assignedTo);
-        const currentSectionTasks = sections.get(employeeName) ?? [];
-        currentSectionTasks.push(task);
-        sections.set(employeeName, currentSectionTasks);
+        const groupKey = getAssignedToGroupKey(task.assignedTo);
+        const existingSection = sections.get(groupKey);
+
+        if (existingSection) {
+            existingSection.tasks.push(task);
+            return;
+        }
+
+        sections.set(groupKey, {
+            groupKey,
+            label: formatAssignedToGroupLabel(task.assignedTo),
+            tasks: [task],
+        });
     });
 
-    return Array.from(sections.entries())
-        .sort(([leftName], [rightName]) => {
-            if (leftName === UNASSIGNED_GROUP) {
+    return Array.from(sections.values())
+        .sort((leftSection, rightSection) => {
+            if (leftSection.groupKey === UNASSIGNED_GROUP_KEY) {
                 return 1;
             }
 
-            if (rightName === UNASSIGNED_GROUP) {
+            if (rightSection.groupKey === UNASSIGNED_GROUP_KEY) {
                 return -1;
             }
 
-            return leftName.localeCompare(rightName);
-        })
-        .map(([employeeName, sectionTasks]) => ({
-            employeeName,
-            tasks: sectionTasks,
-        }));
+            return (
+                leftSection.label.localeCompare(rightSection.label, undefined, {
+                    sensitivity: 'base',
+                }) || leftSection.groupKey.localeCompare(rightSection.groupKey)
+            );
+        });
 };
 
-const getSectionKey = (columnTitle: TaskStatus, employeeName: string) =>
-    `${columnTitle}:${employeeName}`;
+const getSectionKey = (columnTitle: TaskStatus, groupKey: string) =>
+    `${columnTitle}:${groupKey}`;
 
 const findTaskById = (tasks: TaskCardData[], taskId: string) =>
     tasks.find((task) => task.id === taskId) ?? null;
@@ -191,14 +182,14 @@ function KanbanColumn({
     onTaskDoubleClick: (task: TaskCardData) => void;
     canDragTasks: boolean;
     collapsedSections: Record<string, boolean>;
-    onToggleSection: (employeeName: string) => void;
+    onToggleSection: (groupKey: string) => void;
 }) {
     const { setNodeRef, isOver } = useDroppable({
         id: column.dropzoneId,
         disabled: !canDragTasks,
     });
     const visibleTaskIds = employeeSections.flatMap((section) =>
-        collapsedSections[getSectionKey(column.title, section.employeeName)]
+        collapsedSections[getSectionKey(column.title, section.groupKey)]
             ? []
             : section.tasks.map((task) => task.id),
     );
@@ -216,7 +207,7 @@ function KanbanColumn({
         >
             {isCollapsed ? (
                 <div
-                    className={`flex h-full flex-col items-center justify-between px-2 py-4 transition-colors duration-200 ${isOver ? 'bg-slate-100/90 dark:bg-slate-800/80' : ''}`}
+                    className={`flex h-full flex-col items-center justify-between p-2 transition-colors duration-200 ${isOver ? 'bg-slate-100/90 dark:bg-slate-800/80' : ''}`}
                 >
                     <button
                         type="button"
@@ -239,8 +230,8 @@ function KanbanColumn({
                 </div>
             ) : (
                 <>
-                    <div className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-800/90">
-                        <div className={`mb-3 h-1.5 w-full rounded-full ${column.accentBar}`} />
+                    <div className="border-b border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/90">
+                        <div className={`mb-2 h-1.5 w-full rounded-full ${column.accentBar}`} />
                         <div className="flex items-start justify-between gap-2">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -248,7 +239,7 @@ function KanbanColumn({
                                 </h3>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${column.headerBadge}`}>
+                                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${column.headerBadge}`}>
                                     {taskCount}
                                 </span>
                                 <button
@@ -264,30 +255,30 @@ function KanbanColumn({
                     </div>
 
                     <div
-                        className={`flex-1 overflow-y-auto px-4 pb-4 pt-4 transition-colors duration-200 ${isOver ? 'bg-slate-100/80 dark:bg-slate-800/60' : ''}`}
+                        className={`flex-1 overflow-y-auto p-2 transition-colors duration-200 ${isOver ? 'bg-slate-100/80 dark:bg-slate-800/60' : ''}`}
                     >
                         <SortableContext items={visibleTaskIds} strategy={verticalListSortingStrategy}>
-                            <div className="flex min-h-full flex-col gap-4">
+                            <div className="flex min-h-full flex-col gap-2">
                                 {employeeSections.map((section) => {
-                                    const sectionKey = getSectionKey(column.title, section.employeeName);
+                                    const sectionKey = getSectionKey(column.title, section.groupKey);
                                     const isSectionCollapsed = Boolean(collapsedSections[sectionKey]);
 
                                     return (
                                         <div
                                             key={sectionKey}
-                                            className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70"
+                                            className="rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/70"
                                         >
                                             <button
                                                 type="button"
-                                                onClick={() => onToggleSection(section.employeeName)}
-                                                className="flex w-full items-center justify-between gap-3 text-left"
+                                                onClick={() => onToggleSection(section.groupKey)}
+                                                className="flex w-full items-center justify-between gap-2 text-left"
                                             >
-                                                <div className="min-w-0">
+                                                <div className="flex flex-row gap-1 min-w-0">
                                                     <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-                                                        {section.employeeName}
+                                                        {section.label}
                                                     </p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                        {section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}
+                                                    <p className="text-xs mt-0.5 text-slate-500 dark:text-slate-400">
+                                                        ({section.tasks.length} task{section.tasks.length === 1 ? '' : 's'})
                                                     </p>
                                                 </div>
                                                 <ChevronRight
@@ -312,7 +303,7 @@ function KanbanColumn({
                                 })}
 
                                 {taskCount === 0 && (
-                                    <div className="flex min-h-[240px] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/70 px-6 text-center dark:border-slate-600 dark:bg-slate-800/60">
+                                    <div className="flex min-h-[240px] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 text-center dark:border-slate-600 dark:bg-slate-800/60">
                                         <div className="space-y-2">
                                             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                                                 No tasks in {column.title}
@@ -446,7 +437,7 @@ export default function KanbanBoard({
     }
 
     return (
-        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80 sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
@@ -454,8 +445,8 @@ export default function KanbanBoard({
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
             >
-                <div className="overflow-x-auto pb-3">
-                    <div className="flex min-w-full items-stretch gap-6 custom-scrollbar">
+                <div className="overflow-x-auto">
+                    <div className="flex min-w-full items-stretch gap-3 custom-scrollbar">
                         {columns.map((column) => (
                             <KanbanColumn
                                 key={column.id}

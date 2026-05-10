@@ -10,6 +10,14 @@ export interface TaskManagementPermissions {
     canEditRemarksOnly: boolean;
 }
 
+export interface GoalManagementPermissions {
+    canAccessGoalManagement: boolean;
+    canCreateGoals: boolean;
+    canDeleteGoals: boolean;
+    canEditGoalDetails: boolean;
+    canUpdateMilestones: boolean;
+}
+
 // Temporary fallback until task management identity is wired to backend auth.
 export const MOCK_CURRENT_TASK_USER = {
     role: 'Manager' as TaskManagementRole,
@@ -40,4 +48,14 @@ export const getTaskManagementPermissions = (
     canEditTasks: role === 'Manager' || role === 'Supervisor',
     canEditAllTaskFields: role === 'Manager',
     canEditRemarksOnly: role === 'Supervisor',
+});
+
+export const getGoalManagementPermissions = (
+    role: TaskManagementRole,
+): GoalManagementPermissions => ({
+    canAccessGoalManagement: role !== 'Operator',
+    canCreateGoals: role === 'Manager',
+    canDeleteGoals: role === 'Manager',
+    canEditGoalDetails: role === 'Manager',
+    canUpdateMilestones: role === 'Manager' || role === 'Supervisor',
 });

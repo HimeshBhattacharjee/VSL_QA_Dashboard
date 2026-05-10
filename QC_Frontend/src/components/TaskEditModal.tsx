@@ -13,10 +13,8 @@ import {
     type TaskPriority,
     type TaskStatus,
 } from './TaskCard';
-import {
-    PREDEFINED_TASK_ASSIGNEES,
-    normalizeAssignedTo,
-} from '../utilities/taskAssignments';
+import { type AssignmentUserOption } from '../utilities/assignmentUsers';
+import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
     getTaskManagementPermissions,
     type TaskManagementRole,
@@ -41,6 +39,7 @@ interface TaskEditModalProps {
     task: TaskCardData | null;
     role: TaskManagementRole;
     fixedAssignedBy: string;
+    assigneeOptions: AssignmentUserOption[];
     onClose: () => void;
     onCreateTask: (task: TaskFormValues) => void;
     onUpdateTask: (task: TaskFormValues) => void;
@@ -102,6 +101,7 @@ export default function TaskEditModal({
     task,
     role,
     fixedAssignedBy,
+    assigneeOptions,
     onClose,
     onCreateTask,
     onUpdateTask,
@@ -167,12 +167,6 @@ export default function TaskEditModal({
         'w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 outline-none transition-colors dark:bg-slate-800 dark:text-white';
     const getFieldClass = (hasError: boolean, isReadOnly = false) =>
         `${fieldClass} ${hasError ? 'border-rose-300 focus:border-rose-500 dark:border-rose-500/70' : 'border-slate-200 focus:border-slate-400 dark:border-slate-700'} ${isReadOnly ? readOnlyFieldClass : ''}`;
-    const availableAssignees = [
-        ...PREDEFINED_TASK_ASSIGNEES,
-        ...formState.assignedTo.filter(
-            (user) => !PREDEFINED_TASK_ASSIGNEES.includes(user),
-        ),
-    ];
 
     const updateField = <K extends keyof TaskFormValues>(field: K, value: TaskFormValues[K]) => {
         setFormState((current) => ({ ...current, [field]: value }));
@@ -283,7 +277,7 @@ export default function TaskEditModal({
                                     Assigned To
                                 </label>
                                 <MultiUserSelect
-                                    options={availableAssignees}
+                                    options={assigneeOptions}
                                     selectedUsers={formState.assignedTo}
                                     onChange={(users) => updateField('assignedTo', users)}
                                     disabled={!canEditCoreFields}

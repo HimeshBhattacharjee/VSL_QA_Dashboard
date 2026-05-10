@@ -23,8 +23,8 @@ import Visual from './pages/Visual';
 import LamQC from './pages/LamQC';
 import FQC from './pages/FQC';
 import QualityAudit from './pages/QualityAudit';
-import DailyMeetingPage from './pages/DailyMeetingPage';
-import GoalMeetingPage from './pages/GoalMeetingPage';
+import DailyMeeting from './pages/DailyMeeting';
+import GoalMeeting from './pages/GoalMeeting';
 import {
     getCurrentTaskManagementRole,
     getTaskManagementPermissions,
@@ -91,12 +91,12 @@ export default function App() {
                             } />
                             <Route path="/daily-meeting" element={
                                 <TaskManagementRoute>
-                                    <DailyMeetingPage />
+                                    <DailyMeeting />
                                 </TaskManagementRoute>
                             } />
                             <Route path="/goal-meeting" element={
                                 <TaskManagementRoute>
-                                    <GoalMeetingPage />
+                                    <GoalMeeting />
                                 </TaskManagementRoute>
                             } />
                             <Route path="/gel-test" element={
