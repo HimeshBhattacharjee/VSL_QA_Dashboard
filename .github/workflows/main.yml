@@ -50,9 +50,9 @@ jobs:
           pm2 restart qc-frontend || pm2 start "npx serve -s dist -l 8010" --name "qc-frontend"
 
 
-      - name: Save PM2 process list
-        run: |
-          pm2 startup
-          pm2 save
+      # - name: Save PM2 process list
+      #   run: |
+      #     pm2 startup
+      #     pm2 save
 
 # testing 2
