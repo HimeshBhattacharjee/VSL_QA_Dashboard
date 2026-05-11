@@ -158,7 +158,7 @@ export default function QualityAudit() {
     const [currentUserSignatureImage, setCurrentUserSignatureImage] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
-    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSavedDataRef = useRef<string>('');
     const latestSaveRequestRef = useRef(0);
     const saveInProgressRef = useRef(false);
