@@ -115,7 +115,7 @@ export default function AdhesionTest() {
 
     const apiService = {
         getAllReports: async (): Promise<AdhesionTestReport[]> => {
-            const response = await fetch(`${ADHESION_API_BASE_URL}`);
+            const response = await fetch(`${ADHESION_API_BASE_URL}/`);
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -131,7 +131,7 @@ export default function AdhesionTest() {
             return response.json();
         },
         createReport: async (report: Omit<AdhesionTestReport, '_id'>): Promise<AdhesionTestReport> => {
-            const response = await fetch(`${ADHESION_API_BASE_URL}`, {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),

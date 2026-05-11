@@ -170,7 +170,7 @@ export default function QualityAudit() {
     
     const apiService = {
         getAllAudits: async (): Promise<any[]> => {
-            const response = await fetch(`${IPQC_API_BASE_URL}?include_data=true`);
+            const response = await fetch(`${IPQC_API_BASE_URL}/?include_data=true`);
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch audits: ${response.status} ${errorText}`);
@@ -188,7 +188,7 @@ export default function QualityAudit() {
         },
 
         createAudit: async (audit: any): Promise<any> => {
-            const response = await fetch(`${IPQC_API_BASE_URL}`, {
+            const response = await fetch(`${IPQC_API_BASE_URL}/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

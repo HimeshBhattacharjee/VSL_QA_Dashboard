@@ -81,7 +81,7 @@ export default function GelTest() {
     };
     const apiService = {
         getAllReports: async (): Promise<GelTestReport[]> => {
-            const response = await fetch(`${GEL_API_BASE_URL}`);
+            const response = await fetch(`${GEL_API_BASE_URL}/`);
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -97,7 +97,7 @@ export default function GelTest() {
             return response.json();
         },
         createReport: async (report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
-            const response = await fetch(`${GEL_API_BASE_URL}`, {
+            const response = await fetch(`${GEL_API_BASE_URL}/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),

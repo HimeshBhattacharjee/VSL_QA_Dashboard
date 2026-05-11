@@ -77,7 +77,7 @@ export default function PeelTest() {
 
     const apiService = {
         getAllReports: async (): Promise<ReportData[]> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`);
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/`);
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -93,7 +93,7 @@ export default function PeelTest() {
             return response.json();
         },
         createReport: async (report: Omit<ReportData, '_id'>): Promise<ReportData> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports`, {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
