@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import KanbanBoard from '../components/KanbanBoard';
 import MeetingModeTable from '../components/MeetingModeTable';
@@ -6,7 +6,6 @@ import TaskEditModal, {
     type TaskFormValues,
 } from '../components/TaskEditModal';
 import { type TaskCardData } from '../components/TaskCard';
-import UserSingleSelect from '../components/UserSingleSelect';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import {
@@ -19,7 +18,6 @@ import {
     getTaskManagementPermissions,
 } from '../utilities/taskAccess';
 import {
-    ALL_ASSIGNEES_FILTER_VALUE,
     DEFAULT_TASK_FILTERS,
     DEFAULT_TASK_SORT_OPTION,
     areTasksEqual,
@@ -51,11 +49,9 @@ interface TaskViewControlsProps {
     searchQuery: string;
     sortOption: TaskSortOption;
     filters: TaskFilters;
-    assigneeOptions: AssignmentUserOption[];
     onSearchChange: (value: string) => void;
     onSortChange: (value: TaskSortOption) => void;
     onPriorityChange: (value: TaskFilters['priority']) => void;
-    onAssigneeChange: (value: string) => void;
 }
 
 const applyPendingTaskStatusUpdates = (
@@ -79,15 +75,13 @@ function TaskViewControls({
     searchQuery,
     sortOption,
     filters,
-    assigneeOptions,
     onSearchChange,
     onSortChange,
     onPriorityChange,
-    onAssigneeChange,
 }: TaskViewControlsProps) {
     return (
         <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 <div>
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Search
@@ -110,9 +104,12 @@ function TaskViewControls({
                         onChange={(event) => onSortChange(event.target.value as TaskSortOption)}
                         className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
-                        <option value="createdAt">Creation Date</option>
-                        <option value="priority">Priority</option>
-                        <option value="deadline">Deadline</option>
+                        <option value="createdAtAsc">Creation Date (Asc)</option>
+                        <option value="createdAtDesc">Creation Date (Desc)</option>
+                        <option value="priorityAsc">Priority (Asc)</option>
+                        <option value="priorityDesc">Priority (Desc)</option>
+                        <option value="deadlineAsc">Deadline (Asc)</option>
+                        <option value="deadlineDesc">Deadline (Desc)</option>
                     </select>
                 </div>
 
@@ -132,20 +129,6 @@ function TaskViewControls({
                     </select>
                 </div>
 
-                <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Assigned Employee
-                    </label>
-                    <UserSingleSelect
-                        options={assigneeOptions}
-                        value={filters.assignedUser}
-                        onChange={onAssigneeChange}
-                        allOptionLabel="All Employees"
-                        allOptionValue={ALL_ASSIGNEES_FILTER_VALUE}
-                        placeholder="Filter by employee"
-                        searchPlaceholder="Search employees"
-                    />
-                </div>
             </div>
         </section>
     );
@@ -168,11 +151,15 @@ export default function DailyMeetingPage() {
 
     const currentUserRole = getCurrentTaskManagementRole();
     const permissions = getTaskManagementPermissions(currentUserRole);
-    const meetingModeTasks = processTasks(
-        getTasksByStatus(tasks, 'To Do'),
-        searchQuery,
-        filters,
-        sortOption,
+    const meetingModeTasks = useMemo(
+        () =>
+            processTasks(
+                getTasksByStatus(tasks, 'To Do'),
+                searchQuery,
+                filters,
+                sortOption,
+            ),
+        [filters, searchQuery, sortOption, tasks],
     );
 
     useEffect(() => {
@@ -337,6 +324,7 @@ export default function DailyMeetingPage() {
                 description: formValues.description.trim(),
                 assignedTo: normalizeAssignedTo(formValues.assignedTo),
                 assignedBy: FIXED_ASSIGNED_BY,
+                createdAt: formValues.creationDate,
                 priority: formValues.priority,
                 deadline: formValues.deadline || undefined,
                 status: 'To Do',
@@ -467,19 +455,12 @@ export default function DailyMeetingPage() {
                     searchQuery={searchQuery}
                     sortOption={sortOption}
                     filters={filters}
-                    assigneeOptions={assigneeOptions}
                     onSearchChange={setSearchQuery}
                     onSortChange={setSortOption}
                     onPriorityChange={(value) =>
                         setFilters((current) => ({
                             ...current,
                             priority: value,
-                        }))
-                    }
-                    onAssigneeChange={(value) =>
-                        setFilters((current) => ({
-                            ...current,
-                            assignedUser: value,
                         }))
                     }
                 />
@@ -507,7 +488,6 @@ export default function DailyMeetingPage() {
                 mode={modalState?.mode ?? 'create'}
                 task={modalState?.task ?? null}
                 role={currentUserRole}
-                fixedAssignedBy={FIXED_ASSIGNED_BY}
                 assigneeOptions={assigneeOptions}
                 onClose={handleCloseModal}
                 onCreateTask={handleCreateTask}

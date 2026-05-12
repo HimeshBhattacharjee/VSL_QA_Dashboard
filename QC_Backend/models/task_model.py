@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from date_utils import ensure_utc_datetime, serialize_datetime, utc_now
 
 TASKS_COLLECTION_NAME = 'tasks'
 
@@ -14,9 +15,6 @@ tasks_collection = task_db[TASKS_COLLECTION_NAME]
 TaskPriority = Literal['Low', 'Medium', 'High']
 TaskStatus = Literal['To Do', 'Done']
 ASSIGNED_BY_OVERRIDE = 'Sanjit Basu'
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=1)
@@ -48,6 +46,10 @@ def normalize_task_payload(payload: TaskCreate | TaskUpdate) -> dict:
     )
     remarks = task.get('remarks')
     task['remarks'] = remarks.strip() if isinstance(remarks, str) and remarks.strip() else None
+    if task.get('deadline') is not None:
+        task['deadline'] = ensure_utc_datetime(task['deadline'])
+    if task.get('createdAt') is not None:
+        task['createdAt'] = ensure_utc_datetime(task['createdAt'])
     if not task['title']:
         raise ValueError('Task title is required')
     if not task['assignedBy']:
@@ -63,9 +65,9 @@ def serialize_task(document: dict) -> dict:
         'assignedBy': document.get('assignedBy', ''),
         'priority': document.get('priority', 'Medium'),
         'status': document.get('status', 'To Do'),
-        'deadline': document.get('deadline').isoformat() if document.get('deadline') else None,
+        'deadline': serialize_datetime(document['deadline']) if document.get('deadline') else None,
         'remarks': document.get('remarks'),
-        'createdAt': document['createdAt'].isoformat(),
+        'createdAt': serialize_datetime(document['createdAt']),
     }
     return serialized
 

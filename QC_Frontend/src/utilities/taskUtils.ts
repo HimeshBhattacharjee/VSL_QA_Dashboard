@@ -1,6 +1,12 @@
 import { type TaskCardData, type TaskPriority, type TaskStatus } from '../components/TaskCard';
 
-export type TaskSortOption = 'createdAt' | 'priority' | 'deadline';
+export type TaskSortOption =
+    | 'createdAtAsc'
+    | 'createdAtDesc'
+    | 'priorityAsc'
+    | 'priorityDesc'
+    | 'deadlineAsc'
+    | 'deadlineDesc';
 export type TaskPriorityFilter = TaskPriority | 'All';
 
 export interface TaskFilters {
@@ -9,7 +15,7 @@ export interface TaskFilters {
 }
 
 export const ALL_ASSIGNEES_FILTER_VALUE = 'All';
-export const DEFAULT_TASK_SORT_OPTION: TaskSortOption = 'createdAt';
+export const DEFAULT_TASK_SORT_OPTION: TaskSortOption = 'createdAtAsc';
 export const DEFAULT_TASK_FILTERS: TaskFilters = {
     priority: 'All',
     assignedUser: ALL_ASSIGNEES_FILTER_VALUE,
@@ -30,13 +36,26 @@ const getDateTimeValue = (value?: string) => {
     return Number.isNaN(parsedTime) ? null : parsedTime;
 };
 
-const compareByCreatedAt = (left: TaskCardData, right: TaskCardData) =>
-    (getDateTimeValue(right.createdAt) ?? 0) - (getDateTimeValue(left.createdAt) ?? 0);
+const compareByCreatedAtAsc = (left: TaskCardData, right: TaskCardData) =>
+    (getDateTimeValue(left.createdAt) ?? 0) - (getDateTimeValue(right.createdAt) ?? 0);
 
-const compareByPriority = (left: TaskCardData, right: TaskCardData) =>
-    PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
+const compareByCreatedAtDesc = (left: TaskCardData, right: TaskCardData) =>
+    compareByCreatedAtAsc(right, left);
 
-const compareByDeadline = (left: TaskCardData, right: TaskCardData) => {
+const compareByPriority = (
+    left: TaskCardData,
+    right: TaskCardData,
+    direction: 'asc' | 'desc',
+) =>
+    direction === 'asc'
+        ? PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority]
+        : PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
+
+const compareByDeadline = (
+    left: TaskCardData,
+    right: TaskCardData,
+    direction: 'asc' | 'desc',
+) => {
     const leftDeadline = getDateTimeValue(left.deadline);
     const rightDeadline = getDateTimeValue(right.deadline);
 
@@ -52,7 +71,9 @@ const compareByDeadline = (left: TaskCardData, right: TaskCardData) => {
         return -1;
     }
 
-    return leftDeadline - rightDeadline;
+    return direction === 'asc'
+        ? leftDeadline - rightDeadline
+        : rightDeadline - leftDeadline;
 };
 
 const normalizeTaskSignature = (tasks: TaskCardData[]) =>
@@ -109,14 +130,26 @@ export const processTasks = (
         : filteredTasks;
 
     return [...searchedTasks].sort((left, right) => {
-        if (sortOption === 'priority') {
-            return compareByPriority(left, right) || compareByCreatedAt(left, right);
+        if (sortOption === 'createdAtAsc') {
+            return compareByCreatedAtAsc(left, right);
         }
 
-        if (sortOption === 'deadline') {
-            return compareByDeadline(left, right) || compareByCreatedAt(left, right);
+        if (sortOption === 'createdAtDesc') {
+            return compareByCreatedAtDesc(left, right);
         }
 
-        return compareByCreatedAt(left, right);
+        if (sortOption === 'priorityAsc') {
+            return compareByPriority(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+        }
+
+        if (sortOption === 'priorityDesc') {
+            return compareByPriority(left, right, 'desc') || compareByCreatedAtDesc(left, right);
+        }
+
+        if (sortOption === 'deadlineAsc') {
+            return compareByDeadline(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+        }
+
+        return compareByDeadline(left, right, 'desc') || compareByCreatedAtDesc(left, right);
     });
 };
