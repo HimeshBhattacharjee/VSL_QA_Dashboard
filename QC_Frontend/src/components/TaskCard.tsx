@@ -5,6 +5,7 @@ import {
     getUserInitials,
     sortUserNamesByDisplayName,
 } from '../utilities/taskAssignments';
+import { formatISTDate } from '../utilities/istDate';
 
 export type TaskPriority = 'Low' | 'Medium' | 'High';
 export type TaskStatus = 'To Do' | 'Done';
@@ -47,9 +48,6 @@ const statusStyles: Record<TaskStatus, { dot: string; pill: string }> = {
     },
 };
 
-const formatDate = (value: string, options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat('en-IN', options).format(new Date(value));
-
 export default function TaskCard({
     task,
     dragHandleProps,
@@ -80,7 +78,7 @@ export default function TaskCard({
                         {task.priority} Priority
                     </span>
                     <div className="mt-1 text-[11px] text-slate-400">
-                        Created {formatDate(task.createdAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        Created {formatISTDate(task.createdAt)}
                     </div>
                 </div>
                 <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusStyle.pill}`}>
@@ -90,7 +88,7 @@ export default function TaskCard({
             </header>
 
             <div className="mt-2 ml-2">
-                <p className="overflow-hidden text-sm font-bold text-slate-900 dark:text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                <p className="break-words whitespace-normal text-sm font-bold leading-5 text-slate-900 dark:text-white">
                     {task.title}
                 </p>
             </div>
@@ -128,7 +126,7 @@ export default function TaskCard({
                                 <div className="shrink-0 text-left text-xs text-slate-500">
                                     <div className="mt-1 flex items-center justify-start gap-2">
                                         <CalendarDays className="h-3.5 w-3.5" />
-                                        <span>Due {formatDate(task.deadline, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                        <span>Due {formatISTDate(task.deadline)}</span>
                                     </div>
                                 </div>
                             )}

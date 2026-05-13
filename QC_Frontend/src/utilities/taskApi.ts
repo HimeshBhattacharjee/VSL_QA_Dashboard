@@ -1,4 +1,5 @@
 import { type TaskCardData } from '../components/TaskCard';
+import { toISTStartOfDayIso } from './istDate';
 import { normalizeAssignedTo } from './taskAssignments';
 
 const TASK_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/tasks';
@@ -26,6 +27,10 @@ export interface TaskMutationPayload {
     status: TaskCardData['status'];
     deadline?: string;
     remarks?: string;
+}
+
+export interface TaskCreatePayload extends TaskMutationPayload {
+    createdAt?: string;
 }
 
 export const createTaskMutationPayloadFromTask = (
@@ -103,6 +108,11 @@ const buildTaskRequestBody = (task: TaskMutationPayload) => ({
     deadline: task.deadline ? `${task.deadline}T00:00:00.000Z` : null,
 });
 
+const buildTaskCreateRequestBody = (task: TaskCreatePayload) => ({
+    ...buildTaskRequestBody(task),
+    createdAt: task.createdAt ? toISTStartOfDayIso(task.createdAt) : undefined,
+});
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
     const responseText = await response.text();
     const responseData = responseText ? JSON.parse(responseText) : null;
@@ -124,13 +134,13 @@ export async function fetchTasks(): Promise<TaskCardData[]> {
     return tasks.map(normalizeTask);
 }
 
-export async function createTask(task: TaskMutationPayload): Promise<TaskCardData> {
+export async function createTask(task: TaskCreatePayload): Promise<TaskCardData> {
     const response = await fetch(TASK_API_BASE_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(buildTaskRequestBody(task)),
+        body: JSON.stringify(buildTaskCreateRequestBody(task)),
     });
 
     const createdTask = await readJsonResponse<TaskApiRecord>(response);

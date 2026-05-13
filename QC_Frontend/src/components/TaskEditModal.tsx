@@ -19,6 +19,7 @@ import {
     getTaskManagementPermissions,
     type TaskManagementRole,
 } from '../utilities/taskAccess';
+import { getCurrentISTDateKey, getISTDateKey } from '../utilities/istDate';
 
 export type TaskEditMode = 'create' | 'edit';
 
@@ -26,7 +27,7 @@ export interface TaskFormValues {
     title: string;
     description: string;
     assignedTo: string[];
-    assignedBy: string;
+    creationDate: string;
     priority: TaskPriority;
     deadline: string;
     status: TaskStatus;
@@ -38,7 +39,6 @@ interface TaskEditModalProps {
     mode: TaskEditMode;
     task: TaskCardData | null;
     role: TaskManagementRole;
-    fixedAssignedBy: string;
     assigneeOptions: AssignmentUserOption[];
     onClose: () => void;
     onCreateTask: (task: TaskFormValues) => void;
@@ -49,17 +49,18 @@ interface TaskEditModalProps {
 const priorities: TaskPriority[] = ['Low', 'Medium', 'High'];
 const statuses: TaskStatus[] = ['To Do', 'Done'];
 
-type ValidationErrors = Partial<Record<'title' | 'description' | 'assignedTo' | 'priority', string>>;
+type ValidationErrors = Partial<
+    Record<'title' | 'description' | 'assignedTo' | 'creationDate' | 'priority', string>
+>;
 
 const createFormValues = (
     task: TaskCardData | null,
     mode: TaskEditMode,
-    fixedAssignedBy: string,
 ): TaskFormValues => ({
     title: task?.title ?? '',
     description: task?.description ?? '',
     assignedTo: mode === 'create' ? [] : normalizeAssignedTo(task?.assignedTo ?? []),
-    assignedBy: fixedAssignedBy,
+    creationDate: task ? getISTDateKey(task.createdAt) || getCurrentISTDateKey() : getCurrentISTDateKey(),
     priority: task?.priority ?? 'Medium',
     deadline: task?.deadline ?? '',
     status: task?.status ?? 'To Do',
@@ -88,6 +89,10 @@ const validateForm = (
         errors.assignedTo = 'Select at least one assignee';
     }
 
+    if (!formState.creationDate) {
+        errors.creationDate = 'Creation date is required';
+    }
+
     if (!formState.priority) {
         errors.priority = 'Priority is required';
     }
@@ -100,7 +105,6 @@ export default function TaskEditModal({
     mode,
     task,
     role,
-    fixedAssignedBy,
     assigneeOptions,
     onClose,
     onCreateTask,
@@ -108,20 +112,20 @@ export default function TaskEditModal({
     onDelete,
 }: TaskEditModalProps) {
     const [formState, setFormState] = useState<TaskFormValues>(() =>
-        createFormValues(task, mode, fixedAssignedBy),
+        createFormValues(task, mode),
     );
     const [errors, setErrors] = useState<ValidationErrors>({});
 
     useEffect(() => {
         if (!isOpen) {
-            setFormState(createFormValues(null, 'create', fixedAssignedBy));
+            setFormState(createFormValues(null, 'create'));
             setErrors({});
             return;
         }
 
-        setFormState(createFormValues(task, mode, fixedAssignedBy));
+        setFormState(createFormValues(task, mode));
         setErrors({});
-    }, [fixedAssignedBy, isOpen, mode, task]);
+    }, [isOpen, mode, task]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -158,6 +162,7 @@ export default function TaskEditModal({
     const isCreateMode = mode === 'create';
     const permissions = getTaskManagementPermissions(role);
     const canEditCoreFields = permissions.canEditAllTaskFields;
+    const canEditCreationDate = isCreateMode && canEditCoreFields;
     const canEditRemarks = isCreateMode ? permissions.canCreateTasks : permissions.canEditTasks;
     const canEditStatus = !isCreateMode && permissions.canEditAllTaskFields;
     const canSubmit = isCreateMode ? permissions.canCreateTasks : permissions.canEditTasks;
@@ -293,14 +298,24 @@ export default function TaskEditModal({
 
                             <div className="space-y-2">
                                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                    Assigned By
+                                    <CalendarDays className="h-4 w-4" />
+                                    Creation Date
                                 </label>
                                 <input
-                                    type="text"
-                                    value={formState.assignedBy}
-                                    disabled
-                                    className={getFieldClass(false, true)}
+                                    type="date"
+                                    value={formState.creationDate}
+                                    onChange={(event) => updateField('creationDate', event.target.value)}
+                                    disabled={!canEditCreationDate}
+                                    className={getFieldClass(
+                                        Boolean(errors.creationDate),
+                                        !canEditCreationDate,
+                                    )}
                                 />
+                                {errors.creationDate && (
+                                    <p className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                                        {errors.creationDate}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2">

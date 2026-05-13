@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from date_utils import ensure_utc_datetime, serialize_datetime, to_ist_date_key, utc_now
 
 GOALS_COLLECTION_NAME = 'goals'
 
@@ -11,17 +12,7 @@ goal_client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 goal_db = goal_client[MONGODB_DB_NAME]
 goals_collection = goal_db[GOALS_COLLECTION_NAME]
 
-GoalStatus = Literal['', 'On Track', 'Off Track']
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def to_date_key(value: datetime) -> str:
-    if value.tzinfo is None:
-        return value.date().isoformat()
-    return value.astimezone(timezone.utc).date().isoformat()
+GoalStatus = Literal['', 'On Track', 'Off Track', 'On Track with Delay']
 
 
 class GoalMilestoneBase(BaseModel):
@@ -56,24 +47,31 @@ def evaluate_goal_status(milestones: list[dict]) -> GoalStatus:
     if len(milestones) == 0:
         return ''
 
-    today_key = utc_now().date().isoformat()
-    has_reached_evaluation_window = False
+    today_key = to_ist_date_key(utc_now())
+    has_completed_milestone = False
+    has_delayed_completion = False
 
     for milestone in milestones:
-        target_date_key = to_date_key(milestone['targetDate'])
+        target_date_key = to_ist_date_key(milestone['targetDate'])
         completed = bool(milestone.get('completed'))
         completed_at = milestone.get('completedAt')
 
-        if target_date_key <= today_key or completed:
-            has_reached_evaluation_window = True
+        if completed:
+            has_completed_milestone = True
+            if completed_at is not None and to_ist_date_key(completed_at) > target_date_key:
+                has_delayed_completion = True
+            continue
 
-        if completed_at is not None and to_date_key(completed_at) > target_date_key:
+        if target_date_key < today_key:
             return 'Off Track'
 
-        if target_date_key < today_key and not completed:
-            return 'Off Track'
+    if has_delayed_completion:
+        return 'On Track with Delay'
 
-    return 'On Track' if has_reached_evaluation_window else ''
+    if has_completed_milestone:
+        return 'On Track'
+
+    return ''
 
 
 def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
@@ -82,6 +80,8 @@ def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
     goal['assignedTo'] = list(
         dict.fromkeys(assignee.strip() for assignee in goal['assignedTo'] if assignee.strip()),
     )
+    if goal.get('createdAt') is not None:
+        goal['createdAt'] = ensure_utc_datetime(goal['createdAt'])
 
     if not goal['title']:
         raise ValueError('Goal title is required')
@@ -93,7 +93,7 @@ def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
     for milestone in goal['milestones']:
         milestone_id = milestone['id'].strip()
         milestone_title = milestone['title'].strip()
-        target_date = milestone['targetDate']
+        target_date = ensure_utc_datetime(milestone['targetDate'])
         completed = bool(milestone.get('completed'))
         completed_at = milestone.get('completedAt')
 
@@ -108,6 +108,8 @@ def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
 
         if not completed:
             completed_at = None
+        elif completed_at is not None:
+            completed_at = ensure_utc_datetime(completed_at)
 
         normalized_milestones.append(
             {
@@ -131,9 +133,9 @@ def serialize_goal(document: dict) -> dict:
         {
             'id': milestone['id'],
             'title': milestone['title'],
-            'targetDate': milestone['targetDate'].isoformat(),
+            'targetDate': serialize_datetime(milestone['targetDate']),
             'completed': milestone.get('completed', False),
-            'completedAt': milestone['completedAt'].isoformat()
+            'completedAt': serialize_datetime(milestone['completedAt'])
             if milestone.get('completedAt')
             else None,
         }
@@ -144,7 +146,7 @@ def serialize_goal(document: dict) -> dict:
         'id': str(document['_id']),
         'title': document['title'],
         'assignedTo': document.get('assignedTo', []),
-        'createdAt': document['createdAt'].isoformat(),
+        'createdAt': serialize_datetime(document['createdAt']),
         'milestones': milestones,
         'goalStatus': evaluate_goal_status(document.get('milestones', [])),
     }

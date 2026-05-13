@@ -1,8 +1,15 @@
 import { formatAssignedToGroupLabel, getAssignedToGroupKey } from './taskAssignments';
+import { formatISTDate, getISTDateKey } from './istDate';
 
-export type GoalStatus = '' | 'On Track' | 'Off Track';
-export type MilestoneStatus = 'Done' | 'Not Done' | 'Pending';
-export type GoalSortOption = 'createdAt' | 'goalStatus' | 'targetDate';
+export type GoalStatus = '' | 'On Track' | 'Off Track' | 'On Track with Delay';
+export type MilestoneStatus = 'Done' | 'Done (Delayed)' | 'Not Started' | 'Overdue';
+export type GoalSortOption =
+    | 'createdAtAsc'
+    | 'createdAtDesc'
+    | 'goalStatusAsc'
+    | 'goalStatusDesc'
+    | 'targetDateAsc'
+    | 'targetDateDesc';
 export type GoalStatusFilter = GoalStatus | 'All' | '__EMPTY__';
 
 export interface GoalMilestone {
@@ -35,27 +42,20 @@ export interface OwnerGoalGroup {
 
 export const ALL_GOAL_ASSIGNEES_FILTER_VALUE = 'All';
 export const EMPTY_GOAL_STATUS_FILTER_VALUE = '__EMPTY__';
-export const DEFAULT_GOAL_SORT_OPTION: GoalSortOption = 'createdAt';
+export const DEFAULT_GOAL_SORT_OPTION: GoalSortOption = 'createdAtDesc';
 export const DEFAULT_GOAL_FILTERS: GoalFilters = {
     goalStatus: 'All',
     assignedUser: ALL_GOAL_ASSIGNEES_FILTER_VALUE,
 };
 
 const GOAL_STATUS_WEIGHT: Record<Exclude<GoalStatus, ''>, number> = {
-    'Off Track': 3,
+    'Off Track': 4,
+    'On Track with Delay': 3,
     'On Track': 2,
 };
 
-const formatDateKey = (date: Date) => {
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
 export const getDateKey = (value: string | Date) => {
-    const parsedDate = value instanceof Date ? value : new Date(value);
-    return formatDateKey(parsedDate);
+    return getISTDateKey(value);
 };
 
 const compareIsoDates = (left?: string, right?: string) => {
@@ -100,10 +100,12 @@ export const getMilestoneStatus = (
             return 'Done';
         }
 
-        return getDateKey(milestone.completedAt) <= milestone.targetDate ? 'Done' : 'Not Done';
+        return getDateKey(milestone.completedAt) <= milestone.targetDate
+            ? 'Done'
+            : 'Done (Delayed)';
     }
 
-    return milestone.targetDate < todayKey ? 'Not Done' : 'Pending';
+    return milestone.targetDate < todayKey ? 'Overdue' : 'Not Started';
 };
 
 export const getGoalStatus = (
@@ -114,16 +116,19 @@ export const getGoalStatus = (
         return '';
     }
 
-    let hasReachedEvaluationWindow = false;
+    let hasCompletedMilestone = false;
+    let hasDelayedCompletion = false;
 
     for (const milestone of goal.milestones) {
-        const isDueOrCompleted = milestone.targetDate <= todayKey || milestone.completed;
-        if (isDueOrCompleted) {
-            hasReachedEvaluationWindow = true;
-        }
-
-        if (milestone.completedAt && getDateKey(milestone.completedAt) > milestone.targetDate) {
-            return 'Off Track';
+        if (milestone.completed) {
+            hasCompletedMilestone = true;
+            if (
+                milestone.completedAt &&
+                getDateKey(milestone.completedAt) > milestone.targetDate
+            ) {
+                hasDelayedCompletion = true;
+            }
+            continue;
         }
 
         if (milestone.targetDate < todayKey && !milestone.completed) {
@@ -131,7 +136,15 @@ export const getGoalStatus = (
         }
     }
 
-    return hasReachedEvaluationWindow ? 'On Track' : '';
+    if (hasDelayedCompletion) {
+        return 'On Track with Delay';
+    }
+
+    if (hasCompletedMilestone) {
+        return 'On Track';
+    }
+
+    return '';
 };
 
 export const getCompletedMilestoneCount = (goal: Pick<GoalData, 'milestones'>) =>
@@ -159,6 +172,10 @@ export const getGoalStatusClasses = (status: GoalStatus) => {
         return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     }
 
+    if (status === 'On Track with Delay') {
+        return 'border-amber-200 bg-amber-50 text-amber-700';
+    }
+
     return 'border-slate-200 bg-slate-100 text-slate-600';
 };
 
@@ -167,11 +184,15 @@ export const getMilestoneStatusClasses = (status: MilestoneStatus) => {
         return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     }
 
-    if (status === 'Not Done') {
+    if (status === 'Done (Delayed)') {
+        return 'border-amber-200 bg-amber-50 text-amber-700';
+    }
+
+    if (status === 'Overdue') {
         return 'border-rose-200 bg-rose-50 text-rose-700';
     }
 
-    return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-slate-200 bg-slate-100 text-slate-600';
 };
 
 export const formatGoalDate = (
@@ -181,8 +202,7 @@ export const formatGoalDate = (
         month: 'short',
         year: 'numeric',
     },
-) =>
-    new Intl.DateTimeFormat('en-IN', options).format(new Date(value));
+) => formatISTDate(value, options);
 
 export const getGoalTargetDate = (goal: Pick<GoalData, 'milestones'>) => {
     const targetDates = goal.milestones
@@ -217,16 +237,27 @@ export const normalizeGoalSignature = (goals: GoalData[]) =>
 export const areGoalsEqual = (left: GoalData[], right: GoalData[]) =>
     JSON.stringify(normalizeGoalSignature(left)) === JSON.stringify(normalizeGoalSignature(right));
 
-const compareByCreatedAt = (left: GoalData, right: GoalData) =>
-    (getDateTimeValue(right.createdAt) ?? 0) - (getDateTimeValue(left.createdAt) ?? 0);
+const compareByCreatedAtAsc = (left: GoalData, right: GoalData) =>
+    (getDateTimeValue(left.createdAt) ?? 0) - (getDateTimeValue(right.createdAt) ?? 0);
 
-const compareByGoalStatus = (left: GoalData, right: GoalData) => {
+const compareByCreatedAtDesc = (left: GoalData, right: GoalData) =>
+    compareByCreatedAtAsc(right, left);
+
+const compareByGoalStatus = (
+    left: GoalData,
+    right: GoalData,
+    direction: 'asc' | 'desc',
+) => {
     const leftWeight = left.goalStatus ? GOAL_STATUS_WEIGHT[left.goalStatus] : 1;
     const rightWeight = right.goalStatus ? GOAL_STATUS_WEIGHT[right.goalStatus] : 1;
-    return rightWeight - leftWeight;
+    return direction === 'asc' ? leftWeight - rightWeight : rightWeight - leftWeight;
 };
 
-const compareByTargetDate = (left: GoalData, right: GoalData) => {
+const compareByTargetDate = (
+    left: GoalData,
+    right: GoalData,
+    direction: 'asc' | 'desc',
+) => {
     const leftTargetDate = getGoalTargetDate(left);
     const rightTargetDate = getGoalTargetDate(right);
 
@@ -242,7 +273,9 @@ const compareByTargetDate = (left: GoalData, right: GoalData) => {
         return -1;
     }
 
-    return leftTargetDate.localeCompare(rightTargetDate);
+    return direction === 'asc'
+        ? leftTargetDate.localeCompare(rightTargetDate)
+        : rightTargetDate.localeCompare(leftTargetDate);
 };
 
 export const processGoals = (
@@ -275,15 +308,27 @@ export const processGoals = (
         : filteredGoals;
 
     return [...searchedGoals].sort((left, right) => {
-        if (sortOption === 'goalStatus') {
-            return compareByGoalStatus(left, right) || compareByCreatedAt(left, right);
+        if (sortOption === 'createdAtAsc') {
+            return compareByCreatedAtAsc(left, right);
         }
 
-        if (sortOption === 'targetDate') {
-            return compareByTargetDate(left, right) || compareByCreatedAt(left, right);
+        if (sortOption === 'createdAtDesc') {
+            return compareByCreatedAtDesc(left, right);
         }
 
-        return compareByCreatedAt(left, right);
+        if (sortOption === 'goalStatusAsc') {
+            return compareByGoalStatus(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+        }
+
+        if (sortOption === 'goalStatusDesc') {
+            return compareByGoalStatus(left, right, 'desc') || compareByCreatedAtDesc(left, right);
+        }
+
+        if (sortOption === 'targetDateAsc') {
+            return compareByTargetDate(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+        }
+
+        return compareByTargetDate(left, right, 'desc') || compareByCreatedAtDesc(left, right);
     });
 };
 

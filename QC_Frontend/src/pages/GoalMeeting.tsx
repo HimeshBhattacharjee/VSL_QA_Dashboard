@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import GoalModal, { type GoalFormValues } from '../components/GoalModal';
-import UserSingleSelect from '../components/UserSingleSelect';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import {
     fetchAssignmentUsers,
     type AssignmentUserOption,
 } from '../utilities/assignmentUsers';
-import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
     createGoal as createGoalRequest,
     createGoalMutationPayloadFromGoal,
@@ -17,7 +15,6 @@ import {
     updateGoal as updateGoalRequest,
 } from '../utilities/goalApi';
 import {
-    ALL_GOAL_ASSIGNEES_FILTER_VALUE,
     DEFAULT_GOAL_FILTERS,
     DEFAULT_GOAL_SORT_OPTION,
     EMPTY_GOAL_STATUS_FILTER_VALUE,
@@ -35,10 +32,12 @@ import {
     type GoalFilters,
     type GoalSortOption,
 } from '../utilities/goalUtils';
+import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
     getCurrentTaskManagementRole,
     getGoalManagementPermissions,
 } from '../utilities/taskAccess';
+import { useResizableTable } from '../utilities/useResizableTable';
 
 type GoalModalState =
     | {
@@ -74,6 +73,24 @@ interface GoalMeetingTableProps {
 const headerCellClass =
     'sticky top-0 z-10 border-b border-slate-200 bg-white p-3 text-center align-middle text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
 const bodyCellClass = 'p-3 align-middle';
+const resizeHandleClass =
+    'absolute inset-y-0 right-0 flex w-4 translate-x-1/2 touch-none items-center justify-center';
+const rowHandleClass =
+    'absolute bottom-1.5 left-1/2 flex h-4 w-14 -translate-x-1/2 touch-none items-center justify-center rounded-full';
+const goalMeetingColumnDefinitions = [
+    { key: 'owner', label: 'Owner', defaultSize: 230, minSize: 180, maxSize: 320 },
+    { key: 'title', label: 'Goal Title', defaultSize: 320, minSize: 220, maxSize: 520 },
+    { key: 'milestones', label: 'Milestones', defaultSize: 320, minSize: 240, maxSize: 520 },
+    {
+        key: 'milestoneStatus',
+        label: 'Milestone Status',
+        defaultSize: 250,
+        minSize: 220,
+        maxSize: 420,
+    },
+    { key: 'goalStatus', label: 'Goal Status', defaultSize: 170, minSize: 150, maxSize: 240 },
+    { key: 'actions', label: 'Actions', defaultSize: 180, minSize: 160, maxSize: 240 },
+] as const;
 
 const getMilestoneBreakdown = (goal: GoalData) =>
     goal.milestones.reduce(
@@ -82,30 +99,30 @@ const getMilestoneBreakdown = (goal: GoalData) =>
 
             if (status === 'Done') {
                 summary.done += 1;
-            } else if (status === 'Pending') {
-                summary.pending += 1;
+            } else if (status === 'Done (Delayed)') {
+                summary.delayed += 1;
+            } else if (status === 'Overdue') {
+                summary.overdue += 1;
             } else {
-                summary.notDone += 1;
+                summary.notStarted += 1;
             }
 
             return summary;
         },
-        { done: 0, pending: 0, notDone: 0 },
+        { done: 0, delayed: 0, overdue: 0, notStarted: 0 },
     );
 
 function GoalViewControls({
     searchQuery,
     sortOption,
     filters,
-    assigneeOptions,
     onSearchChange,
     onSortChange,
-    onGoalStatusChange,
-    onAssigneeChange,
+    onGoalStatusChange
 }: GoalViewControlsProps) {
     return (
         <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 <div>
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Search
@@ -128,9 +145,12 @@ function GoalViewControls({
                         onChange={(event) => onSortChange(event.target.value as GoalSortOption)}
                         className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
-                        <option value="createdAt">Creation Date</option>
-                        <option value="goalStatus">Goal Status</option>
-                        <option value="targetDate">Target Date</option>
+                        <option value="createdAtDesc">Creation Date (Desc)</option>
+                        <option value="createdAtAsc">Creation Date (Asc)</option>
+                        <option value="goalStatusDesc">Goal Status (Desc)</option>
+                        <option value="goalStatusAsc">Goal Status (Asc)</option>
+                        <option value="targetDateAsc">Target Date (Asc)</option>
+                        <option value="targetDateDesc">Target Date (Desc)</option>
                     </select>
                 </div>
 
@@ -148,23 +168,9 @@ function GoalViewControls({
                         <option value="All">All Statuses</option>
                         <option value={EMPTY_GOAL_STATUS_FILTER_VALUE}>Not Started</option>
                         <option value="On Track">On Track</option>
+                        <option value="On Track with Delay">On Track with Delay</option>
                         <option value="Off Track">Off Track</option>
                     </select>
-                </div>
-
-                <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Assigned Employee
-                    </label>
-                    <UserSingleSelect
-                        options={assigneeOptions}
-                        value={filters.assignedUser}
-                        onChange={onAssigneeChange}
-                        allOptionLabel="All Employees"
-                        allOptionValue={ALL_GOAL_ASSIGNEES_FILTER_VALUE}
-                        placeholder="Filter by employee"
-                        searchPlaceholder="Search employees"
-                    />
                 </div>
             </div>
         </section>
@@ -184,7 +190,30 @@ function GoalMeetingTable({
     const activeGoals = goals.filter((goal) => goal.goalStatus !== '').length;
     const totalGoals = goals.length;
     const onTrackGoals = goals.filter((goal) => goal.goalStatus === 'On Track').length;
+    const delayedGoals = goals.filter(
+        (goal) => goal.goalStatus === 'On Track with Delay',
+    ).length;
     const offTrackGoals = goals.filter((goal) => goal.goalStatus === 'Off Track').length;
+    const rowDefinitions = useMemo(
+        () =>
+            goals.map((goal) => ({
+                key: goal.id,
+                defaultSize: expandedGoalIds.has(goal.id)
+                    ? Math.min(Math.max(goal.milestones.length * 74, 180), 420)
+                    : 112,
+                minSize: expandedGoalIds.has(goal.id) ? 160 : 92,
+                maxSize: 520,
+            })),
+        [expandedGoalIds, goals],
+    );
+    const { columnSizes, rowSizes, startColumnResize, startRowResize } = useResizableTable({
+        columns: goalMeetingColumnDefinitions,
+        rows: rowDefinitions,
+    });
+    const tableMinWidth = goalMeetingColumnDefinitions.reduce(
+        (totalWidth, column) => totalWidth + (columnSizes[column.key] ?? column.defaultSize),
+        0,
+    );
     const stats = [
         {
             label: 'Active Goals',
@@ -205,6 +234,12 @@ function GoalMeetingTable({
                 'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/80 dark:text-emerald-300',
         },
         {
+            label: 'With Delay',
+            value: delayedGoals,
+            className:
+                'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-600 dark:bg-amber-900/80 dark:text-amber-300',
+        },
+        {
             label: 'Off Track',
             value: offTrackGoals,
             className:
@@ -214,11 +249,11 @@ function GoalMeetingTable({
 
     return (
         <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
-            <div className="mb-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="mb-1 grid grid-cols-2 gap-2 xl:grid-cols-5">
                 {stats.map((stat) => (
                     <div
                         key={stat.label}
-                        className={`flex gap-4 p-2 rounded-2xl border shadow-sm justify-between ${stat.className}`}
+                        className={`flex justify-between gap-4 rounded-2xl border p-2 shadow-sm ${stat.className}`}
                     >
                         <p className="text-[12px] font-semibold uppercase tracking-wide opacity-80">
                             {stat.label}
@@ -230,15 +265,41 @@ function GoalMeetingTable({
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
                 <div className="max-h-[calc(100vh-18rem)] overflow-auto">
-                    <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-left">
+                    <table
+                        className="w-full border-separate border-spacing-0 text-left"
+                        style={{ minWidth: `${tableMinWidth}px` }}
+                    >
+                        <colgroup>
+                            {goalMeetingColumnDefinitions.map((column) => (
+                                <col
+                                    key={column.key}
+                                    style={{
+                                        width: `${columnSizes[column.key] ?? column.defaultSize}px`,
+                                    }}
+                                />
+                            ))}
+                        </colgroup>
+
                         <thead>
                             <tr>
-                                <th className={`${headerCellClass} w-[220px]`}>Owner</th>
-                                <th className={`${headerCellClass} w-[280px]`}>Goal Title</th>
-                                <th className={`${headerCellClass} w-[260px]`}>Milestones</th>
-                                <th className={`${headerCellClass} w-[220px]`}>Milestone Status</th>
-                                <th className={`${headerCellClass} w-[140px]`}>Goal Status</th>
-                                <th className={`${headerCellClass} w-[160px]`}>Actions</th>
+                                {goalMeetingColumnDefinitions.map((column) => (
+                                    <th
+                                        key={column.key}
+                                        className={`${headerCellClass} relative`}
+                                    >
+                                        <span className="block pr-3">{column.label}</span>
+                                        <button
+                                            type="button"
+                                            aria-label={`Resize ${column.label} column`}
+                                            onPointerDown={(event) =>
+                                                startColumnResize(column.key, event)
+                                            }
+                                            className={resizeHandleClass}
+                                        >
+                                            <span className="h-8 w-1 rounded-full bg-slate-200 transition-colors hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-400" />
+                                        </button>
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
 
@@ -247,6 +308,7 @@ function GoalMeetingTable({
                                 groupedGoals.map((group) =>
                                     group.goals.map((goal, goalIndex) => {
                                         const isExpanded = expandedGoalIds.has(goal.id);
+                                        const rowHeight = rowSizes[goal.id] ?? 112;
                                         const nextTargetDate = getNextMilestoneTargetDate(goal);
                                         const breakdown = getMilestoneBreakdown(goal);
                                         const milestoneSummary = [
@@ -257,14 +319,20 @@ function GoalMeetingTable({
                                                     'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/80 dark:text-emerald-300',
                                             },
                                             {
-                                                label: 'Pending',
-                                                value: breakdown.pending,
+                                                label: 'Delayed',
+                                                value: breakdown.delayed,
                                                 className:
                                                     'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-600 dark:bg-amber-900/80 dark:text-amber-300',
                                             },
                                             {
-                                                label: 'Not Done',
-                                                value: breakdown.notDone,
+                                                label: 'Not Started',
+                                                value: breakdown.notStarted,
+                                                className:
+                                                    'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200',
+                                            },
+                                            {
+                                                label: 'Overdue',
+                                                value: breakdown.overdue,
                                                 className:
                                                     'border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600 dark:bg-rose-900 dark:text-rose-300',
                                             },
@@ -274,6 +342,7 @@ function GoalMeetingTable({
                                             <tr
                                                 key={goal.id}
                                                 className="bg-white transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+                                                style={{ height: `${rowHeight}px` }}
                                             >
                                                 {goalIndex === 0 && (
                                                     <td
@@ -292,13 +361,21 @@ function GoalMeetingTable({
                                                     </td>
                                                 )}
 
-                                                <td className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}>
-                                                    <p className="text-sm font-semibold leading-6 text-slate-900 dark:text-white">
-                                                        {goal.title}
-                                                    </p>
+                                                <td
+                                                    className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}
+                                                    style={{ height: `${rowHeight}px` }}
+                                                >
+                                                    <div className="flex h-full justify-center items-center">
+                                                        <p className="break-words text-sm font-semibold leading-6 text-slate-900 dark:text-white">
+                                                            {goal.title}
+                                                        </p>
+                                                    </div>
                                                 </td>
 
-                                                <td className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}>
+                                                <td
+                                                    className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}
+                                                    style={{ height: `${rowHeight}px` }}
+                                                >
                                                     {isExpanded ? (
                                                         <div className="space-y-1">
                                                             {goal.milestones.map((milestone) => (
@@ -316,7 +393,7 @@ function GoalMeetingTable({
                                                             ))}
                                                         </div>
                                                     ) : (
-                                                        <div className="space-y-1">
+                                                        <div className="space-y-2">
                                                             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                                                 {getGoalProgressSummary(goal)}
                                                             </div>
@@ -329,7 +406,10 @@ function GoalMeetingTable({
                                                     )}
                                                 </td>
 
-                                                <td className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}>
+                                                <td
+                                                    className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}
+                                                    style={{ height: `${rowHeight}px` }}
+                                                >
                                                     {isExpanded ? (
                                                         <div className="space-y-1">
                                                             {goal.milestones.map((milestone) => {
@@ -369,7 +449,7 @@ function GoalMeetingTable({
                                                             })}
                                                         </div>
                                                     ) : (
-                                                        <div className="space-y-1">
+                                                        <div className="space-y-1.5">
                                                             {milestoneSummary.map((item) => (
                                                                 <div
                                                                     key={item.label}
@@ -389,16 +469,24 @@ function GoalMeetingTable({
                                                     )}
                                                 </td>
 
-                                                <td className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}>
-                                                    <span
-                                                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getGoalStatusClasses(goal.goalStatus)}`}
-                                                    >
-                                                        {getGoalStatusLabel(goal.goalStatus)}
-                                                    </span>
+                                                <td
+                                                    className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}
+                                                    style={{ height: `${rowHeight}px` }}
+                                                >
+                                                    <div className="flex h-full items-center justify-center">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getGoalStatusClasses(goal.goalStatus)}`}
+                                                        >
+                                                            {getGoalStatusLabel(goal.goalStatus)}
+                                                        </span>
+                                                    </div>
                                                 </td>
 
-                                                <td className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}>
-                                                    <div className="flex flex-wrap justify-center gap-2">
+                                                <td
+                                                    className={`${bodyCellClass} relative border-b border-slate-200 dark:border-slate-800`}
+                                                    style={{ height: `${rowHeight}px` }}
+                                                >
+                                                    <div className="flex h-full flex-wrap items-center justify-center gap-2 pb-4">
                                                         <button
                                                             type="button"
                                                             onClick={() => onToggleExpand(goal.id)}
@@ -417,6 +505,17 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
                                                     </div>
+
+                                                    <button
+                                                        type="button"
+                                                        aria-label="Resize row height"
+                                                        onPointerDown={(event) =>
+                                                            startRowResize(goal.id, event)
+                                                        }
+                                                        className={rowHandleClass}
+                                                    >
+                                                        <span className="h-1 w-8 rounded-full bg-slate-300 transition-colors hover:bg-slate-500 dark:bg-slate-600 dark:hover:bg-slate-400" />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         );
@@ -425,7 +524,7 @@ function GoalMeetingTable({
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan={6}
+                                        colSpan={goalMeetingColumnDefinitions.length}
                                         className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400"
                                     >
                                         No goals match the current meeting filters.
@@ -467,7 +566,10 @@ export default function GoalMeeting() {
     const currentUserRole = getCurrentTaskManagementRole();
     const permissions = getGoalManagementPermissions(currentUserRole);
 
-    const visibleGoals = processGoals(goals, searchQuery, filters, sortOption);
+    const visibleGoals = useMemo(
+        () => processGoals(goals, searchQuery, filters, sortOption),
+        [filters, goals, searchQuery, sortOption],
+    );
 
     useEffect(() => {
         let isActive = true;
