@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
+import { ChevronLeft, Pencil, Trash2 } from 'lucide-react';
 
 interface User {
     id: string;
@@ -22,11 +23,22 @@ const DEFAULT_NEW_USER = {
     password: ''
 };
 
+const DEFAULT_EDIT_USER = {
+    name: '',
+    employeeId: '',
+    role: 'Operator'
+};
+
+const EDITABLE_ROLES = ['Operator', 'Supervisor', 'Manager'];
+
 const Admin = () => {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [newUser, setNewUser] = useState(DEFAULT_NEW_USER);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [editUser, setEditUser] = useState(DEFAULT_EDIT_USER);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [visiblePasswords, setVisiblePasswords] = useState<{ [key: string]: boolean }>({});
     const { showAlert } = useAlert();
@@ -170,6 +182,84 @@ const Admin = () => {
         });
     };
 
+    const isSystemAdministrator = (user: User) =>
+        user.role === 'Admin' || user.role === 'System Administrator';
+
+    const openEditUser = (user: User) => {
+        if (isSystemAdministrator(user)) return;
+
+        setEditingUser(user);
+        setEditUser({
+            name: user.name,
+            employeeId: user.employeeId,
+            role: EDITABLE_ROLES.includes(user.role) ? user.role : 'Operator'
+        });
+    };
+
+    const closeEditUser = () => {
+        if (isSavingEdit) return;
+
+        setEditingUser(null);
+        setEditUser(DEFAULT_EDIT_USER);
+    };
+
+    const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setEditUser((current) => ({ ...current, [name]: value }));
+    };
+
+    const handleUpdateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser || isSavingEdit) return;
+
+        const userData = {
+            name: editUser.name.trim(),
+            employeeId: editUser.employeeId.trim(),
+            role: editUser.role
+        };
+
+        if (!userData.name) {
+            showAlert('error', 'Employee Name is required');
+            return;
+        }
+        if (!userData.employeeId) {
+            showAlert('error', 'Employee ID is required');
+            return;
+        }
+        if (!EDITABLE_ROLES.includes(userData.role)) {
+            showAlert('error', 'Select a valid role');
+            return;
+        }
+
+        setIsSavingEdit(true);
+        try {
+            const response = await fetch(`${USER_API_BASE_URL}/users/${editingUser.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Employee-Id': sessionStorage.getItem('employeeId') || ''
+                },
+                body: JSON.stringify(userData),
+            });
+
+            if (response.ok) {
+                const updatedUser = await response.json();
+                setUsers(users.map(user => user.id === updatedUser.id ? updatedUser : user));
+                setEditingUser(null);
+                setEditUser(DEFAULT_EDIT_USER);
+                showAlert('success', 'User updated successfully!');
+            } else {
+                const errorData = await response.json();
+                showAlert('error', errorData.detail || 'Failed to update user');
+            }
+        } catch (error) {
+            console.error('Error updating user:', error);
+            showAlert('error', 'Error updating user');
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
+
     const togglePasswordVisibility = (userId: string) => {
         setVisiblePasswords(prev => ({
             ...prev,
@@ -186,7 +276,7 @@ const Admin = () => {
         );
     });
     const collapseActivePanel = () => setActiveTab(null);
-    const topBackButtonClass = 'inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-x-0.5 hover:bg-white/18 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60';
+    const topBackButtonClass = 'inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 p-2 text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-x-0.5 hover:bg-white/18 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60';
 
     if (loading) {
         return (
@@ -204,6 +294,83 @@ const Admin = () => {
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500 rounded-full blur-3xl opacity-10 animate-pulse delay-500"></div>
             </div>
             <Header onToggleSidebar={() => {}} />
+            {editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm">
+                    <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                        <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-700">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit User</h3>
+                        </div>
+                        <form onSubmit={handleUpdateUser} className="space-y-5 p-5">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Employee Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value={editUser.name}
+                                        onChange={handleEditInputChange}
+                                        required
+                                        disabled={isSavingEdit}
+                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                        placeholder="Enter employee name"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Employee ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="employeeId"
+                                        value={editUser.employeeId}
+                                        onChange={handleEditInputChange}
+                                        required
+                                        disabled={isSavingEdit}
+                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                        placeholder="Enter employee ID"
+                                    />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Role
+                                    </label>
+                                    <select
+                                        name="role"
+                                        value={editUser.role}
+                                        onChange={handleEditInputChange}
+                                        required
+                                        disabled={isSavingEdit}
+                                        className="w-full cursor-pointer appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                    >
+                                        {EDITABLE_ROLES.map((role) => (
+                                            <option key={role} value={role}>{role}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 dark:border-slate-700 sm:flex-row sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={closeEditUser}
+                                    disabled={isSavingEdit}
+                                    className="rounded-xl border border-gray-300 bg-gray-100 px-6 py-3 font-semibold text-gray-800 transition-all duration-300 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingEdit}
+                                    className="rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:from-purple-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                    {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
                 <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-6 py-4">
                     <div
@@ -233,8 +400,7 @@ const Admin = () => {
                                             }}
                                             className={`${topBackButtonClass} hover:shadow-cyan-900/30`}
                                         >
-                                            <span className="text-base leading-none">←</span>
-                                            Back
+                                            <ChevronLeft className="w-8 h-8"/>
                                         </button>
                                     )}
                                     <div className={`p-2 rounded-2xl bg-white/20 ${activeTab === 'create' ? 'scale-110' : ''
@@ -378,8 +544,7 @@ const Admin = () => {
                                             }}
                                             className={`${topBackButtonClass} hover:shadow-purple-900/30`}
                                         >
-                                            <span className="text-base leading-none">←</span>
-                                            Back
+                                            <ChevronLeft className="w-8 h-8"/>
                                         </button>
                                     )}
                                     <div className={`p-2 rounded-2xl bg-white/20 ${activeTab === 'manage' ? 'scale-110' : ''
@@ -491,7 +656,7 @@ const Admin = () => {
                                                                     {user.employeeId}
                                                                 </td>
                                                                 <td className="px-3 py-4 whitespace-nowrap">
-                                                                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin'
+                                                                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${isSystemAdministrator(user)
                                                                         ? 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-100'
                                                                         : user.role === 'Operator'
                                                                             ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-100'
@@ -511,7 +676,7 @@ const Admin = () => {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-3 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    {user.role === 'Admin' ? (
+                                                                    {isSystemAdministrator(user) ? (
                                                                         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                                                                             Protected
                                                                         </span>
@@ -530,7 +695,14 @@ const Admin = () => {
                                                                                 onClick={() => deleteUser(user.id)}
                                                                                 className="text-red-600 dark:text-red-500 hover:text-red-800 dark:hover:text-red-300 transition-colors duration-200 font-semibold cursor-pointer ml-3"
                                                                             >
-                                                                                Delete
+                                                                                <Trash2 className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => openEditUser(user)}
+                                                                                className="text-blue-600 dark:text-blue-500 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-200 font-semibold cursor-pointer ml-3"
+                                                                                title="Edit user"
+                                                                            >
+                                                                                <Pencil className="w-4 h-4" />
                                                                             </button>
                                                                         </>
                                                                     )}
@@ -646,7 +818,7 @@ const Admin = () => {
                                 <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Admins</p>
                                     <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-                                        {users.filter(user => user.role === 'Admin').length}
+                                        {users.filter(user => isSystemAdministrator(user)).length}
                                     </p>
                                 </div>
                             </div>

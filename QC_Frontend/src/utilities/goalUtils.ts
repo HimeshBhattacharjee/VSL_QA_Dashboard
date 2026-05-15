@@ -1,7 +1,14 @@
 import { formatAssignedToGroupLabel, getAssignedToGroupKey } from './taskAssignments';
 import { formatISTDate, getISTDateKey } from './istDate';
 
-export type GoalStatus = '' | 'On Track' | 'Off Track' | 'On Track with Delay';
+export type GoalStatus =
+    | ''
+    | 'On Track'
+    | 'Off Track'
+    | 'On Track with Delay'
+    | 'Done'
+    | 'Not Done'
+    | 'Dropped';
 export type MilestoneStatus = 'Done' | 'Done (Delayed)' | 'Not Started' | 'Overdue';
 export type GoalSortOption =
     | 'createdAtAsc'
@@ -27,6 +34,16 @@ export interface GoalData {
     createdAt: string;
     milestones: GoalMilestone[];
     goalStatus: GoalStatus;
+    financialYear: string;
+    quarter: 1 | 2 | 3 | 4;
+    isDropped: boolean;
+    droppedAt?: string;
+    droppedBy?: string;
+    completionPercentage: number;
+    parentGoalId?: string;
+    originGoalId?: string;
+    carryForwardSourceId?: string;
+    carryForwardEligible: boolean;
 }
 
 export interface GoalFilters {
@@ -49,10 +66,20 @@ export const DEFAULT_GOAL_FILTERS: GoalFilters = {
 };
 
 const GOAL_STATUS_WEIGHT: Record<Exclude<GoalStatus, ''>, number> = {
-    'Off Track': 4,
-    'On Track with Delay': 3,
-    'On Track': 2,
+    Dropped: 7,
+    'Not Done': 6,
+    'Off Track': 5,
+    'On Track with Delay': 4,
+    'On Track': 3,
+    Done: 2,
 };
+
+export interface FinancialYearQuarter {
+    financialYear: string;
+    quarter: 1 | 2 | 3 | 4;
+    label: string;
+    isLocked: boolean;
+}
 
 export const getDateKey = (value: string | Date) => {
     return getISTDateKey(value);
@@ -89,6 +116,69 @@ export const normalizeGoalDate = (value?: string | null) => {
     }
 
     return value.length >= 10 ? value.slice(0, 10) : value;
+};
+
+export const getFinancialYearStart = (value = new Date()) => {
+    const month = value.getMonth() + 1;
+    return month >= 4 ? value.getFullYear() : value.getFullYear() - 1;
+};
+
+export const formatFinancialYear = (startYear: number) =>
+    `FY ${startYear}-${String(startYear + 1).slice(-2)}`;
+
+export const getQuarterStartDate = (financialYearStart: number, quarter: 1 | 2 | 3 | 4) => {
+    if (quarter === 1) {
+        return new Date(financialYearStart, 3, 1);
+    }
+
+    if (quarter === 2) {
+        return new Date(financialYearStart, 6, 1);
+    }
+
+    if (quarter === 3) {
+        return new Date(financialYearStart, 9, 1);
+    }
+
+    return new Date(financialYearStart + 1, 0, 1);
+};
+
+export const getCurrentFinancialYearQuarter = (): FinancialYearQuarter => {
+    const today = new Date();
+    const financialYearStart = getFinancialYearStart(today);
+    const month = today.getMonth() + 1;
+    const quarter = (month >= 4 && month <= 6
+        ? 1
+        : month >= 7 && month <= 9
+            ? 2
+            : month >= 10 && month <= 12
+                ? 3
+                : 4) as 1 | 2 | 3 | 4;
+
+    return {
+        financialYear: formatFinancialYear(financialYearStart),
+        quarter,
+        label: `${formatFinancialYear(financialYearStart)} Q${quarter}`,
+        isLocked: false,
+    };
+};
+
+export const getVisibleFinancialYearQuarters = (): FinancialYearQuarter[] => {
+    const today = new Date();
+    const portalStartFinancialYear = getFinancialYearStart(today);
+
+    return [portalStartFinancialYear, portalStartFinancialYear + 1].flatMap((startYear) =>
+        ([1, 2, 3, 4] as const).map((quarter) => {
+            const financialYear = formatFinancialYear(startYear);
+            const quarterStartDate = getQuarterStartDate(startYear, quarter);
+
+            return {
+                financialYear,
+                quarter,
+                label: `${financialYear} Q${quarter}`,
+                isLocked: quarterStartDate > today,
+            };
+        }),
+    );
 };
 
 export const getMilestoneStatus = (
@@ -163,7 +253,24 @@ export const getGoalProgressPercentage = (goal: Pick<GoalData, 'milestones'>) =>
 
 export const getGoalStatusLabel = (status: GoalStatus) => (status ? status : 'Not Started');
 
+export const getGoalStatusLabelWithProgress = (goal: Pick<GoalData, 'goalStatus' | 'completionPercentage'>) =>
+    goal.goalStatus === 'Not Done'
+        ? `Not Done (${goal.completionPercentage}%)`
+        : getGoalStatusLabel(goal.goalStatus);
+
 export const getGoalStatusClasses = (status: GoalStatus) => {
+    if (status === 'Done') {
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    }
+
+    if (status === 'Dropped') {
+        return 'border-slate-300 bg-slate-100 text-slate-700';
+    }
+
+    if (status === 'Not Done') {
+        return 'border-rose-200 bg-rose-50 text-rose-700';
+    }
+
     if (status === 'Off Track') {
         return 'border-rose-200 bg-rose-50 text-rose-700';
     }

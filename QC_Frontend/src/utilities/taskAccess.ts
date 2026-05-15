@@ -14,7 +14,10 @@ export interface GoalManagementPermissions {
     canAccessGoalManagement: boolean;
     canCreateGoals: boolean;
     canDeleteGoals: boolean;
+    canDropGoals: boolean;
     canEditGoalDetails: boolean;
+    canReviveGoals: boolean;
+    canCarryForwardGoals: boolean;
     canUpdateMilestones: boolean;
 }
 
@@ -56,6 +59,9 @@ export const getGoalManagementPermissions = (
     canAccessGoalManagement: role !== 'Operator',
     canCreateGoals: role === 'Manager',
     canDeleteGoals: role === 'Manager',
+    canDropGoals: role === 'Manager',
     canEditGoalDetails: role === 'Manager',
+    canReviveGoals: role === 'Manager',
+    canCarryForwardGoals: role === 'Manager',
     canUpdateMilestones: role === 'Manager' || role === 'Supervisor',
 });

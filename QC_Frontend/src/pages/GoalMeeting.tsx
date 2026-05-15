@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { CheckCircle2, CircleSlash2, Flag, Lock, Plus, RotateCcw, Target } from 'lucide-react';
 import GoalModal, { type GoalFormValues } from '../components/GoalModal';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
@@ -8,10 +8,13 @@ import {
     type AssignmentUserOption,
 } from '../utilities/assignmentUsers';
 import {
+    carryForwardGoal as carryForwardGoalRequest,
     createGoal as createGoalRequest,
     createGoalMutationPayloadFromGoal,
     deleteGoal as deleteGoalRequest,
+    dropGoal as dropGoalRequest,
     fetchGoals,
+    reviveGoal as reviveGoalRequest,
     updateGoal as updateGoalRequest,
 } from '../utilities/goalApi';
 import {
@@ -20,14 +23,17 @@ import {
     EMPTY_GOAL_STATUS_FILTER_VALUE,
     areGoalsEqual,
     formatGoalDate,
+    getCurrentFinancialYearQuarter,
     getGoalProgressSummary,
     getGoalStatusClasses,
-    getGoalStatusLabel,
+    getGoalStatusLabelWithProgress,
     getMilestoneStatus,
     getMilestoneStatusClasses,
     getNextMilestoneTargetDate,
+    getVisibleFinancialYearQuarters,
     groupGoalsByOwner,
     processGoals,
+    type FinancialYearQuarter,
     type GoalData,
     type GoalFilters,
     type GoalSortOption,
@@ -64,8 +70,14 @@ interface GoalMeetingTableProps {
     goals: GoalData[];
     expandedGoalIds: Set<string>;
     canEditGoal: boolean;
+    canDropGoals: boolean;
+    canReviveGoals: boolean;
+    canCarryForwardGoals: boolean;
     canUpdateMilestones: boolean;
     onEditGoal: (goal: GoalData) => void;
+    onDropGoal: (goal: GoalData) => void;
+    onReviveGoal: (goal: GoalData) => void;
+    onCarryForwardGoal: (goal: GoalData) => void;
     onToggleExpand: (goalId: string) => void;
     onToggleMilestone: (goal: GoalData, milestoneId: string, nextCompleted: boolean) => void;
 }
@@ -78,19 +90,60 @@ const resizeHandleClass =
 const rowHandleClass =
     'absolute bottom-1.5 left-1/2 flex h-4 w-14 -translate-x-1/2 touch-none items-center justify-center rounded-full';
 const goalMeetingColumnDefinitions = [
-    { key: 'owner', label: 'Owner', defaultSize: 230, minSize: 180, maxSize: 320 },
-    { key: 'title', label: 'Goal Title', defaultSize: 320, minSize: 220, maxSize: 520 },
-    { key: 'milestones', label: 'Milestones', defaultSize: 320, minSize: 240, maxSize: 520 },
+    { key: 'owner', label: 'Owner', defaultSize: 180, minSize: 180, maxSize: 320 },
+    { key: 'title', label: 'Goal Title', defaultSize: 220, minSize: 220, maxSize: 520 },
+    { key: 'milestones', label: 'Milestones', defaultSize: 240, minSize: 240, maxSize: 520 },
     {
         key: 'milestoneStatus',
         label: 'Milestone Status',
-        defaultSize: 250,
+        defaultSize: 220,
         minSize: 220,
         maxSize: 420,
     },
-    { key: 'goalStatus', label: 'Goal Status', defaultSize: 170, minSize: 150, maxSize: 240 },
-    { key: 'actions', label: 'Actions', defaultSize: 180, minSize: 160, maxSize: 240 },
+    { key: 'goalStatus', label: 'Goal Status', defaultSize: 150, minSize: 150, maxSize: 240 },
+    { key: 'actions', label: 'Actions', defaultSize: 160, minSize: 160, maxSize: 240 },
 ] as const;
+
+function QuarterSelector({
+    quarters,
+    selectedQuarter,
+    onSelectQuarter,
+}: {
+    quarters: FinancialYearQuarter[];
+    selectedQuarter: FinancialYearQuarter;
+    onSelectQuarter: (quarter: FinancialYearQuarter) => void;
+}) {
+    return (
+        <section className="rounded-3xl border border-slate-200/80 bg-gradient-to-r from-white via-slate-50 to-white p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/80 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+            <div className="grid grid-cols-2 sm:grid-cols-8 items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/75 p-1 shadow-inner dark:border-slate-700/80 dark:bg-slate-950/30">
+                {quarters.map((quarter) => {
+                    const isSelected =
+                        quarter.financialYear === selectedQuarter.financialYear &&
+                        quarter.quarter === selectedQuarter.quarter;
+
+                    return (
+                        <button
+                            key={`${quarter.financialYear}-${quarter.quarter}`}
+                            type="button"
+                            disabled={quarter.isLocked}
+                            onClick={() => onSelectQuarter(quarter)}
+                            className={`flex justify-center items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold tracking-[0.01em] shadow-sm transition-all duration-200 disabled:cursor-not-allowed ${
+                                isSelected
+                                    ? 'border-slate-900 bg-slate-950 text-white shadow-[0_10px_24px_-14px_rgba(15,23,42,0.9)] dark:border-white dark:bg-white dark:text-slate-950'
+                                    : quarter.isLocked
+                                        ? 'border-slate-200 bg-slate-100/75 text-slate-400 opacity-75 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500'
+                                        : 'border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_-20px_rgba(15,23,42,0.7)] dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
+                            }`}
+                        >
+                            <span>{quarter.label}</span>
+                            {quarter.isLocked && <Lock className="h-3.5 w-3.5" />}
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
 
 const getMilestoneBreakdown = (goal: GoalData) =>
     goal.milestones.reduce(
@@ -170,6 +223,9 @@ function GoalViewControls({
                         <option value="On Track">On Track</option>
                         <option value="On Track with Delay">On Track with Delay</option>
                         <option value="Off Track">Off Track</option>
+                        <option value="Done">Done</option>
+                        <option value="Not Done">Not Done</option>
+                        <option value="Dropped">Dropped</option>
                     </select>
                 </div>
             </div>
@@ -181,19 +237,25 @@ function GoalMeetingTable({
     goals,
     expandedGoalIds,
     canEditGoal,
+    canDropGoals,
+    canReviveGoals,
+    canCarryForwardGoals,
     canUpdateMilestones,
     onEditGoal,
+    onDropGoal,
+    onReviveGoal,
+    onCarryForwardGoal,
     onToggleExpand,
     onToggleMilestone,
 }: GoalMeetingTableProps) {
     const groupedGoals = groupGoalsByOwner(goals);
-    const activeGoals = goals.filter((goal) => goal.goalStatus !== '').length;
     const totalGoals = goals.length;
-    const onTrackGoals = goals.filter((goal) => goal.goalStatus === 'On Track').length;
-    const delayedGoals = goals.filter(
-        (goal) => goal.goalStatus === 'On Track with Delay',
+    const doneGoals = goals.filter((goal) => goal.goalStatus === 'Done').length;
+    const notDoneGoals = goals.filter((goal) => goal.goalStatus === 'Not Done').length;
+    const carryForwardedGoals = goals.filter((goal) => Boolean(goal.carryForwardSourceId)).length;
+    const droppedGoals = goals.filter(
+        (goal) => goal.isDropped || goal.goalStatus === 'Dropped',
     ).length;
-    const offTrackGoals = goals.filter((goal) => goal.goalStatus === 'Off Track').length;
     const rowDefinitions = useMemo(
         () =>
             goals.map((goal) => ({
@@ -216,51 +278,72 @@ function GoalMeetingTable({
     );
     const stats = [
         {
-            label: 'Active Goals',
-            value: activeGoals,
-            className:
-                'border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-        },
-        {
-            label: 'Total Goals',
+            label: 'Total',
             value: totalGoals,
+            icon: Target,
             className:
-                'border-slate-200 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-900/20 dark:text-slate-100',
+                'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100',
+            iconClassName: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
         },
         {
-            label: 'On Track',
-            value: onTrackGoals,
+            label: 'Done',
+            value: doneGoals,
+            icon: CheckCircle2,
             className:
-                'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/80 dark:text-emerald-300',
+                'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+            iconClassName: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-300',
         },
         {
-            label: 'With Delay',
-            value: delayedGoals,
+            label: 'Not Done',
+            value: notDoneGoals,
+            icon: CircleSlash2,
             className:
-                'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-600 dark:bg-amber-900/80 dark:text-amber-300',
+                'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+            iconClassName: 'bg-rose-100 text-rose-600 dark:bg-rose-900 dark:text-rose-300',
         },
         {
-            label: 'Off Track',
-            value: offTrackGoals,
+            label: 'Carry Forwarded',
+            value: carryForwardedGoals,
+            icon: RotateCcw,
             className:
-                'border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600 dark:bg-rose-900 dark:text-rose-300',
+                'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
+            iconClassName: 'bg-sky-100 text-sky-600 dark:bg-sky-900 dark:text-sky-300',
+        },
+        {
+            label: 'Dropped',
+            value: droppedGoals,
+            icon: Flag,
+            className:
+                'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+            iconClassName: 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-300',
         },
     ];
 
     return (
         <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
-            <div className="mb-1 grid grid-cols-2 gap-2 xl:grid-cols-5">
-                {stats.map((stat) => (
-                    <div
-                        key={stat.label}
-                        className={`flex justify-between gap-4 rounded-2xl border p-2 shadow-sm ${stat.className}`}
-                    >
-                        <p className="text-[12px] font-semibold uppercase tracking-wide opacity-80">
-                            {stat.label}
-                        </p>
-                        <p className="text-sm font-extrabold">{stat.value}</p>
-                    </div>
-                ))}
+            <div className="mb-2 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5">
+                {stats.map((stat) => {
+                    const StatIcon = stat.icon;
+
+                    return (
+                        <div
+                            key={stat.label}
+                            className={`flex items-center justify-between gap-2 rounded-2xl border p-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${stat.className}`}
+                        >
+                            <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${stat.iconClassName}`}
+                                >
+                                    <StatIcon className="h-4 w-4" />
+                                </span>
+                                <p className="truncate text-[11px] font-bold uppercase tracking-wide opacity-80">
+                                    {stat.label}
+                                </p>
+                            </div>
+                            <p className="text-lg font-extrabold leading-none">{stat.value}</p>
+                        </div>
+                    );
+                })}
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
@@ -431,7 +514,8 @@ function GoalMeetingTable({
                                                                                 type="checkbox"
                                                                                 checked={milestone.completed}
                                                                                 disabled={
-                                                                                    !canUpdateMilestones
+                                                                                    !canUpdateMilestones ||
+                                                                                    goal.isDropped
                                                                                 }
                                                                                 onChange={(event) =>
                                                                                     onToggleMilestone(
@@ -477,7 +561,7 @@ function GoalMeetingTable({
                                                         <span
                                                             className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getGoalStatusClasses(goal.goalStatus)}`}
                                                         >
-                                                            {getGoalStatusLabel(goal.goalStatus)}
+                                                            {getGoalStatusLabelWithProgress(goal)}
                                                         </span>
                                                     </div>
                                                 </td>
@@ -499,9 +583,40 @@ function GoalMeetingTable({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onEditGoal(goal)}
+                                                                disabled={goal.isDropped}
                                                                 className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                                                             >
                                                                 Edit
+                                                            </button>
+                                                        )}
+
+                                                        {canCarryForwardGoals && goal.carryForwardEligible && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onCarryForwardGoal(goal)}
+                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                                                            >
+                                                                Carry
+                                                            </button>
+                                                        )}
+
+                                                        {canDropGoals && goal.goalStatus === 'Not Done' && !goal.isDropped && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onDropGoal(goal)}
+                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+                                                            >
+                                                                Drop
+                                                            </button>
+                                                        )}
+
+                                                        {canReviveGoals && goal.isDropped && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onReviveGoal(goal)}
+                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                            >
+                                                                Revive
                                                             </button>
                                                         )}
                                                     </div>
@@ -539,9 +654,14 @@ function GoalMeetingTable({
     );
 }
 
-const createGoalPayloadFromFormValues = (formValues: GoalFormValues) => ({
+const createGoalPayloadFromFormValues = (
+    formValues: GoalFormValues,
+    selectedQuarter: FinancialYearQuarter,
+) => ({
     title: formValues.title.trim(),
     assignedTo: normalizeAssignedTo(formValues.assignedTo),
+    financialYear: selectedQuarter.financialYear,
+    quarter: selectedQuarter.quarter,
     milestones: formValues.milestones.map((milestone) => ({
         id: milestone.id,
         title: milestone.title.trim(),
@@ -559,16 +679,31 @@ export default function GoalMeeting() {
     const [sortOption, setSortOption] = useState<GoalSortOption>(DEFAULT_GOAL_SORT_OPTION);
     const [filters, setFilters] = useState<GoalFilters>(DEFAULT_GOAL_FILTERS);
     const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(new Set());
+    const visibleQuarters = useMemo(() => getVisibleFinancialYearQuarters(), []);
+    const [selectedQuarter, setSelectedQuarter] = useState<FinancialYearQuarter>(
+        () => getCurrentFinancialYearQuarter(),
+    );
     const [isLoading, setIsLoading] = useState(true);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
 
     const currentUserRole = getCurrentTaskManagementRole();
+    const currentUsername = sessionStorage.getItem('username') ?? currentUserRole;
     const permissions = getGoalManagementPermissions(currentUserRole);
 
+    const quarterGoals = useMemo(
+        () =>
+            goals.filter(
+                (goal) =>
+                    goal.financialYear === selectedQuarter.financialYear &&
+                    goal.quarter === selectedQuarter.quarter,
+            ),
+        [goals, selectedQuarter],
+    );
+
     const visibleGoals = useMemo(
-        () => processGoals(goals, searchQuery, filters, sortOption),
-        [filters, goals, searchQuery, sortOption],
+        () => processGoals(quarterGoals, searchQuery, filters, sortOption),
+        [filters, quarterGoals, searchQuery, sortOption],
     );
 
     useEffect(() => {
@@ -676,7 +811,7 @@ export default function GoalMeeting() {
 
         try {
             const createdGoal = await createGoalRequest(
-                createGoalPayloadFromFormValues(formValues),
+                createGoalPayloadFromFormValues(formValues, selectedQuarter),
             );
             setGoals((current) => [createdGoal, ...current]);
             setModalState(null);
@@ -694,7 +829,12 @@ export default function GoalMeeting() {
         try {
             const updatedGoal = await updateGoalRequest(
                 modalState.goal.id,
-                createGoalPayloadFromFormValues(formValues),
+                createGoalPayloadFromFormValues(formValues, {
+                    financialYear: modalState.goal.financialYear,
+                    quarter: modalState.goal.quarter,
+                    label: `${modalState.goal.financialYear} Q${modalState.goal.quarter}`,
+                    isLocked: false,
+                }),
             );
             setGoals((current) =>
                 current.map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal)),
@@ -741,6 +881,87 @@ export default function GoalMeeting() {
                 void handleDeleteGoalConfirmed(goalId);
             },
         });
+    };
+
+    const replaceGoal = (updatedGoal: GoalData) => {
+        setGoals((current) =>
+            current.map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal)),
+        );
+    };
+
+    const handleDropGoalConfirmed = async (goal: GoalData) => {
+        if (!permissions.canDropGoals) {
+            return;
+        }
+
+        try {
+            const droppedGoal = await dropGoalRequest(goal.id, currentUserRole, currentUsername);
+            replaceGoal(droppedGoal);
+        } catch (error) {
+            console.error('Failed to drop goal:', error);
+            showAlert('error', 'Failed to drop goal.');
+        }
+    };
+
+    const handleDropGoal = (goal: GoalData) => {
+        if (!permissions.canDropGoals) {
+            return;
+        }
+
+        showConfirm({
+            title: 'Drop Goal',
+            message: 'Drop this goal from continuation? This keeps the goal in history and does not delete it.',
+            type: 'warning',
+            confirmText: 'Drop',
+            cancelText: 'Cancel',
+            onConfirm: () => {
+                void handleDropGoalConfirmed(goal);
+            },
+        });
+    };
+
+    const handleReviveGoal = async (goal: GoalData) => {
+        if (!permissions.canReviveGoals) {
+            return;
+        }
+
+        try {
+            const revivedGoal = await reviveGoalRequest(goal.id, currentUserRole);
+            replaceGoal(revivedGoal);
+        } catch (error) {
+            console.error('Failed to revive goal:', error);
+            showAlert('error', 'Failed to revive goal.');
+        }
+    };
+
+    const handleCarryForwardGoal = async (goal: GoalData) => {
+        if (!permissions.canCarryForwardGoals) {
+            return;
+        }
+
+        try {
+            const carriedForwardGoal = await carryForwardGoalRequest(goal.id, currentUserRole);
+            setGoals((current) => {
+                const existingGoal = current.find((item) => item.id === carriedForwardGoal.id);
+
+                if (existingGoal) {
+                    return current.map((item) =>
+                        item.id === carriedForwardGoal.id ? carriedForwardGoal : item,
+                    );
+                }
+
+                return [carriedForwardGoal, ...current];
+            });
+            setSelectedQuarter({
+                financialYear: carriedForwardGoal.financialYear,
+                quarter: carriedForwardGoal.quarter,
+                label: `${carriedForwardGoal.financialYear} Q${carriedForwardGoal.quarter}`,
+                isLocked: false,
+            });
+        } catch (error) {
+            console.error('Failed to carry forward goal:', error);
+            showAlert('error', 'Failed to carry forward goal.');
+        }
     };
 
     const handleMilestoneToggle = async (
@@ -826,6 +1047,12 @@ export default function GoalMeeting() {
                     }
                 />
 
+                <QuarterSelector
+                    quarters={visibleQuarters}
+                    selectedQuarter={selectedQuarter}
+                    onSelectQuarter={setSelectedQuarter}
+                />
+
                 {isLoading && goals.length === 0 ? (
                     <section className="rounded-3xl border border-slate-200 bg-white/90 p-8 text-center shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
                         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -837,8 +1064,14 @@ export default function GoalMeeting() {
                         goals={visibleGoals}
                         expandedGoalIds={expandedGoalIds}
                         canEditGoal={permissions.canEditGoalDetails}
+                        canDropGoals={permissions.canDropGoals}
+                        canReviveGoals={permissions.canReviveGoals}
+                        canCarryForwardGoals={permissions.canCarryForwardGoals}
                         canUpdateMilestones={permissions.canUpdateMilestones}
                         onEditGoal={handleOpenEditModal}
+                        onDropGoal={handleDropGoal}
+                        onReviveGoal={handleReviveGoal}
+                        onCarryForwardGoal={handleCarryForwardGoal}
                         onToggleExpand={handleToggleExpand}
                         onToggleMilestone={handleMilestoneToggle}
                     />

@@ -15,12 +15,12 @@ interface MeetingModeTableProps {
 }
 
 const columnDefinitions = [
-    { key: 'title', label: 'Title', defaultSize: 300, minSize: 240, maxSize: 560 },
-    { key: 'assignedTo', label: 'Assigned To', defaultSize: 220, minSize: 180, maxSize: 360 },
-    { key: 'createdAt', label: 'Creation Date', defaultSize: 170, minSize: 140, maxSize: 240 },
-    { key: 'deadline', label: 'Deadline', defaultSize: 160, minSize: 130, maxSize: 220 },
-    { key: 'remarks', label: 'Remarks', defaultSize: 260, minSize: 180, maxSize: 420 },
-    { key: 'actions', label: 'Actions', defaultSize: 140, minSize: 120, maxSize: 200 },
+    { key: 'title', label: 'Title', defaultSize: 240, minSize: 240, maxSize: 560 },
+    { key: 'assignedTo', label: 'Assigned To', defaultSize: 180, minSize: 180, maxSize: 360 },
+    { key: 'createdAt', label: 'Creation Date', defaultSize: 140, minSize: 140, maxSize: 240 },
+    { key: 'deadline', label: 'Deadline', defaultSize: 130, minSize: 130, maxSize: 220 },
+    { key: 'remarks', label: 'Remarks', defaultSize: 180, minSize: 180, maxSize: 420 },
+    { key: 'actions', label: 'Actions', defaultSize: 120, minSize: 120, maxSize: 200 },
 ] as const;
 
 const headerCellClass =
@@ -65,7 +65,7 @@ export default function MeetingModeTable({
                     {tasks.length} active task{tasks.length === 1 ? '' : 's'}
                 </div>
             </div>
-            <div className="h-full overflow-x-auto overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
+            <div className="max-h-[calc(100vh-18rem)] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
                 <table
                     className="w-full border-separate border-spacing-0 text-left"
                     style={{ minWidth: `${tableMinWidth}px` }}

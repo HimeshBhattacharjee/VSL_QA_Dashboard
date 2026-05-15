@@ -2186,11 +2186,11 @@ def get_template_config(line_number):
             '16-1': {
                 'Line-3': {
                     'Sample-1': 'G251', 'Sample-2': 'G252', 'Sample-3': 'G253', 'Sample-4': 'G254', 'Sample-5': 'G255',
-                    'Sample-6': 'Y251', 'Sample-7': 'Y252', 'Sample-8': 'Y253', 'Sample-9': 'Y254', 'Sample-10': 'Y255'
+                    'Sample-6': 'M251', 'Sample-7': 'M252', 'Sample-8': 'M253', 'Sample-9': 'M254', 'Sample-10': 'M255'
                 },
                 'Line-4': {
                     'Sample-1': 'S251', 'Sample-2': 'S252', 'Sample-3': 'S253', 'Sample-4': 'S254', 'Sample-5': 'S255',
-                    'Sample-6': 'M251', 'Sample-7': 'M252', 'Sample-8': 'M253', 'Sample-9': 'M254', 'Sample-10': 'M255'
+                    'Sample-6': 'Y251', 'Sample-7': 'Y252', 'Sample-8': 'Y253', 'Sample-9': 'Y254', 'Sample-10': 'Y255'
                 }
             },
             '17-1': {
@@ -2346,11 +2346,11 @@ def get_template_config(line_number):
             },
             '23-1': {
                 'Line-3': {
-                    'Sample-1': 'S333', 'Sample-2': 'S334', 'Sample-3': 'S335', 'Sample-4': 'S336', 'Sample-5': 'S337',
+                    'Sample-1': 'G333', 'Sample-2': 'G334', 'Sample-3': 'G335', 'Sample-4': 'G336', 'Sample-5': 'G337',
                     'Sample-6': 'M333', 'Sample-7': 'M334', 'Sample-8': 'M335', 'Sample-9': 'M336', 'Sample-10': 'M337'
                 },
                 'Line-4': {
-                    'Sample-1': 'G333', 'Sample-2': 'G334', 'Sample-3': 'G335', 'Sample-4': 'G336', 'Sample-5': 'G337',
+                    'Sample-1': 'S333', 'Sample-2': 'S334', 'Sample-3': 'S335', 'Sample-4': 'S336', 'Sample-5': 'S337',
                     'Sample-6': 'Y333', 'Sample-7': 'Y334', 'Sample-8': 'Y335', 'Sample-9': 'Y336', 'Sample-10': 'Y337'
                 }
             },
@@ -2420,20 +2420,20 @@ def get_template_config(line_number):
             '27-1': {
                 'Line-3': {
                     'Sample-1': 'G376', 'Sample-2': 'G377', 'Sample-3': 'G378', 'Sample-4': 'G379', 'Sample-5': 'G380',
-                    'Sample-6': 'Y376', 'Sample-7': 'Y377', 'Sample-8': 'Y378', 'Sample-9': 'Y379', 'Sample-10': 'Y380'
+                    'Sample-6': 'M376', 'Sample-7': 'M377', 'Sample-8': 'M378', 'Sample-9': 'M379', 'Sample-10': 'M380'
                 },
                 'Line-4': {
                     'Sample-1': 'S376', 'Sample-2': 'S377', 'Sample-3': 'S378', 'Sample-4': 'S379', 'Sample-5': 'S380',
-                    'Sample-6': 'M376', 'Sample-7': 'M377', 'Sample-8': 'M378', 'Sample-9': 'M379', 'Sample-10': 'M380'
+                    'Sample-6': 'Y376', 'Sample-7': 'Y377', 'Sample-8': 'Y378', 'Sample-9': 'Y379', 'Sample-10': 'Y380'
                 }
             },
             '29-1': {
                 'Line-3': {
-                    'Sample-1': 'G382', 'Sample-2': 'G383', 'Sample-3': 'G384', 'Sample-4': 'G385', 'Sample-5': 'G386',
+                    'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
                     'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
                 },
                 'Line-4': {
-                    'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
+                    'Sample-1': 'G382', 'Sample-2': 'G383', 'Sample-3': 'G384', 'Sample-4': 'G385', 'Sample-5': 'G386',
                     'Sample-6': 'M382', 'Sample-7': 'M383', 'Sample-8': 'M384', 'Sample-9': 'M385', 'Sample-10': 'M386'
                 }
             }

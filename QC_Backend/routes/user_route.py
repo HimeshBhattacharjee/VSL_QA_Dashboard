@@ -1,17 +1,29 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
 from datetime import datetime
 from bson import ObjectId
 import os
 import base64
 from models.user_models import (
     UserCreate, UserResponse, LoginRequest, LoginResponse,
-    PasswordChangeRequest, SignatureUpdateRequest
+    PasswordChangeRequest, SignatureUpdateRequest, UserUpdate
 )
 from users.user_db import users_collection, generate_password
 
 user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
 MANAGEABLE_ROLES = {"Manager", "Supervisor", "Operator"}
+SYSTEM_ADMIN_ROLES = {"Admin", "System Administrator"}
+
+def is_system_admin(user: dict) -> bool:
+    return user.get("role") in SYSTEM_ADMIN_ROLES
+
+def require_admin_request(admin_employee_id: str | None) -> None:
+    if not admin_employee_id:
+        raise HTTPException(status_code=401, detail="Admin authorization is required")
+
+    admin_user = users_collection.find_one({"employeeId": admin_employee_id.strip()})
+    if not admin_user or admin_user.get("status") != "Active" or not is_system_admin(admin_user):
+        raise HTTPException(status_code=403, detail="Only active administrators can edit users")
 
 @user_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate):
@@ -61,11 +73,59 @@ async def delete_user(user_id: str):
     user = users_collection.find_one({"_id": object_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("role") == "Admin":
+    if is_system_admin(user):
         raise HTTPException(status_code=403, detail="System Administrator cannot be deleted")
 
     users_collection.delete_one({"_id": object_id})
     return {"message": "User deleted successfully"}
+
+@user_router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(user_id: str, user_update: UserUpdate, x_admin_employee_id: str | None = Header(default=None)):
+    require_admin_request(x_admin_employee_id)
+
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    existing_user = users_collection.find_one({"_id": object_id})
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if is_system_admin(existing_user):
+        raise HTTPException(status_code=403, detail="System Administrator users cannot be edited")
+
+    name = user_update.name.strip()
+    employee_id = user_update.employeeId.strip()
+    role = user_update.role.strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Employee Name is required")
+    if not employee_id:
+        raise HTTPException(status_code=400, detail="Employee ID is required")
+    if role not in MANAGEABLE_ROLES:
+        raise HTTPException(status_code=400, detail="Role must be Manager, Supervisor, or Operator")
+
+    duplicate_user = users_collection.find_one({
+        "employeeId": employee_id,
+        "_id": {"$ne": object_id}
+    })
+    if duplicate_user:
+        raise HTTPException(status_code=400, detail="Employee ID already exists")
+
+    avatar = ''.join([word[0] for word in name.split() if word]).upper()
+    update_data = {
+        "name": name,
+        "employeeId": employee_id,
+        "role": role,
+        "avatar": avatar,
+    }
+    # Password is intentionally preserved so employee ID edits do not reset login credentials.
+    users_collection.update_one({"_id": object_id}, {"$set": update_data})
+
+    updated_user = users_collection.find_one({"_id": object_id})
+    updated_user["id"] = str(updated_user["_id"])
+    del updated_user["_id"]
+    return updated_user
 
 @user_router.post("/auth/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
@@ -140,7 +200,7 @@ async def update_user_status(user_id: str):
     user = users_collection.find_one({"_id": object_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("role") == "Admin":
+    if is_system_admin(user):
         raise HTTPException(status_code=403, detail="System Administrator status cannot be changed")
 
     new_status = "Inactive" if user["status"] == "Active" else "Active"
