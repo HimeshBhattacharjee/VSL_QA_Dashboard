@@ -1,8 +1,8 @@
 import { type TaskCardData, type TaskPriority, type TaskStatus } from '../components/TaskCard';
 
 export type TaskSortOption =
-    | 'createdAtAsc'
-    | 'createdAtDesc'
+    | 'serialNumberAsc'
+    | 'serialNumberDesc'
     | 'priorityAsc'
     | 'priorityDesc'
     | 'deadlineAsc'
@@ -15,7 +15,7 @@ export interface TaskFilters {
 }
 
 export const ALL_ASSIGNEES_FILTER_VALUE = 'All';
-export const DEFAULT_TASK_SORT_OPTION: TaskSortOption = 'createdAtAsc';
+export const DEFAULT_TASK_SORT_OPTION: TaskSortOption = 'serialNumberAsc';
 export const DEFAULT_TASK_FILTERS: TaskFilters = {
     priority: 'All',
     assignedUser: ALL_ASSIGNEES_FILTER_VALUE,
@@ -39,8 +39,19 @@ const getDateTimeValue = (value?: string) => {
 const compareByCreatedAtAsc = (left: TaskCardData, right: TaskCardData) =>
     (getDateTimeValue(left.createdAt) ?? 0) - (getDateTimeValue(right.createdAt) ?? 0);
 
-const compareByCreatedAtDesc = (left: TaskCardData, right: TaskCardData) =>
-    compareByCreatedAtAsc(right, left);
+const compareBySerialNumber = (
+    left: TaskCardData,
+    right: TaskCardData,
+    serialNumberByTaskId: Record<string, number>,
+    direction: 'asc' | 'desc',
+) => {
+    const leftSerialNumber = serialNumberByTaskId[left.id] ?? Number.MAX_SAFE_INTEGER;
+    const rightSerialNumber = serialNumberByTaskId[right.id] ?? Number.MAX_SAFE_INTEGER;
+
+    return direction === 'asc'
+        ? leftSerialNumber - rightSerialNumber
+        : rightSerialNumber - leftSerialNumber;
+};
 
 const compareByPriority = (
     left: TaskCardData,
@@ -104,11 +115,24 @@ export const moveTaskToStatus = (
 export const areTasksEqual = (left: TaskCardData[], right: TaskCardData[]) =>
     JSON.stringify(normalizeTaskSignature(left)) === JSON.stringify(normalizeTaskSignature(right));
 
+export const getTaskSerialNumberMap = (tasks: TaskCardData[]) => {
+    const sortedTasks = [...tasks].sort(
+        (left, right) => compareByCreatedAtAsc(left, right) || left.id.localeCompare(right.id),
+    );
+
+    // Serial numbers are based on the complete task history, not filtered visible rows.
+    return sortedTasks.reduce<Record<string, number>>((serialMap, task, index) => {
+        serialMap[task.id] = index + 1;
+        return serialMap;
+    }, {});
+};
+
 export const processTasks = (
     tasks: TaskCardData[],
     searchQuery: string,
     filters: TaskFilters,
     sortOption: TaskSortOption,
+    serialNumberByTaskId: Record<string, number> = getTaskSerialNumberMap(tasks),
 ) => {
     const filteredTasks = tasks.filter((task) => {
         const matchesPriority = filters.priority === 'All' || task.priority === filters.priority;
@@ -130,26 +154,38 @@ export const processTasks = (
         : filteredTasks;
 
     return [...searchedTasks].sort((left, right) => {
-        if (sortOption === 'createdAtAsc') {
-            return compareByCreatedAtAsc(left, right);
+        if (sortOption === 'serialNumberAsc') {
+            return compareBySerialNumber(left, right, serialNumberByTaskId, 'asc');
         }
 
-        if (sortOption === 'createdAtDesc') {
-            return compareByCreatedAtDesc(left, right);
+        if (sortOption === 'serialNumberDesc') {
+            return compareBySerialNumber(left, right, serialNumberByTaskId, 'desc');
         }
 
         if (sortOption === 'priorityAsc') {
-            return compareByPriority(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+            return (
+                compareByPriority(left, right, 'asc') ||
+                compareBySerialNumber(left, right, serialNumberByTaskId, 'asc')
+            );
         }
 
         if (sortOption === 'priorityDesc') {
-            return compareByPriority(left, right, 'desc') || compareByCreatedAtDesc(left, right);
+            return (
+                compareByPriority(left, right, 'desc') ||
+                compareBySerialNumber(left, right, serialNumberByTaskId, 'desc')
+            );
         }
 
         if (sortOption === 'deadlineAsc') {
-            return compareByDeadline(left, right, 'asc') || compareByCreatedAtAsc(left, right);
+            return (
+                compareByDeadline(left, right, 'asc') ||
+                compareBySerialNumber(left, right, serialNumberByTaskId, 'asc')
+            );
         }
 
-        return compareByDeadline(left, right, 'desc') || compareByCreatedAtDesc(left, right);
+        return (
+            compareByDeadline(left, right, 'desc') ||
+            compareBySerialNumber(left, right, serialNumberByTaskId, 'desc')
+        );
     });
 };

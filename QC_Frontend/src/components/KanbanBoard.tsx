@@ -332,6 +332,7 @@ interface KanbanBoardProps {
     searchQuery: string;
     filters: TaskFilters;
     sortOption: TaskSortOption;
+    serialNumberByTaskId: Record<string, number>;
     canDragTasks?: boolean;
 }
 
@@ -342,6 +343,7 @@ export default function KanbanBoard({
     searchQuery,
     filters,
     sortOption,
+    serialNumberByTaskId,
     canDragTasks = true,
 }: KanbanBoardProps) {
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -358,8 +360,20 @@ export default function KanbanBoard({
 
     const activeTask = activeTaskId ? findTaskById(tasks, activeTaskId) : null;
     const processedTasksByColumn: Record<TaskStatus, TaskCardData[]> = {
-        'To Do': processTasks(getTasksByStatus(tasks, 'To Do'), searchQuery, filters, sortOption),
-        Done: processTasks(getTasksByStatus(tasks, 'Done'), searchQuery, filters, sortOption),
+        'To Do': processTasks(
+            getTasksByStatus(tasks, 'To Do'),
+            searchQuery,
+            filters,
+            sortOption,
+            serialNumberByTaskId,
+        ),
+        Done: processTasks(
+            getTasksByStatus(tasks, 'Done'),
+            searchQuery,
+            filters,
+            sortOption,
+            serialNumberByTaskId,
+        ),
     };
     const groupedTasksByColumn: Record<TaskStatus, EmployeeTaskSection[]> = {
         'To Do': groupTasksByEmployee(processedTasksByColumn['To Do']),

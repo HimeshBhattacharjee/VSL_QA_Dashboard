@@ -22,6 +22,7 @@ import {
     DEFAULT_TASK_SORT_OPTION,
     areTasksEqual,
     getTasksByStatus,
+    getTaskSerialNumberMap,
     moveTaskToStatus,
     processTasks,
     type TaskFilters,
@@ -104,8 +105,8 @@ function TaskViewControls({
                         onChange={(event) => onSortChange(event.target.value as TaskSortOption)}
                         className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
-                        <option value="createdAtAsc">Creation Date (Asc)</option>
-                        <option value="createdAtDesc">Creation Date (Desc)</option>
+                        <option value="serialNumberAsc">Sl. No. (Asc)</option>
+                        <option value="serialNumberDesc">Sl. No. (Desc)</option>
                         <option value="priorityAsc">Priority (Asc)</option>
                         <option value="priorityDesc">Priority (Desc)</option>
                         <option value="deadlineAsc">Deadline (Asc)</option>
@@ -151,6 +152,7 @@ export default function DailyMeetingPage() {
 
     const currentUserRole = getCurrentTaskManagementRole();
     const permissions = getTaskManagementPermissions(currentUserRole);
+    const taskSerialNumberById = useMemo(() => getTaskSerialNumberMap(tasks), [tasks]);
     const meetingModeTasks = useMemo(
         () =>
             processTasks(
@@ -158,8 +160,9 @@ export default function DailyMeetingPage() {
                 searchQuery,
                 filters,
                 sortOption,
+                taskSerialNumberById,
             ),
-        [filters, searchQuery, sortOption, tasks],
+        [filters, searchQuery, sortOption, taskSerialNumberById, tasks],
     );
 
     useEffect(() => {
@@ -468,7 +471,12 @@ export default function DailyMeetingPage() {
                 {isMeetingMode ? (
                     <MeetingModeTable
                         tasks={meetingModeTasks}
+                        serialNumberByTaskId={taskSerialNumberById}
                         onEditTask={handleOpenEditModal}
+                        onDoneTask={(taskId) => {
+                            void handleTaskStatusChange(taskId, 'Done');
+                        }}
+                        canMarkDone={permissions.canDragTasks}
                     />
                 ) : (
                     <KanbanBoard
@@ -478,6 +486,7 @@ export default function DailyMeetingPage() {
                         searchQuery={searchQuery}
                         filters={filters}
                         sortOption={sortOption}
+                        serialNumberByTaskId={taskSerialNumberById}
                         canDragTasks={permissions.canDragTasks}
                     />
                 )}

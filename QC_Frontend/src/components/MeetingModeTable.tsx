@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { PencilLine } from 'lucide-react';
+import { CheckCircle2, PencilLine } from 'lucide-react';
 import { type TaskCardData } from './TaskCard';
 import { formatISTDate } from '../utilities/istDate';
 import {
@@ -11,16 +11,20 @@ import { useResizableTable } from '../utilities/useResizableTable';
 
 interface MeetingModeTableProps {
     tasks: TaskCardData[];
+    serialNumberByTaskId: Record<string, number>;
     onEditTask: (task: TaskCardData) => void;
+    onDoneTask: (taskId: string) => void;
+    canMarkDone: boolean;
 }
 
 const columnDefinitions = [
+    { key: 'serialNumber', label: 'Sl. No.', defaultSize: 84, minSize: 76, maxSize: 120 },
     { key: 'title', label: 'Title', defaultSize: 240, minSize: 240, maxSize: 560 },
     { key: 'assignedTo', label: 'Assigned To', defaultSize: 180, minSize: 180, maxSize: 360 },
     { key: 'createdAt', label: 'Creation Date', defaultSize: 140, minSize: 140, maxSize: 240 },
     { key: 'deadline', label: 'Deadline', defaultSize: 130, minSize: 130, maxSize: 220 },
     { key: 'remarks', label: 'Remarks', defaultSize: 180, minSize: 180, maxSize: 420 },
-    { key: 'actions', label: 'Actions', defaultSize: 120, minSize: 120, maxSize: 200 },
+    { key: 'actions', label: 'Actions', defaultSize: 148, minSize: 148, maxSize: 220 },
 ] as const;
 
 const headerCellClass =
@@ -35,7 +39,10 @@ const formatDeadline = (value?: string) => (value ? formatISTDate(value) : '--')
 
 export default function MeetingModeTable({
     tasks,
+    serialNumberByTaskId,
     onEditTask,
+    onDoneTask,
+    canMarkDone,
 }: MeetingModeTableProps) {
     const rowDefinitions = useMemo(
         () =>
@@ -118,6 +125,15 @@ export default function MeetingModeTable({
                                         style={{ height: `${rowHeight}px` }}
                                     >
                                         <td
+                                            className={`${bodyCellClass} text-center`}
+                                            style={{ height: `${rowHeight}px` }}
+                                        >
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                {serialNumberByTaskId[task.id] ?? '--'}
+                                            </span>
+                                        </td>
+
+                                        <td
                                             className={bodyCellClass}
                                             style={{ height: `${rowHeight}px` }}
                                         >
@@ -193,14 +209,24 @@ export default function MeetingModeTable({
                                             className={`${bodyCellClass} relative`}
                                             style={{ height: `${rowHeight}px` }}
                                         >
-                                            <div className="flex h-full items-center justify-center">
+                                            <div className="flex h-full items-center justify-center gap-2">
                                                 <button
                                                     type="button"
+                                                    aria-label={`Edit task ${task.title}`}
                                                     onClick={() => onEditTask(task)}
-                                                    className="inline-flex h-10 min-w-[88px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 dark:focus:ring-offset-slate-900"
                                                 >
                                                     <PencilLine className="h-4 w-4" />
-                                                    <span>Edit</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDoneTask(task.id)}
+                                                    disabled={!canMarkDone}
+                                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50 dark:focus:ring-offset-slate-900"
+                                                >
+                                                    <CheckCircle2 className="h-4 w-4" />
+                                                    <span>Done</span>
                                                 </button>
                                             </div>
 

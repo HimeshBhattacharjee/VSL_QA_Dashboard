@@ -96,8 +96,8 @@ const goalMeetingColumnDefinitions = [
     {
         key: 'milestoneStatus',
         label: 'Milestone Status',
-        defaultSize: 220,
-        minSize: 220,
+        defaultSize: 200,
+        minSize: 200,
         maxSize: 420,
     },
     { key: 'goalStatus', label: 'Goal Status', defaultSize: 150, minSize: 150, maxSize: 240 },
