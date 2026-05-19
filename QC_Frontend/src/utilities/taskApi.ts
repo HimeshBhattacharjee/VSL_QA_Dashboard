@@ -13,6 +13,7 @@ interface TaskApiRecord {
     assignedBy: string;
     priority: TaskCardData['priority'];
     status: TaskCardData['status'];
+    visibleInMeeting?: boolean;
     deadline?: string | null;
     remarks?: string | null;
     createdAt: string;
@@ -25,6 +26,7 @@ export interface TaskMutationPayload {
     assignedBy: string;
     priority: TaskCardData['priority'];
     status: TaskCardData['status'];
+    visibleInMeeting: boolean;
     deadline?: string;
     remarks?: string;
 }
@@ -44,6 +46,7 @@ export const createTaskMutationPayloadFromTask = (
         assignedBy: FIXED_TASK_ASSIGNED_BY,
         priority: task.priority,
         status: task.status,
+        visibleInMeeting: task.visibleInMeeting,
         deadline: task.deadline,
         remarks: task.remarks,
     };
@@ -72,6 +75,10 @@ export const createTaskMutationPayloadFromTask = (
         payload.status = overrides.status as TaskMutationPayload['status'];
     }
 
+    if ('visibleInMeeting' in overrides) {
+        payload.visibleInMeeting = overrides.visibleInMeeting as TaskMutationPayload['visibleInMeeting'];
+    }
+
     if ('deadline' in overrides) {
         payload.deadline = overrides.deadline;
     }
@@ -94,6 +101,7 @@ const normalizeDeadline = (value?: string | null) => {
 const normalizeTask = (task: TaskApiRecord): TaskCardData => ({
     ...task,
     assignedTo: normalizeAssignedTo(task.assignedTo),
+    visibleInMeeting: task.visibleInMeeting ?? true,
     deadline: normalizeDeadline(task.deadline),
     remarks: task.remarks ?? undefined,
 });
@@ -107,6 +115,20 @@ const buildTaskRequestBody = (task: TaskMutationPayload) => ({
     remarks: task.remarks?.trim() || null,
     deadline: task.deadline ? `${task.deadline}T00:00:00.000Z` : null,
 });
+
+const getTaskRequestHeaders = (includeContentType = false) => {
+    const headers: Record<string, string> = {
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || '',
+        'X-Employee-Name': sessionStorage.getItem('username') || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || '',
+    };
+
+    if (includeContentType) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    return headers;
+};
 
 const buildTaskCreateRequestBody = (task: TaskCreatePayload) => ({
     ...buildTaskRequestBody(task),
@@ -129,7 +151,9 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export async function fetchTasks(): Promise<TaskCardData[]> {
-    const response = await fetch(TASK_API_BASE_URL);
+    const response = await fetch(TASK_API_BASE_URL, {
+        headers: getTaskRequestHeaders(),
+    });
     const tasks = await readJsonResponse<TaskApiRecord[]>(response);
     return tasks.map(normalizeTask);
 }
@@ -138,7 +162,7 @@ export async function createTask(task: TaskCreatePayload): Promise<TaskCardData>
     const response = await fetch(TASK_API_BASE_URL, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
+            ...getTaskRequestHeaders(true),
         },
         body: JSON.stringify(buildTaskCreateRequestBody(task)),
     });
@@ -154,9 +178,23 @@ export async function updateTask(
     const response = await fetch(`${TASK_API_BASE_URL}/${taskId}`, {
         method: 'PUT',
         headers: {
-            'Content-Type': 'application/json',
+            ...getTaskRequestHeaders(true),
         },
         body: JSON.stringify(buildTaskRequestBody(task)),
+    });
+
+    const updatedTask = await readJsonResponse<TaskApiRecord>(response);
+    return normalizeTask(updatedTask);
+}
+
+export async function updateTaskVisibility(
+    taskId: string,
+    visibleInMeeting: boolean,
+): Promise<TaskCardData> {
+    const response = await fetch(`${TASK_API_BASE_URL}/${taskId}/visibility`, {
+        method: 'PATCH',
+        headers: getTaskRequestHeaders(true),
+        body: JSON.stringify({ visibleInMeeting }),
     });
 
     const updatedTask = await readJsonResponse<TaskApiRecord>(response);

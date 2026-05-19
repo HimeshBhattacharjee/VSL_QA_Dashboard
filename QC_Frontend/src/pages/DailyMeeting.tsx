@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { EyeOff, Plus, RotateCcw } from 'lucide-react';
 import KanbanBoard from '../components/KanbanBoard';
 import MeetingModeTable from '../components/MeetingModeTable';
 import TaskEditModal, {
@@ -14,7 +14,7 @@ import {
 } from '../utilities/assignmentUsers';
 import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
-    getCurrentTaskManagementRole,
+    getCurrentTaskManagementUser,
     getTaskManagementPermissions,
 } from '../utilities/taskAccess';
 import {
@@ -34,6 +34,7 @@ import {
     deleteTask as deleteTaskRequest,
     fetchTasks,
     updateTask as updateTaskRequest,
+    updateTaskVisibility,
 } from '../utilities/taskApi';
 
 type TaskModalState =
@@ -53,6 +54,11 @@ interface TaskViewControlsProps {
     onSearchChange: (value: string) => void;
     onSortChange: (value: TaskSortOption) => void;
     onPriorityChange: (value: TaskFilters['priority']) => void;
+}
+
+interface ExcludedTasksSectionProps {
+    tasks: TaskCardData[];
+    onRestoreTask: (task: TaskCardData) => void;
 }
 
 const applyPendingTaskStatusUpdates = (
@@ -135,6 +141,52 @@ function TaskViewControls({
     );
 }
 
+function ExcludedTasksSection({ tasks, onRestoreTask }: ExcludedTasksSectionProps) {
+    if (tasks.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <EyeOff className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                <span>Excluded from Meeting</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                    {tasks.length}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {tasks.map((task) => (
+                    <div
+                        key={task.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="break-words text-sm font-semibold text-slate-900 dark:text-white">
+                                    {task.title}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                    {task.status} - {task.priority} Priority
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => onRestoreTask(task)}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 dark:focus:ring-offset-slate-900"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span>Restore</span>
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
 export default function DailyMeetingPage() {
     const [tasks, setTasks] = useState<TaskCardData[]>([]);
     const [assigneeOptions, setAssigneeOptions] = useState<AssignmentUserOption[]>([]);
@@ -150,19 +202,28 @@ export default function DailyMeetingPage() {
     >({});
     const deletingTaskIdsRef = useRef<Set<string>>(new Set());
 
-    const currentUserRole = getCurrentTaskManagementRole();
-    const permissions = getTaskManagementPermissions(currentUserRole);
+    const currentTaskUser = getCurrentTaskManagementUser();
+    const currentUserRole = currentTaskUser.role;
+    const permissions = getTaskManagementPermissions(currentUserRole, currentTaskUser);
     const taskSerialNumberById = useMemo(() => getTaskSerialNumberMap(tasks), [tasks]);
+    const visibleTasks = useMemo(
+        () => tasks.filter((task) => task.visibleInMeeting),
+        [tasks],
+    );
+    const excludedTasks = useMemo(
+        () => tasks.filter((task) => !task.visibleInMeeting),
+        [tasks],
+    );
     const meetingModeTasks = useMemo(
         () =>
             processTasks(
-                getTasksByStatus(tasks, 'To Do'),
+                getTasksByStatus(visibleTasks, 'To Do'),
                 searchQuery,
                 filters,
                 sortOption,
                 taskSerialNumberById,
             ),
-        [filters, searchQuery, sortOption, taskSerialNumberById, tasks],
+        [filters, searchQuery, sortOption, taskSerialNumberById, visibleTasks],
     );
 
     useEffect(() => {
@@ -329,6 +390,7 @@ export default function DailyMeetingPage() {
                 assignedBy: FIXED_ASSIGNED_BY,
                 createdAt: formValues.creationDate,
                 priority: formValues.priority,
+                visibleInMeeting: true,
                 deadline: formValues.deadline || undefined,
                 status: 'To Do',
                 remarks: formValues.remarks.trim() || undefined,
@@ -417,6 +479,38 @@ export default function DailyMeetingPage() {
         });
     }
 
+    async function handleTaskVisibilityChange(task: TaskCardData, visibleInMeeting: boolean) {
+        if (!permissions.canManageMeetingVisibility) {
+            return;
+        }
+
+        const previousTask = task;
+        setTasks((current) =>
+            current.map((currentTask) =>
+                currentTask.id === task.id
+                    ? { ...currentTask, visibleInMeeting }
+                    : currentTask,
+            ),
+        );
+
+        try {
+            const updatedTask = await updateTaskVisibility(task.id, visibleInMeeting);
+            setTasks((current) =>
+                current.map((currentTask) =>
+                    currentTask.id === updatedTask.id ? updatedTask : currentTask,
+                ),
+            );
+        } catch (error) {
+            console.error('Failed to update task visibility:', error);
+            showAlert('error', 'Failed to update task visibility.');
+            setTasks((current) =>
+                current.map((currentTask) =>
+                    currentTask.id === previousTask.id ? previousTask : currentTask,
+                ),
+            );
+        }
+    }
+
     return (
         <div className="relative min-h-[85vh] overflow-hidden rounded-3xl bg-slate-50 p-2 transition-colors duration-300 dark:bg-slate-900 sm:p-4">
             <div className="pointer-events-none absolute left-[-10%] top-[-5%] h-72 w-72 rounded-full bg-red-500/15 blur-[90px] dark:bg-red-400/20" />
@@ -468,6 +562,15 @@ export default function DailyMeetingPage() {
                     }
                 />
 
+                {!isMeetingMode && permissions.canManageMeetingVisibility && (
+                    <ExcludedTasksSection
+                        tasks={excludedTasks}
+                        onRestoreTask={(task) => {
+                            void handleTaskVisibilityChange(task, true);
+                        }}
+                    />
+                )}
+
                 {isMeetingMode ? (
                     <MeetingModeTable
                         tasks={meetingModeTasks}
@@ -480,14 +583,18 @@ export default function DailyMeetingPage() {
                     />
                 ) : (
                     <KanbanBoard
-                        tasks={tasks}
+                        tasks={visibleTasks}
                         onTaskDoubleClick={handleOpenEditModal}
                         onTaskStatusChange={handleTaskStatusChange}
+                        onExcludeTaskFromMeeting={(task) => {
+                            void handleTaskVisibilityChange(task, false);
+                        }}
                         searchQuery={searchQuery}
                         filters={filters}
                         sortOption={sortOption}
                         serialNumberByTaskId={taskSerialNumberById}
                         canDragTasks={permissions.canDragTasks}
+                        canExcludeFromMeeting={permissions.canManageMeetingVisibility}
                     />
                 )}
             </div>

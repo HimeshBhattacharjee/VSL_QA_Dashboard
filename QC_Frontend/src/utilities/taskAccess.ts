@@ -8,6 +8,7 @@ export interface TaskManagementPermissions {
     canEditTasks: boolean;
     canEditAllTaskFields: boolean;
     canEditRemarksOnly: boolean;
+    canManageMeetingVisibility: boolean;
 }
 
 export interface GoalManagementPermissions {
@@ -41,8 +42,19 @@ export const getCurrentTaskManagementRole = (): TaskManagementRole => {
     return MOCK_CURRENT_TASK_USER.role;
 };
 
+export const getCurrentTaskManagementUser = () => ({
+    employeeId: sessionStorage.getItem('employeeId')?.trim() || '',
+    employeeName: sessionStorage.getItem('username')?.trim() || '',
+    role: getCurrentTaskManagementRole(),
+});
+
+const isBlockedMeetingVisibilityUser = (employeeId?: string, employeeName?: string) =>
+    employeeId?.trim() === '4000061' ||
+    employeeName?.trim().toLowerCase() === 'sanjit basu';
+
 export const getTaskManagementPermissions = (
     role: TaskManagementRole,
+    user: { employeeId?: string; employeeName?: string } = {},
 ): TaskManagementPermissions => ({
     canAccessTaskManagement: role !== 'Operator',
     canCreateTasks: role === 'Manager',
@@ -51,6 +63,9 @@ export const getTaskManagementPermissions = (
     canEditTasks: role === 'Manager' || role === 'Supervisor',
     canEditAllTaskFields: role === 'Manager',
     canEditRemarksOnly: role === 'Supervisor',
+    canManageMeetingVisibility:
+        (role === 'Manager' || role === 'Supervisor') &&
+        !isBlockedMeetingVisibilityUser(user.employeeId, user.employeeName),
 });
 
 export const getGoalManagementPermissions = (

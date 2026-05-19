@@ -23,6 +23,7 @@ class TaskBase(BaseModel):
     assignedBy: str = Field(..., min_length=1)
     priority: TaskPriority = 'Medium'
     status: TaskStatus = 'To Do'
+    visibleInMeeting: bool = True
     deadline: datetime | None = None
     remarks: str | None = None
 
@@ -31,6 +32,9 @@ class TaskCreate(TaskBase):
 
 class TaskUpdate(TaskBase):
     pass
+
+class TaskVisibilityUpdate(BaseModel):
+    visibleInMeeting: bool
 
 class TaskResponse(TaskBase):
     id: str
@@ -65,6 +69,8 @@ def serialize_task(document: dict) -> dict:
         'assignedBy': document.get('assignedBy', ''),
         'priority': document.get('priority', 'Medium'),
         'status': document.get('status', 'To Do'),
+        # Existing tasks did not have this field; they remain visible by default.
+        'visibleInMeeting': document.get('visibleInMeeting', True),
         'deadline': serialize_datetime(document['deadline']) if document.get('deadline') else None,
         'remarks': document.get('remarks'),
         'createdAt': serialize_datetime(document['createdAt']),

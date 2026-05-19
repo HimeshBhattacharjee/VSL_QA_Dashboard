@@ -134,10 +134,14 @@ function SortableTaskCard({
     task,
     onDoubleClick,
     isDragEnabled,
+    onExcludeFromMeeting,
+    canExcludeFromMeeting,
 }: {
     task: TaskCardData;
     onDoubleClick: () => void;
     isDragEnabled: boolean;
+    onExcludeFromMeeting?: () => void;
+    canExcludeFromMeeting: boolean;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: task.id,
@@ -157,6 +161,8 @@ function SortableTaskCard({
                 task={task}
                 isDragging={isDragging}
                 onDoubleClick={onDoubleClick}
+                onExcludeFromMeeting={onExcludeFromMeeting}
+                canExcludeFromMeeting={canExcludeFromMeeting}
                 dragHandleProps={isDragEnabled ? { ...attributes, ...listeners } : undefined}
             />
         </div>
@@ -170,7 +176,9 @@ function KanbanColumn({
     isCollapsed,
     onToggleCollapse,
     onTaskDoubleClick,
+    onExcludeTaskFromMeeting,
     canDragTasks,
+    canExcludeFromMeeting,
     collapsedSections,
     onToggleSection,
 }: {
@@ -180,7 +188,9 @@ function KanbanColumn({
     isCollapsed: boolean;
     onToggleCollapse: () => void;
     onTaskDoubleClick: (task: TaskCardData) => void;
+    onExcludeTaskFromMeeting?: (task: TaskCardData) => void;
     canDragTasks: boolean;
+    canExcludeFromMeeting: boolean;
     collapsedSections: Record<string, boolean>;
     onToggleSection: (groupKey: string) => void;
 }) {
@@ -293,7 +303,9 @@ function KanbanColumn({
                                                             key={task.id}
                                                             task={task}
                                                             onDoubleClick={() => onTaskDoubleClick(task)}
+                                                            onExcludeFromMeeting={() => onExcludeTaskFromMeeting?.(task)}
                                                             isDragEnabled={canDragTasks}
+                                                            canExcludeFromMeeting={canExcludeFromMeeting}
                                                         />
                                                     ))}
                                                 </div>
@@ -329,22 +341,26 @@ interface KanbanBoardProps {
     tasks: TaskCardData[];
     onTaskDoubleClick: (task: TaskCardData) => void;
     onTaskStatusChange: (taskId: string, nextStatus: TaskStatus) => void;
+    onExcludeTaskFromMeeting?: (task: TaskCardData) => void;
     searchQuery: string;
     filters: TaskFilters;
     sortOption: TaskSortOption;
     serialNumberByTaskId: Record<string, number>;
     canDragTasks?: boolean;
+    canExcludeFromMeeting?: boolean;
 }
 
 export default function KanbanBoard({
     tasks,
     onTaskDoubleClick,
     onTaskStatusChange,
+    onExcludeTaskFromMeeting,
     searchQuery,
     filters,
     sortOption,
     serialNumberByTaskId,
     canDragTasks = true,
+    canExcludeFromMeeting = false,
 }: KanbanBoardProps) {
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
     const [collapsedColumns, setCollapsedColumns] = useState<Record<TaskStatus, boolean>>(initialCollapsedState);
@@ -470,7 +486,9 @@ export default function KanbanBoard({
                                 isCollapsed={collapsedColumns[column.title]}
                                 onToggleCollapse={() => handleToggleColumn(column.title)}
                                 onTaskDoubleClick={onTaskDoubleClick}
+                                onExcludeTaskFromMeeting={onExcludeTaskFromMeeting}
                                 canDragTasks={canDragTasks}
+                                canExcludeFromMeeting={canExcludeFromMeeting}
                                 collapsedSections={collapsedSections}
                                 onToggleSection={(employeeName) => handleToggleSection(column.title, employeeName)}
                             />
