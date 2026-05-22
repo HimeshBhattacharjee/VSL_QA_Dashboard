@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
@@ -13,7 +14,7 @@ interface SidebarItemProps {
     item: {
         id: string;
         label: string;
-        icon: string;
+        icon: ReactNode;
         path: string | null;
         children: Child[] | null;
     };

@@ -4,6 +4,7 @@ motor
 pymongo
 boto3
 openpyxl
+Pillow>=10.0.0
 pandas
 numpy
 fuzzywuzzy

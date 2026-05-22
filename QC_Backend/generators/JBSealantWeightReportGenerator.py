@@ -4,6 +4,7 @@ import io
 from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
+from excel_image_utils import copy_worksheet_images
 
 JB_PASS_MIN = 4
 JB_PASS_MAX = 10
@@ -212,14 +213,17 @@ def generate_jb_sealant_report(jb_data):
         # Load workbook
         wb = load_workbook(template_path)
         
+        template_sheet = wb.active
+
         # Create sheets for each day of the month
         for day in range(1, days_in_month + 1):
             date_str = f"{year}-{month:02d}-{day:02d}"
             formatted_date = f"{day:02d}.{month:02d}.{year}"
             
             # Create new sheet by copying template
-            new_sheet = wb.copy_worksheet(wb.active)
+            new_sheet = wb.copy_worksheet(template_sheet)
             new_sheet.title = formatted_date
+            copy_worksheet_images(template_sheet, new_sheet)
             
             # Get entries for this date
             date_entries = entries_by_date.get(date_str, [])
@@ -230,7 +234,7 @@ def generate_jb_sealant_report(jb_data):
         
         # Remove the original template sheet (first sheet)
         if len(wb.worksheets) > 1:
-            wb.remove(wb.worksheets[0])
+            wb.remove(template_sheet)
         
         # Save to BytesIO
         output = io.BytesIO()

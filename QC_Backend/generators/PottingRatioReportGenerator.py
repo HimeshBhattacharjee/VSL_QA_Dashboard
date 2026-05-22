@@ -4,6 +4,7 @@ import io
 from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
+from excel_image_utils import copy_worksheet_images
 
 def get_display_line_numbers(line_group):
     return ('3', '4') if line_group == 'Line-II' else ('1', '2')
@@ -145,6 +146,7 @@ def generate_potting_report(potting_data):
             # Create new sheet by copying template
             new_sheet = wb.copy_worksheet(template_sheet)
             new_sheet.title = formatted_date
+            copy_worksheet_images(template_sheet, new_sheet)
             
             # Get entries for this date
             date_entries = entries_by_date.get(date_str, [])

@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, type ReactNode } from 'react';
+import { BarChart3, ClipboardList, FlaskConical, Home, ShieldCheck, X } from 'lucide-react';
 import SidebarItem from './SidebarItem';
 import {
     getCurrentTaskManagementRole,
@@ -17,7 +17,7 @@ interface ChildItem {
 interface MenuItem {
     id: string;
     label: string;
-    icon: string;
+    icon: ReactNode;
     path: string | null;
     children: ChildItem[] | null;
 }
@@ -39,14 +39,14 @@ const MENU_ITEMS: MenuItem[] = [
     {
         id: 'home',
         label: 'Home',
-        icon: '🏠',
+        icon: <Home size={18} />,
         path: '/home',
         children: null,
     },
     {
         id: 'task-management',
         label: 'Task Management',
-        icon: '🗂️',
+        icon: <ClipboardList size={18} />,
         path: null,
         children: [
             { id: 'daily-meeting', label: 'Daily Meeting', path: '/daily-meeting' },
@@ -56,7 +56,7 @@ const MENU_ITEMS: MenuItem[] = [
     {
         id: 'quality-tests',
         label: 'Quality Tests',
-        icon: '🧪',
+        icon: <FlaskConical size={18} />,
         path: null,
         children: [
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
@@ -73,7 +73,7 @@ const MENU_ITEMS: MenuItem[] = [
     {
         id: 'quality-analysis',
         label: 'Quality Analysis',
-        icon: '📈',
+        icon: <BarChart3 size={18} />,
         path: null,
         children: [
             { id: 'b-grade', label: 'B-Grade', path: '/b-grade-trend' },
@@ -85,7 +85,7 @@ const MENU_ITEMS: MenuItem[] = [
     {
         id: 'audits',
         label: 'Audits',
-        icon: '📋',
+        icon: <ShieldCheck size={18} />,
         path: null,
         children: [
             { id: 'ipqc-audit', label: 'IPQC Audits', path: '/quality-audit' },
@@ -198,7 +198,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <div className="p-4">
                     <div className="text-center">
                         <p className="text-xs font-semibold text-gray-500">VSL Quality Control</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">© 2026</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">(c) 2026</p>
                     </div>
                 </div>
             </aside>
