@@ -3,11 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import TestHeading from '../components/TestHeading';
+import FabLineSelectionModal from '../components/FabLineSelectionModal';
 import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Trash2, Save, X, BarChart3, Percent, Target, TrendingUp } from 'lucide-react';
+import {
+    DEFAULT_LINE_GROUP,
+    LINE_GROUPS,
+    buildLineWiseMonthlyStats,
+    getLineEntryKey,
+    getLineGroupLabel,
+    getMonthLineSignatures,
+    migrateMonthLineSignatures,
+    normalizeDateString,
+    normalizeLineGroup,
+    setMonthLineSignatures,
+    type LineGroup,
+    type MonthLineSignatureData,
+    type MonthlyStats
+} from '../utilities/lineWiseTestUtils';
 
 interface DailyEntry {
     date: string;
     testingDate: string;
+    lineGroup?: LineGroup;
     po: string;
     moduleType: string;
     moduleNo: string;
@@ -23,15 +40,7 @@ interface DailyEntry {
     result: 'Pass' | 'Fail' | '';
     testDoneBy: string;
     remarks?: string;
-    [key: string]: string | boolean | undefined;
-}
-
-interface MonthlyStats {
-    totalDays: number;
-    filledDays: number;
-    completionRate: number;
-    passCount: number;
-    failCount: number;
+    [key: string]: unknown;
 }
 
 interface SignatureData {
@@ -40,17 +49,17 @@ interface SignatureData {
     approvedBy: string;
 }
 
-// Add interface for month-specific signatures
-interface MonthSignatureData {
-    [key: string]: SignatureData; // Key format: "YYYY-MM"
-}
-
 // Default empty signature
 const defaultSignature: SignatureData = {
     preparedBy: '',
     reviewedBy: '',
     approvedBy: ''
 };
+
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+] as const;
 
 const WET_LEAKAGE_PASS_THRESHOLD = 40;
 
@@ -125,7 +134,7 @@ const normalizeWetLeakageEntry = (entry: DailyEntry): DailyEntry => ({
 const getEntryValidationMessage = (entry: DailyEntry): string | null => {
     const requiredDetails = entryRequiredFields.map(({ key, label }) => ({
         label,
-        value: normalizeFieldValue(entry[key])
+        value: normalizeFieldValue(entry[key] as string | number | undefined)
     }));
 
     const filledDetails = requiredDetails.filter(({ value }) => value !== '');
@@ -155,7 +164,11 @@ export default function WetLeakageTest() {
 
     // Date management
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const months = useMemo(() => [...MONTH_NAMES], []);
+    const [selectedDate, setSelectedDate] = useState<string>('');
+    const [selectedLineGroup, setSelectedLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
+    const [showLineSelector, setShowLineSelector] = useState(false);
+    const [showExportLineSelector, setShowExportLineSelector] = useState(false);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
     const [isEditing, setIsEditing] = useState(false);
 
@@ -170,9 +183,9 @@ export default function WetLeakageTest() {
     });
 
     // Store all month signatures
-    const [allMonthSignatures, setAllMonthSignatures] = useState<MonthSignatureData>(() => {
+    const [allMonthSignatures, setAllMonthSignatures] = useState<MonthLineSignatureData<SignatureData>>(() => {
         const saved = localStorage.getItem('wetLeakageAllMonthSignatures');
-        return saved ? JSON.parse(saved) : {};
+        return migrateMonthLineSignatures(saved, defaultSignature, months);
     });
 
     const { showAlert } = useAlert();
@@ -180,34 +193,23 @@ export default function WetLeakageTest() {
     const WET_LEAKAGE_API_BASE_URL = import.meta.env.VITE_API_URL + '/wet-leakage-test-reports';
 
     // Helper to normalize dates to YYYY-MM-DD format
-    const normalizeDate = useCallback((dateStr: string) => {
-        if (!dateStr) return '';
-        return dateStr.split('T')[0];
-    }, []);
-
-    // Get current month key (YYYY-MM)
-    const getCurrentMonthKey = useCallback(() => {
-        const year = currentDate.getFullYear();
-        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-        return `${year}-${month}`;
-    }, [currentDate]);
+    const normalizeDate = useCallback(normalizeDateString, []);
 
     // Get signatures for current month
     const currentMonthSignatures = useMemo(() => {
-        const monthKey = getCurrentMonthKey();
-        return allMonthSignatures[monthKey] || { ...defaultSignature };
-    }, [allMonthSignatures, getCurrentMonthKey]);
+        return getMonthLineSignatures(
+            allMonthSignatures,
+            currentDate.getFullYear(),
+            months[currentDate.getMonth()],
+            selectedLineGroup,
+            defaultSignature
+        );
+    }, [allMonthSignatures, currentDate, months, selectedLineGroup]);
 
     // Save all month signatures to localStorage whenever they change
     useEffect(() => {
         localStorage.setItem('wetLeakageAllMonthSignatures', JSON.stringify(allMonthSignatures));
     }, [allMonthSignatures]);
-
-    // Months and years for navigation
-    const months = useMemo(() => [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ], []);
 
     const years = useMemo(() => Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i), [currentDate]);
 
@@ -226,20 +228,13 @@ export default function WetLeakageTest() {
             console.log(`Loading data for ${year}-${month}`);
 
             const entriesUrl = `${WET_LEAKAGE_API_BASE_URL}/entries/monthly?year=${year}&month=${month}`;
-            const statsUrl = `${WET_LEAKAGE_API_BASE_URL}/stats/monthly?year=${year}&month=${month}`;
 
-            // Make both API calls in parallel
-            const [entriesResponse, statsResponse] = await Promise.all([
-                fetch(entriesUrl),
-                fetch(statsUrl)
-            ]);
+            const entriesResponse = await fetch(entriesUrl);
 
             // Parse responses
             const entriesJson = await entriesResponse.json();
-            const statsJson = await statsResponse.json();
 
             console.log('Entries response:', entriesJson);
-            console.log('Stats response:', statsJson);
 
             // Extract entries data
             let entriesArr: DailyEntry[] = [];
@@ -255,30 +250,30 @@ export default function WetLeakageTest() {
             const entriesMap = new Map<string, DailyEntry>();
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
-                entriesMap.set(normalizedDate, normalizeWetLeakageEntry({
+                const lineGroup = normalizeLineGroup(entry.lineGroup);
+                entriesMap.set(getLineEntryKey(normalizedDate, lineGroup), normalizeWetLeakageEntry({
                     ...entry,
-                    date: normalizedDate
+                    date: normalizedDate,
+                    testingDate: normalizeDate(entry.testingDate || normalizedDate),
+                    lineGroup
                 }));
             });
 
             setMonthlyEntries(entriesMap);
 
-            // Extract stats data
-            let statsData = statsJson.data || statsJson;
-            const newStats = {
-                totalDays: statsData.totalDays || new Date(year, month - 1, 0).getDate(),
-                filledDays: statsData.filledDays || 0,
-                completionRate: statsData.completionRate || 0,
-                passCount: statsData.passCount || 0,
-                failCount: statsData.failCount || 0
-            };
+            const newStats = buildLineWiseMonthlyStats(
+                entriesMap.values(),
+                new Date(year, month, 0).getDate(),
+                entry => isWetLeakagePass(entry.IR),
+                entry => isWetLeakageFail(entry.IR)
+            );
 
             console.log('Setting stats:', newStats);
             setMonthlyStats(newStats);
 
             // If there was a previously selected date, try to load its entry
             if (selectedDate) {
-                const entry = entriesMap.get(selectedDate);
+                const entry = entriesMap.get(getLineEntryKey(selectedDate, selectedLineGroup));
                 if (entry) {
                     setCurrentEntry(entry);
                     setIsEditing(true);
@@ -290,7 +285,7 @@ export default function WetLeakageTest() {
             // Set empty data on error
             setMonthlyEntries(new Map());
             setMonthlyStats({
-                totalDays: new Date(year, month - 1, 0).getDate(),
+                totalDays: new Date(year, month, 0).getDate() * LINE_GROUPS.length,
                 filledDays: 0,
                 completionRate: 0,
                 passCount: 0,
@@ -299,7 +294,7 @@ export default function WetLeakageTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [WET_LEAKAGE_API_BASE_URL, selectedDate, normalizeDate]);
+    }, [WET_LEAKAGE_API_BASE_URL, selectedDate, selectedLineGroup, normalizeDate]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
@@ -312,64 +307,89 @@ export default function WetLeakageTest() {
     const handlePrevMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setCurrentEntry(null);
+        setShowLineSelector(false);
     }, []);
 
     const handleNextMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setCurrentEntry(null);
+        setShowLineSelector(false);
     }, []);
 
     const handleMonthChange = useCallback((monthIndex: number) => {
         setCurrentDate(prev => new Date(prev.getFullYear(), monthIndex, 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setCurrentEntry(null);
+        setShowLineSelector(false);
     }, []);
 
     const handleYearChange = useCallback((year: number) => {
         setCurrentDate(prev => new Date(year, prev.getMonth(), 1));
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setCurrentEntry(null);
+        setShowLineSelector(false);
     }, []);
 
     // Handle date selection
     const handleDateSelect = useCallback((date: string) => {
         const normalized = normalizeDate(date);
         setSelectedDate(normalized);
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
+        setCurrentEntry(null);
+        setShowLineSelector(true);
+    }, [normalizeDate]);
 
-        // Get entry from already loaded monthly data
-        const entry = monthlyEntries.get(normalized);
+    const createEmptyEntry = useCallback((date: string, lineGroup: LineGroup): DailyEntry => ({
+        date,
+        testingDate: date,
+        lineGroup,
+        po: '',
+        moduleType: '',
+        moduleNo: '',
+        cellSupplier: '',
+        encapsulantSupplier: '',
+        rearGlassSupplier: '',
+        jbSupplier: '',
+        adhesiveSealantSupplier: '',
+        pottingSealantSupplier: '',
+        waterTemp: '',
+        waterResistivity: '',
+        IR: '',
+        result: '',
+        testDoneBy: username || '',
+        remarks: ''
+    }), [username]);
+
+    const handleLineSelect = useCallback((lineGroup: LineGroup) => {
+        if (!selectedDate) return;
+
+        setSelectedLineGroup(lineGroup);
+        setShowLineSelector(false);
+
+        const entry = monthlyEntries.get(getLineEntryKey(selectedDate, lineGroup));
 
         if (entry) {
             console.log('Loading existing entry:', entry);
             setCurrentEntry(normalizeWetLeakageEntry(entry));
             setIsEditing(true);
         } else {
-            console.log('Creating new entry for date:', normalized);
-            // Create new blank entry for this date
-            setCurrentEntry({
-                date: normalized,
-                testingDate: normalized,
-                po: '',
-                moduleType: '',
-                moduleNo: '',
-                cellSupplier: '',
-                encapsulantSupplier: '',
-                rearGlassSupplier: '',
-                jbSupplier: '',
-                adhesiveSealantSupplier: '',
-                pottingSealantSupplier: '',
-                waterTemp: '',
-                waterResistivity: '',
-                IR: '',
-                result: '',
-                testDoneBy: username || '',
-                remarks: ''
-            });
+            console.log('Creating new entry for date:', selectedDate, 'line:', lineGroup);
+            setCurrentEntry(createEmptyEntry(selectedDate, lineGroup));
             setIsEditing(false);
         }
-    }, [monthlyEntries, username, normalizeDate]);
+    }, [selectedDate, monthlyEntries, createEmptyEntry]);
+
+    const handleCloseLineSelector = useCallback(() => {
+        setShowLineSelector(false);
+        setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
+    }, []);
 
     const handleTodayEntry = useCallback(() => {
         const today = new Date().toISOString().split('T')[0];
@@ -412,7 +432,12 @@ export default function WetLeakageTest() {
 
         setIsLoading(true);
         try {
-            const entryToSave = normalizeWetLeakageEntry(currentEntry);
+            const entryToSave = normalizeWetLeakageEntry({
+                ...currentEntry,
+                lineGroup: selectedLineGroup,
+                date: normalizeDate(currentEntry.date),
+                testingDate: normalizeDate(currentEntry.testingDate)
+            });
             console.log('Saving entry:', entryToSave);
 
             const response = await fetch(`${WET_LEAKAGE_API_BASE_URL}/entries`, {
@@ -430,21 +455,28 @@ export default function WetLeakageTest() {
             console.log('Save response:', result);
 
             // Update local state with the saved entry
-            if (result.data && result.data.entry) {
-                const saved = normalizeWetLeakageEntry(result.data.entry as DailyEntry);
-                const normalized = normalizeDate(saved.date);
-                const updatedEntries = new Map(monthlyEntries);
-                updatedEntries.set(normalized, { ...saved, date: normalized });
-                setMonthlyEntries(updatedEntries);
-                setCurrentEntry({ ...saved, date: normalized });
-                setIsEditing(true);
-            }
+            const saved = normalizeWetLeakageEntry((result.data && result.data.entry ? result.data.entry : entryToSave) as DailyEntry);
+            const normalized = normalizeDate(saved.date);
+            const savedLineGroup = normalizeLineGroup(saved.lineGroup);
+            const normalizedSavedEntry = normalizeWetLeakageEntry({
+                ...saved,
+                date: normalized,
+                testingDate: normalizeDate(saved.testingDate || normalized),
+                lineGroup: savedLineGroup
+            });
+            const updatedEntries = new Map(monthlyEntries);
+            updatedEntries.set(getLineEntryKey(normalized, savedLineGroup), normalizedSavedEntry);
+            setMonthlyEntries(updatedEntries);
+            setCurrentEntry(normalizedSavedEntry);
+            setSelectedLineGroup(savedLineGroup);
+            setIsEditing(true);
 
-            // Update stats
-            if (result.data && result.data.stats) {
-                console.log('Updating stats:', result.data.stats);
-                setMonthlyStats(result.data.stats);
-            }
+            setMonthlyStats(buildLineWiseMonthlyStats(
+                updatedEntries.values(),
+                new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate(),
+                entry => isWetLeakagePass(entry.IR),
+                entry => isWetLeakageFail(entry.IR)
+            ));
 
             setHasUnsavedChanges(false);
             showAlert('success', result.message || 'Entry saved successfully');
@@ -455,14 +487,15 @@ export default function WetLeakageTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentEntry, monthlyEntries, WET_LEAKAGE_API_BASE_URL, showAlert, normalizeDate]);
+    }, [currentEntry, selectedLineGroup, monthlyEntries, WET_LEAKAGE_API_BASE_URL, showAlert, normalizeDate, currentDate]);
 
     const handleDeleteEntry = useCallback(() => {
         if (!currentEntry) return;
+        const lineGroup = normalizeLineGroup(currentEntry.lineGroup || selectedLineGroup);
 
         showConfirm({
             title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate}?`,
+            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} - ${getLineGroupLabel(lineGroup)}?`,
             type: 'warning',
             confirmText: 'Delete',
             cancelText: 'Cancel',
@@ -470,7 +503,7 @@ export default function WetLeakageTest() {
                 setIsLoading(true);
                 try {
                     const dateKey = normalizeDate(currentEntry.date);
-                    const response = await fetch(`${WET_LEAKAGE_API_BASE_URL}/entries/${dateKey}`, {
+                    const response = await fetch(`${WET_LEAKAGE_API_BASE_URL}/entries/${dateKey}/${lineGroup}`, {
                         method: 'DELETE',
                     });
 
@@ -478,20 +511,23 @@ export default function WetLeakageTest() {
                         throw new Error('Failed to delete entry');
                     }
 
-                    const result = await response.json();
+                    await response.json();
 
                     // Update local state
                     const updatedEntries = new Map(monthlyEntries);
-                    updatedEntries.delete(dateKey);
+                    updatedEntries.delete(getLineEntryKey(dateKey, lineGroup));
                     setMonthlyEntries(updatedEntries);
 
-                    // Update stats
-                    if (result.data && result.data.stats) {
-                        setMonthlyStats(result.data.stats);
-                    }
+                    setMonthlyStats(buildLineWiseMonthlyStats(
+                        updatedEntries.values(),
+                        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate(),
+                        entry => isWetLeakagePass(entry.IR),
+                        entry => isWetLeakageFail(entry.IR)
+                    ));
 
                     setCurrentEntry(null);
                     setSelectedDate('');
+                    setSelectedLineGroup(DEFAULT_LINE_GROUP);
                     showAlert('info', 'Entry deleted successfully');
                 } catch (error) {
                     console.error('Error deleting entry:', error);
@@ -501,10 +537,10 @@ export default function WetLeakageTest() {
                 }
             }
         });
-    }, [currentEntry, monthlyEntries, WET_LEAKAGE_API_BASE_URL, showAlert, showConfirm, normalizeDate]);
+    }, [currentEntry, selectedLineGroup, monthlyEntries, WET_LEAKAGE_API_BASE_URL, showAlert, showConfirm, normalizeDate, currentDate]);
 
     // Export monthly Excel report
-    const handleExportMonthlyExcel = useCallback(async () => {
+    const handleExportMonthlyExcel = useCallback(async (exportLineGroup: LineGroup) => {
         const monthName = months[currentDate.getMonth()];
         const year = currentDate.getFullYear();
         const firstThreeLetters = monthName.substring(0, 3);
@@ -521,13 +557,33 @@ export default function WetLeakageTest() {
             const monthlyResp = await fetch(`${WET_LEAKAGE_API_BASE_URL}/entries/monthly?year=${year}&month=${month}`);
             if (!monthlyResp.ok) throw new Error('Failed to fetch monthly entries');
             const monthlyJson = await monthlyResp.json();
-            const entriesArray = Array.isArray(monthlyJson?.data) ? monthlyJson.data : [];
+            const entriesByDate = new Map<string, DailyEntry>();
+            (Array.isArray(monthlyJson?.data) ? monthlyJson.data : [])
+                .filter((entry: DailyEntry) => normalizeLineGroup(entry.lineGroup) === exportLineGroup)
+                .forEach((entry: DailyEntry) => {
+                    const normalizedDate = normalizeDate(entry.date);
+                    entriesByDate.set(normalizedDate, normalizeWetLeakageEntry({
+                        ...entry,
+                        date: normalizedDate,
+                        testingDate: normalizeDate(entry.testingDate || entry.date),
+                        lineGroup: exportLineGroup
+                    }));
+                });
+            const entriesArray = Array.from(entriesByDate.values());
+
+            const exportSignatures = getMonthLineSignatures(
+                allMonthSignatures,
+                year,
+                monthName,
+                exportLineGroup,
+                defaultSignature
+            );
 
             // Get signatures from current month state
             const formData = {
-                preparedBySignature: currentMonthSignatures.preparedBy,
-                reviewedBySignature: currentMonthSignatures.reviewedBy,
-                approvedBySignature: currentMonthSignatures.approvedBy
+                preparedBySignature: exportSignatures.preparedBy,
+                reviewedBySignature: exportSignatures.reviewedBy,
+                approvedBySignature: exportSignatures.approvedBy
             };
 
             const wetLeakageReportData = {
@@ -565,12 +621,14 @@ export default function WetLeakageTest() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, WET_LEAKAGE_API_BASE_URL, showAlert, currentMonthSignatures]);
+    }, [currentDate, months, WET_LEAKAGE_API_BASE_URL, showAlert, normalizeDate, allMonthSignatures]);
 
     // Reset form
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
         setSelectedDate('');
+        setSelectedLineGroup(DEFAULT_LINE_GROUP);
+        setShowLineSelector(false);
         setHasUnsavedChanges(false);
     }, []);
 
@@ -612,20 +670,22 @@ export default function WetLeakageTest() {
         // Actual days
         for (let i = 1; i <= daysInMonth; i++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-            const entry = monthlyEntries.get(dateStr);
+            const dateEntries = LINE_GROUPS
+                .map(lineGroup => monthlyEntries.get(getLineEntryKey(dateStr, lineGroup)))
+                .filter((entry): entry is DailyEntry => Boolean(entry));
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDate;
 
             let statusClass = 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
             let statusIcon = null;
 
-            if (entry) {
-                if (isWetLeakagePass(entry.IR)) {
-                    statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
-                    statusIcon = <CheckCircle className="w-4 h-4 text-green-500" />;
-                } else if (isWetLeakageFail(entry.IR)) {
+            if (dateEntries.length > 0) {
+                if (dateEntries.some(entry => isWetLeakageFail(entry.IR))) {
                     statusClass = 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700';
                     statusIcon = <AlertCircle className="w-4 h-4 text-red-500" />;
+                } else if (dateEntries.some(entry => isWetLeakagePass(entry.IR))) {
+                    statusClass = 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+                    statusIcon = <CheckCircle className="w-4 h-4 text-green-500" />;
                 }
             }
 
@@ -638,7 +698,7 @@ export default function WetLeakageTest() {
                         ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : statusClass}
                         ${isToday ? 'font-bold' : ''}
                         hover:shadow-md hover:-translate-y-0.5
-                        ${!entry ? 'hover:border-blue-300' : ''}
+                        ${dateEntries.length === 0 ? 'hover:border-blue-300' : ''}
                     `}
                 >
                     <div className="flex items-center justify-between">
@@ -659,8 +719,15 @@ export default function WetLeakageTest() {
             return;
         }
 
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+        const signatureYear = currentDate.getFullYear();
+        const signatureMonth = months[currentDate.getMonth()];
+        const currentSignatures = getMonthLineSignatures(
+            allMonthSignatures,
+            signatureYear,
+            signatureMonth,
+            selectedLineGroup,
+            defaultSignature
+        );
 
         let currentSignature = '';
         switch (section) {
@@ -696,18 +763,23 @@ export default function WetLeakageTest() {
             return;
         }
 
-        // Update signatures for current month
-        setAllMonthSignatures(prev => ({
-            ...prev,
-            [monthKey]: {
-                ...(prev[monthKey] || defaultSignature),
-                [`${section}By`]: username
-            }
-        }));
+        const signatureKey = `${section}By` as keyof SignatureData;
+        const updatedSignatures = {
+            ...currentSignatures,
+            [signatureKey]: username
+        };
+
+        setAllMonthSignatures(prev => setMonthLineSignatures(
+            prev,
+            signatureYear,
+            signatureMonth,
+            selectedLineGroup,
+            updatedSignatures
+        ));
 
         setHasUnsavedChanges(true);
-        showAlert('success', `Signature added to ${section} section for ${monthKey}`);
-    }, [username, userRole, allMonthSignatures, getCurrentMonthKey, showAlert]);
+        showAlert('success', `Signature added to ${section} section for ${signatureMonth} ${signatureYear} - ${getLineGroupLabel(selectedLineGroup)}`);
+    }, [username, userRole, allMonthSignatures, currentDate, months, selectedLineGroup, showAlert]);
 
     const handleRemoveSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) {
@@ -715,8 +787,15 @@ export default function WetLeakageTest() {
             return;
         }
 
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+        const signatureYear = currentDate.getFullYear();
+        const signatureMonth = months[currentDate.getMonth()];
+        const currentSignatures = getMonthLineSignatures(
+            allMonthSignatures,
+            signatureYear,
+            signatureMonth,
+            selectedLineGroup,
+            defaultSignature
+        );
 
         let currentSignature = '';
         switch (section) {
@@ -736,24 +815,34 @@ export default function WetLeakageTest() {
             return;
         }
 
-        // Update signatures for current month
-        setAllMonthSignatures(prev => ({
-            ...prev,
-            [monthKey]: {
-                ...(prev[monthKey] || defaultSignature),
-                [`${section}By`]: ''
-            }
-        }));
+        const signatureKey = `${section}By` as keyof SignatureData;
+        const updatedSignatures = {
+            ...currentSignatures,
+            [signatureKey]: ''
+        };
+
+        setAllMonthSignatures(prev => setMonthLineSignatures(
+            prev,
+            signatureYear,
+            signatureMonth,
+            selectedLineGroup,
+            updatedSignatures
+        ));
 
         setHasUnsavedChanges(true);
-        showAlert('info', `Signature removed from ${section} section for ${monthKey}`);
-    }, [username, allMonthSignatures, getCurrentMonthKey, showAlert]);
+        showAlert('info', `Signature removed from ${section} section for ${signatureMonth} ${signatureYear} - ${getLineGroupLabel(selectedLineGroup)}`);
+    }, [username, allMonthSignatures, currentDate, months, selectedLineGroup, showAlert]);
 
     const canAddSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) return false;
 
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+        const currentSignatures = getMonthLineSignatures(
+            allMonthSignatures,
+            currentDate.getFullYear(),
+            months[currentDate.getMonth()],
+            selectedLineGroup,
+            defaultSignature
+        );
 
         let currentSignature = '';
         switch (section) {
@@ -782,13 +871,18 @@ export default function WetLeakageTest() {
             default:
                 return false;
         }
-    }, [username, userRole, allMonthSignatures, getCurrentMonthKey]);
+    }, [username, userRole, allMonthSignatures, currentDate, months, selectedLineGroup]);
 
     const canRemoveSignature = useCallback((section: 'prepared' | 'reviewed' | 'approved') => {
         if (!username) return false;
 
-        const monthKey = getCurrentMonthKey();
-        const currentSignatures = allMonthSignatures[monthKey] || { ...defaultSignature };
+        const currentSignatures = getMonthLineSignatures(
+            allMonthSignatures,
+            currentDate.getFullYear(),
+            months[currentDate.getMonth()],
+            selectedLineGroup,
+            defaultSignature
+        );
 
         let currentSignature = '';
         switch (section) {
@@ -804,7 +898,7 @@ export default function WetLeakageTest() {
         }
 
         return currentSignature.includes(username);
-    }, [username, allMonthSignatures, getCurrentMonthKey]);
+    }, [username, allMonthSignatures, currentDate, months, selectedLineGroup]);
 
     return (
         <>
@@ -825,6 +919,25 @@ export default function WetLeakageTest() {
                         </div>
                     </div>
                 )}
+                <FabLineSelectionModal
+                    isOpen={showExportLineSelector}
+                    title="Export Data"
+                    question="Export data for:"
+                    selectedLineGroup={selectedLineGroup}
+                    onLineSelect={(lineGroup) => {
+                        setShowExportLineSelector(false);
+                        void handleExportMonthlyExcel(lineGroup);
+                    }}
+                    onClose={() => setShowExportLineSelector(false)}
+                />
+                <FabLineSelectionModal
+                    isOpen={showLineSelector && Boolean(selectedDate)}
+                    title="Select Line"
+                    question="Which line do you want to fill details for?"
+                    selectedLineGroup={selectedLineGroup}
+                    onLineSelect={handleLineSelect}
+                    onClose={handleCloseLineSelector}
+                />
                 <TestHeading
                     heading="Wet Leakage Test"
                     criteria="Recipe: Apply 1500 V for 120 seconds; Passing Criteria: IR > 40MΩ /m2"
@@ -884,7 +997,7 @@ export default function WetLeakageTest() {
                                         </button>
 
                                         <button
-                                            onClick={handleExportMonthlyExcel}
+                                            onClick={() => setShowExportLineSelector(true)}
                                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
                                             title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
                                         >
@@ -933,7 +1046,7 @@ export default function WetLeakageTest() {
                                                 year: 'numeric',
                                                 month: 'long',
                                                 day: 'numeric'
-                                            })}
+                                            })} - {getLineGroupLabel(normalizeLineGroup(currentEntry.lineGroup))}
                                         </h3>
                                         <div className="flex gap-2">
                                             {isEditing && (
@@ -1202,7 +1315,7 @@ export default function WetLeakageTest() {
                                         {monthlyStats.completionRate}%
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">
-                                        {monthlyStats.filledDays} / {monthlyStats.totalDays} days
+                                        {monthlyStats.filledDays} / {monthlyStats.totalDays} line entries
                                     </div>
                                 </div>
 
@@ -1230,15 +1343,15 @@ export default function WetLeakageTest() {
                                 </h3>
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Total Days</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Total Line Entries</span>
                                         <span className="font-semibold dark:text-white">{monthlyStats.totalDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Filled Days</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Filled Line Entries</span>
                                         <span className="font-semibold text-green-600">{monthlyStats.filledDays}</span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <span className="text-gray-600 dark:text-gray-400">Missing Days</span>
+                                        <span className="text-gray-600 dark:text-gray-400">Missing Line Entries</span>
                                         <span className="font-semibold text-red-500">{monthlyStats.totalDays - monthlyStats.filledDays}</span>
                                     </div>
                                 </div>
@@ -1284,7 +1397,7 @@ export default function WetLeakageTest() {
                 </div>
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mt-6">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">
-                        Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
+                        Signatures for {months[currentDate.getMonth()]} {currentDate.getFullYear()} - {getLineGroupLabel(selectedLineGroup)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="text-center">

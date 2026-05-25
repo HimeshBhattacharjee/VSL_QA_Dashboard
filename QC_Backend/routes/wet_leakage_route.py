@@ -24,6 +24,9 @@ ENTRY_REQUIRED_FIELDS = [
     ("testDoneBy", "Test Done By"),
 ]
 
+def _normalize_line_group(line_group):
+    return 'Line-II' if str(line_group or '').endswith('Line-II') or str(line_group or '') == 'Line-II' else 'Line-I'
+
 
 def normalize_field_value(value):
     if value is None:
@@ -88,7 +91,7 @@ def get_entry_validation_message(entry):
 def build_default_monthly_stats(year, month):
     days_in_month = calendar.monthrange(year, month)[1]
     return {
-        "totalDays": days_in_month,
+        "totalDays": days_in_month * 2,
         "filledDays": 0,
         "completionRate": 0,
         "passCount": 0,
@@ -102,10 +105,11 @@ def build_monthly_stats(year, month):
     filled_days = len(entries)
     pass_count = sum(1 for entry in entries if get_entry_result(entry) == "Pass")
     fail_count = sum(1 for entry in entries if get_entry_result(entry) == "Fail")
-    completion_rate = round((filled_days / days_in_month) * 100) if days_in_month > 0 else 0
+    total_possible_entries = days_in_month * 2
+    completion_rate = round((filled_days / total_possible_entries) * 100) if total_possible_entries > 0 else 0
 
     return {
-        "totalDays": days_in_month,
+        "totalDays": total_possible_entries,
         "filledDays": filled_days,
         "completionRate": completion_rate,
         "passCount": pass_count,
@@ -137,11 +141,22 @@ def serialize_doc(doc):
     except Exception:
         pass
     doc_copy["result"] = get_entry_result(doc_copy)
+    doc_copy["lineGroup"] = _normalize_line_group(doc_copy.get("lineGroup"))
     return doc_copy
 
 def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
+
+def _legacy_line_i_filter(date_key):
+    return {"date": date_key, "lineGroup": {"$exists": False}}
+
+def _entry_update_filter(entry):
+    if entry.get("lineGroup") == "Line-I":
+        legacy_entry = wet_leakage_entries_collection.find_one(_legacy_line_i_filter(entry["date"]))
+        if legacy_entry:
+            return {"_id": legacy_entry["_id"]} if "_id" in legacy_entry else {"date": entry["date"]}
+    return {"date": entry["date"], "lineGroup": entry["lineGroup"]}
 
 @wet_leakage_router.get("/entries/monthly")
 async def get_monthly_entries(
@@ -174,7 +189,22 @@ async def get_entry(date: str):
     try:
         # Normalize incoming date param to YYYY-MM-DD (strip time if present)
         date_key = date.split('T')[0]
-        entry = wet_leakage_entries_collection.find_one({"date": date_key})
+        entry = wet_leakage_entries_collection.find_one({"date": date_key, "lineGroup": "Line-I"}) or wet_leakage_entries_collection.find_one(_legacy_line_i_filter(date_key))
+        if entry:
+            return serialize_doc(entry)
+        return None
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entry: {str(e)}")
+
+@wet_leakage_router.get("/entries/{date}/{line_group}")
+async def get_entry_by_line_group(date: str, line_group: str):
+    """Get a single entry by date and FAB-II line group."""
+    try:
+        date_key = date.split('T')[0]
+        normalized_line_group = _normalize_line_group(line_group)
+        entry = wet_leakage_entries_collection.find_one({"date": date_key, "lineGroup": normalized_line_group})
+        if not entry and normalized_line_group == "Line-I":
+            entry = wet_leakage_entries_collection.find_one(_legacy_line_i_filter(date_key))
         if entry:
             return serialize_doc(entry)
         return None
@@ -227,6 +257,7 @@ async def create_entry(entry: dict):
 
         entry = normalize_entry(entry)
         entry["date"] = date_obj.strftime("%Y-%m-%d")
+        entry["lineGroup"] = _normalize_line_group(entry.get("lineGroup"))
         # ensure testingDate matches normalized date
         entry["testingDate"] = entry.get("testingDate") and str(entry.get("testingDate")).split('T')[0] or entry["date"]
         entry["year"] = date_obj.year
@@ -237,15 +268,15 @@ async def create_entry(entry: dict):
         if "_id" in entry:
             del entry["_id"]
         
-        # Upsert by date
+        # Upsert by date and FAB-II line group
         result = wet_leakage_entries_collection.update_one(
-            {"date": entry["date"]},
+            _entry_update_filter(entry),
             {"$set": entry},
             upsert=True
         )
         
         # Get the saved entry
-        saved_entry = wet_leakage_entries_collection.find_one({"date": entry["date"]})
+        saved_entry = wet_leakage_entries_collection.find_one({"date": entry["date"], "lineGroup": entry["lineGroup"]})
         stats = build_monthly_stats(date_obj.year, date_obj.month)
         
         return {
@@ -261,13 +292,18 @@ async def create_entry(entry: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save entry: {str(e)}")
 
-@wet_leakage_router.delete("/entries/{date}")
-async def delete_entry(date: str):
-    """Delete an entry by date"""
+@wet_leakage_router.delete("/entries/{date}/{line_group}")
+async def delete_entry_by_line_group(date: str, line_group: str):
+    """Delete an entry by date and FAB-II line group."""
     try:
         # Normalize date param and get entry first to know year/month for stats
         date_key = str(date).split('T')[0]
-        entry = wet_leakage_entries_collection.find_one({"date": date_key})
+        normalized_line_group = _normalize_line_group(line_group)
+        entry = wet_leakage_entries_collection.find_one({"date": date_key, "lineGroup": normalized_line_group})
+        delete_filter = {"date": date_key, "lineGroup": normalized_line_group}
+        if not entry and normalized_line_group == "Line-I":
+            delete_filter = _legacy_line_i_filter(date_key)
+            entry = wet_leakage_entries_collection.find_one(delete_filter)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
@@ -275,7 +311,7 @@ async def delete_entry(date: str):
         month = entry.get("month")
         
         # Delete the entry
-        result = wet_leakage_entries_collection.delete_one({"date": date_key})
+        result = wet_leakage_entries_collection.delete_one(delete_filter)
         
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Entry not found")
@@ -297,6 +333,11 @@ async def delete_entry(date: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
+
+@wet_leakage_router.delete("/entries/{date}")
+async def delete_entry(date: str):
+    """Delete the Line-I entry by date for backward compatibility."""
+    return await delete_entry_by_line_group(date, "Line-I")
 
 @wet_leakage_router.get("/export/excel")
 async def export_monthly_excel(
