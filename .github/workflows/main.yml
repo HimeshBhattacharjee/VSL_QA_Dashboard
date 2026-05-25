@@ -58,13 +58,13 @@ jobs:
         run: |
           cd ./QC_Backend
           source .venv/bin/activate
-          # pm2 delete qc-backend || true
+          pm2 delete qc-backend || true
           pm2 restart qc-backend || pm2 start python --name qc-backend -- main.py --host 0.0.0.0 --port 8012
 
       - name: Deploy frontend
         run: |
           cd ./QC_Frontend
-          # pm2 delete qc-frontend || true
+          pm2 delete qc-frontend || true
           pm2 restart qc-frontend || pm2 start "npx serve -s dist -l 8010" --name "qc-frontend"
 
 
