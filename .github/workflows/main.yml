@@ -14,6 +14,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Clean runner workspace
+        run: |
+          echo "Disk before cleanup:"
+          df -h
+
+          RUNNER_ROOT="$(cd "$GITHUB_WORKSPACE/../../.." && pwd)"
+
+          rm -rf ./QC_Backend/.venv
+          rm -rf ./QC_Frontend/node_modules ./QC_Frontend/dist
+          rm -rf "$RUNNER_ROOT/_work/_temp"/*
+          find "$RUNNER_ROOT/_diag" -type f -name "*.log" -mtime +3 -delete || true
+
+          python3 -m pip cache purge || true
+          npm cache clean --force || true
+
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Backend build
         run: |
           cd ./QC_Backend
@@ -26,7 +44,7 @@ jobs:
       - name: Frontend build
         run: |
           cd ./QC_Frontend
-          npm install
+          npm ci
           rm -rf .env
           echo "${{ secrets.QP_ENV_FRONTEND }}" > .env
           npm run build

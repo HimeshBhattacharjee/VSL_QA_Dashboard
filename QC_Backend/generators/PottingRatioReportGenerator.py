@@ -4,7 +4,7 @@ import io
 from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
-from excel_image_utils import copy_worksheet_images
+from generators.excel_image_utils import copy_worksheet_images
 
 def get_display_line_numbers(line_group):
     return ('3', '4') if line_group == 'Line-II' else ('1', '2')

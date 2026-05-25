@@ -4,7 +4,7 @@ import io
 from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
-from excel_image_utils import copy_worksheet_images
+from generators.excel_image_utils import copy_worksheet_images
 
 GLASS_GROOVE_TARGETS = {
     'Glass Groove (5.6 mm)': 40,
