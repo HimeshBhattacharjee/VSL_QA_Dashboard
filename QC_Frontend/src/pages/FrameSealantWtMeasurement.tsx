@@ -1313,6 +1313,7 @@ export default function FrameSealantWeightMeasurement() {
                             <option value="Yihua">Yihua</option>
                             <option value="Ralpro">Ralpro</option>
                             <option value="Vishakha Renewables">Vishakha Renewables</option>
+                            <option value="Future Aluminium New Materials">Future Aluminium New Materials</option>
                             <option value="N/A">N/A</option>
                         </select>
                     </div>
