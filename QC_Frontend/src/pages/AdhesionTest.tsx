@@ -30,6 +30,22 @@ const DEFAULT_ADHESION_AVERAGES: AdhesionAverages = {
     backMaxAvg: '0.00',
 };
 
+const ADHESION_FORM_DATA_KEY = 'adhesionTestFormData';
+const ADHESION_EDITING_REPORT_ID_KEY = 'adhesionTestEditingReportId';
+const ADHESION_EDITING_REPORT_DATA_KEY = 'adhesionTestEditingReportData';
+
+const clearAdhesionDraftStorage = () => {
+    sessionStorage.removeItem(ADHESION_FORM_DATA_KEY);
+    sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
+    sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
+};
+
+const cloneAdhesionReport = (report: AdhesionTestReport): AdhesionTestReport => (
+    typeof structuredClone === 'function'
+        ? structuredClone(report)
+        : JSON.parse(JSON.stringify(report))
+);
+
 const calculateAdhesionAverage = (keys: string[], values: { [key: string]: string }): string => {
     let sum = 0;
     let count = 0;
@@ -112,6 +128,8 @@ export default function AdhesionTest() {
 
     // Use ref to store the latest values for real-time calculation
     const dataValuesRef = useRef<{ [key: string]: string }>({});
+    const isRouteActiveRef = useRef(true);
+    const editSessionRef = useRef(0);
 
     const apiService = {
         getAllReports: async (): Promise<AdhesionTestReport[]> => {
@@ -189,21 +207,19 @@ export default function AdhesionTest() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: function () {
-                    sessionStorage.removeItem('editingReportIndex');
-                    sessionStorage.removeItem('editingReportData');
                     clearFormData();
                     navigate('/home');
                 }
             });
         } else {
-            sessionStorage.removeItem('editingReportIndex');
-            sessionStorage.removeItem('editingReportData');
             clearFormData();
             navigate('/home');
         }
     };
 
     useEffect(() => {
+        isRouteActiveRef.current = true;
+        clearAdhesionDraftStorage();
         initializeForm();
         loadSavedReports();
         loadFormData();
@@ -215,7 +231,12 @@ export default function AdhesionTest() {
             }
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
+        return () => {
+            isRouteActiveRef.current = false;
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // Clear only Adhesion's unsaved draft/edit cache when leaving this route.
+            clearAdhesionDraftStorage();
+        };
     }, []);
 
     const initializeForm = () => {
@@ -446,16 +467,21 @@ export default function AdhesionTest() {
             }
             const reportMetadata = reports[index];
             const fullReport = await apiService.getReportById(reportMetadata._id!);
-            clearFormData(false);
-            setAdhesionReportName(fullReport.name);
-            sessionStorage.setItem('editingReportData', JSON.stringify(fullReport));
-            sessionStorage.setItem('editingReportId', fullReport._id!);
+            const selectedReport = cloneAdhesionReport(fullReport);
+            const editSessionId = editSessionRef.current + 1;
+            editSessionRef.current = editSessionId;
+
+            // Start every edit from a clean session before loading the selected report clone.
+            clearFormData();
+            sessionStorage.setItem(ADHESION_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
+            sessionStorage.setItem(ADHESION_EDITING_REPORT_ID_KEY, selectedReport._id!);
             setActiveTab('edit-report');
             setTimeout(() => {
-                loadReportData(fullReport);
+                if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
+                loadReportData(cloneAdhesionReport(selectedReport));
                 setHasUnsavedChanges(true);
             }, 150);
-            showAlert('info', `Now editing: ${fullReport.name}`);
+            showAlert('info', `Now editing: ${selectedReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -537,11 +563,13 @@ export default function AdhesionTest() {
 
     useEffect(() => {
         if (activeTab === 'edit-report') {
-            const editingReportData = sessionStorage.getItem('editingReportData');
+            const editingReportData = sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY);
             if (editingReportData) {
+                const editSessionId = editSessionRef.current;
                 clearFormData(false);
                 setTimeout(() => {
-                    const report = JSON.parse(editingReportData) as AdhesionTestReport;
+                    if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
+                    const report = cloneAdhesionReport(JSON.parse(editingReportData) as AdhesionTestReport);
                     loadReportData(report);
                     setHasUnsavedChanges(true);
                 }, 100);
@@ -552,6 +580,8 @@ export default function AdhesionTest() {
     }, [activeTab]);
 
     const saveFormData = () => {
+        if (!isRouteActiveRef.current) return;
+
         const formData: { [key: string]: string | boolean } = {};
 
         // Save editable text fields
@@ -573,11 +603,11 @@ export default function AdhesionTest() {
         formData.laminationPosition = laminationPosition;
         formData.lamParams = JSON.stringify(lamParams);
 
-        sessionStorage.setItem('adhesionTestFormData', JSON.stringify(formData));
+        sessionStorage.setItem(ADHESION_FORM_DATA_KEY, JSON.stringify(formData));
     };
 
     const loadFormData = () => {
-        const savedData = sessionStorage.getItem('adhesionTestFormData');
+        const savedData = sessionStorage.getItem(ADHESION_FORM_DATA_KEY);
         if (savedData) {
             const formData = JSON.parse(savedData);
 
@@ -649,14 +679,14 @@ export default function AdhesionTest() {
 
         if (clearEditingState) {
             setAdhesionReportName('');
-            sessionStorage.removeItem('editingReportId');
-            sessionStorage.removeItem('editingReportData');
+            sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
+            sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
         }
 
         setAverages({ ...DEFAULT_ADHESION_AVERAGES });
 
         if (clearEditingState) {
-            sessionStorage.removeItem('adhesionTestFormData');
+            sessionStorage.removeItem(ADHESION_FORM_DATA_KEY);
         }
 
         setHasUnsavedChanges(false);
@@ -710,7 +740,7 @@ export default function AdhesionTest() {
             reportData.formData.laminationPosition = laminationPosition;
             reportData.formData.lamParams = JSON.stringify(lamParams);
 
-            const editingId = sessionStorage.getItem('editingReportId');
+            const editingId = sessionStorage.getItem(ADHESION_EDITING_REPORT_ID_KEY);
 
             if (editingId) {
                 const existingReport = await apiService.getReportById(editingId);
@@ -736,8 +766,8 @@ export default function AdhesionTest() {
                                     await apiService.createReport(reportData);
                                     showAlert('success', 'New report created successfully!');
                                 }
-                                sessionStorage.removeItem('editingReportId');
-                                sessionStorage.removeItem('editingReportData');
+                                sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
+                                sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
                                 clearFormData();
                                 loadSavedReports();
                                 setActiveTab('saved-reports');
@@ -749,8 +779,8 @@ export default function AdhesionTest() {
                         showAlert('success', 'New report created with updated name!');
                     }
                 }
-                sessionStorage.removeItem('editingReportId');
-                sessionStorage.removeItem('editingReportData');
+                sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
+                sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
             } else {
                 const nameExists = await apiService.checkReportNameExists(adhesionReportName);
                 if (nameExists) {

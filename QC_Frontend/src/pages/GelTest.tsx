@@ -27,6 +27,22 @@ interface MeasurementRow {
     dateShiftTimeRowSpan?: number;
 }
 
+const GEL_FORM_DATA_KEY = 'gelTestFormData';
+const GEL_EDITING_REPORT_ID_KEY = 'gelTestEditingReportId';
+const GEL_EDITING_REPORT_DATA_KEY = 'gelTestEditingReportData';
+
+const clearGelDraftStorage = () => {
+    sessionStorage.removeItem(GEL_FORM_DATA_KEY);
+    sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
+    sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
+};
+
+const cloneGelReport = (report: GelTestReport): GelTestReport => (
+    typeof structuredClone === 'function'
+        ? structuredClone(report)
+        : JSON.parse(JSON.stringify(report))
+);
+
 export default function GelTest() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
@@ -74,6 +90,8 @@ export default function GelTest() {
     const [dateShiftTimeValues, setDateShiftTimeValues] = useState<Record<string, DateShiftTimeValue>>(createInitialDateShiftTimeValues);
     const previousDataValuesRef = useRef<{ [key: string]: string }>({});
     const suppressAutoSaveRef = useRef(true);
+    const isRouteActiveRef = useRef(true);
+    const editSessionRef = useRef(0);
     const getDateShiftTimeFieldType = (key: string): 'date' | 'shift' | 'time' => {
         if (key === 'gel_editable_42') return 'date';
         if (key === 'gel_editable_53') return 'shift';
@@ -155,21 +173,19 @@ export default function GelTest() {
                 confirmText: 'Leave',
                 cancelText: 'Stay',
                 onConfirm: function () {
-                    sessionStorage.removeItem('editingReportIndex');
-                    sessionStorage.removeItem('editingReportData');
                     clearFormData();
                     navigate('/home');
                 }
             });
         } else {
-            sessionStorage.removeItem('editingReportIndex');
-            sessionStorage.removeItem('editingReportData');
             clearFormData();
             navigate('/home');
         }
     };
 
     useEffect(() => {
+        isRouteActiveRef.current = true;
+        clearGelDraftStorage();
         initializeForm();
         loadSavedReports();
         loadFormData();
@@ -181,7 +197,12 @@ export default function GelTest() {
             }
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => { window.removeEventListener('beforeunload', handleBeforeUnload) };
+        return () => {
+            isRouteActiveRef.current = false;
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // Clear only Gel Content's unsaved draft/edit cache when leaving this route.
+            clearGelDraftStorage();
+        };
     }, []);
 
     const initializeForm = () => {
@@ -330,7 +351,9 @@ export default function GelTest() {
     };
 
     const saveFormData = () => {
-        sessionStorage.setItem('gelTestFormData', JSON.stringify(buildFormData()));
+        if (!isRouteActiveRef.current) return;
+
+        sessionStorage.setItem(GEL_FORM_DATA_KEY, JSON.stringify(buildFormData()));
     };
 
     const isValidDataValue = (value: string): boolean => {
@@ -639,16 +662,21 @@ export default function GelTest() {
             }
             const reportMetadata = reports[index];
             const fullReport = await apiService.getReportById(reportMetadata._id!);
-            clearFormData(false);
-            setGelReportName(fullReport.name);
-            sessionStorage.setItem('editingReportData', JSON.stringify(fullReport));
-            sessionStorage.setItem('editingReportId', fullReport._id!);
+            const selectedReport = cloneGelReport(fullReport);
+            const editSessionId = editSessionRef.current + 1;
+            editSessionRef.current = editSessionId;
+
+            // Start every edit from a clean session before loading the selected report clone.
+            clearFormData();
+            sessionStorage.setItem(GEL_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
+            sessionStorage.setItem(GEL_EDITING_REPORT_ID_KEY, selectedReport._id!);
             setActiveTab('edit-report');
             setTimeout(() => {
-                loadReportData(fullReport);
+                if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
+                loadReportData(cloneGelReport(selectedReport));
                 setHasUnsavedChanges(true);
             }, 150);
-            showAlert('info', `Now editing: ${fullReport.name}`);
+            showAlert('info', `Now editing: ${selectedReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -663,11 +691,13 @@ export default function GelTest() {
 
     useEffect(() => {
         if (activeTab === 'edit-report') {
-            const editingReportData = sessionStorage.getItem('editingReportData');
+            const editingReportData = sessionStorage.getItem(GEL_EDITING_REPORT_DATA_KEY);
             if (editingReportData) {
+                const editSessionId = editSessionRef.current;
                 clearFormData(false);
                 setTimeout(() => {
-                    const report = JSON.parse(editingReportData) as GelTestReport;
+                    if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
+                    const report = cloneGelReport(JSON.parse(editingReportData) as GelTestReport);
                     loadReportData(report);
                     setHasUnsavedChanges(true);
                 }, 100);
@@ -678,7 +708,7 @@ export default function GelTest() {
     }, [activeTab]);
 
     const loadFormData = () => {
-        const savedData = sessionStorage.getItem('gelTestFormData');
+        const savedData = sessionStorage.getItem(GEL_FORM_DATA_KEY);
         if (savedData) {
             const formData = JSON.parse(savedData);
             applyStoredFormData(formData);
@@ -698,15 +728,15 @@ export default function GelTest() {
 
         if (clearEditingState) {
             setGelReportName('');
-            sessionStorage.removeItem('editingReportId');
-            sessionStorage.removeItem('editingReportData');
+            sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
+            sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
         }
 
         setAverageValues(Array(7).fill('0'));
         setMeanValue('0');
 
         if (clearEditingState) {
-            sessionStorage.removeItem('gelTestFormData');
+            sessionStorage.removeItem(GEL_FORM_DATA_KEY);
         }
 
         setHasUnsavedChanges(false);
@@ -743,7 +773,7 @@ export default function GelTest() {
                 formData: buildFormData(),
                 averages: buildAverages(),
             };
-            const editingId = sessionStorage.getItem('editingReportId');
+            const editingId = sessionStorage.getItem(GEL_EDITING_REPORT_ID_KEY);
             if (editingId) {
                 const existingReport = await apiService.getReportById(editingId);
                 if (gelReportName === existingReport.name) {
@@ -768,8 +798,8 @@ export default function GelTest() {
                                     await apiService.createReport(reportData);
                                     showAlert('success', 'New report created successfully!');
                                 }
-                                sessionStorage.removeItem('editingReportId');
-                                sessionStorage.removeItem('editingReportData');
+                                sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
+                                sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
                                 clearFormData();
                                 loadSavedReports();
                                 setActiveTab('saved-reports');
@@ -781,8 +811,8 @@ export default function GelTest() {
                         showAlert('success', 'New report created with updated name!');
                     }
                 }
-                sessionStorage.removeItem('editingReportId');
-                sessionStorage.removeItem('editingReportData');
+                sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
+                sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
             } else {
                 const nameExists = await apiService.checkReportNameExists(gelReportName);
                 if (nameExists) {

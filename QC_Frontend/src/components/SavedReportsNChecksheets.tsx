@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react';
 
 export interface SavedReport {
     id?: string;
+    _id?: string;
     name: string;
     timestamp: string | number;
     updatedTimestamp?: string | number;
@@ -70,6 +71,19 @@ export default function SavedReportsNChecksheets({
         return new Date(value).getTime();
     };
 
+    const getReportKey = (report: SavedReport) => report.id || report._id;
+
+    const getOriginalIndex = (report: SavedReport) => {
+        const reportKey = getReportKey(report);
+
+        if (reportKey) {
+            return reports.findIndex(savedReport => getReportKey(savedReport) === reportKey);
+        }
+
+        // Keep actions tied to the exact filtered object when no backend id is present.
+        return reports.indexOf(report);
+    };
+
     // Filter, search, and sort reports without changing the source order.
     const filteredReports = useMemo(() => {
         let filtered = [...reports];
@@ -126,12 +140,13 @@ export default function SavedReportsNChecksheets({
         return filtered;
     }, [reports, searchTerm, activeFilters, filterConfigs, sortOption]);
 
-    const handleDelete = (index: number, reportName: string) => {
-        // Find the original index in the unfiltered reports array
-        const originalIndex = reports.findIndex(r => r.id === filteredReports[index].id);
+    const handleDelete = (report: SavedReport) => {
+        const originalIndex = getOriginalIndex(report);
+        if (originalIndex < 0) return;
+
         showConfirm({
             title: 'Delete Report',
-            message: `Are you sure you want to delete "${reportName}"? This action cannot be undone.`,
+            message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
             type: 'warning',
             confirmText: 'Delete',
             onConfirm: () => onDelete(originalIndex)
@@ -309,9 +324,12 @@ export default function SavedReportsNChecksheets({
                 {filteredReports.length === 0 ? (
                     renderEmptyState()
                 ) : (
-                    filteredReports.map((report, index) => (
+                    filteredReports.map((report, index) => {
+                        const originalIndex = getOriginalIndex(report);
+
+                        return (
                         <div
-                            key={report.id || `${report.name}-${index}`}
+                            key={getReportKey(report) || `${report.name}-${index}`}
                             className="report-item border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/40 transition-all duration-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
                         >
                             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-0">
@@ -332,7 +350,7 @@ export default function SavedReportsNChecksheets({
                                 <div className="flex flex-wrap gap-2 md:gap-2 md:flex-nowrap justify-start md:justify-end">
                                     <button
                                         className="excel-export-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 dark:bg-blue-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-green-500 dark:hover:bg-green-600 hover:scale-105 active:scale-95 flex items-center justify-center min-w-[36px] md:min-w-[44px]"
-                                        onClick={() => onExportExcel(reports.findIndex(r => r.id === report.id))}
+                                        onClick={() => originalIndex >= 0 && onExportExcel(originalIndex)}
                                         title="Export to Excel"
                                         aria-label="Export to Excel"
                                     >
@@ -344,15 +362,15 @@ export default function SavedReportsNChecksheets({
                                     </button>
                                     <button
                                         className="edit-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-green-500 dark:bg-green-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-green-600 dark:hover:bg-green-700 hover:scale-105 active:scale-95 whitespace-nowrap"
-                                        onClick={() => onEdit(reports.findIndex(r => r.id === report.id))}
+                                        onClick={() => originalIndex >= 0 && onEdit(originalIndex)}
                                         aria-label={`Edit ${report.name}`}
                                     >
                                         Edit
                                     </button>
-                                    {customActions && customActions(report, reports.findIndex(r => r.id === report.id))}
+                                    {customActions && customActions(report, originalIndex)}
                                     <button
                                         className="delete-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-red-500 dark:bg-red-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-red-600 dark:hover:bg-red-700 hover:scale-105 active:scale-95 whitespace-nowrap"
-                                        onClick={() => handleDelete(index, report.name)}
+                                        onClick={() => handleDelete(report)}
                                         aria-label={`Delete ${report.name}`}
                                     >
                                         Delete
@@ -360,7 +378,8 @@ export default function SavedReportsNChecksheets({
                                 </div>
                             </div>
                         </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
             
