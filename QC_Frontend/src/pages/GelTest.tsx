@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
@@ -44,7 +43,6 @@ const cloneGelReport = (report: GelTestReport): GelTestReport => (
 );
 
 export default function GelTest() {
-    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
     const [savedReports, setSavedReports] = useState<GelTestReport[]>([]);
     const [gelReportName, setGelReportName] = useState('');
@@ -163,25 +161,6 @@ export default function GelTest() {
         setUserRole(storedUserRole);
         setUsername(storedUsername);
     }, []);
-
-    const handleBackToHome = () => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: function () {
-                    clearFormData();
-                    navigate('/home');
-                }
-            });
-        } else {
-            clearFormData();
-            navigate('/home');
-        }
-    };
 
     useEffect(() => {
         isRouteActiveRef.current = true;
@@ -1073,14 +1052,6 @@ export default function GelTest() {
     return (
         <>
             <div className="mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">

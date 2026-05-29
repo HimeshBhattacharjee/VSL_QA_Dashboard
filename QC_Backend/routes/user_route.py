@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
+from fastapi.responses import StreamingResponse
 from datetime import datetime
 from bson import ObjectId
 import os
+import io
 import base64
+from urllib.parse import unquote, urlparse
 from models.user_models import (
     UserCreate, UserResponse, LoginRequest, LoginResponse,
     PasswordChangeRequest, SignatureUpdateRequest, UserUpdate
@@ -13,6 +16,24 @@ user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
 MANAGEABLE_ROLES = {"Manager", "Supervisor", "Operator"}
 SYSTEM_ADMIN_ROLES = {"Admin", "System Administrator"}
+SIGNATURE_S3_PREFIX = "users/signatures/"
+
+def extract_signature_key(signature_source: str | None) -> str | None:
+    if not signature_source:
+        return None
+
+    source = signature_source.strip()
+    if source.startswith(SIGNATURE_S3_PREFIX):
+        return source
+
+    if source.startswith(("http://", "https://")):
+        parsed = urlparse(source)
+        path_key = unquote(parsed.path.lstrip("/"))
+        marker_index = path_key.find(SIGNATURE_S3_PREFIX)
+        if marker_index >= 0:
+            return path_key[marker_index:]
+
+    return None
 
 def is_system_admin(user: dict) -> bool:
     return user.get("role") in SYSTEM_ADMIN_ROLES
@@ -262,7 +283,8 @@ async def upload_signature(
         
         return {
             "message": "Signature uploaded successfully", 
-            "signatureUrl": signature_url
+            "signatureUrl": signature_url,
+            "signatureKey": s3_key
         }
     
     except HTTPException:
@@ -297,6 +319,26 @@ async def remove_signature(employeeId: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error removing signature: {str(e)}")
 
+@user_router.get("/signature-image")
+async def get_signature_image(source: str):
+    signature_key = extract_signature_key(source)
+    if not signature_key:
+        raise HTTPException(status_code=400, detail="Invalid signature image reference")
+
+    try:
+        from s3_service import S3Service
+        s3_service = S3Service()
+        response = s3_service.s3_client.get_object(
+            Bucket=s3_service.bucket_name,
+            Key=signature_key
+        )
+        image_bytes = response["Body"].read()
+        content_type = response.get("ContentType") or "image/png"
+        return StreamingResponse(io.BytesIO(image_bytes), media_type=content_type)
+    except Exception as e:
+        print(f"Unable to load signature image {signature_key}: {str(e)}")
+        raise HTTPException(status_code=404, detail="Signature image not found")
+
 @user_router.get("/signature/{employeeId}")
 async def get_signature(employeeId: str):
     user = users_collection.find_one({"employeeId": employeeId})
@@ -308,9 +350,9 @@ async def get_signature(employeeId: str):
         from s3_service import S3Service
         s3_service = S3Service()
         signature_url = s3_service.get_image_url(signature_key)
-        return {"signature": signature_url}
+        return {"signature": signature_url, "signatureKey": signature_key}
     else:
-        return {"signature": None}
+        return {"signature": None, "signatureKey": None}
 
 @user_router.get("/current-user", response_model=UserResponse)
 async def get_current_user(employeeId: str):

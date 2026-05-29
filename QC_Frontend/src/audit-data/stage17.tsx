@@ -191,6 +191,7 @@ const AutoFramingObservations = {
                                     { value: "Yihua", label: "Yihua" },
                                     { value: "Ralpro", label: "Ralpro" },
                                     { value: "Vishakha Renewables", label: "Vishakha Renewables" },
+                                    { value: "Future Aluminium New Materials", label: "Future Aluminium New Materials" },
                                     { value: "N/A", label: "N/A" }
                                 ]}
                                 type="status"

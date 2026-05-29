@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import TestHeading from '../components/TestHeading';
@@ -227,8 +226,7 @@ const getEntryValidationMessage = (entry: DailyEntry): string | null => {
 };
 
 export default function SSHTest() {
-    const navigate = useNavigate();
-    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [_, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
@@ -837,24 +835,6 @@ export default function SSHTest() {
         setHasUnsavedChanges(false);
     }, []);
 
-    // Handle back to home with unsaved changes check
-    const handleBackToHome = useCallback(() => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave?',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: () => {
-                    navigate('/home');
-                }
-            });
-        } else {
-            navigate('/home');
-        }
-    }, [hasUnsavedChanges, navigate, showConfirm]);
-
     // Get shift icon based on shift
     const getShiftIcon = useCallback((shift: 'A' | 'B' | 'C') => {
         switch (shift) {
@@ -1100,14 +1080,6 @@ export default function SSHTest() {
     return (
         <>
             <div className="mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">

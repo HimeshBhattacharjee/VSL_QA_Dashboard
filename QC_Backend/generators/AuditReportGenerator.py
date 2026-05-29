@@ -2,13 +2,17 @@ from openpyxl import load_workbook
 from openpyxl.styles import (PatternFill, Alignment, NamedStyle)
 from openpyxl.utils import get_column_letter
 import base64
+import copy
 import io
 import os
 import urllib.request
 import re
+from urllib.parse import unquote, urlparse
 from openpyxl.cell.cell import MergedCell
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from paths import get_template_key, download_from_s3
+from models.ipqc_audit_models import normalize_ipqc_audit_data
+from s3_service import S3Service
 
 DYNAMIC_LINE_PARAMETER_IDS = {
     '2-4', '2-5', '2-6',
@@ -20,11 +24,18 @@ DYNAMIC_LINE_PARAMETER_IDS = {
 }
 
 GROUPED_SAMPLE_PARAMETER_IDS = {'12-1', '12-2', '16-1', '23-1', '27-1', '29-1'}
+SAMPLE_GROUP_ORDER = ('2h', '4h', '6h', '8h')
 SAMPLE_GROUPS = {
     '2h': [('Sample-1', 'Sample-1'), ('Sample-2', 'Sample-2'), ('Sample-3', 'Sample-3'), ('Sample-4', 'Sample-4'), ('Sample-5', 'Sample-5')],
     '4h': [('Sample-6', 'Sample-6'), ('Sample-7', 'Sample-7'), ('Sample-8', 'Sample-8'), ('Sample-9', 'Sample-9'), ('Sample-10', 'Sample-10')],
     '6h': [('Sample-11', 'Sample-1'), ('Sample-12', 'Sample-2'), ('Sample-13', 'Sample-3'), ('Sample-14', 'Sample-4'), ('Sample-15', 'Sample-5')],
     '8h': [('Sample-16', 'Sample-6'), ('Sample-17', 'Sample-7'), ('Sample-18', 'Sample-8'), ('Sample-19', 'Sample-9'), ('Sample-20', 'Sample-10')],
+}
+GROUPED_SAMPLE_TARGET_SLOTS = {
+    '2h': {'lineIndex': 0, 'sampleKeys': ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')},
+    '4h': {'lineIndex': 0, 'sampleKeys': ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')},
+    '6h': {'lineIndex': 1, 'sampleKeys': ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')},
+    '8h': {'lineIndex': 1, 'sampleKeys': ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')},
 }
 LINE_SELECTION_CELL_MAPPINGS = {
     '2-4': {'4h': 'M16', '8h': 'Y16'}, '2-5': {'4h': 'M16', '8h': 'Y16'}, '2-6': {'4h': 'M16', '8h': 'Y16'},
@@ -76,18 +87,12 @@ COMPONENT_FIELD_DEFAULTS = {
         'type': 'TM4545-30U/TM3045-30U/XND-18-V100C/TM45100-30U'
     }
 }
-PRELAM_GROUPED_PARAMETER_IDS = {'12-1', '12-2'}
-PRELAM_GROUP_TARGETS = {
-    '2h': ('Line-3', ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')),
-    '4h': ('Line-3', ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')),
-    '6h': ('Line-4', ('Sample-1', 'Sample-2', 'Sample-3', 'Sample-4', 'Sample-5')),
-    '8h': ('Line-4', ('Sample-6', 'Sample-7', 'Sample-8', 'Sample-9', 'Sample-10')),
-}
 NESTED_STRING_DEFAULTS = {
     '5-5-cell-appearance': 'Checked OK',
     '5-15-el-inspection': 'Checked OK',
 }
 NUMERIC_PATTERN = re.compile(r'^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$')
+SIGNATURE_S3_PREFIX = 'users/signatures/'
 
 def is_empty_value(value):
     return value is None or value == ''
@@ -168,6 +173,113 @@ def set_cell_value(cell, value):
 def set_cell_raw_value(cell, value):
     cell.value = value
 
+def is_standard_sample_grouped_value(value):
+    return isinstance(value, dict) and isinstance(value.get('sampleGroups'), list)
+
+def sample_number_from_label(sample_label):
+    if not isinstance(sample_label, str) or not sample_label.startswith('Sample-'):
+        return None
+    try:
+        return int(sample_label.split('-', 1)[1])
+    except (TypeError, ValueError):
+        return None
+
+def get_grouped_sample_groups(value):
+    if not is_standard_sample_grouped_value(value):
+        return {}
+    groups = {}
+    for group in value.get('sampleGroups', []):
+        if isinstance(group, dict) and group.get('groupKey') in SAMPLE_GROUPS:
+            groups[group.get('groupKey')] = group
+    return groups
+
+def get_grouped_sample_line_mapping(value):
+    groups = get_grouped_sample_groups(value)
+    return {
+        group_key: normalize_line_value(groups[group_key].get('selectedLine', ''))
+        for group_key in SAMPLE_GROUP_ORDER
+        if group_key in groups and groups[group_key].get('selectedLine')
+    }
+
+def get_line_sort_key(line_key):
+    normalized_line = normalize_line_value(line_key)
+    return (0, int(normalized_line)) if str(normalized_line).isdigit() else (1, str(normalized_line))
+
+def get_grouped_sample_mapping_lines(param_mapping):
+    if not isinstance(param_mapping, dict):
+        return []
+    return sorted(
+        (line_key for line_key, sample_mapping in param_mapping.items() if isinstance(sample_mapping, dict) and str(line_key).startswith('Line-')),
+        key=get_line_sort_key
+    )
+
+def get_grouped_sample_cell_map(param_mapping):
+    mapping_lines = get_grouped_sample_mapping_lines(param_mapping)
+    if len(mapping_lines) < 2:
+        print("Warning: grouped sample mapping expected two line blocks but found fewer")
+        return {}
+
+    cell_map = {}
+    for group_key in SAMPLE_GROUP_ORDER:
+        target_slot = GROUPED_SAMPLE_TARGET_SLOTS[group_key]
+        target_line = mapping_lines[target_slot['lineIndex']]
+        target_line_mapping = param_mapping.get(target_line, {})
+        for (source_sample, _), target_sample in zip(SAMPLE_GROUPS[group_key], target_slot['sampleKeys']):
+            sample_number = sample_number_from_label(source_sample)
+            cell_ref = target_line_mapping.get(target_sample) if isinstance(target_line_mapping, dict) else None
+            if isinstance(sample_number, int) and cell_ref:
+                cell_map[sample_number] = cell_ref
+    return cell_map
+
+def get_grouped_sample_lookup(group):
+    lookup = {}
+    duplicate_indexes = set()
+    samples = group.get('samples', []) if isinstance(group, dict) else []
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        sample_number = sample.get('sampleNumber')
+        if not isinstance(sample_number, int):
+            sample_number = sample_number_from_label(sample.get('sampleLabel'))
+        if isinstance(sample_number, int) and sample_number not in lookup:
+            lookup[sample_number] = sample
+        elif isinstance(sample_number, int):
+            duplicate_indexes.add(sample_number)
+    if duplicate_indexes:
+        group_key = group.get('groupKey', '') if isinstance(group, dict) else ''
+        print(f"Warning: grouped sample group {group_key} has duplicate sample indexes: {', '.join(str(index) for index in sorted(duplicate_indexes))}")
+    return lookup
+
+def validate_grouped_sample_value(param_id, value):
+    if not is_standard_sample_grouped_value(value):
+        print(f"Warning: grouped sample parameter {param_id} has malformed value; expected sampleGroups structure")
+        return
+
+    groups = get_grouped_sample_groups(value)
+    missing_groups = [group_key for group_key in SAMPLE_GROUP_ORDER if group_key not in groups]
+    if missing_groups:
+        print(f"Warning: grouped sample parameter {param_id} missing groups: {', '.join(missing_groups)}")
+
+    total_samples = 0
+    for group_key in SAMPLE_GROUP_ORDER:
+        group = groups.get(group_key)
+        if not group:
+            continue
+        lookup = get_grouped_sample_lookup(group)
+        expected_numbers = [sample_number_from_label(source_sample) for source_sample, _ in SAMPLE_GROUPS[group_key]]
+        missing_samples = [f"Sample-{sample_number}" for sample_number in expected_numbers if sample_number not in lookup]
+        if missing_samples:
+            print(f"Warning: grouped sample parameter {param_id} group {group_key} missing samples: {', '.join(missing_samples)}")
+        if not group.get('selectedLine'):
+            print(f"Warning: grouped sample parameter {param_id} group {group_key} missing selectedLine")
+        actual_numbers = sorted(lookup)
+        if actual_numbers != [number for number in expected_numbers if isinstance(number, int)]:
+            print(f"Warning: grouped sample parameter {param_id} group {group_key} has unexpected sample order/indexes: {actual_numbers}")
+        total_samples += len(lookup)
+
+    if total_samples != 20:
+        print(f"Warning: grouped sample parameter {param_id} expected 20 samples, found {total_samples}")
+
 def extract_safety_module_ids(stages):
     for stage in stages:
         if stage.get('id') != 26:
@@ -192,19 +304,78 @@ def get_writable_cell(worksheet, cell_ref):
                 return worksheet[merged_range.coord.split(":")[0]]
     return cell
 
+def extract_signature_image_key(image_source):
+    if not isinstance(image_source, str):
+        return None
+
+    source = image_source.strip()
+    if source.startswith(SIGNATURE_S3_PREFIX):
+        return source
+
+    if source.startswith(('http://', 'https://')):
+        parsed = urlparse(source)
+        path_key = unquote(parsed.path.lstrip('/'))
+        marker_index = path_key.find(SIGNATURE_S3_PREFIX)
+        if marker_index >= 0:
+            return path_key[marker_index:]
+
+    return None
+
+def describe_signature_image_source(image_source):
+    if not image_source:
+        return 'missing'
+    if not isinstance(image_source, str):
+        return type(image_source).__name__
+    if image_source.startswith('data:'):
+        return 'data URI'
+    if image_source.startswith(('http://', 'https://')):
+        signature_key = extract_signature_image_key(image_source)
+        return f"S3 presigned URL ({signature_key})" if signature_key else 'URL'
+    if image_source.startswith(SIGNATURE_S3_PREFIX):
+        return f"S3 key ({image_source})"
+    if os.path.exists(image_source):
+        return f"file path ({image_source})"
+    return 'base64/reference'
+
+def load_signature_image_from_s3(signature_key):
+    try:
+        s3_service = S3Service()
+        response = s3_service.s3_client.get_object(
+            Bucket=s3_service.bucket_name,
+            Key=signature_key
+        )
+        return io.BytesIO(response['Body'].read())
+    except Exception as e:
+        print(f"Warning: signature image S3 reference is not accessible ({signature_key}): {str(e)}")
+        return None
+
+def resolve_signature_image_bytes(image_source):
+    if not image_source:
+        return None
+
+    signature_key = extract_signature_image_key(image_source)
+    if signature_key:
+        return load_signature_image_from_s3(signature_key)
+
+    if isinstance(image_source, str) and image_source.startswith(('http://', 'https://')):
+        with urllib.request.urlopen(image_source, timeout=10) as response:
+            return io.BytesIO(response.read())
+
+    if isinstance(image_source, str) and os.path.exists(image_source):
+        return image_source
+
+    encoded_image = image_source.split(',', 1)[1] if isinstance(image_source, str) and ',' in image_source else image_source
+    return io.BytesIO(base64.b64decode(encoded_image))
+
 def insert_signature_image(worksheet, cell_ref, image_source):
     """Insert URL, data URI, raw base64, or file-path signature images."""
     if not image_source:
         return False
     try:
-        if isinstance(image_source, str) and image_source.startswith(('http://', 'https://')):
-            with urllib.request.urlopen(image_source, timeout=10) as response:
-                image_bytes = io.BytesIO(response.read())
-        elif isinstance(image_source, str) and os.path.exists(image_source):
-            image_bytes = image_source
-        else:
-            encoded_image = image_source.split(',', 1)[1] if isinstance(image_source, str) and ',' in image_source else image_source
-            image_bytes = io.BytesIO(base64.b64decode(encoded_image))
+        image_bytes = resolve_signature_image_bytes(image_source)
+        if not image_bytes:
+            print(f"Warning: signature image at {cell_ref} could not be loaded from {describe_signature_image_source(image_source)}")
+            return False
         signature_image = OpenpyxlImage(image_bytes)
         signature_image.height = 45
         signature_image.width = 120
@@ -269,12 +440,12 @@ def get_template_config(line_number):
             'audit_by': {
                 'cell': 'C444',
                 'label': 'Audit By:',
-                'format': {'font_size': 16, 'bold': True}
+                'format': {'font_size': 16, 'bold': True, 'horizontal': 'left'}
             },
             'reviewed_by': {
                 'cell': 'U444',
                 'label': 'Reviewed By:',
-                'format': {'font_size': 16, 'bold': True}
+                'format': {'font_size': 16, 'bold': True, 'horizontal': 'left'}
             }
         }
         observation_cell_mapping = {
@@ -2429,12 +2600,12 @@ def get_template_config(line_number):
             },
             '29-1': {
                 'Line-3': {
-                    'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
-                    'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
-                },
-                'Line-4': {
                     'Sample-1': 'G382', 'Sample-2': 'G383', 'Sample-3': 'G384', 'Sample-4': 'G385', 'Sample-5': 'G386',
                     'Sample-6': 'M382', 'Sample-7': 'M383', 'Sample-8': 'M384', 'Sample-9': 'M385', 'Sample-10': 'M386'
+                },
+                'Line-4': {
+                    'Sample-1': 'S382', 'Sample-2': 'S383', 'Sample-3': 'S384', 'Sample-4': 'S385', 'Sample-5': 'S386',
+                    'Sample-6': 'Y382', 'Sample-7': 'Y383', 'Sample-8': 'Y384', 'Sample-9': 'Y385', 'Sample-10': 'Y386'
                 }
             }
         }
@@ -2446,8 +2617,9 @@ def resolve_signature(audit_data, signature_key):
     """Read current and legacy signature shapes without requiring schema changes."""
     signatures = audit_data.get('signatures') or audit_data.get('data', {}).get('signatures') or {}
     image_key = f"{signature_key}Image"
-    signature_value = signatures.get(signature_key) or audit_data.get(signature_key)
-    image_value = signatures.get(image_key) or audit_data.get(image_key)
+    nested_data = audit_data.get('data', {}) if isinstance(audit_data.get('data'), dict) else {}
+    signature_value = signatures.get(signature_key) or audit_data.get(signature_key) or nested_data.get(signature_key)
+    image_value = signatures.get(image_key) or audit_data.get(image_key) or nested_data.get(image_key)
 
     if isinstance(signature_value, dict):
         text_value = signature_value.get('name') or signature_value.get('text') or signature_value.get('value') or ''
@@ -2457,17 +2629,20 @@ def resolve_signature(audit_data, signature_key):
 
     return text_value, image_value
 
-def write_signature(worksheet, text_cell_ref, image_cell_ref, text_value, image_value, format_options):
+def write_signature(worksheet, text_cell_ref, image_cell_ref, text_value, image_value, format_options, signature_label='Signature'):
     if text_value:
         text_cell = get_writable_cell(worksheet, text_cell_ref)
         text_cell.value = text_value
-        apply_cell_formatting(text_cell, **format_options)
+        apply_cell_formatting(text_cell, **{**format_options, 'horizontal': 'left'})
 
     if image_value:
+        print(f"{signature_label} image reference found: {describe_signature_image_source(image_value)}")
         image_cell = get_writable_cell(worksheet, image_cell_ref)
         if insert_signature_image(worksheet, image_cell_ref, image_value):
             image_cell.value = None
             apply_cell_formatting(image_cell, **format_options)
+    elif text_value:
+        print(f"Warning: {signature_label} text signature exists but image reference is missing; continuing without image")
 
 def normalize_line_value(line_value):
     if line_value is None:
@@ -2503,10 +2678,11 @@ def fill_line_dropdown_values(worksheet, audit_data):
                         set_cell_raw_value(cell, normalize_line_value(selected_line))
                         apply_cell_formatting(cell, horizontal='center')
 
-                line_mapping = observation.get('lineMapping')
                 group_cells = GROUPED_LINE_SELECTION_CELL_MAPPINGS.get(param_id)
-                if isinstance(line_mapping, dict) and group_cells:
-                    for group_key, line_value in line_mapping.items():
+                if group_cells:
+                    grouped_line_mapping = get_grouped_sample_line_mapping(observation.get('value', {}))
+                    for group_key in SAMPLE_GROUP_ORDER:
+                        line_value = grouped_line_mapping.get(group_key)
                         cell_ref = group_cells.get(group_key)
                         if line_value and cell_ref:
                             cell = get_writable_cell(worksheet, cell_ref)
@@ -2541,10 +2717,10 @@ def fill_basic_info(worksheet, audit_data, field_config):
             apply_cell_formatting(cell, **field_config['module_type']['format'])
 
         audit_by_text, audit_by_image = resolve_signature(audit_data, 'auditBy')
-        write_signature(worksheet, 'C405', 'C407', audit_by_text, audit_by_image, field_config['audit_by']['format'])
+        write_signature(worksheet, 'C405', 'C407', audit_by_text, audit_by_image, field_config['audit_by']['format'], 'Audit By')
 
         reviewed_by_text, reviewed_by_image = resolve_signature(audit_data, 'reviewedBy')
-        write_signature(worksheet, 'O405', 'O407', reviewed_by_text, reviewed_by_image, field_config['reviewed_by']['format'])
+        write_signature(worksheet, 'O405', 'O407', reviewed_by_text, reviewed_by_image, field_config['reviewed_by']['format'], 'Reviewed By')
 
         customer_spec = 'Yes' if audit_data.get('customerSpecAvailable') else 'No'
         spec_signed = 'Yes' if audit_data.get('specificationSignedOff') else 'No'
@@ -2713,36 +2889,30 @@ def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_m
 def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_mapping, line_mapping=None):
     """Handle line-based sample parameters"""
     if isinstance(value, dict):
-        if param_id in PRELAM_GROUPED_PARAMETER_IDS:
-            # Pre-Lam rows use 2h/4h/6h/8h as fixed column groups; selected line is exported separately in the header.
-            for group_key, sample_pairs in SAMPLE_GROUPS.items():
-                target_line, target_samples = PRELAM_GROUP_TARGETS[group_key]
-                for (source_sample, _), target_sample in zip(sample_pairs, target_samples):
-                    if value.get(source_sample, '') == '':
+        if param_id in GROUPED_SAMPLE_PARAMETER_IDS:
+            validate_grouped_sample_value(param_id, value)
+            groups = get_grouped_sample_groups(value)
+            sample_cell_map = get_grouped_sample_cell_map(param_mapping)
+            for group_key in SAMPLE_GROUP_ORDER:
+                group = groups.get(group_key)
+                if not group:
+                    continue
+                sample_lookup = get_grouped_sample_lookup(group)
+                for source_sample, _target_sample in SAMPLE_GROUPS[group_key]:
+                    sample_number = sample_number_from_label(source_sample)
+                    if not isinstance(sample_number, int):
                         continue
-                    if target_line in param_mapping and target_sample in param_mapping[target_line]:
-                        cell_ref = param_mapping[target_line][target_sample]
-                        cell = get_writable_cell(worksheet, cell_ref)
-                        set_cell_value(cell, value.get(source_sample, ''))
-                        apply_cell_formatting(cell, horizontal='center')
-                        print(f"Filled observation {value.get(source_sample, '')} for parameter {param_id} at {source_sample} in cell {cell_ref}")
-            return
-
-        if param_id in GROUPED_SAMPLE_PARAMETER_IDS and isinstance(line_mapping, dict):
-            for group_key, sample_pairs in SAMPLE_GROUPS.items():
-                selected_line = line_mapping.get(group_key)
-                mapped_time_slot = format_line_key(selected_line) if selected_line else time_slot
-                if mapped_time_slot not in param_mapping:
-                    mapped_time_slot = time_slot
-                for source_sample, target_sample in sample_pairs:
-                    if value.get(source_sample, '') == '':
+                    sample = sample_lookup.get(sample_number)
+                    sample_value = sample.get('value', '') if isinstance(sample, dict) else ''
+                    cell_ref = sample_cell_map.get(sample_number)
+                    if not cell_ref:
+                        print(f"Warning: no Excel cell mapping for parameter {param_id} {source_sample}")
                         continue
-                    if mapped_time_slot in param_mapping and target_sample in param_mapping[mapped_time_slot]:
-                        cell_ref = param_mapping[mapped_time_slot][target_sample]
-                        cell = get_writable_cell(worksheet, cell_ref)
-                        set_cell_value(cell, value.get(source_sample, ''))
-                        apply_cell_formatting(cell, horizontal='center')
-                        print(f"Filled observation {value.get(source_sample, '')} for parameter {param_id} at {source_sample} in cell {cell_ref}")
+                    cell = get_writable_cell(worksheet, cell_ref)
+                    set_cell_value(cell, sample_value)
+                    apply_cell_formatting(cell, horizontal='center')
+                    if sample_value != '':
+                        print(f"Filled observation {sample_value} for parameter {param_id} at {source_sample} in cell {cell_ref}")
             return
 
         for sample_key, sample_value in value.items():
@@ -3061,6 +3231,7 @@ def generate_audit_report(audit_data):
     try:
         if not audit_data:
             raise ValueError("No audit data provided")
+        audit_data = normalize_ipqc_audit_data(copy.deepcopy(audit_data))
         print("Received audit data for report generation")
         line_number = audit_data.get('lineNumber', 'I')
         template_path, field_config, observation_cell_mapping = get_template_config(line_number)

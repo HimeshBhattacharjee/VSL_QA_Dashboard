@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { initialStages } from '../audit-data';
-import { AuditData, StageData } from '../types/audit';
+import { AuditData, ObservationValue, StageData } from '../types/audit';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useLine } from '../context/LineContext';
@@ -21,7 +20,11 @@ import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { createTwentySampleValue } from '../audit-data/sampleGroupedInputs';
+import {
+    createTwentySampleValue,
+    normalizeSampleGroupedValue,
+    updateSampleGroupedLineSelection
+} from '../audit-data/sampleGroupedInputs';
 
 const DYNAMIC_LINE_STAGE_IDS = new Set([2, 3, 9, 10, 11, 12, 16, 23, 27, 29]);
 const SAMPLE_GROUPED_STAGE_IDS = new Set([12, 16, 23, 27, 29]);
@@ -53,6 +56,29 @@ const hydrateStage5Defaults = (paramId: string, defaultValue: any, savedValue: a
         }
         return merged;
     }, {});
+};
+
+type SignatureSection = 'auditBy' | 'reviewedBy';
+
+const getLoadedSignatureText = (loadedSignatures: any, section: SignatureSection, fallback = '') => {
+    const signatureValue = loadedSignatures?.[section] ?? fallback;
+    if (signatureValue && typeof signatureValue === 'object') {
+        return signatureValue.name || signatureValue.text || signatureValue.value || '';
+    }
+    return signatureValue || '';
+};
+
+const getLoadedSignatureImage = (loadedSignatures: any, section: SignatureSection, fallback = '') => {
+    const imageKey = `${section}Image`;
+    const signatureValue = loadedSignatures?.[section];
+    return loadedSignatures?.[imageKey]
+        || loadedSignatures?.[`${section}SignatureImage`]
+        || loadedSignatures?.[`${imageKey}Url`]
+        || (signatureValue && typeof signatureValue === 'object'
+            ? signatureValue.signature || signatureValue.image || signatureValue.photo
+            : '')
+        || fallback
+        || '';
 };
 
 const getAuditSnapshot = (auditData: AuditData, auditBySignature: string, reviewedBySignature: string, auditBySignatureImage = '', reviewedBySignatureImage = '') => JSON.stringify({
@@ -114,7 +140,7 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
                                 ...param,
                                 observations: [{
                                     timeSlot: lineOptions[0],
-                                    value: createTwentySampleValue(),
+                                    value: createTwentySampleValue(param.id, defaultLineMapping),
                                     selectedLine: defaultLine,
                                     lineMapping: defaultLineMapping
                                 }]
@@ -137,14 +163,13 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
 };
 
 export default function QualityAudit() {
-    const navigate = useNavigate();
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const { lineNumber, setLineNumber } = useLine();
     const [activeTab, setActiveTab] = useState<'create-edit' | 'saved-reports'>('create-edit');
     const [currentView, setCurrentView] = useState<'basicInfo' | 'stageSelection' | 'stageDetail'>('basicInfo');
     const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
-    const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+    const [_, setHasUnsavedChanges] = useState<boolean>(false);
     const [stageChanges, setStageChanges] = useState<Set<number>>(new Set());
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
@@ -167,6 +192,16 @@ export default function QualityAudit() {
     
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
     const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
+
+    const getSignatureImageSrc = useCallback((imageSource: string) => {
+        const source = imageSource?.trim();
+        if (!source) return '';
+        if (source.startsWith('data:') || source.startsWith('blob:')) return source;
+        if (source.startsWith('users/signatures/') || source.includes('/users/signatures/')) {
+            return `${USER_API_BASE_URL}/signature-image?source=${encodeURIComponent(source)}`;
+        }
+        return source;
+    }, [USER_API_BASE_URL]);
     
     const apiService = {
         getAllAudits: async (): Promise<any[]> => {
@@ -258,7 +293,7 @@ export default function QualityAudit() {
                 const response = await fetch(`${USER_API_BASE_URL}/signature/${employeeId}`);
                 if (!response.ok) return;
                 const data = await response.json();
-                setCurrentUserSignatureImage(data.signature || '');
+                setCurrentUserSignatureImage(data.signatureKey || data.signature || '');
             } catch (error) {
                 console.error('Error fetching stored signature:', error);
             }
@@ -292,7 +327,7 @@ export default function QualityAudit() {
         customerSpecAvailable: false,
         specificationSignedOff: false,
         stages: lineDependentStages,
-        signatures: { auditBy: '', reviewedBy: '' }
+        signatures: { auditBy: '', reviewedBy: '', auditByImage: '', reviewedByImage: '' }
     });
     const latestAuditDataRef = useRef(auditData);
     const latestAuditBySignatureRef = useRef(auditBySignature);
@@ -335,10 +370,19 @@ export default function QualityAudit() {
                         mapping[groupKey] = lineOptions.includes(groupLine) ? groupLine : normalizedSelectedLine;
                         return mapping;
                     }, {});
+                    const mergedValue = SAMPLE_GROUPED_STAGE_IDS.has(stage.id) && obs.timeSlot.startsWith('Line-')
+                        ? normalizeSampleGroupedValue(
+                            savedObservation?.value ?? obs.value,
+                            param.id,
+                            normalizedLineMapping,
+                            normalizedSelectedLine
+                        )
+                        : hydrateStage5Defaults(param.id, obs.value, savedObservation?.value);
+
                     return {
                         ...obs,
                         ...savedObservation,
-                        value: hydrateStage5Defaults(param.id, obs.value, savedObservation?.value),
+                        value: mergedValue,
                         selectedLine: obs.timeSlot.startsWith('Line-')
                             ? normalizedSelectedLine
                             : savedObservation?.selectedLine,
@@ -528,22 +572,24 @@ export default function QualityAudit() {
                         setCurrentChecksheetId(existingAudit._id!);
                         const loadedSignatures = existingAudit.data.signatures ||
                             existingAudit.data.data?.signatures ||
-                            { auditBy: existingAudit.data.auditBy, reviewedBy: existingAudit.data.reviewedBy };
+                            {
+                                auditBy: existingAudit.data.auditBy || existingAudit.data.data?.auditBy,
+                                reviewedBy: existingAudit.data.reviewedBy || existingAudit.data.data?.reviewedBy,
+                                auditByImage: existingAudit.data.auditByImage || existingAudit.data.data?.auditByImage,
+                                reviewedByImage: existingAudit.data.reviewedByImage || existingAudit.data.data?.reviewedByImage
+                            };
+                        const loadedAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy');
+                        const loadedReviewedBy = getLoadedSignatureText(loadedSignatures, 'reviewedBy');
+                        const loadedAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy');
+                        const loadedReviewedByImage = getLoadedSignatureImage(loadedSignatures, 'reviewedBy');
 
-                        if (loadedSignatures) {
-                            setAuditBySignature(loadedSignatures.auditBy || '');
-                            setReviewedBySignature(loadedSignatures.reviewedBy || '');
-                            setAuditBySignatureImage(loadedSignatures.auditByImage || '');
-                            setReviewedBySignatureImage(loadedSignatures.reviewedByImage || '');
-                        } else {
-                            setAuditBySignature('');
-                            setReviewedBySignature('');
-                            setAuditBySignatureImage('');
-                            setReviewedBySignatureImage('');
-                        }
+                        setAuditBySignature(loadedAuditBy);
+                        setReviewedBySignature(loadedReviewedBy);
+                        setAuditBySignatureImage(loadedAuditByImage);
+                        setReviewedBySignatureImage(loadedReviewedByImage);
                         
                         // Update last saved data reference
-                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '', loadedSignatures.auditByImage || '', loadedSignatures.reviewedByImage || '');
+                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedAuditBy, loadedReviewedBy, loadedAuditByImage, loadedReviewedByImage);
                     } else {
                         setCurrentChecksheetId(null);
                         lastSavedDataRef.current = '';
@@ -689,50 +735,7 @@ export default function QualityAudit() {
         }
     };
 
-    const handleBackToHome = () => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave? All unsaved data will be lost.',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: () => {
-                    setLineNumber('');
-                    setAuditData({
-                        lineNumber: '',
-                        date: new Date().toISOString().split('T')[0],
-                        shift: '',
-                        productionOrderNo: '',
-                        moduleType: '',
-                        customerSpecAvailable: false,
-                        specificationSignedOff: false,
-                        stages: initialStages,
-                        signatures: {
-                            auditBy: '',
-                            reviewedBy: ''
-                        }
-                    });
-                    setAuditBySignature('');
-                    setAuditBySignatureImage('');
-                    setReviewedBySignature('');
-                    setReviewedBySignatureImage('');
-                    setCurrentChecksheetId(null);
-                    setHasUnsavedChanges(false);
-                    setStageChanges(new Set());
-                    setCurrentView('basicInfo');
-                    setSelectedStageId(null);
-                    lastSavedDataRef.current = '';
-                    navigate('/home');
-                }
-            });
-        } else {
-            setLineNumber('');
-            navigate('/home');
-        }
-    };
-
-    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: string | Record<string, string> | Record<string, Record<string, string>>) => {
+    const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: ObservationValue) => {
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -742,7 +745,12 @@ export default function QualityAudit() {
                         param.id === paramId ? {
                             ...param,
                             observations: param.observations.map(obs =>
-                                obs.timeSlot === timeSlot ? { ...obs, value } : obs
+                                obs.timeSlot === timeSlot ? {
+                                    ...obs,
+                                    value: SAMPLE_GROUPED_STAGE_IDS.has(stageId)
+                                        ? normalizeSampleGroupedValue(value, paramId, obs.lineMapping || {}, obs.selectedLine || '')
+                                        : value
+                                } : obs
                             )
                         } : param
                     )
@@ -783,15 +791,20 @@ export default function QualityAudit() {
                     parameters: stage.parameters.map(param =>
                         param.id === paramId ? {
                             ...param,
-                            observations: param.observations.map(obs =>
-                                obs.timeSlot === timeSlot ? {
+                            observations: param.observations.map(obs => {
+                                if (obs.timeSlot !== timeSlot) return obs;
+                                const lineMapping = {
+                                    ...(obs.lineMapping || {}),
+                                    [groupKey]: selectedLine
+                                };
+                                return {
                                     ...obs,
-                                    lineMapping: {
-                                        ...(obs.lineMapping || {}),
-                                        [groupKey]: selectedLine
-                                    }
-                                } : obs
-                            )
+                                    lineMapping,
+                                    value: SAMPLE_GROUPED_STAGE_IDS.has(stageId)
+                                        ? updateSampleGroupedLineSelection(obs.value, paramId, groupKey, selectedLine, lineMapping, obs.selectedLine || selectedLine)
+                                        : obs.value
+                                };
+                            })
                         } : param
                     )
                 } : stage
@@ -813,13 +826,22 @@ export default function QualityAudit() {
             }
             
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            console.log('Generating Excel with data:', auditData);
+            const exportAuditData = {
+                ...auditData,
+                signatures: {
+                    auditBy: auditBySignature,
+                    reviewedBy: reviewedBySignature,
+                    auditByImage: auditBySignatureImage,
+                    reviewedByImage: reviewedBySignatureImage
+                }
+            };
+            console.log('Generating Excel with data:', exportAuditData);
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(auditData)
+                body: JSON.stringify(exportAuditData)
             });
 
             if (!response.ok) {
@@ -989,23 +1011,25 @@ export default function QualityAudit() {
 
             const loadedSignatures = fullAudit.data.signatures ||
                 fullAudit.data.data?.signatures ||
-                { auditBy: fullAudit.data.auditBy, reviewedBy: fullAudit.data.reviewedBy };
+                {
+                    auditBy: fullAudit.data.auditBy || fullAudit.data.data?.auditBy,
+                    reviewedBy: fullAudit.data.reviewedBy || fullAudit.data.data?.reviewedBy,
+                    auditByImage: fullAudit.data.auditByImage || fullAudit.data.data?.auditByImage,
+                    reviewedByImage: fullAudit.data.reviewedByImage || fullAudit.data.data?.reviewedByImage
+                };
+            const loadedAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy');
+            const loadedReviewedBy = getLoadedSignatureText(loadedSignatures, 'reviewedBy');
+            const loadedAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy');
+            const loadedReviewedByImage = getLoadedSignatureImage(loadedSignatures, 'reviewedBy');
 
-            if (loadedSignatures) {
-                setAuditBySignature(loadedSignatures.auditBy || '');
-                setReviewedBySignature(loadedSignatures.reviewedBy || '');
-                setAuditBySignatureImage(loadedSignatures.auditByImage || '');
-                setReviewedBySignatureImage(loadedSignatures.reviewedByImage || '');
-            } else {
-                setAuditBySignature('');
-                setReviewedBySignature('');
-                setAuditBySignatureImage('');
-                setReviewedBySignatureImage('');
-            }
+            setAuditBySignature(loadedAuditBy);
+            setReviewedBySignature(loadedReviewedBy);
+            setAuditBySignatureImage(loadedAuditByImage);
+            setReviewedBySignatureImage(loadedReviewedByImage);
 
             setLineNumber(fullAudit.data.lineNumber);
             
-            lastSavedDataRef.current = getAuditSnapshot(fullAudit.data, loadedSignatures.auditBy || '', loadedSignatures.reviewedBy || '', loadedSignatures.auditByImage || '', loadedSignatures.reviewedByImage || '');
+            lastSavedDataRef.current = getAuditSnapshot(fullAudit.data, loadedAuditBy, loadedReviewedBy, loadedAuditByImage, loadedReviewedByImage);
 
             showAlert('info', `Editing ${fullAudit.name}`);
         } catch (error) {
@@ -1034,7 +1058,9 @@ export default function QualityAudit() {
                     stages: initialStages,
                     signatures: {
                         auditBy: '',
-                        reviewedBy: ''
+                        reviewedBy: '',
+                        auditByImage: '',
+                        reviewedByImage: ''
                     }
                 });
                 setAuditBySignature('');
@@ -1070,21 +1096,11 @@ export default function QualityAudit() {
                         </div>
                     </div>
                 )}
-                
                 {autoSaveStatus !== 'idle' && (
                     <div className={`fixed bottom-0 right-0 text-white rounded-sm px-3 py-1 text-xs z-40 ${autoSaveStatus === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
                         {autoSaveStatus === 'saving' ? 'Saving...' : autoSaveStatus === 'saved' ? 'Saved' : 'Auto-save failed'}
                     </div>
                 )}
-                
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
                 <div className="flex justify-center mb-2">
                     <button
                         onClick={() => setActiveTab('create-edit')}
@@ -1226,7 +1242,7 @@ export default function QualityAudit() {
                                             </div>
                                             {auditBySignatureImage && (
                                                 <img
-                                                    src={auditBySignatureImage}
+                                                    src={getSignatureImageSrc(auditBySignatureImage)}
                                                     alt="Audit by signature preview"
                                                     className="mx-auto mb-2 h-14 max-w-full object-contain rounded border border-gray-200 dark:border-gray-600 bg-white"
                                                 />
@@ -1257,7 +1273,7 @@ export default function QualityAudit() {
                                             </div>
                                             {reviewedBySignatureImage && (
                                                 <img
-                                                    src={reviewedBySignatureImage}
+                                                    src={getSignatureImageSrc(reviewedBySignatureImage)}
                                                     alt="Reviewed by signature preview"
                                                     className="mx-auto mb-2 h-14 max-w-full object-contain rounded border border-gray-200 dark:border-gray-600 bg-white"
                                                 />

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from datetime import datetime
@@ -11,7 +11,7 @@ from routes.bGrade_route import bgrade_router
 from routes.peel_route import peel_router
 from routes.user_route import user_router
 from routes.gel_route import gel_router
-from routes.adhesion_route import adhesion_router
+from routes.adhesion_route import adhesion_router, get_adhesion_current_user, require_adhesion_export_access
 from routes.potting_ratio_route import potting_router
 from routes.jb_sealant_wt_route import jb_sealant_router
 from routes.frame_sealant_wt_route import frame_sealant_router
@@ -164,8 +164,9 @@ async def generate_gel_report_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/adhesion-test-reports/generate-adhesion-report")
-async def generate_adhesion_report_endpoint(request: dict):
+async def generate_adhesion_report_endpoint(request: dict, x_employee_id: str | None = Header(default=None)):
     try:
+        user = get_adhesion_current_user(x_employee_id)
         report_id = request.get("report_id")
         
         if report_id:
@@ -179,6 +180,7 @@ async def generate_adhesion_report_endpoint(request: dict):
             report = adhesion_test_collection.find_one({"_id": ObjectId(report_id)})
             if not report:
                 raise HTTPException(status_code=404, detail="Report not found")
+            require_adhesion_export_access(report, user)
 
             # Fetch data from S3
             adhesion_report = AdhesionTestReport.from_dict(report)
@@ -191,12 +193,7 @@ async def generate_adhesion_report_endpoint(request: dict):
                 "name": report["name"]
             }
         else:
-            # Current report export - use data from request
-            report_data = {
-                "form_data": request.get("form_data", {}),
-                "averages": request.get("averages", {}),
-                "name": request.get("report_name", "Adhesion_Test_Report")
-            }
+            raise HTTPException(status_code=403, detail="Adhesion Excel can be generated only from submitted saved reports")
 
         output, filename = generate_adhesion_report(report_data)
         return StreamingResponse(

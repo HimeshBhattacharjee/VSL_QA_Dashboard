@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, Fragment } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 import TestHeading from '../components/TestHeading';
+
+type AdhesionWorkflowState = 'draft' | 'submitted' | 'returned';
 
 interface AdhesionTestReport {
     _id?: string;
@@ -11,6 +11,19 @@ interface AdhesionTestReport {
     timestamp: string;
     formData: { [key: string]: string | boolean; };
     averages: { [key: string]: string; };
+    workflowState?: AdhesionWorkflowState;
+    createdByUserId?: string | null;
+    createdByEmployeeName?: string | null;
+    createdByEmployeeId?: string | null;
+    submittedAt?: string | null;
+    submittedBy?: string | null;
+    returnedAt?: string | null;
+    returnedBy?: string | null;
+    returnComments?: string | null;
+    isSigned?: boolean;
+    signedAt?: string | null;
+    updatedAt?: string | null;
+    s3_key?: string;
 }
 
 interface AdhesionAverages {
@@ -33,11 +46,30 @@ const DEFAULT_ADHESION_AVERAGES: AdhesionAverages = {
 const ADHESION_FORM_DATA_KEY = 'adhesionTestFormData';
 const ADHESION_EDITING_REPORT_ID_KEY = 'adhesionTestEditingReportId';
 const ADHESION_EDITING_REPORT_DATA_KEY = 'adhesionTestEditingReportData';
+const ADHESION_LOCAL_DRAFT_KEY = 'adhesionTestPersistentDraft';
+const ADHESION_LOCAL_DRAFT_ID_KEY = 'adhesionTestPersistentDraftId';
+const ADHESION_ACTIVE_SESSION_KEY = 'adhesionTestActiveSession';
+const ADHESION_SESSION_OWNER_KEY = 'adhesionTestSessionOwner';
+const ADHESION_AUTOSAVE_DELAY_MS = 1000;
+
+const getAdhesionSessionOwner = () =>
+    `${sessionStorage.getItem('employeeId') || ''}|${sessionStorage.getItem('userRole') || ''}`;
+
+const markAdhesionSessionOwner = () => {
+    sessionStorage.setItem(ADHESION_SESSION_OWNER_KEY, getAdhesionSessionOwner());
+};
 
 const clearAdhesionDraftStorage = () => {
     sessionStorage.removeItem(ADHESION_FORM_DATA_KEY);
     sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
     sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
+    sessionStorage.removeItem(ADHESION_ACTIVE_SESSION_KEY);
+    sessionStorage.removeItem(ADHESION_SESSION_OWNER_KEY);
+};
+
+const clearAdhesionPersistentDraft = () => {
+    localStorage.removeItem(ADHESION_LOCAL_DRAFT_KEY);
+    localStorage.removeItem(ADHESION_LOCAL_DRAFT_ID_KEY);
 };
 
 const cloneAdhesionReport = (report: AdhesionTestReport): AdhesionTestReport => (
@@ -92,15 +124,31 @@ const isBelowAdhesionThreshold = (value: string, threshold: number): boolean => 
     return !isNaN(numericValue) && numericValue < threshold;
 };
 
+const getWorkflowState = (report?: Pick<AdhesionTestReport, 'workflowState'> | null): AdhesionWorkflowState =>
+    report?.workflowState || 'submitted';
+
+const formatWorkflowState = (state: AdhesionWorkflowState) =>
+    state.charAt(0).toUpperCase() + state.slice(1);
+
+const formatTimestamp = (value?: string | null) =>
+    value ? new Date(value).toLocaleString() : '-';
+
 export default function AdhesionTest() {
-    const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
+    const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports' | 'returned-reports'>('edit-report');
     const [savedReports, setSavedReports] = useState<AdhesionTestReport[]>([]);
     const [adhesionReportName, setAdhesionReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
+    const [currentReportId, setCurrentReportId] = useState<string | null>(null);
+    const [currentWorkflowState, setCurrentWorkflowState] = useState<AdhesionWorkflowState>('draft');
+    const [currentReportMeta, setCurrentReportMeta] = useState<AdhesionTestReport | null>(null);
+    const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [returnModalReportIndex, setReturnModalReportIndex] = useState<number | null>(null);
+    const [returnComment, setReturnComment] = useState('');
+    const [returnCommentError, setReturnCommentError] = useState('');
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -130,10 +178,48 @@ export default function AdhesionTest() {
     const dataValuesRef = useRef<{ [key: string]: string }>({});
     const isRouteActiveRef = useRef(true);
     const editSessionRef = useRef(0);
+    const autosaveTimeoutRef = useRef<number | null>(null);
+    const isHydratingRef = useRef(false);
+    const currentReportIdRef = useRef<string | null>(null);
+    const currentWorkflowStateRef = useRef<AdhesionWorkflowState>('draft');
+    const duplicateNameAlertShownRef = useRef(false);
+
+    const isOperatorRole = userRole === 'Operator';
+    const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
+    const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const canCreateReport = isOperatorRole || isSystemAdminRole;
+    const canEditCurrentReport = isSystemAdminRole
+        || (isOperatorRole && (!currentReportId || ['draft', 'returned'].includes(currentWorkflowState)))
+        || (isReviewerRole && currentReportId !== null && currentWorkflowState === 'submitted');
+    const canSubmitCurrentReport = (isOperatorRole || isSystemAdminRole)
+        && currentWorkflowState !== 'submitted'
+        && preparedBySignature.trim().length > 0;
+    const canExportCurrentReport = currentReportId !== null && currentWorkflowState === 'submitted';
+    const returnedReports = savedReports.filter(report => getWorkflowState(report) === 'returned');
+    const reportsForMainList = isOperatorRole
+        ? savedReports.filter(report => getWorkflowState(report) !== 'returned')
+        : savedReports;
+
+    const authHeaders = (includeJson = false): HeadersInit => ({
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
+        'X-User-Name': sessionStorage.getItem('username') || username || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+    });
+
+    const getFriendlyReportError = (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('409') || message.toLowerCase().includes('already exists')) {
+            return 'Report name already exists. Please choose another name.';
+        }
+        return 'Failed to save report';
+    };
 
     const apiService = {
         getAllReports: async (): Promise<AdhesionTestReport[]> => {
-            const response = await fetch(`${ADHESION_API_BASE_URL}/`);
+            const response = await fetch(`${ADHESION_API_BASE_URL}/`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -141,7 +227,9 @@ export default function AdhesionTest() {
             return response.json();
         },
         getReportById: async (id: string): Promise<AdhesionTestReport> => {
-            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}`);
+            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch report: ${response.status} ${errorText}`);
@@ -151,7 +239,7 @@ export default function AdhesionTest() {
         createReport: async (report: Omit<AdhesionTestReport, '_id'>): Promise<AdhesionTestReport> => {
             const response = await fetch(`${ADHESION_API_BASE_URL}/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -163,7 +251,7 @@ export default function AdhesionTest() {
         updateReport: async (id: string, report: Omit<AdhesionTestReport, '_id'>): Promise<AdhesionTestReport> => {
             const response = await fetch(`${ADHESION_API_BASE_URL}/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -173,7 +261,10 @@ export default function AdhesionTest() {
             return response.json();
         },
         deleteReport: async (id: string): Promise<void> => {
-            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
@@ -189,53 +280,102 @@ export default function AdhesionTest() {
             const result = await response.json();
             return result.exists;
         },
+        submitReport: async (id: string, report: Omit<AdhesionTestReport, '_id'>): Promise<AdhesionTestReport> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}/submit`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to submit report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        returnReport: async (id: string, returnComments: string): Promise<AdhesionTestReport> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}/return`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ returnComments }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to return report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
     };
 
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
+        const currentOwner = getAdhesionSessionOwner();
+        const storedAdhesionOwner = sessionStorage.getItem(ADHESION_SESSION_OWNER_KEY);
+        const hasAdhesionSession = Boolean(
+            sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY)
+            || sessionStorage.getItem(ADHESION_EDITING_REPORT_ID_KEY)
+            || sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY)
+            || sessionStorage.getItem(ADHESION_FORM_DATA_KEY)
+        );
+
+        // Adhesion edit sessions are scoped to the authenticated employee/role.
+        if (hasAdhesionSession && storedAdhesionOwner !== currentOwner) {
+            clearAdhesionDraftStorage();
+            clearAdhesionPersistentDraft();
+        }
+
         setUserRole(storedUserRole);
         setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
+        if (!['Operator', 'Admin', 'System Administrator'].includes(storedUserRole || '')) {
+            setActiveTab('saved-reports');
+        }
     }, []);
 
-    const handleBackToHome = () => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: function () {
-                    clearFormData();
-                    navigate('/home');
-                }
-            });
-        } else {
-            clearFormData();
-            navigate('/home');
+    useEffect(() => {
+        currentReportIdRef.current = currentReportId;
+    }, [currentReportId]);
+
+    useEffect(() => {
+        currentWorkflowStateRef.current = currentWorkflowState;
+    }, [currentWorkflowState]);
+
+    useEffect(() => {
+        if (activeTab === 'returned-reports' && returnedReports.length === 0) {
+            setActiveTab('saved-reports');
         }
-    };
+    }, [activeTab, returnedReports.length]);
 
     useEffect(() => {
         isRouteActiveRef.current = true;
-        clearAdhesionDraftStorage();
         initializeForm();
         loadSavedReports();
-        loadFormData();
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (hasUnsavedChanges) {
-                e.preventDefault();
-                e.returnValue = '';
-                return '';
+        const storedAdhesionOwner = sessionStorage.getItem(ADHESION_SESSION_OWNER_KEY);
+        const persistentDraft = localStorage.getItem(ADHESION_LOCAL_DRAFT_KEY);
+        const currentEmployeeId = sessionStorage.getItem('employeeId') || '';
+        const restorableLocalDraft = (() => {
+            if (!persistentDraft) return false;
+            try {
+                const draft = JSON.parse(persistentDraft) as { ownerEmployeeId?: string };
+                return Boolean(draft.ownerEmployeeId && draft.ownerEmployeeId === currentEmployeeId);
+            } catch {
+                clearAdhesionPersistentDraft();
+                return false;
             }
-        };
-        window.addEventListener('beforeunload', handleBeforeUnload);
+        })();
+        if (['Operator', 'Admin', 'System Administrator'].includes(sessionStorage.getItem('userRole') || '')
+            && (
+                (storedAdhesionOwner === getAdhesionSessionOwner() && sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY))
+                || restorableLocalDraft
+            )) {
+            restoreActiveDraftSession();
+        }
         return () => {
             isRouteActiveRef.current = false;
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            // Clear only Adhesion's unsaved draft/edit cache when leaving this route.
-            clearAdhesionDraftStorage();
+            if (autosaveTimeoutRef.current !== null) {
+                window.clearTimeout(autosaveTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -327,10 +467,15 @@ export default function AdhesionTest() {
 
     useEffect(() => {
         if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
+        duplicateNameAlertShownRef.current = false;
         if (adhesionReportName !== '') saveFormData();
     }, [adhesionReportName]);
 
     const handleAddSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -380,6 +525,10 @@ export default function AdhesionTest() {
     };
 
     const handleRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -417,7 +566,7 @@ export default function AdhesionTest() {
     };
 
     const canRemoveSignature = (section: 'prepared' | 'verified') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentReport) return false;
 
         let currentSignature = '';
         switch (section) {
@@ -433,7 +582,7 @@ export default function AdhesionTest() {
     };
 
     const canAddSignature = (section: 'prepared' | 'verified') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentReport) return false;
 
         let currentSignature = '';
         switch (section) {
@@ -460,12 +609,17 @@ export default function AdhesionTest() {
     const editSavedReport = async (index: number) => {
         try {
             setIsLoading(true);
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const reportMetadata = reports[index];
+            const reportMetadata = savedReports[index];
+            const state = getWorkflowState(reportMetadata);
+
+            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
+                showAlert('error', 'Draft and returned reports are locked until the operator submits them');
+                return;
+            }
             const fullReport = await apiService.getReportById(reportMetadata._id!);
             const selectedReport = cloneAdhesionReport(fullReport);
             const editSessionId = editSessionRef.current + 1;
@@ -473,15 +627,21 @@ export default function AdhesionTest() {
 
             // Start every edit from a clean session before loading the selected report clone.
             clearFormData();
+            markAdhesionSessionOwner();
             sessionStorage.setItem(ADHESION_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
             sessionStorage.setItem(ADHESION_EDITING_REPORT_ID_KEY, selectedReport._id!);
+            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
             setActiveTab('edit-report');
             setTimeout(() => {
                 if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
                 loadReportData(cloneAdhesionReport(selectedReport));
-                setHasUnsavedChanges(true);
+                setHasUnsavedChanges(getWorkflowState(selectedReport) !== 'submitted');
             }, 150);
-            showAlert('info', `Now editing: ${selectedReport.name}`);
+            const selectedState = getWorkflowState(selectedReport);
+            const willBeEditable = isSystemAdminRole
+                || (isOperatorRole && ['draft', 'returned'].includes(selectedState))
+                || (isReviewerRole && selectedState === 'submitted');
+            showAlert('info', `${willBeEditable ? 'Opened' : 'Viewing'}: ${selectedReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -491,6 +651,12 @@ export default function AdhesionTest() {
     };
 
     const loadReportData = (report: AdhesionTestReport) => {
+        isHydratingRef.current = true;
+        setCurrentReportId(report._id || null);
+        currentReportIdRef.current = report._id || null;
+        setCurrentWorkflowState(getWorkflowState(report));
+        currentWorkflowStateRef.current = getWorkflowState(report);
+        setCurrentReportMeta(report);
         setAdhesionReportName(report.name);
 
         // Load date
@@ -557,41 +723,22 @@ export default function AdhesionTest() {
         calculateAverages();
 
         setTimeout(() => {
-            saveFormData();
+            isHydratingRef.current = false;
+            if (getWorkflowState(report) !== 'submitted') {
+                saveFormData();
+            }
         }, 200);
     };
 
-    useEffect(() => {
-        if (activeTab === 'edit-report') {
-            const editingReportData = sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY);
-            if (editingReportData) {
-                const editSessionId = editSessionRef.current;
-                clearFormData(false);
-                setTimeout(() => {
-                    if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
-                    const report = cloneAdhesionReport(JSON.parse(editingReportData) as AdhesionTestReport);
-                    loadReportData(report);
-                    setHasUnsavedChanges(true);
-                }, 100);
-            } else {
-                loadFormData();
-            }
-        }
-    }, [activeTab]);
-
-    const saveFormData = () => {
-        if (!isRouteActiveRef.current) return;
-
+    const buildCurrentFormData = () => {
         const formData: { [key: string]: string | boolean } = {};
 
-        // Save editable text fields
         Object.keys(editableValues).forEach(key => {
             formData[key] = editableValues[key];
         });
 
-        // Save data cells
-        Object.keys(dataValues).forEach(key => {
-            formData[key] = dataValues[key] || '-';
+        Object.keys(dataValuesRef.current).forEach(key => {
+            formData[key] = dataValuesRef.current[key] || '-';
         });
 
         formData.preparedBySignature = preparedBySignature;
@@ -603,60 +750,173 @@ export default function AdhesionTest() {
         formData.laminationPosition = laminationPosition;
         formData.lamParams = JSON.stringify(lamParams);
 
-        sessionStorage.setItem(ADHESION_FORM_DATA_KEY, JSON.stringify(formData));
+        return formData;
     };
 
-    const loadFormData = () => {
+    const buildReportPayload = (): Omit<AdhesionTestReport, '_id'> => {
+        const currentAverages = getAdhesionAverages(dataValuesRef.current);
+        return {
+            name: adhesionReportName.trim(),
+            timestamp: currentReportMeta?.timestamp || new Date().toISOString(),
+            formData: buildCurrentFormData(),
+            averages: { ...currentAverages },
+            workflowState: currentWorkflowState,
+        };
+    };
+
+    const hasMeaningfulDraftContent = () => {
+        const hasEditableValue = Object.values(editableValues).some(value => value.trim().length > 0);
+        const hasDataValue = Object.values(dataValuesRef.current).some(value => value && value !== '-');
+        const hasLamParam = Object.values(lamParams).some(params =>
+            params.pumpingTime || params.pressingTime || params.ventingTime || params.processTime
+        );
+
+        return Boolean(
+            adhesionReportName.trim()
+            || testDate !== new Date().toISOString().split('T')[0]
+            || shift
+            || laminator
+            || laminationPosition
+            || preparedBySignature.trim()
+            || verifiedBySignature.trim()
+            || hasEditableValue
+            || hasDataValue
+            || hasLamParam
+        );
+    };
+
+    const saveFormData = () => {
+        if (!isRouteActiveRef.current) return;
+
+        const formData = buildCurrentFormData();
+        sessionStorage.setItem(ADHESION_FORM_DATA_KEY, JSON.stringify(formData));
+
+        if (canCreateReport && currentWorkflowState !== 'submitted' && hasMeaningfulDraftContent()) {
+            markAdhesionSessionOwner();
+            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
+            localStorage.setItem(ADHESION_LOCAL_DRAFT_KEY, JSON.stringify({
+                reportId: currentReportIdRef.current,
+                ownerEmployeeId: employeeId || sessionStorage.getItem('employeeId') || '',
+                workflowState: currentWorkflowStateRef.current,
+                savedAt: new Date().toISOString(),
+                report: buildReportPayload(),
+            }));
+            if (currentReportIdRef.current) {
+                localStorage.setItem(ADHESION_LOCAL_DRAFT_ID_KEY, currentReportIdRef.current);
+            }
+        }
+    };
+
+    const startFreshReport = () => {
+        if (autosaveTimeoutRef.current !== null) {
+            window.clearTimeout(autosaveTimeoutRef.current);
+            autosaveTimeoutRef.current = null;
+        }
+        editSessionRef.current += 1;
+        // Create Report must be isolated from any previously opened draft/returned/submitted report.
+        clearFormData(true, true);
+        clearAdhesionDraftStorage();
+        markAdhesionSessionOwner();
+        setCurrentWorkflowState('draft');
+        setActiveTab('edit-report');
+    };
+
+    const applyCachedFormData = (formData: { [key: string]: string | boolean }) => {
+        isHydratingRef.current = true;
+
+        if (formData.reportName !== undefined) setAdhesionReportName(formData.reportName as string);
+        if (formData.testDate !== undefined) setTestDate(formData.testDate as string);
+        if (formData.shift !== undefined) setShift(formData.shift as string);
+        if (formData.laminator !== undefined) setLaminator(formData.laminator as string);
+        if (formData.laminationPosition !== undefined) setLaminationPosition(formData.laminationPosition as string);
+        if (formData.lamParams !== undefined) setLamParams(JSON.parse(formData.lamParams as string));
+
+        const editableInputs: { [key: string]: string } = {};
+        for (let i = 0; i <= 33; i++) {
+            const key = `adhesion_editable_${i}`;
+            if (formData[key] !== undefined) {
+                editableInputs[key] = formData[key] as string;
+            }
+        }
+        setEditableValues(editableInputs);
+
+        const dataInputs: { [key: string]: string } = {};
+        for (let i = 0; i <= 19; i++) {
+            const key = `adhesion_data_${i}`;
+            if (formData[key] !== undefined) {
+                dataInputs[key] = formData[key] as string;
+            } else {
+                dataInputs[key] = '-';
+            }
+        }
+        syncDataValues(dataInputs);
+
+        if (formData.preparedBySignature !== undefined) {
+            setPreparedBySignature(formData.preparedBySignature as string);
+        }
+        if (formData.verifiedBySignature !== undefined) {
+            setVerifiedBySignature(formData.verifiedBySignature as string);
+        }
+
+        calculateAverages();
+        setHasUnsavedChanges(true);
+
+        window.setTimeout(() => {
+            isHydratingRef.current = false;
+        }, 0);
+    };
+
+    const restoreActiveDraftSession = () => {
+        const editingReportData = sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY);
+        if (editingReportData && sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY)) {
+            markAdhesionSessionOwner();
+            const report = cloneAdhesionReport(JSON.parse(editingReportData) as AdhesionTestReport);
+            loadReportData(report);
+            setHasUnsavedChanges(getWorkflowState(report) !== 'submitted');
+            return;
+        }
+
+        const persistentDraft = localStorage.getItem(ADHESION_LOCAL_DRAFT_KEY);
+        if (persistentDraft) {
+            const draft = JSON.parse(persistentDraft) as {
+                reportId?: string | null;
+                ownerEmployeeId?: string;
+                workflowState?: AdhesionWorkflowState;
+                report?: Omit<AdhesionTestReport, '_id'>;
+            };
+            const currentEmployeeId = employeeId || sessionStorage.getItem('employeeId') || '';
+            if (draft.ownerEmployeeId && draft.ownerEmployeeId !== currentEmployeeId) {
+                clearAdhesionPersistentDraft();
+                return;
+            }
+            if (draft.report) {
+                const restoredReport: AdhesionTestReport = {
+                    ...draft.report,
+                    _id: draft.reportId || undefined,
+                    workflowState: draft.workflowState || draft.report.workflowState || 'draft',
+                };
+                setCurrentReportId(restoredReport._id || null);
+                currentReportIdRef.current = restoredReport._id || null;
+                setCurrentWorkflowState(getWorkflowState(restoredReport));
+                currentWorkflowStateRef.current = getWorkflowState(restoredReport);
+                setCurrentReportMeta(restoredReport);
+                markAdhesionSessionOwner();
+                sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
+                applyCachedFormData(restoredReport.formData);
+                return;
+            }
+        }
+
         const savedData = sessionStorage.getItem(ADHESION_FORM_DATA_KEY);
         if (savedData) {
-            const formData = JSON.parse(savedData);
-
-            if (formData.reportName !== undefined) setAdhesionReportName(formData.reportName);
-            if (formData.testDate !== undefined) setTestDate(formData.testDate);
-            if (formData.shift !== undefined) setShift(formData.shift);
-            if (formData.laminator !== undefined) setLaminator(formData.laminator);
-            if (formData.laminationPosition !== undefined) setLaminationPosition(formData.laminationPosition);
-            if (formData.lamParams !== undefined) setLamParams(JSON.parse(formData.lamParams));
-
-            // Load editable text fields
-            const editableInputs: { [key: string]: string } = {};
-            for (let i = 0; i <= 33; i++) {
-                const key = `adhesion_editable_${i}`;
-                if (formData[key] !== undefined) {
-                    editableInputs[key] = formData[key];
-                }
-            }
-            setEditableValues(editableInputs);
-
-            // Load data cells
-            const dataInputs: { [key: string]: string } = {};
-            for (let i = 0; i <= 19; i++) {
-                const key = `adhesion_data_${i}`;
-                if (formData[key] !== undefined) {
-                    dataInputs[key] = formData[key];
-                } else {
-                    dataInputs[key] = '-';
-                }
-            }
-            syncDataValues(dataInputs);
-
-            if (formData.preparedBySignature !== undefined) {
-                setPreparedBySignature(formData.preparedBySignature as string);
-            }
-            if (formData.verifiedBySignature !== undefined) {
-                setVerifiedBySignature(formData.verifiedBySignature as string);
-            }
-
-            calculateAverages();
-
-            setHasUnsavedChanges(true);
+            applyCachedFormData(JSON.parse(savedData));
         } else {
-            // Initialize data cells with hyphens if no saved data
             initializeDataCellsWithHyphens();
         }
     };
 
-    const clearFormData = (clearEditingState = true) => {
+    const clearFormData = (clearEditingState = true, clearPersistentDraft = false) => {
+        isHydratingRef.current = true;
         setEditableValues({});
         
         const initialDataInputs: { [key: string]: string } = {};
@@ -679,6 +939,11 @@ export default function AdhesionTest() {
 
         if (clearEditingState) {
             setAdhesionReportName('');
+            setCurrentReportId(null);
+            currentReportIdRef.current = null;
+            setCurrentWorkflowState('draft');
+            currentWorkflowStateRef.current = 'draft';
+            setCurrentReportMeta(null);
             sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
             sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
         }
@@ -688,136 +953,237 @@ export default function AdhesionTest() {
         if (clearEditingState) {
             sessionStorage.removeItem(ADHESION_FORM_DATA_KEY);
         }
+        if (clearPersistentDraft) {
+            clearAdhesionPersistentDraft();
+        }
 
         setHasUnsavedChanges(false);
+        setAutosaveStatus('idle');
+
+        window.setTimeout(() => {
+            isHydratingRef.current = false;
+        }, 0);
     };
 
-    const loadSavedReports = async () => {
+    const autosaveDraft = async () => {
+        if (!canCreateReport || currentWorkflowStateRef.current === 'submitted' || !hasMeaningfulDraftContent()) return;
+
         try {
-            setIsLoading(true);
+            setAutosaveStatus('saving');
+            const payload = buildReportPayload();
+            let savedReport: AdhesionTestReport;
+
+            if (currentReportIdRef.current) {
+                savedReport = await apiService.updateReport(currentReportIdRef.current, payload);
+            } else {
+                savedReport = await apiService.createReport(payload);
+                setCurrentReportId(savedReport._id || null);
+                currentReportIdRef.current = savedReport._id || null;
+                if (savedReport._id) {
+                    localStorage.setItem(ADHESION_LOCAL_DRAFT_ID_KEY, savedReport._id);
+                }
+            }
+
+            setCurrentWorkflowState(getWorkflowState(savedReport));
+            currentWorkflowStateRef.current = getWorkflowState(savedReport);
+            setCurrentReportMeta(savedReport);
+            markAdhesionSessionOwner();
+            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
+            setAutosaveStatus('saved');
+            setHasUnsavedChanges(false);
+            localStorage.setItem(ADHESION_LOCAL_DRAFT_KEY, JSON.stringify({
+                reportId: savedReport._id || currentReportIdRef.current,
+                ownerEmployeeId: employeeId || sessionStorage.getItem('employeeId') || '',
+                workflowState: getWorkflowState(savedReport),
+                savedAt: new Date().toISOString(),
+                report: {
+                    ...payload,
+                    name: savedReport.name,
+                    timestamp: savedReport.timestamp,
+                    workflowState: getWorkflowState(savedReport),
+                },
+            }));
+            await loadSavedReports(false);
+        } catch (error) {
+            console.error('Adhesion autosave failed:', error);
+            const friendlyMessage = getFriendlyReportError(error);
+            if (friendlyMessage.includes('already exists') && !duplicateNameAlertShownRef.current) {
+                duplicateNameAlertShownRef.current = true;
+                showAlert('error', friendlyMessage);
+            }
+            setAutosaveStatus('error');
+        }
+    };
+
+    const scheduleAutosave = () => {
+        if (isHydratingRef.current || !canCreateReport || currentWorkflowState === 'submitted') return;
+
+        saveFormData();
+        if (!hasMeaningfulDraftContent()) return;
+
+        if (autosaveTimeoutRef.current !== null) {
+            window.clearTimeout(autosaveTimeoutRef.current);
+        }
+
+        autosaveTimeoutRef.current = window.setTimeout(() => {
+            autosaveDraft();
+        }, ADHESION_AUTOSAVE_DELAY_MS);
+    };
+
+    useEffect(() => {
+        scheduleAutosave();
+    }, [
+        adhesionReportName,
+        editableValues,
+        dataValues,
+        preparedBySignature,
+        verifiedBySignature,
+        testDate,
+        shift,
+        laminator,
+        laminationPosition,
+        lamParams,
+        userRole,
+        currentWorkflowState,
+    ]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges && currentWorkflowState !== 'submitted') {
+                saveFormData();
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            if (hasUnsavedChanges && currentWorkflowState !== 'submitted') {
+                saveFormData();
+            }
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [
+        hasUnsavedChanges,
+        currentWorkflowState,
+        adhesionReportName,
+        editableValues,
+        dataValues,
+        preparedBySignature,
+        verifiedBySignature,
+        testDate,
+        shift,
+        laminator,
+        laminationPosition,
+        lamParams,
+    ]);
+
+    const loadSavedReports = async (showSpinner = true) => {
+        try {
+            if (showSpinner) setIsLoading(true);
             const reports = await apiService.getAllReports();
             setSavedReports(reports);
         } catch (error) {
             console.error('Error loading reports:', error);
             showAlert('error', 'Failed to load saved reports');
         } finally {
-            setIsLoading(false);
+            if (showSpinner) setIsLoading(false);
         }
     };
 
+    useEffect(() => {
+        const syncAuthScopedState = () => {
+            const nextEmployeeId = sessionStorage.getItem('employeeId');
+            const nextUsername = sessionStorage.getItem('username');
+            const nextUserRole = sessionStorage.getItem('userRole');
+            if (employeeId === null && userRole === null) return;
+            const identityChanged = nextEmployeeId !== employeeId || nextUserRole !== userRole;
+
+            if (!identityChanged) return;
+
+            clearFormData(true, true);
+            clearAdhesionDraftStorage();
+            clearAdhesionPersistentDraft();
+            setSavedReports([]);
+            setEmployeeId(nextEmployeeId);
+            setUsername(nextUsername);
+            setUserRole(nextUserRole);
+            setActiveTab(['Operator', 'Admin', 'System Administrator'].includes(nextUserRole || '') ? 'edit-report' : 'saved-reports');
+            if (nextEmployeeId) {
+                loadSavedReports(false);
+            }
+        };
+
+        window.addEventListener('focus', syncAuthScopedState);
+        window.addEventListener('pageshow', syncAuthScopedState);
+        const authSyncInterval = window.setInterval(syncAuthScopedState, 1000);
+        return () => {
+            window.removeEventListener('focus', syncAuthScopedState);
+            window.removeEventListener('pageshow', syncAuthScopedState);
+            window.clearInterval(authSyncInterval);
+        };
+    }, [employeeId, userRole]);
+
     const saveReport = async () => {
-        if (!adhesionReportName.trim()) {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'You are not authorized to modify this report');
+            return;
+        }
+        if (currentWorkflowState === 'submitted' && !adhesionReportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
 
         try {
             setIsLoading(true);
-            const currentAverages = getAdhesionAverages(dataValuesRef.current);
+            const reportData = buildReportPayload();
 
-            const reportData: Omit<AdhesionTestReport, '_id'> = {
-                name: adhesionReportName,
-                timestamp: new Date().toISOString(),
-                formData: {},
-                averages: { ...currentAverages },
-            };
-
-            // Save editable text fields
-            Object.keys(editableValues).forEach(key => {
-                reportData.formData[key] = editableValues[key];
-            });
-
-            // Save data cells
-            Object.keys(dataValues).forEach(key => {
-                reportData.formData[key] = dataValues[key] || '-';
-            });
-
-            reportData.formData.preparedBySignature = preparedBySignature;
-            reportData.formData.verifiedBySignature = verifiedBySignature;
-            reportData.formData.testDate = testDate;
-            reportData.formData.shift = shift;
-            reportData.formData.laminator = laminator;
-            reportData.formData.laminationPosition = laminationPosition;
-            reportData.formData.lamParams = JSON.stringify(lamParams);
-
-            const editingId = sessionStorage.getItem(ADHESION_EDITING_REPORT_ID_KEY);
-
-            if (editingId) {
-                const existingReport = await apiService.getReportById(editingId);
-                if (adhesionReportName === existingReport.name) {
-                    await apiService.updateReport(editingId, reportData);
-                    showAlert('success', 'Report updated successfully!');
-                } else {
-                    const nameExists = await apiService.checkReportNameExists(adhesionReportName, editingId);
-                    if (nameExists) {
-                        showConfirm({
-                            title: 'Report Name Exists',
-                            message: `A report named "${adhesionReportName}" already exists. Do you want to replace it?`,
-                            type: 'warning',
-                            confirmText: 'Replace',
-                            cancelText: 'Cancel',
-                            onConfirm: async () => {
-                                const allReports = await apiService.getAllReports();
-                                const existingReportWithSameName = allReports.find(report => report.name === adhesionReportName);
-                                if (existingReportWithSameName) {
-                                    await apiService.updateReport(existingReportWithSameName._id!, reportData);
-                                    showAlert('success', 'Report updated successfully!');
-                                } else {
-                                    await apiService.createReport(reportData);
-                                    showAlert('success', 'New report created successfully!');
-                                }
-                                sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
-                                sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
-                                clearFormData();
-                                loadSavedReports();
-                                setActiveTab('saved-reports');
-                            }
-                        });
-                        return;
-                    } else {
-                        await apiService.createReport(reportData);
-                        showAlert('success', 'New report created with updated name!');
-                    }
-                }
-                sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
-                sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
-            } else {
-                const nameExists = await apiService.checkReportNameExists(adhesionReportName);
-                if (nameExists) {
-                    showConfirm({
-                        title: 'Report Name Exists',
-                        message: `A report named "${adhesionReportName}" already exists. Do you want to replace it?`,
-                        type: 'warning',
-                        confirmText: 'Replace',
-                        cancelText: 'Cancel',
-                        onConfirm: async () => {
-                            const allReports = await apiService.getAllReports();
-                            const existingReport = allReports.find(report => report.name === adhesionReportName);
-                            if (existingReport) {
-                                await apiService.updateReport(existingReport._id!, reportData);
-                                showAlert('success', 'Report updated successfully!');
-                            } else {
-                                await apiService.createReport(reportData);
-                                showAlert('success', 'New report created successfully!');
-                            }
-                            clearFormData();
-                            loadSavedReports();
-                            setActiveTab('saved-reports');
-                        }
-                    });
+            if (currentWorkflowState === 'submitted') {
+                if (!currentReportId) {
+                    showAlert('error', 'Submitted report ID is missing');
                     return;
-                } else {
-                    await apiService.createReport(reportData);
-                    showAlert('success', 'Report saved successfully!');
                 }
+                const updatedReport = await apiService.updateReport(currentReportId, reportData);
+                setCurrentReportMeta(updatedReport);
+                showAlert('success', 'Report changes saved successfully');
+                await loadSavedReports(false);
+                return;
             }
 
-            clearFormData();
-            loadSavedReports();
+            if (!preparedBySignature.trim()) {
+                showAlert('error', 'Prepared By signature is required before submission');
+                return;
+            }
+
+            let reportId = currentReportId;
+            if (!reportId) {
+                const draftReport = await apiService.createReport(reportData);
+                reportId = draftReport._id || null;
+                setCurrentReportId(reportId);
+                currentReportIdRef.current = reportId;
+            } else {
+                await apiService.updateReport(reportId, reportData);
+            }
+
+            if (!reportId) {
+                showAlert('error', 'Unable to submit report without a saved draft ID');
+                return;
+            }
+
+            const submittedReport = await apiService.submitReport(reportId, reportData);
+            setCurrentWorkflowState('submitted');
+            currentWorkflowStateRef.current = 'submitted';
+            setCurrentReportMeta(submittedReport);
+            clearAdhesionDraftStorage();
+            clearAdhesionPersistentDraft();
+            setHasUnsavedChanges(false);
+            await loadSavedReports(false);
+            clearFormData(true, true);
             setActiveTab('saved-reports');
+            showAlert('success', currentWorkflowState === 'returned' ? 'Report resubmitted successfully' : 'Report submitted successfully');
         } catch (error) {
             console.error('Error saving report:', error);
-            showAlert('error', 'Failed to save report');
+            showAlert('error', getFriendlyReportError(error));
         } finally {
             setIsLoading(false);
         }
@@ -825,13 +1191,22 @@ export default function AdhesionTest() {
 
     const deleteSavedReport = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const report = reports[index];
+            const report = savedReports[index];
+            const reportState = getWorkflowState(report);
+            const canDeleteDraft = isOperatorRole && reportState === 'draft';
+            const canDeleteSubmitted = (isReviewerRole || isSystemAdminRole) && reportState === 'submitted';
+            if (!canDeleteDraft && !canDeleteSubmitted) {
+                showAlert('error', 'You are not authorized to delete this report');
+                return;
+            }
             await apiService.deleteReport(report._id!);
+            if (report._id === currentReportId) {
+                clearFormData(true, true);
+            }
             await loadSavedReports();
             showAlert('info', 'Report deleted successfully');
         } catch (error) {
@@ -842,40 +1217,16 @@ export default function AdhesionTest() {
 
     const exportToExcel = async () => {
         try {
+            if (!currentReportId || currentWorkflowState !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
+                return;
+            }
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const currentAverages = getAdhesionAverages(dataValuesRef.current);
-
-            const formData: { [key: string]: string | boolean } = {};
-
-            // Save editable text fields
-            Object.keys(editableValues).forEach(key => {
-                formData[key] = editableValues[key];
-            });
-
-            // Save data cells
-            Object.keys(dataValues).forEach(key => {
-                formData[key] = dataValues[key] || '-';
-            });
-
-            formData.preparedBySignature = preparedBySignature;
-            formData.verifiedBySignature = verifiedBySignature;
-            formData.testDate = testDate;
-            formData.shift = shift;
-            formData.laminator = laminator;
-            formData.laminationPosition = laminationPosition;
-            formData.lamParams = JSON.stringify(lamParams);
-
-            const adhesionReportData = {
-                report_name: adhesionReportName.trim() || 'Adhesion_Test_Report',
-                timestamp: new Date().toISOString(),
-                form_data: formData,
-                averages: { ...currentAverages },
-            };
 
             const response = await fetch(`${ADHESION_API_BASE_URL}/generate-adhesion-report`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(adhesionReportData),
+                headers: authHeaders(true),
+                body: JSON.stringify({ report_id: currentReportId }),
             });
 
             if (!response.ok) throw new Error('Failed to generate report');
@@ -899,18 +1250,21 @@ export default function AdhesionTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
 
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
 
-            const report = reports[index];
+            const report = savedReports[index];
+            if (getWorkflowState(report) !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
+                return;
+            }
             const response = await fetch(`${ADHESION_API_BASE_URL}/generate-adhesion-report`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify({ report_id: report._id }),
             });
 
@@ -929,6 +1283,64 @@ export default function AdhesionTest() {
         } catch (error) {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
+        }
+    };
+
+    const openReturnModal = (index: number) => {
+        if (index < 0 || index >= savedReports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+
+        const report = savedReports[index];
+        if (getWorkflowState(report) !== 'submitted') {
+            showAlert('error', 'Only submitted reports can be returned');
+            return;
+        }
+
+        setReturnModalReportIndex(index);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const closeReturnModal = () => {
+        setReturnModalReportIndex(null);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const submitReturnForCorrection = async () => {
+        if (returnModalReportIndex === null) return;
+
+        const trimmedComments = returnComment.trim();
+        if (!trimmedComments) {
+            setReturnCommentError('Comment is required');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const report = savedReports[returnModalReportIndex];
+            await apiService.returnReport(report._id!, trimmedComments);
+            if (currentReportId === report._id) {
+                setCurrentWorkflowState('returned');
+                setCurrentReportMeta(prev => prev ? {
+                    ...prev,
+                    workflowState: 'returned',
+                    returnComments: trimmedComments,
+                    returnedAt: new Date().toISOString(),
+                    returnedBy: username,
+                } : prev);
+            }
+            await loadSavedReports(false);
+            closeReturnModal();
+            showAlert('success', 'Report returned for correction');
+            setActiveTab('saved-reports');
+        } catch (error) {
+            console.error('Error returning report:', error);
+            showAlert('error', 'Failed to return report');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -965,17 +1377,121 @@ export default function AdhesionTest() {
         'adhesion_editable_25', // Glass Size
     ];
 
+    const canOpenListedReport = (report: AdhesionTestReport) =>
+        isSystemAdminRole || isOperatorRole || (isReviewerRole && getWorkflowState(report) === 'submitted');
+
+    const canDeleteListedReport = (report: AdhesionTestReport) =>
+        ((isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted')
+        || (isOperatorRole && getWorkflowState(report) === 'draft');
+
+    const canReturnListedReport = (report: AdhesionTestReport) =>
+        (isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted';
+
+    const getOpenActionLabel = (report: AdhesionTestReport) => {
+        const state = getWorkflowState(report);
+        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
+        if (isOperatorRole && state === 'submitted') return 'View';
+        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+    };
+
+    const renderAdhesionReportsList = (reports: AdhesionTestReport[], title: string) => (
+        <div className="saved-reports-container bg-white dark:bg-gray-900 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
+                {title}
+            </h2>
+            {reports.length === 0 ? (
+                <div className="text-center py-6 md:py-8">
+                    <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">No adhesion reports found.</p>
+                </div>
+            ) : (
+                <div className="reports-list">
+                    {reports.map((report, index) => {
+                        const originalIndex = report._id
+                            ? savedReports.findIndex(savedReport => savedReport._id === report._id)
+                            : savedReports.indexOf(report);
+                        const state = getWorkflowState(report);
+                        const canExport = state === 'submitted' && canOpenListedReport(report);
+                        const canOpen = canOpenListedReport(report);
+
+                        return (
+                            <div
+                                key={report._id || `${report.name}-${index}`}
+                                className="report-item border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
+                            >
+                                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
+                                    <div className="flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
+                                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state === 'submitted' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200' : state === 'returned' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                                {formatWorkflowState(state)}
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                                            <p>Created: {formatTimestamp(report.timestamp)}</p>
+                                            <p>Created by: {report.createdByEmployeeName || report.createdByEmployeeId || 'Legacy report'}</p>
+                                            <p>Updated: {formatTimestamp(report.updatedAt || report.timestamp)}</p>
+                                            {report.submittedAt && <p>Submitted: {formatTimestamp(report.submittedAt)} by {report.submittedBy || '-'}</p>}
+                                            {state === 'returned' && report.returnComments && (
+                                                <p className="text-amber-700 dark:text-amber-300">Return comments: {report.returnComments}</p>
+                                            )}
+                                            {state === 'returned' && (
+                                                <p>Returned: {formatTimestamp(report.returnedAt)} by {report.returnedBy || '-'}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 justify-start md:justify-end">
+                                        <button
+                                            className={`px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
+                                            disabled={!canExport}
+                                            title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
+                                        >
+                                            Excel
+                                        </button>
+                                        <button
+                                            className={`px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => canOpen && originalIndex >= 0 && editSavedReport(originalIndex)}
+                                            disabled={!canOpen}
+                                        >
+                                            {getOpenActionLabel(report)}
+                                        </button>
+                                        {canReturnListedReport(report) && (
+                                            <button
+                                                className="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
+                                                onClick={() => originalIndex >= 0 && openReturnModal(originalIndex)}
+                                            >
+                                                Return
+                                            </button>
+                                        )}
+                                        {canDeleteListedReport(report) && (
+                                            <button
+                                                className="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
+                                                onClick={() => {
+                                                    showConfirm({
+                                                        title: 'Delete Report',
+                                                        message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
+                                                        type: 'warning',
+                                                        confirmText: 'Delete',
+                                                        onConfirm: () => originalIndex >= 0 && deleteSavedReport(originalIndex),
+                                                    });
+                                                }}
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <>
             <div className="mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
@@ -984,27 +1500,96 @@ export default function AdhesionTest() {
                         </div>
                     </div>
                 )}
+                {returnModalReportIndex !== null && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                        <div className="w-full max-w-md rounded-md bg-white p-4 shadow-xl dark:bg-gray-900">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Return for Correction</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {savedReports[returnModalReportIndex]?.name}
+                            </p>
+                            <textarea
+                                value={returnComment}
+                                onChange={(event) => {
+                                    setReturnComment(event.target.value);
+                                    if (returnCommentError) setReturnCommentError('');
+                                }}
+                                rows={4}
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                placeholder="Enter correction comments"
+                            />
+                            {returnCommentError && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{returnCommentError}</p>
+                            )}
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                    onClick={closeReturnModal}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                                    onClick={submitReturnForCorrection}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {canCreateReport && currentWorkflowState !== 'submitted' && autosaveStatus !== 'idle' && (
+                    <div className={`fixed bottom-4 right-4 z-40 rounded-full border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur ${autosaveStatus === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/80 dark:text-red-200'
+                        : autosaveStatus === 'saving'
+                            ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/80 dark:text-blue-200'
+                            : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/80 dark:text-green-200'
+                        }`}
+                    >
+                        {autosaveStatus === 'saving' ? 'Saving...' : autosaveStatus === 'saved' ? 'Saved' : 'Autosave Failed'}
+                    </div>
+                )}
                 <TestHeading
                     heading="Adhesion Test"
                     criteria="Glass to Encapsulant ≥ 60N/cm & Backsheet to Encapsulant ≥ 40N/cm"
                 />
                 <div className="flex justify-center mb-2">
-                    <div
-                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                        onClick={() => setActiveTab('edit-report')}
-                    >
-                        Edit Report
-                    </div>
+                    {canCreateReport && (
+                        <div
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={startFreshReport}
+                        >
+                            Create Report
+                        </div>
+                    )}
                     <div
                         className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
-                        Saved Reports
+                        {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
                     </div>
+                    {isOperatorRole && returnedReports.length > 0 && (
+                        <div
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={() => setActiveTab('returned-reports')}
+                        >
+                            Returned Reports
+                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
+                                {returnedReports.length}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {activeTab === 'edit-report' && (
                     <div className="tab-content active">
+                        {currentWorkflowState === 'returned' && currentReportMeta?.returnComments && (
+                            <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
+                                <strong>Returned for correction:</strong> {currentReportMeta.returnComments}
+                                <div className="mt-1 text-xs">
+                                    Returned by {currentReportMeta.returnedBy || '-'} on {formatTimestamp(currentReportMeta.returnedAt)}
+                                </div>
+                            </div>
+                        )}
                         <div className="save-actions flex flex-col sm:flex-row justify-center items-center gap-3.5">
                             <input
                                 type="text"
@@ -1012,24 +1597,49 @@ export default function AdhesionTest() {
                                 onChange={(e) => setAdhesionReportName(e.target.value)}
                                 className="adhesion-report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter report name"
+                                disabled={!canEditCurrentReport}
                             />
-                            <button
-                                className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-blue-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                onClick={saveReport}
-                            >
-                                Save Report
-                            </button>
-                            <button
-                                className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                onClick={exportToExcel}
-                            >
-                                Export as Excel
-                            </button>
+                            {canCreateReport && currentWorkflowState !== 'submitted' && (
+                                <button
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-gray-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={() => clearFormData(true, true)}
+                                >
+                                    New Report
+                                </button>
+                            )}
+                            {canEditCurrentReport && (
+                                <button
+                                    className={`save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
+                                    onClick={saveReport}
+                                    disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport}
+                                >
+                                    {currentWorkflowState === 'submitted' ? 'Save Changes' : currentWorkflowState === 'returned' ? 'Resubmit Report' : 'Submit Report'}
+                                </button>
+                            )}
+                            {canExportCurrentReport && (
+                                <button
+                                    className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={exportToExcel}
+                                >
+                                    Export as Excel
+                                </button>
+                            )}
+                            {currentReportId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                                <button
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-amber-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={() => {
+                                        const index = savedReports.findIndex(report => report._id === currentReportId);
+                                        if (index >= 0) openReturnModal(index);
+                                    }}
+                                >
+                                    Return for Correction
+                                </button>
+                            )}
                         </div>
-
-                        <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg">
-                            <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
-                                <table ref={tableRef} className="w-full border-collapse min-w-[800px]">
+                        <div className="test-report-container overflow-hidden bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg custom-scrollbar">
+                            <fieldset disabled={!canEditCurrentReport} className={!canEditCurrentReport ? 'w-full min-w-0 opacity-90' : 'w-full min-w-0'}>
+                                <div className="w-full overflow-x-auto rounded-md border border-gray-300 custom-scrollbar dark:border-gray-700">
+                                <table ref={tableRef} className="w-full border-collapse min-w-[1000px]">
                                     <tbody>
                                         <tr>
                                             <td rowSpan={3} className="p-2 bg-gray-100 dark:bg-gray-700">
@@ -1613,22 +2223,23 @@ export default function AdhesionTest() {
                                     </div>
                                 </div>
                             </div>
+                            </fieldset>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        <SavedReportsNChecksheets
-                            reports={savedReports}
-                            onExportExcel={exportSavedReportToExcel}
-                            onEdit={editSavedReport}
-                            onDelete={deleteSavedReport}
-                        />
+                        {renderAdhesionReportsList(reportsForMainList, isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports')}
+                    </div>
+                )}
+
+                {activeTab === 'returned-reports' && isOperatorRole && returnedReports.length > 0 && (
+                    <div className="tab-content active">
+                        {renderAdhesionReportsList(returnedReports, 'Returned Reports')}
                     </div>
                 )}
             </div>
         </>
     );
 }
-

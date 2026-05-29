@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ZoomableChart from '../components/ZoomableChart';
 import { useAlert } from '../context/AlertContext';
@@ -29,7 +28,6 @@ interface DefectAnalysisResponse {
 }
 
 export default function BGradeTrend() {
-    const navigate = useNavigate();
     const [currentAnalysisType, setCurrentAnalysisType] = useState<'b-grade' | 'defect'>('b-grade');
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
@@ -66,10 +64,6 @@ export default function BGradeTrend() {
             fetchAndDisplayData();
         }
     }, [startDate, endDate, currentAnalysisType]);
-
-    const handleBackToHome = () => {
-        navigate('/home');
-    };
 
     const setActiveButton = (type: 'b-grade' | 'defect') => {
         setCurrentAnalysisType(type);
@@ -364,15 +358,7 @@ export default function BGradeTrend() {
 
     return (
         <>
-            <div className="max-w-7xl mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
+            <div className="mx-auto">
                 <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 md:p-6 shadow-2xl transition-colors duration-300">
                     <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-center justify-center flex-wrap">
                         <div className="flex flex-col w-full sm:w-auto">

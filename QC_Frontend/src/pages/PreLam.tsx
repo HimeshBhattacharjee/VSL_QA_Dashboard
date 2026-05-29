@@ -1,14 +1,8 @@
-import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import SummaryGraph from '../components/SummaryGraph';
 
 export default function PreLam() {
-    const navigate = useNavigate();
     const [isLoaded, setIsLoaded] = useState(false);
-
-    const handleBackToHome = () => {
-        navigate('/home');
-    };
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -34,15 +28,7 @@ export default function PreLam() {
 
     return (
         <>
-            <div className="max-w-7xl mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
+            <div className="mx-auto">
                 <div className="reports-container grid grid-cols-1 md:grid-cols-2 gap-6">
                     {reportSections.map((section, index) => (
                         <div

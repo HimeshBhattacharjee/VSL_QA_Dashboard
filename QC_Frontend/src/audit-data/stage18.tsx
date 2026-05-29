@@ -250,6 +250,8 @@ const JunctionBoxFixingObservations = {
                                     onChange={(value) => handleUpdate(line, 'cableSupplier', value)}
                                     options={[
                                         { value: "Suzhou UKT New Energy Technology Co. Ltd", label: "Suzhou UKT New Energy Technology Co. Ltd" },
+                                        { value: "Ningbo Kibor Wire & Cable Co. Ltd.", label: "Ningbo Kibor Wire & Cable Co. Ltd." },
+                                        { value: "Wuxi Xinhongye Wire & Cable Co. Ltd", label: "Wuxi Xinhongye Wire & Cable Co. Ltd" },
                                         { value: "N/A", label: "N/A" }
                                     ]}
                                     type="status"

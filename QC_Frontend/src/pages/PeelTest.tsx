@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ZoomableChart from '../components/ZoomableChart';
@@ -27,7 +26,6 @@ type GraphData = {
 const PEEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/peel';
 
 export default function PeelTest() {
-    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<TabType>('edit-report');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
@@ -341,25 +339,6 @@ export default function PeelTest() {
     useEffect(() => {
         saveFormData();
     }, [selectedDate, selectedShift, currentEditingReport, activeTab, tableData, formData, showReportEditor]);
-
-    const handleBackToHome = () => {
-        if (hasUnsavedChanges) {
-            showConfirm({
-                title: 'Unsaved Changes',
-                message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
-                type: 'warning',
-                confirmText: 'Leave',
-                cancelText: 'Stay',
-                onConfirm: () => {
-                    clearFormData();
-                    navigate('/home');
-                }
-            });
-        } else {
-            clearFormData();
-            navigate('/home');
-        }
-    };
 
     const clearFormData = () => {
         setHasUnsavedChanges(false);
@@ -1394,14 +1373,6 @@ export default function PeelTest() {
     return (
         <>
             <div className="mx-auto">
-                <div className="text-center mb-2">
-                    <button
-                        onClick={handleBackToHome}
-                        className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
-                    >
-                        <span className="font-bold text-md">⇐</span> Back to Home
-                    </button>
-                </div>
                 <TestHeading
                     heading="Solar Cell Peel Strength Test"
                     criteria="Peel strength average ≥ 1.0 N/mm"
