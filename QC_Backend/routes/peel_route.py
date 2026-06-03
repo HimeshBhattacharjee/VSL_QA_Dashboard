@@ -1,373 +1,536 @@
-from fastapi import APIRouter, HTTPException, Query
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
-from typing import Optional
+import re
 from datetime import datetime
-from constants import MONGODB_URI, MONGODB_DB_NAME
+from typing import Any, Dict, Optional
+
+from bson import ObjectId
+from fastapi import APIRouter, HTTPException, Query
+from pymongo import ASCENDING, DESCENDING
+from pymongo.errors import DuplicateKeyError, PyMongoError
+
+from constants import MONGODB_DB_NAME
+from models.peel_data_models import (
+    PEEL_DATA_COLLECTION_NAME,
+    ensure_peel_indexes,
+    insert_manual_peel_record,
+    month_number_from_abbreviation,
+    peel_data_collection,
+    serialize_peel_doc,
+    serialize_peel_docs,
+    update_manual_peel_record,
+)
 
 peel_router = APIRouter(prefix="/api/peel", tags=["Peel Test Data"], responses={404: {"description": "Not found"}})
 
-def get_mongodb_client():
-    try:
-        client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-        client.admin.command('ping')
-        return client
-    except ConnectionFailure as e:
-        raise HTTPException(status_code=503, detail=f"Could not connect to MongoDB: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MongoDB connection error: {str(e)}")
+SORT_FIELDS = {
+    "year": "year",
+    "month": "month",
+    "date": "date",
+    "shift": "shift",
+    "machine": "machine",
+    "module_type": "module_type",
+    "cell_vendor": "cell_vendor",
+    "po_number": "po_number",
+    "file_name": "file_name",
+    "updated_at": "updated_at",
+    "last_extracted_at": "last_extracted_at",
+}
 
-def get_collection_name(date_str):
-    try:
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        month_name = date_obj.strftime('%b').lower()
-        year = date_obj.strftime('%Y')
-        return f"peel_{month_name}_{year}"
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+ALLOWED_SHIFTS = {"A", "B", "C"}
 
-@peel_router.get("/")
-async def peel_root():
+
+def _normalize_month_filter(month: Optional[str]) -> Optional[str]:
+    if not month:
+        return None
+    month_number = month_number_from_abbreviation(month)
+    if month_number:
+        return datetime(2000, month_number, 1).strftime("%b").upper()
+    return str(month).strip().upper()[:3]
+
+
+def _date_key(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return str(value).split("T")[0]
+
+
+def _normalize_shift_filter(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    compact = str(value).strip().upper().replace("SHIFT", "").replace("-", "").strip()
+    if compact not in ALLOWED_SHIFTS:
+        raise HTTPException(status_code=400, detail="Shift must be one of Shift-A, Shift-B, or Shift-C")
+    return compact
+
+
+def _build_query(
+    *,
+    year: Optional[int],
+    month: Optional[str],
+    date: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+    shift: Optional[str],
+    machine: Optional[str],
+    module_type: Optional[str],
+    search: Optional[str],
+) -> Dict[str, Any]:
+    query: Dict[str, Any] = {}
+
+    if year:
+        query["year"] = year
+    normalized_month = _normalize_month_filter(month)
+    if normalized_month:
+        query["month"] = normalized_month
+
+    exact_date = _date_key(date)
+    if exact_date:
+        query["date"] = exact_date
+    else:
+        date_range: Dict[str, str] = {}
+        if start_date:
+            date_range["$gte"] = _date_key(start_date) or start_date
+        if end_date:
+            date_range["$lte"] = _date_key(end_date) or end_date
+        if date_range:
+            query["date"] = date_range
+
+    normalized_shift = _normalize_shift_filter(shift)
+    if normalized_shift:
+        query["shift"] = {"$regex": f"^{re.escape(normalized_shift)}$", "$options": "i"}
+    if machine:
+        query["machine"] = {"$regex": re.escape(machine.strip()), "$options": "i"}
+    if module_type:
+        query["module_type"] = {"$regex": re.escape(module_type.strip()), "$options": "i"}
+    if search:
+        regex = {"$regex": re.escape(search.strip()), "$options": "i"}
+        query["$or"] = [
+            {"date": regex},
+            {"shift": regex},
+            {"machine": regex},
+            {"module_type": regex},
+            {"cell_vendor": regex},
+            {"po_number": regex},
+            {"file_name": regex},
+            {"source_path": regex},
+            {"Date": regex},
+            {"Shift": regex},
+            {"Cell_Vendor": regex},
+            {"PO": regex},
+        ]
+
+    return query
+
+
+def _list_peel_records(
+    *,
+    year: Optional[int],
+    month: Optional[str],
+    date: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+    shift: Optional[str],
+    machine: Optional[str],
+    module_type: Optional[str],
+    search: Optional[str],
+    page: int,
+    page_size: int,
+    sort_by: str,
+    sort_order: str,
+) -> Dict[str, Any]:
+    ensure_peel_indexes()
+    query = _build_query(
+        year=year,
+        month=month,
+        date=date,
+        start_date=start_date,
+        end_date=end_date,
+        shift=shift,
+        machine=machine,
+        module_type=module_type,
+        search=search,
+    )
+    sort_field = SORT_FIELDS.get(sort_by, "date")
+    direction = ASCENDING if sort_order.lower() == "asc" else DESCENDING
+    skip = (page - 1) * page_size
+
+    total = peel_data_collection.count_documents(query)
+    cursor = peel_data_collection.find(query).sort(sort_field, direction).skip(skip).limit(page_size)
+    data = serialize_peel_docs(cursor)
+    return {
+        "status": "success",
+        "collection": PEEL_DATA_COLLECTION_NAME,
+        "filters": query,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size if page_size else 0,
+        },
+        "sort": {"sort_by": sort_field, "sort_order": "asc" if direction == ASCENDING else "desc"},
+        "count": len(data),
+        "data": data,
+    }
+
+
+@peel_router.get("/info")
+async def peel_info():
     return {
         "message": "Peel Test Data API",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "collection": PEEL_DATA_COLLECTION_NAME,
         "endpoints": {
-            "/collections": "List all available collections (months)",
-            "/data": "Get peel test data by date and/or shift",
-            "/date/{date}": "Get all data for a specific date",
-            "/date/{date}/shift/{shift}": "Get data for specific date and shift",
-            "/month/{month}/{year}": "Get all data for a specific month and year",
-            "/graph-data": "Get processed data for graphing by month, year, stringer, and cell face"
-        }
+            "GET /api/peel": "List peel test data with filters, pagination, sorting, and search",
+            "GET /api/peel/{id}": "Get a single peel test record",
+            "POST /api/peel": "Create a peel test record",
+            "PUT /api/peel/{id}": "Update a peel test record",
+            "DELETE /api/peel/{id}": "Delete a peel test record",
+            "/date/{date}/shift/{shift}": "Compatibility endpoint for report generation",
+            "/graph-data": "Compatibility endpoint for peel strength charts",
+        },
     }
+
 
 @peel_router.get("/health")
 async def peel_health_check():
     try:
-        client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME]
-        collections = db.list_collection_names()
-        client.close()        
+        ensure_peel_indexes()
         return {
             "status": "healthy",
             "database": MONGODB_DB_NAME,
-            "collections_count": len(collections),
-            "timestamp": datetime.now().isoformat()
+            "collection": PEEL_DATA_COLLECTION_NAME,
+            "document_count": peel_data_collection.count_documents({}),
+            "timestamp": datetime.now().isoformat(),
         }
-    except Exception as e:
+    except Exception as exc:
         return {
             "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "error": str(exc),
+            "timestamp": datetime.now().isoformat(),
         }
+
 
 @peel_router.get("/collections")
 async def get_collections():
     try:
-        client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME]
-        collections = db.list_collection_names()        
-        collection_info = []
-        for col in collections:
-            count = db[col].count_documents({})
-            collection_info.append({
-                "collection_name": col,
-                "document_count": count
-            })
-        client.close()
+        ensure_peel_indexes()
+        years = list(
+            peel_data_collection.aggregate(
+                [
+                    {"$match": {"year": {"$exists": True}}},
+                    {"$group": {"_id": "$year", "count": {"$sum": 1}}},
+                    {"$sort": {"_id": 1}},
+                ]
+            )
+        )
+        months = list(
+            peel_data_collection.aggregate(
+                [
+                    {"$match": {"year": {"$exists": True}, "month": {"$exists": True}}},
+                    {
+                        "$group": {
+                            "_id": {"year": "$year", "month": "$month", "month_name": "$month_name"},
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"_id.year": 1, "_id.month": 1}},
+                ]
+            )
+        )
         return {
             "status": "success",
-            "total_collections": len(collections),
-            "collections": collection_info
+            "collection": {
+                "collection_name": PEEL_DATA_COLLECTION_NAME,
+                "document_count": peel_data_collection.count_documents({}),
+            },
+            "years": [{"year": item["_id"], "document_count": item["count"]} for item in years],
+            "months": [
+                {
+                    "year": item["_id"].get("year"),
+                    "month": item["_id"].get("month"),
+                    "month_name": item["_id"].get("month_name"),
+                    "document_count": item["count"],
+                }
+                for item in months
+            ],
         }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching collections: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching peel metadata: {str(exc)}")
 
-@peel_router.get("/data")
-async def get_peel_data(
-    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
-    shift: Optional[str] = Query(None, description="Shift (A, B, or C)"),
-    stringer: Optional[int] = Query(None, description="Stringer number"),
-    unit: Optional[str] = Query(None, description="Unit (A or B)")
+
+@peel_router.get("")
+@peel_router.get("/")
+async def get_peel_records(
+    year: Optional[int] = Query(None),
+    month: Optional[str] = Query(None, description="Month abbreviation or number"),
+    date: Optional[str] = Query(None, description="Exact date in YYYY-MM-DD format"),
+    start_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
+    shift: Optional[str] = Query(None),
+    machine: Optional[str] = Query(None),
+    module_type: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    sort_by: str = Query("date"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$"),
 ):
     try:
-        client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME]
-        query_filter = {}
+        return _list_peel_records(
+            year=year,
+            month=month,
+            date=date,
+            start_date=start_date,
+            end_date=end_date,
+            shift=shift,
+            machine=machine,
+            module_type=module_type,
+            search=search,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching peel data: {str(exc)}")
+
+
+@peel_router.get("/data")
+async def get_peel_data_compat(
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
+    shift: Optional[str] = Query(None, description="Shift"),
+    stringer: Optional[int] = Query(None, description="Stringer number"),
+    unit: Optional[str] = Query(None, description="Unit"),
+):
+    try:
+        query: Dict[str, Any] = {}
         if date:
-            query_filter['Date'] = date
-            collection_name = get_collection_name(date)
-            if collection_name not in db.list_collection_names():
-                client.close()
-                return {
-                    "status": "success",
-                    "message": f"No data available for {date}",
-                    "data": []
-                }
-            collection = db[collection_name]
-        else:
-            client.close()
-            raise HTTPException(status_code=400, detail="Date parameter is required")
-        if shift:
-            shift = shift.upper()
-            if shift not in ['A', 'B', 'C']:
-                raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
-            query_filter['Shift'] = shift
+            query["date"] = _date_key(date)
+        normalized_shift = _normalize_shift_filter(shift)
+        if normalized_shift:
+            query["shift"] = {"$regex": f"^{re.escape(normalized_shift)}$", "$options": "i"}
         if stringer:
-            query_filter['Stringer'] = stringer
+            query["$or"] = [{"Stringer": stringer}, {"stringer": stringer}]
         if unit:
-            unit = unit.upper()
-            if unit not in ['A', 'B']:
-                raise HTTPException(status_code=400, detail="Unit must be A or B")
-            query_filter['Unit'] = unit
-        results = list(collection.find(query_filter, {'_id': 0}))
-        client.close()
-        return {
-            "status": "success",
-            "filters": query_filter,
-            "count": len(results),
-            "data": results
-        }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
+            query["Unit"] = {"$regex": f"^{re.escape(unit.strip())}$", "$options": "i"}
+
+        results = serialize_peel_docs(peel_data_collection.find(query).sort("date", ASCENDING))
+        return {"status": "success", "filters": query, "count": len(results), "data": results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching data: {str(exc)}")
+
 
 @peel_router.get("/date/{date}/shift/{shift}")
 async def get_data_by_date_and_shift(date: str, shift: str):
     try:
-        shift = shift.upper()
-        if shift not in ['A', 'B', 'C']:
-            raise HTTPException(status_code=400, detail="Shift must be A, B, or C")
-        client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME]
-        collection_name = get_collection_name(date)
-        if collection_name not in db.list_collection_names():
-            client.close()
-            return {
-                "status": "success",
-                "message": f"No data available for {date} - Shift {shift}",
-                "date": date,
-                "shift": shift,
-                "data": []
-            }
-        collection = db[collection_name]
-        results = list(collection.find(
-            {'Date': date, 'Shift': shift},
-            {'_id': 0}
-        ))
-        client.close()
+        normalized_shift = _normalize_shift_filter(shift)
+        query = {
+            "date": _date_key(date),
+            "shift": {"$regex": f"^{re.escape(normalized_shift or '')}$", "$options": "i"},
+        }
+        results = serialize_peel_docs(peel_data_collection.find(query).sort([("Stringer", ASCENDING), ("Unit", ASCENDING)]))
         return {
             "status": "success",
-            "date": date,
-            "shift": shift,
+            "date": _date_key(date),
+            "shift": normalized_shift,
             "count": len(results),
-            "data": results
+            "data": results,
         }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
-    
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching data: {str(exc)}")
+
+
 @peel_router.get("/graph-data")
 async def get_graph_data(
-    month: str = Query(..., description="Three-letter month abbreviation (jan, feb, mar, etc.)"),
-    year: int = Query(..., description="Four-digit year (e.g., 2024)"),
-    stringer: int = Query(..., description="Stringer number from 1 to 12"),
-    cell_face: str = Query(..., description="Cell face: 'front', 'back', or 'both'")
+    month: str = Query(..., description="Three-letter month abbreviation or month number"),
+    year: int = Query(..., description="Four-digit year"),
+    stringer: int = Query(..., description="Stringer number"),
+    cell_face: str = Query(..., description="Cell face: 'front', 'back', or 'both'"),
 ):
     try:
-        month = month.lower()
-        valid_months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
-                       'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-        if month not in valid_months:
-            raise HTTPException(status_code=400, detail="Invalid month. Use three-letter abbreviation (jan, feb, etc.)")
-        if stringer < 1 or stringer > 12:
-            raise HTTPException(status_code=400, detail="Stringer must be between 1 and 12")
+        normalized_month = _normalize_month_filter(month)
+        if not normalized_month:
+            raise HTTPException(status_code=400, detail="Invalid month")
+        if stringer < 1 or stringer > 99:
+            raise HTTPException(status_code=400, detail="Stringer must be a positive number")
+
         cell_face = cell_face.lower()
-        if cell_face not in ['front', 'back', 'both']:
+        if cell_face not in {"front", "back", "both"}:
             raise HTTPException(status_code=400, detail="Cell face must be 'front', 'back', or 'both'")
-        
-        collection_name = f"peel_{month}_{year}"
-        client = get_mongodb_client()
-        db = client[MONGODB_DB_NAME]
-        
-        if collection_name not in db.list_collection_names():
-            client.close()
-            return {
-                "status": "success",
-                "message": f"No data available for {month.capitalize()} {year}",
-                "month": month,
-                "year": year,
-                "stringer": stringer,
-                "cell_face": cell_face,
-                "data": []
-            }
-        
-        collection = db[collection_name]
-        query_filter = {'Stringer': stringer}
-        results = list(collection.find(query_filter, {'_id': 0}))
-        
+
+        query_filter: Dict[str, Any] = {
+            "year": year,
+            "month": normalized_month,
+            "$or": [
+                {"Stringer": stringer},
+                {"stringer": stringer},
+                {"machine": {"$regex": f"STRINGER\\s*-?\\s*{stringer}(\\D|$)", "$options": "i"}},
+            ],
+        }
+        results = list(peel_data_collection.find(query_filter, {"_id": 0}))
+
         if not results:
-            client.close()
             return {
                 "status": "success",
-                "message": f"No data available for stringer {stringer} in {month.capitalize()} {year}",
-                "month": month,
+                "message": f"No data available for stringer {stringer} in {normalized_month} {year}",
+                "month": normalized_month.lower(),
                 "year": year,
                 "stringer": stringer,
                 "cell_face": cell_face,
-                "data": []
+                "data": [],
             }
-        
-        date_data = {}
+
+        date_data: Dict[str, list] = {}
         for record in results:
-            date = record.get('Date')
-            if date not in date_data:
-                date_data[date] = []
-            date_data[date].append(record)
-        
+            record_date = record.get("date") or record.get("Date")
+            if record_date not in date_data:
+                date_data[record_date] = []
+            date_data[record_date].append(record)
+
         graph_data = []
-        for date, records in sorted(date_data.items()):
+        for record_date, records in sorted(date_data.items()):
             daily_averages = []
             max_values = []
             min_values = []
-            
+
             for record in records:
                 row_averages = []
                 front_row_averages = []
                 back_row_averages = []
-                
-                # Process front side data
-                if cell_face in ['front', 'both']:
-                    front_values = []
-                    # Group front values by position (assuming positions 1-16, ribbons 1-7)
-                    front_positions = {}
+
+                if cell_face in {"front", "both"}:
+                    front_positions: Dict[int, list] = {}
                     for key, value in record.items():
-                        if (key.startswith('Front_') or key.startswith('front_')) and isinstance(value, (int, float)):
-                            # Extract position from key (e.g., Front_1_1 -> position 1)
-                            try:
-                                parts = key.split('_')
-                                if len(parts) >= 3:
-                                    position = int(parts[1])
-                                    if position not in front_positions:
-                                        front_positions[position] = []
-                                    front_positions[position].append(value)
-                            except (ValueError, IndexError):
-                                front_values.append(value)
-                    
-                    # Calculate row averages for front
-                    for position, values in front_positions.items():
+                        if not str(key).lower().startswith("front_") or not isinstance(value, (int, float)):
+                            continue
+                        parts = str(key).split("_")
+                        if len(parts) >= 3 and parts[1].isdigit():
+                            front_positions.setdefault(int(parts[1]), []).append(value)
+                    for values in front_positions.values():
                         if values:
                             row_avg = sum(values) / len(values)
                             front_row_averages.append(row_avg)
                             row_averages.append(row_avg)
-                    
-                    # Also include individual front values if position parsing failed
-                    if front_values and not front_row_averages:
-                        front_avg = sum(front_values) / len(front_values)
-                        front_row_averages.append(front_avg)
-                        row_averages.append(front_avg)
-                
-                # Process back side data
-                if cell_face in ['back', 'both']:
-                    back_values = []
-                    # Group back values by position
-                    back_positions = {}
+
+                if cell_face in {"back", "both"}:
+                    back_positions: Dict[int, list] = {}
                     for key, value in record.items():
-                        if (key.startswith('Back_') or key.startswith('back_')) and isinstance(value, (int, float)):
-                            # Extract position from key (e.g., Back_1_1 -> position 1)
-                            try:
-                                parts = key.split('_')
-                                if len(parts) >= 3:
-                                    position = int(parts[1])
-                                    if position not in back_positions:
-                                        back_positions[position] = []
-                                    back_positions[position].append(value)
-                            except (ValueError, IndexError):
-                                back_values.append(value)
-                    
-                    # Calculate row averages for back
-                    for position, values in back_positions.items():
+                        if not str(key).lower().startswith("back_") or not isinstance(value, (int, float)):
+                            continue
+                        parts = str(key).split("_")
+                        if len(parts) >= 3 and parts[1].isdigit():
+                            back_positions.setdefault(int(parts[1]), []).append(value)
+                    for values in back_positions.values():
                         if values:
                             row_avg = sum(values) / len(values)
                             back_row_averages.append(row_avg)
                             row_averages.append(row_avg)
-                    
-                    # Also include individual back values if position parsing failed
-                    if back_values and not back_row_averages:
-                        back_avg = sum(back_values) / len(back_values)
-                        back_row_averages.append(back_avg)
-                        row_averages.append(back_avg)
-                
-                # Calculate max and min for this record
-                if row_averages:
-                    record_avg = sum(row_averages) / len(row_averages)
-                    daily_averages.append(record_avg)
-                    
-                    # For max and min calculations
-                    if cell_face == 'both' and front_row_averages and back_row_averages:
-                        # For both faces: average of max front and max back
-                        max_front = max(front_row_averages) if front_row_averages else 0
-                        max_back = max(back_row_averages) if back_row_averages else 0
-                        max_both = (max_front + max_back) / 2
-                        
-                        min_front = min(front_row_averages) if front_row_averages else 0
-                        min_back = min(back_row_averages) if back_row_averages else 0
-                        min_both = (min_front + min_back) / 2
-                        
-                        max_values.append(max_both)
-                        min_values.append(min_both)
-                    
-                    elif cell_face == 'front' and front_row_averages:
-                        # For front only: max of all front row averages
-                        max_values.append(max(front_row_averages))
-                        min_values.append(min(front_row_averages))
-                    
-                    elif cell_face == 'back' and back_row_averages:
-                        # For back only: max of all back row averages
-                        max_values.append(max(back_row_averages))
-                        min_values.append(min(back_row_averages))
-            
-            if daily_averages:
-                daily_avg = sum(daily_averages) / len(daily_averages)
-                
-                # Calculate overall max and min for the day
-                daily_max = round(max(max_values), 2) if max_values else None
-                daily_min = round(min(min_values), 2) if min_values else None
-                
-                graph_data.append({
-                    "date": date,
-                    "average_value": round(daily_avg, 2),
-                    "max_value": daily_max,
-                    "min_value": daily_min,
+
+                if not row_averages:
+                    continue
+
+                daily_averages.append(sum(row_averages) / len(row_averages))
+                if cell_face == "both" and front_row_averages and back_row_averages:
+                    max_values.append((max(front_row_averages) + max(back_row_averages)) / 2)
+                    min_values.append((min(front_row_averages) + min(back_row_averages)) / 2)
+                elif cell_face == "front" and front_row_averages:
+                    max_values.append(max(front_row_averages))
+                    min_values.append(min(front_row_averages))
+                elif cell_face == "back" and back_row_averages:
+                    max_values.append(max(back_row_averages))
+                    min_values.append(min(back_row_averages))
+
+            graph_data.append(
+                {
+                    "date": record_date,
+                    "average_value": round(sum(daily_averages) / len(daily_averages), 2) if daily_averages else None,
+                    "max_value": round(max(max_values), 2) if max_values else None,
+                    "min_value": round(min(min_values), 2) if min_values else None,
                     "record_count": len(records),
-                    "unit_count": len(set(record.get('Unit', '') for record in records))
-                })
-            else:
-                graph_data.append({
-                    "date": date,
-                    "average_value": None,
-                    "max_value": None,
-                    "min_value": None,
-                    "record_count": len(records),
-                    "unit_count": len(set(record.get('Unit', '') for record in records)),
-                    "message": "No valid data for selected cell face"
-                })
-        
-        client.close()
+                    "unit_count": len(set(record.get("Unit") or record.get("unit") or "" for record in records)),
+                }
+            )
+
         return {
             "status": "success",
-            "month": month,
+            "month": normalized_month.lower(),
             "year": year,
             "stringer": stringer,
             "cell_face": cell_face,
             "total_days": len(graph_data),
-            "data": graph_data
+            "data": graph_data,
         }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching graph data: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching graph data: {str(exc)}")
+
+
+@peel_router.get("/{record_id}")
+async def get_peel_record(record_id: str):
+    try:
+        if not ObjectId.is_valid(record_id):
+            raise HTTPException(status_code=400, detail="Invalid peel record ID")
+        record = peel_data_collection.find_one({"_id": ObjectId(record_id)})
+        if not record:
+            raise HTTPException(status_code=404, detail="Peel record not found")
+        return {"status": "success", "data": serialize_peel_doc(record)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching peel record: {str(exc)}")
+
+
+@peel_router.post("")
+@peel_router.post("/")
+async def create_peel_record(record_data: dict):
+    try:
+        created = insert_manual_peel_record(record_data)
+        return {"status": "success", "message": "Peel record created", "data": serialize_peel_doc(created)}
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A peel record with the same business key already exists")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PyMongoError as exc:
+        raise HTTPException(status_code=500, detail=f"MongoDB error creating peel record: {str(exc)}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error creating peel record: {str(exc)}")
+
+
+@peel_router.put("/{record_id}")
+async def update_peel_record(record_id: str, record_data: dict):
+    try:
+        updated = update_manual_peel_record(record_id, record_data)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Peel record not found")
+        return {"status": "success", "message": "Peel record updated", "data": serialize_peel_doc(updated)}
+    except HTTPException:
+        raise
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A peel record with the same business key already exists")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PyMongoError as exc:
+        raise HTTPException(status_code=500, detail=f"MongoDB error updating peel record: {str(exc)}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error updating peel record: {str(exc)}")
+
+
+@peel_router.delete("/{record_id}")
+async def delete_peel_record(record_id: str):
+    try:
+        if not ObjectId.is_valid(record_id):
+            raise HTTPException(status_code=400, detail="Invalid peel record ID")
+        result = peel_data_collection.delete_one({"_id": ObjectId(record_id)})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Peel record not found")
+        return {"status": "success", "message": "Peel record deleted"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error deleting peel record: {str(exc)}")

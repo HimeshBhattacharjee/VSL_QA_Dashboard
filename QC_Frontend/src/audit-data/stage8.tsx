@@ -78,16 +78,16 @@ const LineSection = {
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
     }) => (
-        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+        <div className="flex w-full min-w-0 flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
-                <span className="text-sm font-semibold text-gray-700">Auto Tapping & Layup - {line.split('-')[1]}</span>
+                <span className="text-sm font-semibold text-gray-700 break-words">Auto Tapping & Layup - {line.split('-')[1]}</span>
             </div>
-            <div className="flex gap-2">
-                <div className="flex flex-col items-center justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex min-w-0 flex-col items-center justify-between">
                     <span className="text-xs text-gray-500 mb-1">4 hours</span>
                     {children('4hrs')}
                 </div>
-                <div className="flex flex-col items-center justify-between">
+                <div className="flex min-w-0 flex-col items-center justify-between">
                     <span className="text-xs text-gray-500 mb-1">8 hours</span>
                     {children('8hrs')}
                 </div>
@@ -101,9 +101,9 @@ const LineSection = {
         onUpdate: (updatedValue: Record<string, string>) => void;
         children: React.ReactNode;
     }) => (
-        <div className="flex flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
+        <div className="flex w-full min-w-0 flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
-                <span className="text-sm font-semibold text-gray-700">Auto Tapping & Layup - {line.split('-')[1]}</span>
+                <span className="text-sm font-semibold text-gray-700 break-words">Auto Tapping & Layup - {line.split('-')[1]}</span>
             </div>
             {children}
         </div>
@@ -122,7 +122,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type, criteria)} ${className}`}
+            className={`w-full min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type, criteria)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -139,13 +139,13 @@ const InputComponents = {
         type?: 'status' | 'temperature' | 'measurement' | 'date';
         criteria?: string;
     }) => (
-        <div className="flex flex-col items-center">
+        <div className="flex w-full min-w-0 flex-col items-center">
             <input
                 type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
+                className={`min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
             />
         </div>
     )
@@ -164,7 +164,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -202,7 +202,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -240,7 +240,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.SingleInputSection
                         key={line}
@@ -248,8 +248,8 @@ const AutoTapingNLayupObservations = {
                         value={sampleValue}
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
-                        <div className="flex justify-between gap-2">
-                            <div className="flex flex-col gap-1 items-center">
+                        <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="flex min-w-0 flex-col gap-1 items-center">
                                 <span className="text-xs text-gray-500">Supplier</span>
                                 <InputComponents.Select
                                     value={sampleValue[`${line}-Supplier`] || ''}
@@ -263,7 +263,7 @@ const AutoTapingNLayupObservations = {
                                     type="status"
                                 />
                             </div>
-                            <div className="flex flex-col gap-1 items-center">
+                            <div className="flex min-w-0 flex-col gap-1 items-center">
                                 <span className="text-xs text-gray-500">Type</span>
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-Type`] || ''}
@@ -272,7 +272,7 @@ const AutoTapingNLayupObservations = {
                                     type="measurement"
                                 />
                             </div>
-                            <div className="flex flex-col gap-1 items-center">
+                            <div className="flex min-w-0 flex-col gap-1 items-center">
                                 <span className="text-xs text-gray-500">Quantity</span>
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-Quantity`] || ''}
@@ -301,7 +301,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -310,7 +310,7 @@ const AutoTapingNLayupObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         {(timeSlot) => (
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex w-full min-w-0 flex-col items-center gap-1">
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-${timeSlot}`] || ''}
                                     onChange={(value) => handleUpdate(line, timeSlot, value)}
@@ -339,7 +339,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -348,7 +348,7 @@ const AutoTapingNLayupObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         {(timeSlot) => (
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex w-full min-w-0 flex-col items-center gap-1">
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-${timeSlot}`] || ''}
                                     onChange={(value) => handleUpdate(line, timeSlot, value)}
@@ -377,7 +377,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="flex justify-between gap-4">
+            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -386,7 +386,7 @@ const AutoTapingNLayupObservations = {
                         onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
                     >
                         {(timeSlot) => (
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex w-full min-w-0 flex-col items-center gap-1">
                                 <InputComponents.TextInput
                                     value={sampleValue[`${line}-${timeSlot}`] || ''}
                                     onChange={(value) => handleUpdate(line, timeSlot, value)}

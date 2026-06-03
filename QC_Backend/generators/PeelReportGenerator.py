@@ -7,8 +7,8 @@ def fill_peel_basic_info(worksheet, peel_data):
     try:
         form_data = peel_data.get('form_data', {})
         basic_info_mapping = {
-            'preparedBySignature': 'E823',
-            'verifiedBySignature': 'N823',
+            'preparedBySignature': 'E415',
+            'verifiedBySignature': 'N415',
         }
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
@@ -83,10 +83,14 @@ def get_column_letter(col_idx):
     return ''.join(reversed(letters))
 
 def generate_peel_filename(peel_data):
-    report_name = peel_data.get('report_name', 'Peel_Test_Report')
+    report_name = peel_data.get('report_name') or peel_data.get('name', 'Peel_Test_Report')
+    report_line = peel_data.get('line')
     timestamp = peel_data.get('timestamp', '').split('T')[0] if peel_data.get('timestamp') else ''
     clean_name = "".join(c for c in report_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
     clean_name = clean_name.replace(' ', '_')
+    if report_line and report_line.replace(' ', '_') not in clean_name:
+        clean_line = "".join(c for c in report_line if c.isalnum() or c in (' ', '-', '_')).rstrip().replace(' ', '_')
+        clean_name = f"{clean_name}_{clean_line}"
     if timestamp:
         return f"Peel_Test_{clean_name}_{timestamp}.xlsx"
     else:

@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from pymongo import ASCENDING, DESCENDING, MongoClient
 from typing import Optional, Dict, Any
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from s3_service import S3Service
@@ -6,6 +6,18 @@ from s3_service import S3Service
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 adhesion_test_collection = db["adhesion_test_reports"]
+
+def ensure_adhesion_test_indexes() -> None:
+    try:
+        adhesion_test_collection.create_index([("updatedAt", DESCENDING)], name="adhesion_updated_at_desc_idx")
+        adhesion_test_collection.create_index([("timestamp", DESCENDING)], name="adhesion_timestamp_desc_idx")
+        adhesion_test_collection.create_index([("name", ASCENDING)], name="adhesion_name_idx")
+        adhesion_test_collection.create_index([("workflowState", ASCENDING)], name="adhesion_workflow_state_idx")
+        adhesion_test_collection.create_index([("createdByEmployeeId", ASCENDING)], name="adhesion_created_by_employee_id_idx")
+    except Exception as exc:
+        print(f"Warning: failed to ensure adhesion test indexes: {exc}")
+
+ensure_adhesion_test_indexes()
 
 class AdhesionTestReport:
     def __init__(

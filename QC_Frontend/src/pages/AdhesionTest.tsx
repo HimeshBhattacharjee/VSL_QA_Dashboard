@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, Fragment } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import TestHeading from '../components/TestHeading';
+import ReportPagination from '../components/ReportPagination';
+import ReportListControls, { filterSortReports, ReportSortOption } from '../components/ReportListControls';
 
 type AdhesionWorkflowState = 'draft' | 'submitted' | 'returned';
 
@@ -48,22 +50,12 @@ const ADHESION_EDITING_REPORT_ID_KEY = 'adhesionTestEditingReportId';
 const ADHESION_EDITING_REPORT_DATA_KEY = 'adhesionTestEditingReportData';
 const ADHESION_LOCAL_DRAFT_KEY = 'adhesionTestPersistentDraft';
 const ADHESION_LOCAL_DRAFT_ID_KEY = 'adhesionTestPersistentDraftId';
-const ADHESION_ACTIVE_SESSION_KEY = 'adhesionTestActiveSession';
 const ADHESION_SESSION_OWNER_KEY = 'adhesionTestSessionOwner';
-const ADHESION_AUTOSAVE_DELAY_MS = 1000;
-
-const getAdhesionSessionOwner = () =>
-    `${sessionStorage.getItem('employeeId') || ''}|${sessionStorage.getItem('userRole') || ''}`;
-
-const markAdhesionSessionOwner = () => {
-    sessionStorage.setItem(ADHESION_SESSION_OWNER_KEY, getAdhesionSessionOwner());
-};
 
 const clearAdhesionDraftStorage = () => {
     sessionStorage.removeItem(ADHESION_FORM_DATA_KEY);
     sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
     sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
-    sessionStorage.removeItem(ADHESION_ACTIVE_SESSION_KEY);
     sessionStorage.removeItem(ADHESION_SESSION_OWNER_KEY);
 };
 
@@ -145,10 +137,17 @@ export default function AdhesionTest() {
     const [currentReportId, setCurrentReportId] = useState<string | null>(null);
     const [currentWorkflowState, setCurrentWorkflowState] = useState<AdhesionWorkflowState>('draft');
     const [currentReportMeta, setCurrentReportMeta] = useState<AdhesionTestReport | null>(null);
-    const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [returnModalReportIndex, setReturnModalReportIndex] = useState<number | null>(null);
     const [returnComment, setReturnComment] = useState('');
     const [returnCommentError, setReturnCommentError] = useState('');
+    const [mainReportPage, setMainReportPage] = useState(1);
+    const [mainReportPageSize, setMainReportPageSize] = useState(10);
+    const [returnedReportPage, setReturnedReportPage] = useState(1);
+    const [returnedReportPageSize, setReturnedReportPageSize] = useState(10);
+    const [mainReportSearch, setMainReportSearch] = useState('');
+    const [mainReportSort, setMainReportSort] = useState<ReportSortOption>('newest-updated');
+    const [returnedReportSearch, setReturnedReportSearch] = useState('');
+    const [returnedReportSort, setReturnedReportSort] = useState<ReportSortOption>('newest-updated');
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -178,11 +177,9 @@ export default function AdhesionTest() {
     const dataValuesRef = useRef<{ [key: string]: string }>({});
     const isRouteActiveRef = useRef(true);
     const editSessionRef = useRef(0);
-    const autosaveTimeoutRef = useRef<number | null>(null);
     const isHydratingRef = useRef(false);
     const currentReportIdRef = useRef<string | null>(null);
     const currentWorkflowStateRef = useRef<AdhesionWorkflowState>('draft');
-    const duplicateNameAlertShownRef = useRef(false);
 
     const isOperatorRole = userRole === 'Operator';
     const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
@@ -191,6 +188,7 @@ export default function AdhesionTest() {
     const canEditCurrentReport = isSystemAdminRole
         || (isOperatorRole && (!currentReportId || ['draft', 'returned'].includes(currentWorkflowState)))
         || (isReviewerRole && currentReportId !== null && currentWorkflowState === 'submitted');
+    const canSaveDraftCurrentReport = (isOperatorRole || isSystemAdminRole) && currentWorkflowState !== 'submitted';
     const canSubmitCurrentReport = (isOperatorRole || isSystemAdminRole)
         && currentWorkflowState !== 'submitted'
         && preparedBySignature.trim().length > 0;
@@ -310,20 +308,8 @@ export default function AdhesionTest() {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
         const storedEmployeeId = sessionStorage.getItem('employeeId');
-        const currentOwner = getAdhesionSessionOwner();
-        const storedAdhesionOwner = sessionStorage.getItem(ADHESION_SESSION_OWNER_KEY);
-        const hasAdhesionSession = Boolean(
-            sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY)
-            || sessionStorage.getItem(ADHESION_EDITING_REPORT_ID_KEY)
-            || sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY)
-            || sessionStorage.getItem(ADHESION_FORM_DATA_KEY)
-        );
-
-        // Adhesion edit sessions are scoped to the authenticated employee/role.
-        if (hasAdhesionSession && storedAdhesionOwner !== currentOwner) {
-            clearAdhesionDraftStorage();
-            clearAdhesionPersistentDraft();
-        }
+        clearAdhesionDraftStorage();
+        clearAdhesionPersistentDraft();
 
         setUserRole(storedUserRole);
         setUsername(storedUsername);
@@ -348,34 +334,23 @@ export default function AdhesionTest() {
     }, [activeTab, returnedReports.length]);
 
     useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(reportsForMainList.length / mainReportPageSize));
+        setMainReportPage(page => Math.min(page, totalPages));
+    }, [reportsForMainList.length, mainReportPageSize]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(returnedReports.length / returnedReportPageSize));
+        setReturnedReportPage(page => Math.min(page, totalPages));
+    }, [returnedReports.length, returnedReportPageSize]);
+
+    useEffect(() => {
         isRouteActiveRef.current = true;
         initializeForm();
         loadSavedReports();
-        const storedAdhesionOwner = sessionStorage.getItem(ADHESION_SESSION_OWNER_KEY);
-        const persistentDraft = localStorage.getItem(ADHESION_LOCAL_DRAFT_KEY);
-        const currentEmployeeId = sessionStorage.getItem('employeeId') || '';
-        const restorableLocalDraft = (() => {
-            if (!persistentDraft) return false;
-            try {
-                const draft = JSON.parse(persistentDraft) as { ownerEmployeeId?: string };
-                return Boolean(draft.ownerEmployeeId && draft.ownerEmployeeId === currentEmployeeId);
-            } catch {
-                clearAdhesionPersistentDraft();
-                return false;
-            }
-        })();
-        if (['Operator', 'Admin', 'System Administrator'].includes(sessionStorage.getItem('userRole') || '')
-            && (
-                (storedAdhesionOwner === getAdhesionSessionOwner() && sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY))
-                || restorableLocalDraft
-            )) {
-            restoreActiveDraftSession();
-        }
         return () => {
             isRouteActiveRef.current = false;
-            if (autosaveTimeoutRef.current !== null) {
-                window.clearTimeout(autosaveTimeoutRef.current);
-            }
+            clearAdhesionDraftStorage();
+            clearAdhesionPersistentDraft();
         };
     }, []);
 
@@ -423,14 +398,12 @@ export default function AdhesionTest() {
             return updated;
         });
         setHasUnsavedChanges(true);
-        setTimeout(() => saveFormData(), 0);
     };
 
     // Handle editable input changes
     const handleEditableChange = (key: string, value: string) => {
         setEditableValues(prev => ({ ...prev, [key]: value }));
         setHasUnsavedChanges(true);
-        setTimeout(() => saveFormData(), 0);
     };
 
     // Handle data input changes - immediate update with ref for real-time calculation
@@ -440,7 +413,6 @@ export default function AdhesionTest() {
             const newValues = { ...dataValuesRef.current, [key]: value };
             syncDataValues(newValues);
             setHasUnsavedChanges(true);
-            setTimeout(() => saveFormData(), 0);
         } else {
             showAlert('error', 'Please enter a valid number');
         }
@@ -459,16 +431,11 @@ export default function AdhesionTest() {
         if (value === '' || value === null || value === undefined) {
             const newValues = { ...dataValuesRef.current, [key]: '-' };
             syncDataValues(newValues);
-            setTimeout(() => {
-                saveFormData();
-            }, 0);
         }
     };
 
     useEffect(() => {
         if (adhesionReportName.trim() && !hasUnsavedChanges) setHasUnsavedChanges(true);
-        duplicateNameAlertShownRef.current = false;
-        if (adhesionReportName !== '') saveFormData();
     }, [adhesionReportName]);
 
     const handleAddSignature = (section: 'prepared' | 'verified') => {
@@ -518,9 +485,6 @@ export default function AdhesionTest() {
         }
 
         setHasUnsavedChanges(true);
-        setTimeout(() => {
-            saveFormData();
-        }, 0);
         showAlert('success', `Signature added to ${section} section`);
     };
 
@@ -559,9 +523,6 @@ export default function AdhesionTest() {
         }
 
         setHasUnsavedChanges(true);
-        setTimeout(() => {
-            saveFormData();
-        }, 0);
         showAlert('info', `Signature removed from ${section} section`);
     };
 
@@ -625,12 +586,8 @@ export default function AdhesionTest() {
             const editSessionId = editSessionRef.current + 1;
             editSessionRef.current = editSessionId;
 
-            // Start every edit from a clean session before loading the selected report clone.
+            // Start every edit from a clean in-memory session before loading the selected report clone.
             clearFormData();
-            markAdhesionSessionOwner();
-            sessionStorage.setItem(ADHESION_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
-            sessionStorage.setItem(ADHESION_EDITING_REPORT_ID_KEY, selectedReport._id!);
-            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
             setActiveTab('edit-report');
             setTimeout(() => {
                 if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
@@ -724,9 +681,6 @@ export default function AdhesionTest() {
 
         setTimeout(() => {
             isHydratingRef.current = false;
-            if (getWorkflowState(report) !== 'submitted') {
-                saveFormData();
-            }
         }, 200);
     };
 
@@ -764,155 +718,13 @@ export default function AdhesionTest() {
         };
     };
 
-    const hasMeaningfulDraftContent = () => {
-        const hasEditableValue = Object.values(editableValues).some(value => value.trim().length > 0);
-        const hasDataValue = Object.values(dataValuesRef.current).some(value => value && value !== '-');
-        const hasLamParam = Object.values(lamParams).some(params =>
-            params.pumpingTime || params.pressingTime || params.ventingTime || params.processTime
-        );
-
-        return Boolean(
-            adhesionReportName.trim()
-            || testDate !== new Date().toISOString().split('T')[0]
-            || shift
-            || laminator
-            || laminationPosition
-            || preparedBySignature.trim()
-            || verifiedBySignature.trim()
-            || hasEditableValue
-            || hasDataValue
-            || hasLamParam
-        );
-    };
-
-    const saveFormData = () => {
-        if (!isRouteActiveRef.current) return;
-
-        const formData = buildCurrentFormData();
-        sessionStorage.setItem(ADHESION_FORM_DATA_KEY, JSON.stringify(formData));
-
-        if (canCreateReport && currentWorkflowState !== 'submitted' && hasMeaningfulDraftContent()) {
-            markAdhesionSessionOwner();
-            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
-            localStorage.setItem(ADHESION_LOCAL_DRAFT_KEY, JSON.stringify({
-                reportId: currentReportIdRef.current,
-                ownerEmployeeId: employeeId || sessionStorage.getItem('employeeId') || '',
-                workflowState: currentWorkflowStateRef.current,
-                savedAt: new Date().toISOString(),
-                report: buildReportPayload(),
-            }));
-            if (currentReportIdRef.current) {
-                localStorage.setItem(ADHESION_LOCAL_DRAFT_ID_KEY, currentReportIdRef.current);
-            }
-        }
-    };
-
     const startFreshReport = () => {
-        if (autosaveTimeoutRef.current !== null) {
-            window.clearTimeout(autosaveTimeoutRef.current);
-            autosaveTimeoutRef.current = null;
-        }
         editSessionRef.current += 1;
         // Create Report must be isolated from any previously opened draft/returned/submitted report.
         clearFormData(true, true);
         clearAdhesionDraftStorage();
-        markAdhesionSessionOwner();
         setCurrentWorkflowState('draft');
         setActiveTab('edit-report');
-    };
-
-    const applyCachedFormData = (formData: { [key: string]: string | boolean }) => {
-        isHydratingRef.current = true;
-
-        if (formData.reportName !== undefined) setAdhesionReportName(formData.reportName as string);
-        if (formData.testDate !== undefined) setTestDate(formData.testDate as string);
-        if (formData.shift !== undefined) setShift(formData.shift as string);
-        if (formData.laminator !== undefined) setLaminator(formData.laminator as string);
-        if (formData.laminationPosition !== undefined) setLaminationPosition(formData.laminationPosition as string);
-        if (formData.lamParams !== undefined) setLamParams(JSON.parse(formData.lamParams as string));
-
-        const editableInputs: { [key: string]: string } = {};
-        for (let i = 0; i <= 33; i++) {
-            const key = `adhesion_editable_${i}`;
-            if (formData[key] !== undefined) {
-                editableInputs[key] = formData[key] as string;
-            }
-        }
-        setEditableValues(editableInputs);
-
-        const dataInputs: { [key: string]: string } = {};
-        for (let i = 0; i <= 19; i++) {
-            const key = `adhesion_data_${i}`;
-            if (formData[key] !== undefined) {
-                dataInputs[key] = formData[key] as string;
-            } else {
-                dataInputs[key] = '-';
-            }
-        }
-        syncDataValues(dataInputs);
-
-        if (formData.preparedBySignature !== undefined) {
-            setPreparedBySignature(formData.preparedBySignature as string);
-        }
-        if (formData.verifiedBySignature !== undefined) {
-            setVerifiedBySignature(formData.verifiedBySignature as string);
-        }
-
-        calculateAverages();
-        setHasUnsavedChanges(true);
-
-        window.setTimeout(() => {
-            isHydratingRef.current = false;
-        }, 0);
-    };
-
-    const restoreActiveDraftSession = () => {
-        const editingReportData = sessionStorage.getItem(ADHESION_EDITING_REPORT_DATA_KEY);
-        if (editingReportData && sessionStorage.getItem(ADHESION_ACTIVE_SESSION_KEY)) {
-            markAdhesionSessionOwner();
-            const report = cloneAdhesionReport(JSON.parse(editingReportData) as AdhesionTestReport);
-            loadReportData(report);
-            setHasUnsavedChanges(getWorkflowState(report) !== 'submitted');
-            return;
-        }
-
-        const persistentDraft = localStorage.getItem(ADHESION_LOCAL_DRAFT_KEY);
-        if (persistentDraft) {
-            const draft = JSON.parse(persistentDraft) as {
-                reportId?: string | null;
-                ownerEmployeeId?: string;
-                workflowState?: AdhesionWorkflowState;
-                report?: Omit<AdhesionTestReport, '_id'>;
-            };
-            const currentEmployeeId = employeeId || sessionStorage.getItem('employeeId') || '';
-            if (draft.ownerEmployeeId && draft.ownerEmployeeId !== currentEmployeeId) {
-                clearAdhesionPersistentDraft();
-                return;
-            }
-            if (draft.report) {
-                const restoredReport: AdhesionTestReport = {
-                    ...draft.report,
-                    _id: draft.reportId || undefined,
-                    workflowState: draft.workflowState || draft.report.workflowState || 'draft',
-                };
-                setCurrentReportId(restoredReport._id || null);
-                currentReportIdRef.current = restoredReport._id || null;
-                setCurrentWorkflowState(getWorkflowState(restoredReport));
-                currentWorkflowStateRef.current = getWorkflowState(restoredReport);
-                setCurrentReportMeta(restoredReport);
-                markAdhesionSessionOwner();
-                sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
-                applyCachedFormData(restoredReport.formData);
-                return;
-            }
-        }
-
-        const savedData = sessionStorage.getItem(ADHESION_FORM_DATA_KEY);
-        if (savedData) {
-            applyCachedFormData(JSON.parse(savedData));
-        } else {
-            initializeDataCellsWithHyphens();
-        }
     };
 
     const clearFormData = (clearEditingState = true, clearPersistentDraft = false) => {
@@ -958,125 +770,54 @@ export default function AdhesionTest() {
         }
 
         setHasUnsavedChanges(false);
-        setAutosaveStatus('idle');
 
         window.setTimeout(() => {
             isHydratingRef.current = false;
         }, 0);
     };
 
-    const autosaveDraft = async () => {
-        if (!canCreateReport || currentWorkflowStateRef.current === 'submitted' || !hasMeaningfulDraftContent()) return;
+    const saveDraftReport = async () => {
+        if (!canSaveDraftCurrentReport || !canEditCurrentReport) {
+            showAlert('error', 'You are not authorized to save this report');
+            return;
+        }
+        if (!adhesionReportName.trim()) {
+            showAlert('error', 'Please enter a report name');
+            return;
+        }
 
         try {
-            setAutosaveStatus('saving');
-            const payload = buildReportPayload();
-            let savedReport: AdhesionTestReport;
-
-            if (currentReportIdRef.current) {
-                savedReport = await apiService.updateReport(currentReportIdRef.current, payload);
+            setIsLoading(true);
+            const reportData = buildReportPayload();
+            if (currentReportId) {
+                const updatedReport = await apiService.updateReport(currentReportId, reportData);
+                setCurrentReportMeta(updatedReport);
+                setCurrentWorkflowState(getWorkflowState(updatedReport));
+                showAlert('success', 'Draft saved successfully');
             } else {
-                savedReport = await apiService.createReport(payload);
-                setCurrentReportId(savedReport._id || null);
-                currentReportIdRef.current = savedReport._id || null;
-                if (savedReport._id) {
-                    localStorage.setItem(ADHESION_LOCAL_DRAFT_ID_KEY, savedReport._id);
+                const nameExists = await apiService.checkReportNameExists(adhesionReportName);
+                if (nameExists) {
+                    showAlert('error', 'Report name already exists. Open it from the saved reports list.');
+                    return;
                 }
+                const createdReport = await apiService.createReport(reportData);
+                setCurrentReportId(createdReport._id || null);
+                currentReportIdRef.current = createdReport._id || null;
+                setCurrentReportMeta(createdReport);
+                setCurrentWorkflowState(getWorkflowState(createdReport));
+                showAlert('success', 'Draft saved successfully');
             }
-
-            setCurrentWorkflowState(getWorkflowState(savedReport));
-            currentWorkflowStateRef.current = getWorkflowState(savedReport);
-            setCurrentReportMeta(savedReport);
-            markAdhesionSessionOwner();
-            sessionStorage.setItem(ADHESION_ACTIVE_SESSION_KEY, 'true');
-            setAutosaveStatus('saved');
             setHasUnsavedChanges(false);
-            localStorage.setItem(ADHESION_LOCAL_DRAFT_KEY, JSON.stringify({
-                reportId: savedReport._id || currentReportIdRef.current,
-                ownerEmployeeId: employeeId || sessionStorage.getItem('employeeId') || '',
-                workflowState: getWorkflowState(savedReport),
-                savedAt: new Date().toISOString(),
-                report: {
-                    ...payload,
-                    name: savedReport.name,
-                    timestamp: savedReport.timestamp,
-                    workflowState: getWorkflowState(savedReport),
-                },
-            }));
+            clearAdhesionDraftStorage();
+            clearAdhesionPersistentDraft();
             await loadSavedReports(false);
         } catch (error) {
-            console.error('Adhesion autosave failed:', error);
-            const friendlyMessage = getFriendlyReportError(error);
-            if (friendlyMessage.includes('already exists') && !duplicateNameAlertShownRef.current) {
-                duplicateNameAlertShownRef.current = true;
-                showAlert('error', friendlyMessage);
-            }
-            setAutosaveStatus('error');
+            console.error('Error saving draft:', error);
+            showAlert('error', getFriendlyReportError(error));
+        } finally {
+            setIsLoading(false);
         }
     };
-
-    const scheduleAutosave = () => {
-        if (isHydratingRef.current || !canCreateReport || currentWorkflowState === 'submitted') return;
-
-        saveFormData();
-        if (!hasMeaningfulDraftContent()) return;
-
-        if (autosaveTimeoutRef.current !== null) {
-            window.clearTimeout(autosaveTimeoutRef.current);
-        }
-
-        autosaveTimeoutRef.current = window.setTimeout(() => {
-            autosaveDraft();
-        }, ADHESION_AUTOSAVE_DELAY_MS);
-    };
-
-    useEffect(() => {
-        scheduleAutosave();
-    }, [
-        adhesionReportName,
-        editableValues,
-        dataValues,
-        preparedBySignature,
-        verifiedBySignature,
-        testDate,
-        shift,
-        laminator,
-        laminationPosition,
-        lamParams,
-        userRole,
-        currentWorkflowState,
-    ]);
-
-    useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (hasUnsavedChanges && currentWorkflowState !== 'submitted') {
-                saveFormData();
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-            if (hasUnsavedChanges && currentWorkflowState !== 'submitted') {
-                saveFormData();
-            }
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
-    }, [
-        hasUnsavedChanges,
-        currentWorkflowState,
-        adhesionReportName,
-        editableValues,
-        dataValues,
-        preparedBySignature,
-        verifiedBySignature,
-        testDate,
-        shift,
-        laminator,
-        laminationPosition,
-        lamParams,
-    ]);
 
     const loadSavedReports = async (showSpinner = true) => {
         try {
@@ -1394,18 +1135,50 @@ export default function AdhesionTest() {
         return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
     };
 
-    const renderAdhesionReportsList = (reports: AdhesionTestReport[], title: string) => (
-        <div className="saved-reports-container bg-white dark:bg-gray-900 p-4 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+    const renderAdhesionReportsList = (reports: AdhesionTestReport[], title: string, listType: 'main' | 'returned' = 'main') => {
+        const page = listType === 'returned' ? returnedReportPage : mainReportPage;
+        const pageSize = listType === 'returned' ? returnedReportPageSize : mainReportPageSize;
+        const setPage = listType === 'returned' ? setReturnedReportPage : setMainReportPage;
+        const setPageSize = listType === 'returned' ? setReturnedReportPageSize : setMainReportPageSize;
+        const searchTerm = listType === 'returned' ? returnedReportSearch : mainReportSearch;
+        const sortOption = listType === 'returned' ? returnedReportSort : mainReportSort;
+        const setSearchTerm = listType === 'returned' ? setReturnedReportSearch : setMainReportSearch;
+        const setSortOption = listType === 'returned' ? setReturnedReportSort : setMainReportSort;
+        const filteredReports = filterSortReports(reports, searchTerm, sortOption);
+        const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
+        const safePage = Math.min(Math.max(1, page), totalPages);
+        const paginatedReports = filteredReports.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+        return (
+        <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
             <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
                 {title}
             </h2>
-            {reports.length === 0 ? (
+            <ReportListControls
+                searchTerm={searchTerm}
+                sortOption={sortOption}
+                totalCount={reports.length}
+                filteredCount={filteredReports.length}
+                onSearchTermChange={(value) => {
+                    setSearchTerm(value);
+                    setPage(1);
+                }}
+                onSortOptionChange={(value) => {
+                    setSortOption(value);
+                    setPage(1);
+                }}
+                searchPlaceholder="Search by report, creator, employee ID, or status..."
+            />
+            {filteredReports.length === 0 ? (
                 <div className="text-center py-6 md:py-8">
-                    <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">No adhesion reports found.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
+                        {reports.length === 0 ? 'No adhesion reports found.' : 'No matching adhesion reports found.'}
+                    </p>
                 </div>
             ) : (
+                <>
                 <div className="reports-list">
-                    {reports.map((report, index) => {
+                    {paginatedReports.map((report, index) => {
                         const originalIndex = report._id
                             ? savedReports.findIndex(savedReport => savedReport._id === report._id)
                             : savedReports.indexOf(report);
@@ -1416,12 +1189,12 @@ export default function AdhesionTest() {
                         return (
                             <div
                                 key={report._id || `${report.name}-${index}`}
-                                className="report-item border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
+                                className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
                             >
-                                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
-                                    <div className="flex-1">
+                                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                                    <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
+                                            <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
                                             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state === 'submitted' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200' : state === 'returned' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}>
                                                 {formatWorkflowState(state)}
                                             </span>
@@ -1439,9 +1212,9 @@ export default function AdhesionTest() {
                                             )}
                                         </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-2 justify-start md:justify-end">
+                                    <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
                                         <button
-                                            className={`px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                             onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
                                             disabled={!canExport}
                                             title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
@@ -1449,7 +1222,7 @@ export default function AdhesionTest() {
                                             Excel
                                         </button>
                                         <button
-                                            className={`px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                             onClick={() => canOpen && originalIndex >= 0 && editSavedReport(originalIndex)}
                                             disabled={!canOpen}
                                         >
@@ -1457,7 +1230,7 @@ export default function AdhesionTest() {
                                         </button>
                                         {canReturnListedReport(report) && (
                                             <button
-                                                className="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
+                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
                                                 onClick={() => originalIndex >= 0 && openReturnModal(originalIndex)}
                                             >
                                                 Return
@@ -1465,7 +1238,7 @@ export default function AdhesionTest() {
                                         )}
                                         {canDeleteListedReport(report) && (
                                             <button
-                                                className="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
+                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
                                                 onClick={() => {
                                                     showConfirm({
                                                         title: 'Delete Report',
@@ -1485,9 +1258,22 @@ export default function AdhesionTest() {
                         );
                     })}
                 </div>
+                <ReportPagination
+                    totalItems={filteredReports.length}
+                    page={safePage}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={(nextPageSize) => {
+                        setPageSize(nextPageSize);
+                        setPage(1);
+                    }}
+                    itemLabel="reports"
+                />
+                </>
             )}
         </div>
-    );
+        );
+    };
 
     return (
         <>
@@ -1535,17 +1321,6 @@ export default function AdhesionTest() {
                                 </button>
                             </div>
                         </div>
-                    </div>
-                )}
-                {canCreateReport && currentWorkflowState !== 'submitted' && autosaveStatus !== 'idle' && (
-                    <div className={`fixed bottom-4 right-4 z-40 rounded-full border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur ${autosaveStatus === 'error'
-                        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/80 dark:text-red-200'
-                        : autosaveStatus === 'saving'
-                            ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/80 dark:text-blue-200'
-                            : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/80 dark:text-green-200'
-                        }`}
-                    >
-                        {autosaveStatus === 'saving' ? 'Saving...' : autosaveStatus === 'saved' ? 'Saved' : 'Autosave Failed'}
                     </div>
                 )}
                 <TestHeading
@@ -1599,12 +1374,12 @@ export default function AdhesionTest() {
                                 placeholder="Enter report name"
                                 disabled={!canEditCurrentReport}
                             />
-                            {canCreateReport && currentWorkflowState !== 'submitted' && (
+                            {canSaveDraftCurrentReport && canEditCurrentReport && (
                                 <button
-                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-gray-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                    onClick={() => clearFormData(true, true)}
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-slate-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={saveDraftReport}
                                 >
-                                    New Report
+                                    Save Draft
                                 </button>
                             )}
                             {canEditCurrentReport && (
@@ -1692,7 +1467,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         setTestDate(e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 />
@@ -1706,7 +1480,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         setShift(e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -1762,7 +1535,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         setLaminator(e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -1784,7 +1556,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         setLaminationPosition(e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -1956,7 +1727,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         handleEditableChange(editableFieldKeys[19], e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -1990,7 +1760,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         handleEditableChange(editableFieldKeys[21], e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -2024,7 +1793,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         handleEditableChange(editableFieldKeys[23], e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -2046,7 +1814,6 @@ export default function AdhesionTest() {
                                                     onChange={(e) => {
                                                         handleEditableChange(editableFieldKeys[24], e.target.value);
                                                         setHasUnsavedChanges(true);
-                                                        setTimeout(() => saveFormData(), 0);
                                                     }}
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                 >
@@ -2230,13 +1997,13 @@ export default function AdhesionTest() {
 
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        {renderAdhesionReportsList(reportsForMainList, isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports')}
+                        {renderAdhesionReportsList(reportsForMainList, isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports', 'main')}
                     </div>
                 )}
 
                 {activeTab === 'returned-reports' && isOperatorRole && returnedReports.length > 0 && (
                     <div className="tab-content active">
-                        {renderAdhesionReportsList(returnedReports, 'Returned Reports')}
+                        {renderAdhesionReportsList(returnedReports, 'Returned Reports', 'returned')}
                     </div>
                 )}
             </div>

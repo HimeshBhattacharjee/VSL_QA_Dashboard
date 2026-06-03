@@ -297,12 +297,27 @@ def extract_safety_module_ids(stages):
     return {}
 
 def get_writable_cell(worksheet, cell_ref):
-    cell = worksheet[cell_ref]
-    if isinstance(cell, MergedCell):
-        for merged_range in worksheet.merged_cells.ranges:
-            if cell.coordinate in merged_range:
-                return worksheet[merged_range.coord.split(":")[0]]
-    return cell
+    try:
+        cell = worksheet[cell_ref]
+        if isinstance(cell, MergedCell):
+            for merged_range in worksheet.merged_cells.ranges:
+                if cell.coordinate in merged_range:
+                    return worksheet[merged_range.coord.split(":")[0]]
+        return cell
+    except Exception as e:
+        print(f"Warning: invalid or inaccessible Excel cell reference {cell_ref}: {str(e)}")
+        return None
+
+def safe_set_cell(worksheet, cell_ref, value, raw=False, **format_options):
+    cell = get_writable_cell(worksheet, cell_ref)
+    if cell is None:
+        return False
+    if raw:
+        set_cell_raw_value(cell, value)
+    else:
+        set_cell_value(cell, value)
+    apply_cell_formatting(cell, **format_options)
+    return True
 
 def extract_signature_image_key(image_source):
     if not isinstance(image_source, str):
@@ -2632,15 +2647,17 @@ def resolve_signature(audit_data, signature_key):
 def write_signature(worksheet, text_cell_ref, image_cell_ref, text_value, image_value, format_options, signature_label='Signature'):
     if text_value:
         text_cell = get_writable_cell(worksheet, text_cell_ref)
-        text_cell.value = text_value
-        apply_cell_formatting(text_cell, **{**format_options, 'horizontal': 'left'})
+        if text_cell is not None:
+            text_cell.value = text_value
+            apply_cell_formatting(text_cell, **{**format_options, 'horizontal': 'left'})
 
     if image_value:
         print(f"{signature_label} image reference found: {describe_signature_image_source(image_value)}")
         image_cell = get_writable_cell(worksheet, image_cell_ref)
         if insert_signature_image(worksheet, image_cell_ref, image_value):
-            image_cell.value = None
-            apply_cell_formatting(image_cell, **format_options)
+            if image_cell is not None:
+                image_cell.value = None
+                apply_cell_formatting(image_cell, **format_options)
     elif text_value:
         print(f"Warning: {signature_label} text signature exists but image reference is missing; continuing without image")
 
@@ -2664,82 +2681,79 @@ def get_line_selection_bucket(time_slot):
 
 def fill_line_dropdown_values(worksheet, audit_data):
     """Export selected line dropdowns into their template header cells."""
-    for stage in audit_data.get('stages', []):
-        for parameter in stage.get('parameters', []):
-            param_id = parameter.get('id', '')
-            for observation in parameter.get('observations', []):
-                selected_line = observation.get('selectedLine')
-                line_cells = LINE_SELECTION_CELL_MAPPINGS.get(param_id)
-                if selected_line and line_cells:
-                    bucket = get_line_selection_bucket(observation.get('timeSlot', ''))
-                    cell_ref = line_cells.get(bucket)
-                    if cell_ref:
-                        cell = get_writable_cell(worksheet, cell_ref)
-                        set_cell_raw_value(cell, normalize_line_value(selected_line))
-                        apply_cell_formatting(cell, horizontal='center')
+    try:
+        for stage in audit_data.get('stages', []) or []:
+            if not isinstance(stage, dict):
+                continue
+            for parameter in stage.get('parameters', []) or []:
+                if not isinstance(parameter, dict):
+                    continue
+                param_id = parameter.get('id', '')
+                for observation in parameter.get('observations', []) or []:
+                    if not isinstance(observation, dict):
+                        continue
+                    selected_line = observation.get('selectedLine')
+                    line_cells = LINE_SELECTION_CELL_MAPPINGS.get(param_id)
+                    if selected_line and line_cells:
+                        bucket = get_line_selection_bucket(observation.get('timeSlot', ''))
+                        cell_ref = line_cells.get(bucket)
+                        if cell_ref:
+                            safe_set_cell(worksheet, cell_ref, normalize_line_value(selected_line), raw=True, horizontal='center')
 
-                group_cells = GROUPED_LINE_SELECTION_CELL_MAPPINGS.get(param_id)
-                if group_cells:
-                    grouped_line_mapping = get_grouped_sample_line_mapping(observation.get('value', {}))
-                    for group_key in SAMPLE_GROUP_ORDER:
-                        line_value = grouped_line_mapping.get(group_key)
-                        cell_ref = group_cells.get(group_key)
-                        if line_value and cell_ref:
-                            cell = get_writable_cell(worksheet, cell_ref)
-                            set_cell_raw_value(cell, normalize_line_value(line_value))
-                            apply_cell_formatting(cell, horizontal='center')
+                    group_cells = GROUPED_LINE_SELECTION_CELL_MAPPINGS.get(param_id)
+                    if group_cells:
+                        grouped_line_mapping = get_grouped_sample_line_mapping(observation.get('value', {}))
+                        for group_key in SAMPLE_GROUP_ORDER:
+                            line_value = grouped_line_mapping.get(group_key)
+                            cell_ref = group_cells.get(group_key)
+                            if line_value and cell_ref:
+                                safe_set_cell(worksheet, cell_ref, normalize_line_value(line_value), raw=True, horizontal='center')
+    except Exception as e:
+        print(f"Warning: failed to export some line dropdown values: {str(e)}")
 
 def fill_basic_info(worksheet, audit_data, field_config):
     try:
         if audit_data.get('date'):
             cell_ref = field_config['date']['cell']
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = audit_data['date']
-            apply_cell_formatting(cell, **field_config['date']['format'])
+            safe_set_cell(worksheet, cell_ref, audit_data['date'], raw=True, **field_config['date'].get('format', {}))
 
         if audit_data.get('shift'):
             cell_ref = field_config['shift']['cell']
             shift_map = {'A': 'A', 'B': 'B', 'C': 'C', 'G': 'G'}
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = shift_map.get(audit_data['shift'], audit_data['shift'])
-            apply_cell_formatting(cell, **field_config['shift']['format'])
+            safe_set_cell(worksheet, cell_ref, shift_map.get(audit_data['shift'], audit_data['shift']), raw=True, **field_config['shift'].get('format', {}))
 
         if audit_data.get('productionOrderNo'):
             cell_ref = field_config['production_order']['cell']
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = audit_data['productionOrderNo']
-            apply_cell_formatting(cell, **field_config['production_order']['format'])
+            safe_set_cell(worksheet, cell_ref, audit_data['productionOrderNo'], raw=True, **field_config['production_order'].get('format', {}))
 
         if audit_data.get('moduleType'):
             cell_ref = field_config['module_type']['cell']
-            cell = get_writable_cell(worksheet, cell_ref)
-            cell.value = audit_data['moduleType']
-            apply_cell_formatting(cell, **field_config['module_type']['format'])
+            safe_set_cell(worksheet, cell_ref, audit_data['moduleType'], raw=True, **field_config['module_type'].get('format', {}))
 
         audit_by_text, audit_by_image = resolve_signature(audit_data, 'auditBy')
-        write_signature(worksheet, 'C405', 'C407', audit_by_text, audit_by_image, field_config['audit_by']['format'], 'Audit By')
+        audit_by_cell = field_config.get('audit_by', {}).get('cell', 'C405')
+        audit_by_image_cell = field_config.get('auditByImage', {}).get('cell', 'C407')
+        write_signature(worksheet, audit_by_cell, audit_by_image_cell, audit_by_text, audit_by_image, field_config.get('audit_by', {}).get('format', {}), 'Audit By')
 
         reviewed_by_text, reviewed_by_image = resolve_signature(audit_data, 'reviewedBy')
-        write_signature(worksheet, 'O405', 'O407', reviewed_by_text, reviewed_by_image, field_config['reviewed_by']['format'], 'Reviewed By')
+        reviewed_by_cell = field_config.get('reviewed_by', {}).get('cell', 'O405')
+        reviewed_by_image_cell = field_config.get('reviewedByImage', {}).get('cell', 'O407')
+        write_signature(worksheet, reviewed_by_cell, reviewed_by_image_cell, reviewed_by_text, reviewed_by_image, field_config.get('reviewed_by', {}).get('format', {}), 'Reviewed By')
 
         customer_spec = 'Yes' if audit_data.get('customerSpecAvailable') else 'No'
         spec_signed = 'Yes' if audit_data.get('specificationSignedOff') else 'No'
 
         cell_ref = field_config['customer_spec_available']['cell']
-        cell = get_writable_cell(worksheet, cell_ref)
-        cell.value = customer_spec
-        apply_cell_formatting(cell, **field_config['customer_spec_available']['format'])
+        safe_set_cell(worksheet, cell_ref, customer_spec, raw=True, **field_config['customer_spec_available'].get('format', {}))
 
         cell_ref = field_config['spec_signed_off']['cell']
-        cell = get_writable_cell(worksheet, cell_ref)
-        cell.value = spec_signed
-        apply_cell_formatting(cell, **field_config['spec_signed_off']['format'])
+        safe_set_cell(worksheet, cell_ref, spec_signed, raw=True, **field_config['spec_signed_off'].get('format', {}))
 
         print("Basic information filled and formatted successfully")
         
     except Exception as e:
         print(f"Error filling basic info: {str(e)}")
-        raise
+        print("Warning: continuing audit export without some basic info fields")
 
 def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
     try:
@@ -2873,7 +2887,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
         print("Observations data filled successfully")
     except Exception as e:
         print(f"Error filling observations data: {str(e)}")
-        raise
+        print("Warning: continuing audit export with partially filled observations")
 
 def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping):
     """Handle parameters with Sample-1, Sample-2, etc. structure"""
@@ -3235,6 +3249,11 @@ def generate_audit_report(audit_data):
         print("Received audit data for report generation")
         line_number = audit_data.get('lineNumber', 'I')
         template_path, field_config, observation_cell_mapping = get_template_config(line_number)
+        if not template_path or not os.path.exists(template_path):
+            raise FileNotFoundError(f"Audit template could not be loaded for line {line_number}: {template_path}")
+        if not isinstance(observation_cell_mapping, dict):
+            print("Warning: observation cell mapping is invalid; continuing without observations")
+            observation_cell_mapping = {}
         wb = load_workbook(template_path)
         setup_cell_styles(wb)
         ws = wb.active

@@ -7,7 +7,7 @@ const LaminateInspectionObservations = {
     },
 
     renderInputNumber: (props: ObservationRenderProps) => {
-        const value = props.value as string;
+        const value = typeof props.value === 'string' ? props.value : '';
         const numericValue = parseFloat(value);
         const isOff = value.toLowerCase() === 'off';
         let isOutOfRange = false;
@@ -31,12 +31,12 @@ const LaminateInspectionObservations = {
         else if (isOutOfRange) bgColor = 'bg-red-100';
 
         return (
-            <div className="flex flex-col items-center">
+            <div className="flex w-full min-w-0 flex-col items-center">
                 <input
                     type="text"
                     value={value}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${bgColor}`}
+                    className={`w-full min-w-0 px-3 py-2 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${bgColor}`}
                 />
                 <span className="text-xs text-gray-500 mt-1">mm</span>
             </div>

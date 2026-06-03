@@ -5,7 +5,8 @@ import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
-import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
+import ReportListControls, { ReportSortOption } from '../components/ReportListControls';
+import ReportPagination from '../components/ReportPagination';
 import { createTabbingStringingStage } from '../audit-data/stage5';
 import { createAutoBussingStage } from '../audit-data/stage7';
 import { createAutoTapingNLayupStage } from '../audit-data/stage8';
@@ -28,7 +29,20 @@ import {
 
 const DYNAMIC_LINE_STAGE_IDS = new Set([2, 3, 9, 10, 11, 12, 16, 23, 27, 29]);
 const SAMPLE_GROUPED_STAGE_IDS = new Set([12, 16, 23, 27, 29]);
+const SAMPLE_GROUPED_PARAMETER_IDS = new Set(["12-1", "12-2", "16-1", "23-1", "27-1", "29-1"]);
 const SAMPLE_GROUP_KEYS = ["2h", "4h", "6h", "8h"] as const;
+const AUTOSAVE_DELAY_MS = 1200;
+
+type AuditWorkflowState = 'draft' | 'submitted' | 'returned';
+
+const getWorkflowState = (checksheet?: Pick<SavedChecksheet, 'workflowState'> | null): AuditWorkflowState =>
+    checksheet?.workflowState || 'submitted';
+
+const formatWorkflowState = (state: AuditWorkflowState) =>
+    state.charAt(0).toUpperCase() + state.slice(1);
+
+const formatTimestamp = (value?: string | number | null) =>
+    value ? new Date(value).toLocaleString() : '-';
 
 const getDynamicLineOptions = (lineNumber: string) => lineNumber === 'II' ? ['3', '4'] : ['1', '2'];
 
@@ -39,6 +53,8 @@ const getDefaultLineMapping = (lineOptions: string[]) => {
     const secondLine = getSelectedLineFromSlot(lineOptions[1] || lineOptions[0] || '');
     return { "2h": firstLine, "4h": firstLine, "6h": secondLine, "8h": secondLine };
 };
+
+const isSampleGroupedParameter = (paramId: string) => SAMPLE_GROUPED_PARAMETER_IDS.has(paramId);
 
 const hydrateStage5Defaults = (paramId: string, defaultValue: any, savedValue: any) => {
     if (!['5-5-cell-appearance', '5-15-el-inspection'].includes(paramId) || typeof defaultValue !== 'object' || defaultValue === null) {
@@ -105,11 +121,28 @@ interface SavedChecksheet {
     name: string;
     timestamp: number;
     updatedTimestamp?: number;
-    data: AuditData;
+    data?: AuditData;
+    lineNumber?: string;
+    date?: string;
+    shift?: string;
+    productionOrderNo?: string;
+    moduleType?: string;
+    status?: string;
+    workflowState?: AuditWorkflowState;
+    createdBy?: string;
+    createdByUserId?: string | null;
+    createdByEmployeeName?: string | null;
+    createdByEmployeeId?: string | null;
+    submittedAt?: string | null;
+    submittedBy?: string | null;
+    returnedAt?: string | null;
+    returnedBy?: string | null;
+    returnComments?: string | null;
+    isSigned?: boolean;
+    signedAt?: string | null;
 }
 
-const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
-    return useMemo(() => {
+const buildLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
         if (!lineNumber) return baseStages;
         return baseStages.map(stage => {
             if (stage.id === 5) return createTabbingStringingStage(lineNumber);
@@ -159,23 +192,44 @@ const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => 
                 })
             };
         });
-    }, [baseStages, lineNumber]);
+};
+
+const useLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
+    return useMemo(() => buildLineDependentStages(baseStages, lineNumber), [baseStages, lineNumber]);
 };
 
 export default function QualityAudit() {
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const { lineNumber, setLineNumber } = useLine();
-    const [activeTab, setActiveTab] = useState<'create-edit' | 'saved-reports'>('create-edit');
+    const [activeTab, setActiveTab] = useState<'create-edit' | 'saved-reports' | 'returned-reports'>('create-edit');
     const [currentView, setCurrentView] = useState<'basicInfo' | 'stageSelection' | 'stageDetail'>('basicInfo');
     const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
     const [_, setHasUnsavedChanges] = useState<boolean>(false);
     const [stageChanges, setStageChanges] = useState<Set<number>>(new Set());
     const [savedChecksheets, setSavedChecksheets] = useState<SavedChecksheet[]>([]);
+    const [savedChecksheetsTotal, setSavedChecksheetsTotal] = useState(0);
+    const [savedChecksheetsPage, setSavedChecksheetsPage] = useState(1);
+    const [savedChecksheetsPageSize, setSavedChecksheetsPageSize] = useState(20);
+    const [savedChecksheetsSearch, setSavedChecksheetsSearch] = useState('');
+    const [savedChecksheetsSearchInput, setSavedChecksheetsSearchInput] = useState('');
+    const [savedChecksheetsSort, setSavedChecksheetsSort] = useState<ReportSortOption>('newest-created');
+    const [isSavedChecksheetsLoading, setIsSavedChecksheetsLoading] = useState(false);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
+    const [currentWorkflowState, setCurrentWorkflowState] = useState<AuditWorkflowState>('draft');
+    const [currentChecksheetMeta, setCurrentChecksheetMeta] = useState<SavedChecksheet | null>(null);
+    const [returnedChecksheets, setReturnedChecksheets] = useState<SavedChecksheet[]>([]);
+    const [returnedChecksheetsTotal, setReturnedChecksheetsTotal] = useState(0);
+    const [returnedChecksheetsPage, setReturnedChecksheetsPage] = useState(1);
+    const [returnedChecksheetsPageSize, setReturnedChecksheetsPageSize] = useState(20);
+    const [returnedChecksheetsSearchInput, setReturnedChecksheetsSearchInput] = useState('');
+    const [returnedChecksheetsSearch, setReturnedChecksheetsSearch] = useState('');
+    const [returnedChecksheetsSort, setReturnedChecksheetsSort] = useState<ReportSortOption>('newest-updated');
+    const [isReturnedChecksheetsLoading, setIsReturnedChecksheetsLoading] = useState(false);
+    const [returnModalChecksheetIndex, setReturnModalChecksheetIndex] = useState<number | null>(null);
+    const [returnComment, setReturnComment] = useState('');
+    const [returnCommentError, setReturnCommentError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [, setIsAutoSaving] = useState(false);
-    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [auditBySignature, setAuditBySignature] = useState<string>('');
     const [reviewedBySignature, setReviewedBySignature] = useState<string>('');
     const [auditBySignatureImage, setAuditBySignatureImage] = useState<string>('');
@@ -183,15 +237,37 @@ export default function QualityAudit() {
     const [currentUserSignatureImage, setCurrentUserSignatureImage] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
-    const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
+    const [isAutosaving, setIsAutosaving] = useState(false);
     const lastSavedDataRef = useRef<string>('');
-    const latestSaveRequestRef = useRef(0);
-    const saveInProgressRef = useRef(false);
-    const pendingSaveRef = useRef(false);
     const currentChecksheetIdRef = useRef<string | null>(null);
+    const savedChecksheetsRef = useRef<SavedChecksheet[]>([]);
+    const autoLoadDraftKeyRef = useRef<string>('');
+    const autosaveTimeoutRef = useRef<number | null>(null);
+    const isAutosavingRef = useRef(false);
     
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
     const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
+
+    const isOperatorRole = userRole === 'Operator';
+    const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
+    const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const canCreateChecksheet = isOperatorRole;
+    const canEditCurrentChecksheet = (isSystemAdminRole && currentChecksheetId !== null)
+        || (isOperatorRole && (!currentChecksheetId || ['draft', 'returned'].includes(currentWorkflowState)))
+        || (isReviewerRole && currentChecksheetId !== null && currentWorkflowState === 'submitted');
+    const canSaveDraftCurrentChecksheet = isOperatorRole && currentWorkflowState !== 'submitted';
+    const canSubmitCurrentChecksheet = isOperatorRole
+        && currentWorkflowState !== 'submitted'
+        && auditBySignature.trim().length > 0;
+    const canExportCurrentChecksheet = currentChecksheetId !== null && currentWorkflowState === 'submitted';
+
+    const authHeaders = (includeJson = false): HeadersInit => ({
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
+        'X-User-Name': sessionStorage.getItem('username') || username || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+    });
 
     const getSignatureImageSrc = useCallback((imageSource: string) => {
         const source = imageSource?.trim();
@@ -205,7 +281,9 @@ export default function QualityAudit() {
     
     const apiService = {
         getAllAudits: async (): Promise<any[]> => {
-            const response = await fetch(`${IPQC_API_BASE_URL}/?include_data=true`);
+            const response = await fetch(`${IPQC_API_BASE_URL}/?include_data=true`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch audits: ${response.status} ${errorText}`);
@@ -213,8 +291,56 @@ export default function QualityAudit() {
             return response.json();
         },
 
+        getAuditSummaries: async (params: {
+            page: number;
+            pageSize: number;
+            search?: string;
+            sort?: ReportSortOption;
+            workflowState?: AuditWorkflowState;
+            excludeWorkflowState?: AuditWorkflowState;
+        }): Promise<{ items: any[]; total: number; page: number; page_size: number }> => {
+            const query = new URLSearchParams({
+                summary: 'true',
+                page: String(params.page),
+                page_size: String(params.pageSize),
+                sort: params.sort || 'newest-created'
+            });
+            if (params.search?.trim()) query.append('search', params.search.trim());
+            if (params.workflowState) query.append('workflow_state', params.workflowState);
+            if (params.excludeWorkflowState) query.append('exclude_workflow_state', params.excludeWorkflowState);
+
+            const response = await fetch(`${IPQC_API_BASE_URL}/?${query}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch audit summaries: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
+        getDraftByLineDateShift: async (line: string, date: string, shift: string): Promise<any | null> => {
+            const query = new URLSearchParams({
+                lineNumber: line,
+                date,
+                shift,
+                workflow_state: 'draft'
+            });
+            const response = await fetch(`${IPQC_API_BASE_URL}/search/by-filters?${query}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to find matching draft: ${response.status} ${errorText}`);
+            }
+            const audits = await response.json();
+            return Array.isArray(audits) ? audits.find(audit => getWorkflowState(audit) === 'draft') || null : null;
+        },
+
         getAuditById: async (id: string): Promise<any> => {
-            const response = await fetch(`${IPQC_API_BASE_URL}/${id}`);
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch audit: ${response.status} ${errorText}`);
@@ -225,9 +351,7 @@ export default function QualityAudit() {
         createAudit: async (audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: authHeaders(true),
                 body: JSON.stringify(audit),
             });
             if (!response.ok) {
@@ -240,9 +364,7 @@ export default function QualityAudit() {
         updateAudit: async (id: string, audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: authHeaders(true),
                 body: JSON.stringify(audit),
             });
             if (!response.ok) {
@@ -255,6 +377,7 @@ export default function QualityAudit() {
         deleteAudit: async (id: string): Promise<void> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
                 method: 'DELETE',
+                headers: authHeaders(),
             });
             if (!response.ok) {
                 const errorText = await response.text();
@@ -262,16 +385,39 @@ export default function QualityAudit() {
             }
         },
 
-        searchAuditsByFilters: async (filters: { lineNumber?: string; date?: string; shift?: string }): Promise<any[]> => {
-            const params = new URLSearchParams();
-            if (filters.lineNumber) params.append('lineNumber', filters.lineNumber);
-            if (filters.date) params.append('date', filters.date);
-            if (filters.shift) params.append('shift', filters.shift);
-
-            const response = await fetch(`${IPQC_API_BASE_URL}/search/by-filters?${params}`);
+        checkAuditNameExists: async (name: string, excludeId?: string | null): Promise<boolean> => {
+            const query = excludeId ? `?exclude_id=${encodeURIComponent(excludeId)}` : '';
+            const response = await fetch(`${IPQC_API_BASE_URL}/name/${encodeURIComponent(name)}${query}`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to search audits: ${response.status} ${errorText}`);
+                throw new Error(`Failed to check audit name: ${response.status} ${errorText}`);
+            }
+            const result = await response.json();
+            return result.exists;
+        },
+        submitAudit: async (id: string, audit: any): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}/submit`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify(audit),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to submit audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        returnAudit: async (id: string, returnComments: string): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}/return`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ returnComments }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to return audit: ${response.status} ${errorText}`);
             }
             return response.json();
         },
@@ -280,8 +426,13 @@ export default function QualityAudit() {
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
         setUserRole(storedUserRole);
         setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
+        if (storedUserRole !== 'Operator') {
+            setActiveTab('saved-reports');
+        }
     }, []);
 
     useEffect(() => {
@@ -301,10 +452,6 @@ export default function QualityAudit() {
 
         fetchStoredSignature();
     }, [USER_API_BASE_URL]);
-
-    useEffect(() => {
-        loadSavedChecksheets();
-    }, []);
 
     useEffect(() => {
         if (!currentUserSignatureImage || !username) return;
@@ -342,14 +489,73 @@ export default function QualityAudit() {
         latestAuditBySignatureImageRef.current = auditBySignatureImage;
         latestReviewedBySignatureImageRef.current = reviewedBySignatureImage;
         currentChecksheetIdRef.current = currentChecksheetId;
-    }, [auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage, currentChecksheetId]);
+        savedChecksheetsRef.current = savedChecksheets;
+    }, [auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage, currentChecksheetId, savedChecksheets]);
 
     // Helper functions
     const generateChecksheetName = useCallback((lineNumber: string, date: string, shift: string) => {
         return `Checksheet - Line ${lineNumber} - ${date} - Shift ${shift}`;
     }, []);
 
-    const mergeStageObservations = useCallback((stage: StageData, savedStage?: StageData) => ({
+    const getDraftLookupKey = useCallback((line: string, date: string, shift: string) => {
+        return [line, date, shift].map(value => value.trim()).join('|');
+    }, []);
+
+    const mapAuditToChecksheet = useCallback((audit: any, fallbackData?: AuditData): SavedChecksheet | null => {
+        const auditDataForSummary = audit.data || fallbackData;
+        const id = audit._id || audit.id || '';
+
+        if (!id) return null;
+
+        return {
+            _id: id,
+            id,
+            name: audit.name,
+            timestamp: new Date(audit.timestamp).getTime(),
+            updatedTimestamp: audit.updated_timestamp ? new Date(audit.updated_timestamp).getTime() : undefined,
+            data: audit.data,
+            lineNumber: audit.lineNumber || auditDataForSummary?.lineNumber,
+            date: audit.date || auditDataForSummary?.date,
+            shift: audit.shift || auditDataForSummary?.shift,
+            productionOrderNo: audit.productionOrderNo || auditDataForSummary?.productionOrderNo,
+            moduleType: audit.moduleType || auditDataForSummary?.moduleType,
+            status: audit.status || audit.workflowState || (auditDataForSummary as any)?.status,
+            workflowState: audit.workflowState || audit.status || (auditDataForSummary as any)?.workflowState,
+            createdBy: audit.createdBy,
+            createdByUserId: audit.createdByUserId,
+            createdByEmployeeName: audit.createdByEmployeeName,
+            createdByEmployeeId: audit.createdByEmployeeId,
+            submittedAt: audit.submittedAt,
+            submittedBy: audit.submittedBy,
+            returnedAt: audit.returnedAt,
+            returnedBy: audit.returnedBy,
+            returnComments: audit.returnComments,
+            isSigned: audit.isSigned,
+            signedAt: audit.signedAt
+        };
+    }, []);
+
+    const upsertSavedChecksheetSummary = useCallback((audit: any, fallbackData?: AuditData) => {
+        const checksheet = mapAuditToChecksheet(audit, fallbackData);
+        if (!checksheet) return;
+
+        setSavedChecksheets(prev => {
+            const existingIndex = prev.findIndex(sheet => sheet.id === checksheet.id);
+            if (existingIndex < 0) {
+                return [checksheet, ...prev];
+            }
+
+            const next = [...prev];
+            next[existingIndex] = { ...next[existingIndex], ...checksheet };
+            return next;
+        });
+        setSavedChecksheetsTotal(prev => {
+            const exists = savedChecksheetsRef.current.some(sheet => sheet.id === checksheet.id);
+            return exists ? prev : prev + 1;
+        });
+    }, [mapAuditToChecksheet]);
+
+    const mergeStageObservations = useCallback((stage: StageData, savedStage?: StageData, mergeLineNumber = lineNumber) => ({
         ...stage,
         parameters: stage.parameters.map(param => {
             const savedParam = savedStage?.parameters.find((p: any) => p.id === param.id);
@@ -361,7 +567,7 @@ export default function QualityAudit() {
                     const savedObservation = savedParam.observations.find((savedObs: any) => savedObs.timeSlot === obs.timeSlot)
                         || (SAMPLE_GROUPED_STAGE_IDS.has(stage.id) ? savedParam.observations.find((savedObs: any) => typeof savedObs.timeSlot === 'string' && savedObs.timeSlot.startsWith('Line-')) : undefined);
                     const selectedLine = savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot);
-                    const lineOptions = getDynamicLineOptions(lineNumber);
+                    const lineOptions = getDynamicLineOptions(mergeLineNumber);
                     const normalizedSelectedLine = lineOptions.includes(selectedLine) ? selectedLine : lineOptions[0];
                     const defaultGroupLineMapping = getDefaultLineMapping(lineOptions);
                     const savedLineMapping = savedObservation?.lineMapping || obs.lineMapping || {};
@@ -396,141 +602,256 @@ export default function QualityAudit() {
     }), [lineNumber]);
 
     const loadSavedChecksheets = useCallback(async () => {
+        setIsSavedChecksheetsLoading(true);
         try {
-            const audits = await apiService.getAllAudits();
-            console.log('Loaded audits from MongoDB:', audits);
-            const checksheets = audits.map(audit => {
-                if (!audit.data) {
-                    console.warn('Audit missing data field:', audit);
-                    return null;
-                }
-                return {
-                    _id: audit._id,
-                    id: audit._id || '',
-                    name: audit.name,
-                    timestamp: new Date(audit.timestamp).getTime(),
-                    updatedTimestamp: audit.updated_timestamp ? new Date(audit.updated_timestamp).getTime() : undefined,
-                    data: audit.data
-                };
-            }).filter(Boolean) as SavedChecksheet[];
+            const response = await apiService.getAuditSummaries({
+                page: savedChecksheetsPage,
+                pageSize: savedChecksheetsPageSize,
+                search: savedChecksheetsSearch,
+                sort: savedChecksheetsSort,
+                excludeWorkflowState: isOperatorRole ? 'returned' : undefined
+            });
+            const checksheets = response.items
+                .map(audit => mapAuditToChecksheet(audit))
+                .filter(Boolean) as SavedChecksheet[];
             setSavedChecksheets(checksheets);
+            setSavedChecksheetsTotal(response.total);
         } catch (error) {
             console.error('Error loading audits:', error);
+        } finally {
+            setIsSavedChecksheetsLoading(false);
         }
-    }, []);
+    }, [mapAuditToChecksheet, savedChecksheetsPage, savedChecksheetsPageSize, savedChecksheetsSearch, savedChecksheetsSort, isOperatorRole]);
 
-    // Define performAutoSave after auditData is defined
-    const performAutoSave = useCallback(async () => {
-        if (saveInProgressRef.current) {
-            pendingSaveRef.current = true;
-            return;
+    const loadReturnedChecksheets = useCallback(async () => {
+        if (!isOperatorRole) return;
+        setIsReturnedChecksheetsLoading(true);
+        try {
+            const response = await apiService.getAuditSummaries({
+                page: returnedChecksheetsPage,
+                pageSize: returnedChecksheetsPageSize,
+                search: returnedChecksheetsSearch,
+                sort: returnedChecksheetsSort,
+                workflowState: 'returned'
+            });
+            const checksheets = response.items
+                .map(audit => mapAuditToChecksheet(audit))
+                .filter(Boolean) as SavedChecksheet[];
+            setReturnedChecksheets(checksheets);
+            setReturnedChecksheetsTotal(response.total);
+        } catch (error) {
+            console.error('Error loading returned audits:', error);
+        } finally {
+            setIsReturnedChecksheetsLoading(false);
         }
+    }, [mapAuditToChecksheet, returnedChecksheetsPage, returnedChecksheetsPageSize, returnedChecksheetsSearch, returnedChecksheetsSort, isOperatorRole]);
 
+    useEffect(() => {
+        if (activeTab !== 'saved-reports') return;
+        loadSavedChecksheets();
+    }, [activeTab, loadSavedChecksheets]);
+
+    useEffect(() => {
+        if (activeTab !== 'returned-reports') return;
+        loadReturnedChecksheets();
+    }, [activeTab, loadReturnedChecksheets]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSavedChecksheetsSearch(savedChecksheetsSearchInput);
+            setSavedChecksheetsPage(1);
+        }, 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [savedChecksheetsSearchInput]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setReturnedChecksheetsSearch(returnedChecksheetsSearchInput);
+            setReturnedChecksheetsPage(1);
+        }, 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [returnedChecksheetsSearchInput]);
+
+    useEffect(() => {
+        if (isOperatorRole) {
+            loadReturnedChecksheets();
+        }
+    }, [isOperatorRole, loadReturnedChecksheets]);
+
+    useEffect(() => {
+        if (activeTab === 'returned-reports' && returnedChecksheetsTotal === 0) {
+            setActiveTab('saved-reports');
+        }
+    }, [activeTab, returnedChecksheetsTotal]);
+
+    const getLatestSnapshot = useCallback(() => getAuditSnapshot(
+        latestAuditDataRef.current,
+        latestAuditBySignatureRef.current,
+        latestReviewedBySignatureRef.current,
+        latestAuditBySignatureImageRef.current,
+        latestReviewedBySignatureImageRef.current
+    ), []);
+
+    const buildChecksheetPayload = useCallback(() => {
         const dataToSave = latestAuditDataRef.current;
         const auditBy = latestAuditBySignatureRef.current;
         const reviewedBy = latestReviewedBySignatureRef.current;
         const auditByImage = latestAuditBySignatureImageRef.current;
         const reviewedByImage = latestReviewedBySignatureImageRef.current;
-        const checksheetId = currentChecksheetIdRef.current;
+        const checksheetName = generateChecksheetName(dataToSave.lineNumber, dataToSave.date, dataToSave.shift);
+        const existingSummary = currentChecksheetIdRef.current
+            ? savedChecksheetsRef.current.find(sheet => sheet.id === currentChecksheetIdRef.current)
+            : undefined;
 
-        if (!dataToSave.lineNumber || !dataToSave.date || !dataToSave.shift) {
-            return;
-        }
-
-        saveInProgressRef.current = true;
-        setIsAutoSaving(true);
-        
-        try {
-            const checksheetName = generateChecksheetName(dataToSave.lineNumber, dataToSave.date, dataToSave.shift);
-            const checksheetData = {
-                name: checksheetName,
-                timestamp: checksheetId
-                    ? new Date(savedChecksheets.find(sheet => sheet.id === checksheetId)?.timestamp || Date.now()).toISOString()
-                    : new Date().toISOString(),
-                updated_timestamp: new Date().toISOString(),
-                data: {
-                    ...dataToSave,
-                    signatures: { auditBy, reviewedBy, auditByImage, reviewedByImage }
-                }
-            };
-
-            if (checksheetId) {
-                await apiService.updateAudit(checksheetId, checksheetData);
-            } else {
-                const result = await apiService.createAudit(checksheetData);
-                currentChecksheetIdRef.current = result._id!;
-                setCurrentChecksheetId(result._id!);
-            }
-
-            lastSavedDataRef.current = getAuditSnapshot(dataToSave, auditBy, reviewedBy, auditByImage, reviewedByImage);
-
-            setHasUnsavedChanges(false);
-            setStageChanges(new Set());
-            setAutoSaveStatus('saved');
-            
-            // Reload saved checksheets list in background
-            await loadSavedChecksheets();
-            
-        } catch (error) {
-            console.error('Auto-save error:', error);
-            throw error;
-        } finally {
-            saveInProgressRef.current = false;
-            setIsAutoSaving(false);
-            if (pendingSaveRef.current) {
-                pendingSaveRef.current = false;
-                setTimeout(() => performAutoSave(), 0);
-            }
-        }
-    }, [generateChecksheetName, loadSavedChecksheets, savedChecksheets]);
-
-    // Auto-save effect - triggers whenever relevant data changes
-    useEffect(() => {
-        // Don't auto-save if basic info is incomplete
-        if (!auditData.lineNumber || !auditData.date || !auditData.shift) {
-            return;
-        }
-
-        if (isLoading) {
-            return;
-        }
-
-        const currentDataString = getAuditSnapshot(auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage);
-
-        // Don't auto-save if data hasn't changed
-        if (currentDataString === lastSavedDataRef.current) {
-            return;
-        }
-
-        // Debounce auto-save
-        if (autoSaveTimeoutRef.current) {
-            clearTimeout(autoSaveTimeoutRef.current);
-        }
-
-        autoSaveTimeoutRef.current = setTimeout(() => {
-            const requestId = latestSaveRequestRef.current + 1;
-            latestSaveRequestRef.current = requestId;
-            setAutoSaveStatus('saving');
-            const saveWithRetry = async (attempt = 0): Promise<void> => {
-                try {
-                    await performAutoSave();
-                } catch {
-                    if (attempt < 2 && requestId === latestSaveRequestRef.current) {
-                        setTimeout(() => saveWithRetry(attempt + 1), 500);
-                        return;
-                    }
-                    setAutoSaveStatus('error');
-                }
-            };
-            saveWithRetry();
-        }, 2000);
-
-        return () => {
-            if (autoSaveTimeoutRef.current) {
-                clearTimeout(autoSaveTimeoutRef.current);
+        return {
+            name: checksheetName,
+            timestamp: currentChecksheetIdRef.current
+                ? new Date(existingSummary?.timestamp || Date.now()).toISOString()
+                : new Date().toISOString(),
+            updated_timestamp: new Date().toISOString(),
+            data: {
+                ...dataToSave,
+                signatures: { auditBy, reviewedBy, auditByImage, reviewedByImage },
+                workflowState: currentWorkflowState,
+                status: currentWorkflowState,
             }
         };
-    }, [auditData, auditBySignature, reviewedBySignature, auditBySignatureImage, reviewedBySignatureImage, isLoading, performAutoSave]);
+    }, [currentWorkflowState, generateChecksheetName]);
+
+    const isBasicInfoComplete = useCallback(() => (
+        auditData.lineNumber.trim() !== ''
+        && auditData.date.trim() !== ''
+        && auditData.shift.trim() !== ''
+        && auditData.productionOrderNo.trim() !== ''
+        && auditData.moduleType.trim() !== ''
+    ), [auditData.date, auditData.lineNumber, auditData.moduleType, auditData.productionOrderNo, auditData.shift]);
+
+    const markChecksheetSaved = (response: any, fallbackData?: AuditData, savedSnapshot = getLatestSnapshot()) => {
+        const checksheet = mapAuditToChecksheet(response, fallbackData);
+        if (checksheet?._id) {
+            setCurrentChecksheetId(checksheet._id);
+            currentChecksheetIdRef.current = checksheet._id;
+            setCurrentWorkflowState(getWorkflowState(checksheet));
+            setCurrentChecksheetMeta(checksheet);
+        }
+        lastSavedDataRef.current = savedSnapshot;
+        if (getLatestSnapshot() === savedSnapshot) {
+            setHasUnsavedChanges(false);
+            setStageChanges(new Set());
+        } else {
+            setHasUnsavedChanges(true);
+        }
+        upsertSavedChecksheetSummary(response, fallbackData);
+    };
+
+    const createOrLoadDraftChecksheet = async () => {
+        if (!canCreateChecksheet) {
+            showAlert('error', 'Only operators can create checksheets');
+            return null;
+        }
+        if (!isBasicInfoComplete()) {
+            showAlert('error', 'Please complete line, date, shift, production order number, and module type');
+            return null;
+        }
+
+        const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
+        if (matchingDraft?._id) {
+            await loadChecksheetById(matchingDraft._id, { showLoading: false, showOpenedAlert: false });
+            showAlert('info', 'Existing draft loaded for the selected line, date, and shift');
+            return matchingDraft;
+        }
+
+        const payload = buildChecksheetPayload();
+        const created = await apiService.createAudit(payload);
+        markChecksheetSaved(created, payload.data as AuditData, getLatestSnapshot());
+        const createdId = created._id || created.id;
+        if (createdId) {
+            await loadChecksheetById(createdId, { showLoading: false, showOpenedAlert: false });
+        }
+        await loadSavedChecksheets();
+        return created;
+    };
+
+    const submitChecksheet = async () => {
+        if (!auditBySignature.trim()) {
+            showAlert('error', 'Prepared By signature is required before submission');
+            return;
+        }
+        if (!isBasicInfoComplete()) {
+            showAlert('error', 'Please complete line, date, shift, production order number, and module type before submitting');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const payload = buildChecksheetPayload();
+            let checksheetId = currentChecksheetId;
+            if (!checksheetId) {
+                const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
+                if (matchingDraft?._id) {
+                    const draftId = matchingDraft._id as string;
+                    checksheetId = draftId;
+                    setCurrentChecksheetId(checksheetId);
+                    currentChecksheetIdRef.current = checksheetId;
+                    await apiService.updateAudit(draftId, payload);
+                } else {
+                    const created = await apiService.createAudit(payload);
+                    checksheetId = created._id || null;
+                    setCurrentChecksheetId(checksheetId);
+                    currentChecksheetIdRef.current = checksheetId;
+                }
+            } else {
+                await apiService.updateAudit(checksheetId, payload);
+            }
+            if (!checksheetId) {
+                showAlert('error', 'Unable to submit checksheet without a saved draft ID');
+                return;
+            }
+            const submitted = await apiService.submitAudit(checksheetId, payload);
+            markChecksheetSaved(submitted, payload.data as AuditData, getLatestSnapshot());
+            setCurrentWorkflowState('submitted');
+            await loadSavedChecksheets();
+            if (isOperatorRole) await loadReturnedChecksheets();
+            clearCurrentChecksheet();
+            setActiveTab('saved-reports');
+            showAlert('success', currentWorkflowState === 'returned' ? 'Checksheet resubmitted successfully' : 'Checksheet submitted successfully');
+        } catch (error) {
+            console.error('Error submitting checksheet:', error);
+            showAlert('error', 'Failed to submit checksheet');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveSubmittedChanges = async () => {
+        if (!currentChecksheetId || !canEditCurrentChecksheet || currentWorkflowState !== 'submitted') {
+            showAlert('error', 'You are not authorized to modify this checksheet');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const payload = buildChecksheetPayload();
+            const response = await apiService.updateAudit(currentChecksheetId, payload);
+            markChecksheetSaved(response, payload.data as AuditData, getLatestSnapshot());
+            await loadSavedChecksheets();
+            showAlert('success', 'Checksheet changes saved successfully');
+        } catch (error) {
+            console.error('Error saving checksheet:', error);
+            showAlert('error', 'Failed to save checksheet');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveChecksheet = async () => {
+        if (currentWorkflowState === 'submitted') {
+            await saveSubmittedChanges();
+            return;
+        }
+        await submitChecksheet();
+    };
 
     useEffect(() => {
         setAuditData(prev => ({
@@ -542,68 +863,77 @@ export default function QualityAudit() {
         }));
     }, [lineDependentStages, mergeStageObservations]);
 
+    useEffect(() => {
+        if (autosaveTimeoutRef.current) {
+            window.clearTimeout(autosaveTimeoutRef.current);
+            autosaveTimeoutRef.current = null;
+        }
+
+        if (
+            !currentChecksheetId
+            || !canSaveDraftCurrentChecksheet
+            || !canEditCurrentChecksheet
+            || !['draft', 'returned'].includes(currentWorkflowState)
+        ) {
+            return;
+        }
+
+        const currentSnapshot = getLatestSnapshot();
+        if (!lastSavedDataRef.current || currentSnapshot === lastSavedDataRef.current) return;
+
+        autosaveTimeoutRef.current = window.setTimeout(async () => {
+            if (isAutosavingRef.current || !currentChecksheetIdRef.current) return;
+
+            const snapshotToSave = getLatestSnapshot();
+            if (snapshotToSave === lastSavedDataRef.current) return;
+
+            try {
+                isAutosavingRef.current = true;
+                setIsAutosaving(true);
+                const payload = buildChecksheetPayload();
+                const response = await apiService.updateAudit(currentChecksheetIdRef.current, payload);
+                markChecksheetSaved(response, payload.data as AuditData, snapshotToSave);
+            } catch (error) {
+                console.error('Error autosaving checksheet:', error);
+            } finally {
+                isAutosavingRef.current = false;
+                setIsAutosaving(false);
+                autosaveTimeoutRef.current = null;
+            }
+        }, AUTOSAVE_DELAY_MS);
+
+        return () => {
+            if (autosaveTimeoutRef.current) {
+                window.clearTimeout(autosaveTimeoutRef.current);
+                autosaveTimeoutRef.current = null;
+            }
+        };
+    }, [
+        auditData,
+        auditBySignature,
+        auditBySignatureImage,
+        reviewedBySignature,
+        reviewedBySignatureImage,
+        canEditCurrentChecksheet,
+        canSaveDraftCurrentChecksheet,
+        currentChecksheetId,
+        currentWorkflowState,
+        buildChecksheetPayload,
+        getLatestSnapshot
+    ]);
+
     const handleLineChange = (line: string) => {
+        if (!canEditCurrentChecksheet) return;
         setLineNumber(line);
         setAuditData(prev => ({ ...prev, lineNumber: line }));
         setHasUnsavedChanges(true);
     };
 
-    useEffect(() => {
-        const checkExistingChecksheet = async () => {
-            if (auditData.lineNumber && auditData.date && auditData.shift) {
-                try {
-                    const existingAudits = await apiService.searchAuditsByFilters({
-                        lineNumber: auditData.lineNumber,
-                        date: auditData.date,
-                        shift: auditData.shift
-                    });
-
-                    if (existingAudits.length > 0) {
-                        const existingAudit = existingAudits[0];
-                        console.log('Found existing audit:', existingAudit);
-                        const mergedData = {
-                            ...existingAudit.data,
-                            stages: lineDependentStages.map(stage => {
-                                const savedStage = existingAudit.data.stages.find((s: StageData) => s.id === stage.id);
-                                return mergeStageObservations(stage, savedStage);
-                            })
-                        };
-                        setAuditData(mergedData);
-                        setCurrentChecksheetId(existingAudit._id!);
-                        const loadedSignatures = existingAudit.data.signatures ||
-                            existingAudit.data.data?.signatures ||
-                            {
-                                auditBy: existingAudit.data.auditBy || existingAudit.data.data?.auditBy,
-                                reviewedBy: existingAudit.data.reviewedBy || existingAudit.data.data?.reviewedBy,
-                                auditByImage: existingAudit.data.auditByImage || existingAudit.data.data?.auditByImage,
-                                reviewedByImage: existingAudit.data.reviewedByImage || existingAudit.data.data?.reviewedByImage
-                            };
-                        const loadedAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy');
-                        const loadedReviewedBy = getLoadedSignatureText(loadedSignatures, 'reviewedBy');
-                        const loadedAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy');
-                        const loadedReviewedByImage = getLoadedSignatureImage(loadedSignatures, 'reviewedBy');
-
-                        setAuditBySignature(loadedAuditBy);
-                        setReviewedBySignature(loadedReviewedBy);
-                        setAuditBySignatureImage(loadedAuditByImage);
-                        setReviewedBySignatureImage(loadedReviewedByImage);
-                        
-                        // Update last saved data reference
-                        lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedAuditBy, loadedReviewedBy, loadedAuditByImage, loadedReviewedByImage);
-                    } else {
-                        setCurrentChecksheetId(null);
-                        lastSavedDataRef.current = '';
-                    }
-                } catch (error) {
-                    console.error('Error checking existing checksheet:', error);
-                }
-            }
-        };
-
-        checkExistingChecksheet();
-    }, [auditData.lineNumber, auditData.date, auditData.shift, lineDependentStages, mergeStageObservations]);
-
     const handleAddSignature = async (section: 'audit' | 'reviewed') => {
+        if (!canEditCurrentChecksheet) {
+            showAlert('error', 'This checksheet is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -658,6 +988,10 @@ export default function QualityAudit() {
     };
 
     const handleRemoveSignature = async (section: 'audit' | 'reviewed') => {
+        if (!canEditCurrentChecksheet) {
+            showAlert('error', 'This checksheet is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -698,7 +1032,7 @@ export default function QualityAudit() {
     };
 
     const canRemoveSignature = (section: 'audit' | 'reviewed') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentChecksheet) return false;
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -712,7 +1046,7 @@ export default function QualityAudit() {
     };
 
     const canAddSignature = (section: 'audit' | 'reviewed') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentChecksheet) return false;
         let currentSignature = '';
         switch (section) {
             case 'audit':
@@ -736,6 +1070,7 @@ export default function QualityAudit() {
     };
 
     const updateObservation = (stageId: number, paramId: string, timeSlot: string, value: ObservationValue) => {
+        if (!canEditCurrentChecksheet) return;
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -747,7 +1082,7 @@ export default function QualityAudit() {
                             observations: param.observations.map(obs =>
                                 obs.timeSlot === timeSlot ? {
                                     ...obs,
-                                    value: SAMPLE_GROUPED_STAGE_IDS.has(stageId)
+                                    value: isSampleGroupedParameter(paramId)
                                         ? normalizeSampleGroupedValue(value, paramId, obs.lineMapping || {}, obs.selectedLine || '')
                                         : value
                                 } : obs
@@ -762,6 +1097,7 @@ export default function QualityAudit() {
     };
 
     const updateObservationLineSelection = (stageId: number, paramId: string, timeSlot: string, selectedLine: string) => {
+        if (!canEditCurrentChecksheet) return;
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -783,6 +1119,7 @@ export default function QualityAudit() {
     };
 
     const updateObservationLineMapping = (stageId: number, paramId: string, timeSlot: string, groupKey: string, selectedLine: string) => {
+        if (!canEditCurrentChecksheet) return;
         setAuditData(prev => ({
             ...prev,
             stages: prev.stages.map(stage =>
@@ -800,7 +1137,7 @@ export default function QualityAudit() {
                                 return {
                                     ...obs,
                                     lineMapping,
-                                    value: SAMPLE_GROUPED_STAGE_IDS.has(stageId)
+                                    value: isSampleGroupedParameter(paramId)
                                         ? updateSampleGroupedLineSelection(obs.value, paramId, groupKey, selectedLine, lineMapping, obs.selectedLine || selectedLine)
                                         : obs.value
                                 };
@@ -815,33 +1152,55 @@ export default function QualityAudit() {
     };
 
     const updateBasicInfo = (field: keyof AuditData, value: any) => {
+        if (!canEditCurrentChecksheet) return;
         setAuditData(prev => ({ ...prev, [field]: value }));
         setHasUnsavedChanges(true);
     };
 
+    const clearCurrentChecksheet = () => {
+        setCurrentChecksheetId(null);
+        currentChecksheetIdRef.current = null;
+        setCurrentWorkflowState('draft');
+        setCurrentChecksheetMeta(null);
+        setAuditData({
+            lineNumber: '',
+            date: new Date().toISOString().split('T')[0],
+            shift: '',
+            productionOrderNo: '',
+            moduleType: '',
+            customerSpecAvailable: false,
+            specificationSignedOff: false,
+            stages: lineDependentStages,
+            signatures: {
+                auditBy: '',
+                reviewedBy: '',
+                auditByImage: '',
+                reviewedByImage: ''
+            }
+        });
+        setAuditBySignature('');
+        setAuditBySignatureImage('');
+        setReviewedBySignature('');
+        setReviewedBySignatureImage('');
+        setCurrentView('basicInfo');
+        setSelectedStageId(null);
+        setStageChanges(new Set());
+        setHasUnsavedChanges(false);
+        lastSavedDataRef.current = '';
+        autoLoadDraftKeyRef.current = '';
+    };
+
     const generateExcelReport = async () => {
         try {
-            if (auditData.lineNumber && auditData.date && auditData.shift) {
-                await performAutoSave();
+            if (!currentChecksheetId || currentWorkflowState !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted checksheets');
+                return;
             }
-            
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const exportAuditData = {
-                ...auditData,
-                signatures: {
-                    auditBy: auditBySignature,
-                    reviewedBy: reviewedBySignature,
-                    auditByImage: auditBySignatureImage,
-                    reviewedByImage: reviewedBySignatureImage
-                }
-            };
-            console.log('Generating Excel with data:', exportAuditData);
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(exportAuditData)
+                headers: authHeaders(true),
+                body: JSON.stringify({ audit_id: currentChecksheetId })
             });
 
             if (!response.ok) {
@@ -877,14 +1236,16 @@ export default function QualityAudit() {
                 showAlert('error', 'Checksheet not found');
                 return;
             }
+            if (getWorkflowState(checksheet) !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted checksheets');
+                return;
+            }
 
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
 
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: authHeaders(true),
                 body: JSON.stringify({ audit_id: checksheet._id })
             });
 
@@ -898,7 +1259,10 @@ export default function QualityAudit() {
             a.style.display = 'none';
             a.href = url;
 
-            const filename = `Quality_Audit_Line${checksheet.data.lineNumber}_${checksheet.data.date.replace(/-/g, '')}_Shift${checksheet.data.shift}.xlsx`;
+            const filenameLine = checksheet.data?.lineNumber || checksheet.lineNumber || '';
+            const filenameDate = checksheet.data?.date || checksheet.date || '';
+            const filenameShift = checksheet.data?.shift || checksheet.shift || '';
+            const filename = `Quality_Audit_Line${filenameLine}_${filenameDate.replace(/-/g, '')}_Shift${filenameShift}.xlsx`;
             a.download = filename;
 
             document.body.appendChild(a);
@@ -914,27 +1278,38 @@ export default function QualityAudit() {
         }
     };
 
-    const isBasicInfoComplete = () => {
-        return (
-            auditData.lineNumber !== '' &&
-            auditData.date !== '' &&
-            auditData.shift !== '' &&
-            auditData.productionOrderNo !== '' &&
-            auditData.moduleType !== ''
-        );
-    };
+    const handleNextFromBasicInfo = async () => {
+        if (!isBasicInfoComplete()) {
+            if (auditData.lineNumber === '') {
+                showAlert('error', 'Please select the line number.');
+            } else if (auditData.date === '') {
+                showAlert('error', 'Please select the date.');
+            } else if (auditData.shift === '') {
+                showAlert('error', 'Please select the shift.');
+            } else if (auditData.productionOrderNo === '') {
+                showAlert('error', 'Please enter the production order number.');
+            } else if (auditData.moduleType === '') {
+                showAlert('error', 'Please enter the module type.');
+            }
+            return;
+        }
 
-    const handleNextFromBasicInfo = () => {
-        if (isBasicInfoComplete()) {
+        if (currentChecksheetId) {
             setCurrentView('stageSelection');
-        } else if (auditData.lineNumber === '') {
-            showAlert('error', 'Please select the line number.');
-        } else if (auditData.shift === '') {
-            showAlert('error', 'Please select the shift.');
-        } else if (auditData.productionOrderNo === '') {
-            showAlert('error', 'Please enter the production order number.');
-        } else if (auditData.moduleType === '') {
-            showAlert('error', 'Please enter the module type.');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const draft = await createOrLoadDraftChecksheet();
+            if (!draft) return;
+            setCurrentView('stageSelection');
+            showAlert('success', 'Draft checksheet ready');
+        } catch (error) {
+            console.error('Error creating draft checksheet:', error);
+            showAlert('error', 'Failed to create draft checksheet');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -991,31 +1366,47 @@ export default function QualityAudit() {
         }
     };
 
-    const editSavedChecksheet = async (index: number) => {
+    const loadChecksheetById = async (
+        checksheetId: string,
+        options: { showLoading?: boolean; showOpenedAlert?: boolean; nextView?: 'basicInfo' | 'stageSelection' | 'stageDetail' } = {}
+    ) => {
+        const { showLoading = true, showOpenedAlert = true, nextView = 'basicInfo' } = options;
         try {
-            setIsLoading(true);
-            const checksheet = savedChecksheets[index];
-            if (!checksheet || !checksheet._id) {
-                showAlert('error', 'Checksheet not found');
-                return;
-            }
+            if (showLoading) setIsLoading(true);
+            const fullAudit = await apiService.getAuditById(checksheetId);
+            const loadedState = getWorkflowState(fullAudit);
+            const fullAuditData = fullAudit.data || {};
+            const loadedLineNumber = fullAuditData.lineNumber || fullAudit.lineNumber || '';
+            const stagesForLoadedLine = buildLineDependentStages(initialStages, loadedLineNumber);
+            const mergedData = {
+                ...fullAuditData,
+                lineNumber: loadedLineNumber,
+                stages: stagesForLoadedLine.map(stage => {
+                    const savedStage = fullAuditData.stages?.find((s: StageData) => s.id === stage.id);
+                    return mergeStageObservations(stage, savedStage, loadedLineNumber);
+                })
+            } as AuditData;
 
-            const fullAudit = await apiService.getAuditById(checksheet.id);
-
-            setAuditData(fullAudit.data);
+            setAuditData(mergedData);
             setCurrentChecksheetId(fullAudit._id);
+            currentChecksheetIdRef.current = fullAudit._id;
+            setCurrentWorkflowState(loadedState);
+            setCurrentChecksheetMeta(mapAuditToChecksheet(fullAudit, mergedData));
             setActiveTab('create-edit');
-            setCurrentView('basicInfo');
+            setCurrentView(nextView);
+            if (nextView !== 'stageDetail') {
+                setSelectedStageId(null);
+            }
             setHasUnsavedChanges(false);
             setStageChanges(new Set());
 
-            const loadedSignatures = fullAudit.data.signatures ||
-                fullAudit.data.data?.signatures ||
+            const loadedSignatures = fullAuditData.signatures ||
+                fullAuditData.data?.signatures ||
                 {
-                    auditBy: fullAudit.data.auditBy || fullAudit.data.data?.auditBy,
-                    reviewedBy: fullAudit.data.reviewedBy || fullAudit.data.data?.reviewedBy,
-                    auditByImage: fullAudit.data.auditByImage || fullAudit.data.data?.auditByImage,
-                    reviewedByImage: fullAudit.data.reviewedByImage || fullAudit.data.data?.reviewedByImage
+                    auditBy: fullAuditData.auditBy || fullAuditData.data?.auditBy,
+                    reviewedBy: fullAuditData.reviewedBy || fullAuditData.data?.reviewedBy,
+                    auditByImage: fullAuditData.auditByImage || fullAuditData.data?.auditByImage,
+                    reviewedByImage: fullAuditData.reviewedByImage || fullAuditData.data?.reviewedByImage
                 };
             const loadedAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy');
             const loadedReviewedBy = getLoadedSignatureText(loadedSignatures, 'reviewedBy');
@@ -1027,47 +1418,95 @@ export default function QualityAudit() {
             setAuditBySignatureImage(loadedAuditByImage);
             setReviewedBySignatureImage(loadedReviewedByImage);
 
-            setLineNumber(fullAudit.data.lineNumber);
+            setLineNumber(loadedLineNumber);
             
-            lastSavedDataRef.current = getAuditSnapshot(fullAudit.data, loadedAuditBy, loadedReviewedBy, loadedAuditByImage, loadedReviewedByImage);
+            lastSavedDataRef.current = getAuditSnapshot(mergedData, loadedAuditBy, loadedReviewedBy, loadedAuditByImage, loadedReviewedByImage);
+            autoLoadDraftKeyRef.current = getDraftLookupKey(mergedData.lineNumber, mergedData.date, mergedData.shift);
 
-            showAlert('info', `Editing ${fullAudit.name}`);
+            const willBeEditable = isSystemAdminRole
+                || (isOperatorRole && ['draft', 'returned'].includes(loadedState))
+                || (isReviewerRole && loadedState === 'submitted');
+            if (showOpenedAlert) {
+                showAlert('info', `${willBeEditable ? 'Opened' : 'Viewing'} ${fullAudit.name}`);
+            }
+            return fullAudit;
+        } finally {
+            if (showLoading) setIsLoading(false);
+        }
+    };
+
+    const editChecksheetFromList = async (checksheet: SavedChecksheet | undefined) => {
+        try {
+            if (!checksheet || !checksheet._id) {
+                showAlert('error', 'Checksheet not found');
+                return;
+            }
+            const state = getWorkflowState(checksheet);
+            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
+                showAlert('error', 'Draft and returned checksheets are locked until the operator submits them');
+                return;
+            }
+
+            await loadChecksheetById(checksheet.id);
         } catch (error) {
             console.error('Error loading checksheet:', error);
             showAlert('error', 'Failed to load checksheet');
-        } finally {
-            setIsLoading(false);
         }
     };
+
+    const editSavedChecksheet = async (index: number) => {
+        await editChecksheetFromList(savedChecksheets[index]);
+    };
+
+    const editReturnedChecksheet = async (index: number) => {
+        await editChecksheetFromList(returnedChecksheets[index]);
+    };
+
+    useEffect(() => {
+        if (!isOperatorRole || activeTab !== 'create-edit' || currentChecksheetId || currentWorkflowState !== 'draft') return;
+        if (!auditData.lineNumber || !auditData.date || !auditData.shift) return;
+
+        const lookupKey = getDraftLookupKey(auditData.lineNumber, auditData.date, auditData.shift);
+        if (autoLoadDraftKeyRef.current === lookupKey) return;
+        autoLoadDraftKeyRef.current = lookupKey;
+
+        let cancelled = false;
+        const timeout = window.setTimeout(async () => {
+            try {
+                const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
+                if (cancelled || !matchingDraft?._id || currentChecksheetIdRef.current) return;
+                await loadChecksheetById(matchingDraft._id, { showLoading: false, showOpenedAlert: false });
+                showAlert('info', 'Existing draft loaded for the selected line, date, and shift');
+            } catch (error) {
+                console.error('Error auto-loading draft checksheet:', error);
+            }
+        }, 300);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeout);
+        };
+    }, [auditData.lineNumber, auditData.date, auditData.shift, activeTab, currentChecksheetId, currentWorkflowState, getDraftLookupKey, isOperatorRole]);
 
     const deleteSavedChecksheet = async (index: number) => {
         try {
             const checksheet = savedChecksheets[index];
+            if (!checksheet?._id) {
+                showAlert('error', 'Checksheet not found');
+                return;
+            }
+            const state = getWorkflowState(checksheet);
+            const canDelete = isSystemAdminRole
+                || (isOperatorRole && state === 'draft')
+                || (isReviewerRole && state === 'submitted');
+            if (!canDelete) {
+                showAlert('error', 'You are not authorized to delete this checksheet');
+                return;
+            }
             await apiService.deleteAudit(checksheet._id!);
             await loadSavedChecksheets();
             if (currentChecksheetId === checksheet._id) {
-                setCurrentChecksheetId(null);
-                setAuditData({
-                    lineNumber: '',
-                    date: new Date().toISOString().split('T')[0],
-                    shift: '',
-                    productionOrderNo: '',
-                    moduleType: '',
-                    customerSpecAvailable: false,
-                    specificationSignedOff: false,
-                    stages: initialStages,
-                    signatures: {
-                        auditBy: '',
-                        reviewedBy: '',
-                        auditByImage: '',
-                        reviewedByImage: ''
-                    }
-                });
-                setAuditBySignature('');
-                setAuditBySignatureImage('');
-                setReviewedBySignature('');
-                setReviewedBySignatureImage('');
-                lastSavedDataRef.current = '';
+                clearCurrentChecksheet();
             }
             showAlert('success', 'Checksheet deleted successfully!');
         } catch (error) {
@@ -1076,12 +1515,253 @@ export default function QualityAudit() {
         }
     };
 
+    const openReturnModal = (index: number) => {
+        const checksheet = savedChecksheets[index];
+        if (!checksheet?._id) {
+            showAlert('error', 'Checksheet not found');
+            return;
+        }
+        if (getWorkflowState(checksheet) !== 'submitted') {
+            showAlert('error', 'Only submitted checksheets can be returned');
+            return;
+        }
+        setReturnModalChecksheetIndex(index);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const closeReturnModal = () => {
+        setReturnModalChecksheetIndex(null);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const submitReturnForCorrection = async () => {
+        if (returnModalChecksheetIndex === null) return;
+        const trimmedComments = returnComment.trim();
+        if (!trimmedComments) {
+            setReturnCommentError('Correction comments are required');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const checksheet = savedChecksheets[returnModalChecksheetIndex];
+            await apiService.returnAudit(checksheet._id!, trimmedComments);
+            if (currentChecksheetId === checksheet._id) {
+                setCurrentWorkflowState('returned');
+                setCurrentChecksheetMeta(prev => prev ? {
+                    ...prev,
+                    workflowState: 'returned',
+                    returnComments: trimmedComments,
+                    returnedAt: new Date().toISOString(),
+                    returnedBy: username,
+                } : prev);
+            }
+            closeReturnModal();
+            await loadSavedChecksheets();
+            if (isOperatorRole) await loadReturnedChecksheets();
+            showAlert('success', 'Checksheet returned for correction');
+        } catch (error) {
+            console.error('Error returning checksheet:', error);
+            showAlert('error', 'Failed to return checksheet');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const canOpenListedChecksheet = (checksheet: SavedChecksheet) => {
+        const state = getWorkflowState(checksheet);
+        return isSystemAdminRole || isOperatorRole || (isReviewerRole && state === 'submitted');
+    };
+
+    const canExportListedChecksheet = (checksheet: SavedChecksheet) =>
+        getWorkflowState(checksheet) === 'submitted' && canOpenListedChecksheet(checksheet);
+
+    const canDeleteListedChecksheet = (checksheet: SavedChecksheet) => {
+        const state = getWorkflowState(checksheet);
+        return isSystemAdminRole || (isOperatorRole && state === 'draft') || (isReviewerRole && state === 'submitted');
+    };
+
+    const canReturnListedChecksheet = (checksheet: SavedChecksheet) =>
+        (isReviewerRole || isSystemAdminRole) && getWorkflowState(checksheet) === 'submitted';
+
+    const getOpenActionLabel = (checksheet: SavedChecksheet) => {
+        const state = getWorkflowState(checksheet);
+        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
+        if (isOperatorRole && state === 'submitted') return 'View';
+        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+    };
+
+    const canProceedFromBasicInfo = isBasicInfoComplete() && (currentChecksheetId !== null || canCreateChecksheet) && !isLoading;
+
     const stageButtons = Array.from({ length: 31 }, (_, index) => ({
         id: index + 1,
         label: `Stage ${index + 1}`,
         enabled: index < 31,
         hasUnsavedChanges: stageChanges.has(index + 1)
     }));
+
+    const getStateBadgeClass = (state: AuditWorkflowState) => {
+        if (state === 'submitted') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
+        if (state === 'returned') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+    };
+
+    const renderChecksheetsList = (checksheets: SavedChecksheet[], title: string, listType: 'main' | 'returned' = 'main') => {
+        const isReturnedList = listType === 'returned';
+        const page = isReturnedList ? returnedChecksheetsPage : savedChecksheetsPage;
+        const pageSize = isReturnedList ? returnedChecksheetsPageSize : savedChecksheetsPageSize;
+        const totalItems = isReturnedList ? returnedChecksheetsTotal : savedChecksheetsTotal;
+        const searchTerm = isReturnedList ? returnedChecksheetsSearchInput : savedChecksheetsSearchInput;
+        const sortOption = isReturnedList ? returnedChecksheetsSort : savedChecksheetsSort;
+        const isListLoading = isReturnedList ? isReturnedChecksheetsLoading : isSavedChecksheetsLoading;
+        const setPage = isReturnedList ? setReturnedChecksheetsPage : setSavedChecksheetsPage;
+        const setPageSize = isReturnedList ? setReturnedChecksheetsPageSize : setSavedChecksheetsPageSize;
+        const setSearchTerm = isReturnedList ? setReturnedChecksheetsSearchInput : setSavedChecksheetsSearchInput;
+        const setSortOption = isReturnedList ? setReturnedChecksheetsSort : setSavedChecksheetsSort;
+
+        return (
+            <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+                <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
+                    {title}
+                </h2>
+                <ReportListControls
+                    searchTerm={searchTerm}
+                    sortOption={sortOption}
+                    totalCount={totalItems}
+                    filteredCount={totalItems}
+                    onSearchTermChange={(value) => {
+                        setSearchTerm(value);
+                        setPage(1);
+                    }}
+                    onSortOptionChange={(value) => {
+                        setSortOption(value);
+                        setPage(1);
+                    }}
+                    searchPlaceholder="Search by checksheet, production order, module type, or creator..."
+                />
+                {isListLoading ? (
+                    <div className="text-center py-6 md:py-8 text-gray-500 dark:text-gray-400">
+                        Loading checksheets...
+                    </div>
+                ) : checksheets.length === 0 ? (
+                    <div className="text-center py-6 md:py-8">
+                        <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
+                            {totalItems === 0 ? 'No checksheets found.' : 'No matching checksheets found.'}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="reports-list">
+                            {checksheets.map((checksheet, index) => {
+                                const state = getWorkflowState(checksheet);
+                                const canOpen = canOpenListedChecksheet(checksheet);
+                                const canExport = !isReturnedList && canExportListedChecksheet(checksheet);
+                                const canDelete = !isReturnedList && canDeleteListedChecksheet(checksheet);
+                                const canReturn = !isReturnedList && canReturnListedChecksheet(checksheet);
+                                const updatedTime = checksheet.updatedTimestamp || checksheet.timestamp;
+                                const createdBy = checksheet.createdByEmployeeName || checksheet.createdByEmployeeId || checksheet.createdBy || 'Legacy checksheet';
+
+                                return (
+                                    <div
+                                        key={checksheet._id || `${checksheet.name}-${index}`}
+                                        className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
+                                    >
+                                        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">
+                                                        {checksheet.name}
+                                                    </h3>
+                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getStateBadgeClass(state)}`}>
+                                                        {formatWorkflowState(state)}
+                                                    </span>
+                                                    {checksheet.lineNumber && (
+                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                                                            Line {checksheet.lineNumber}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                                                    <p>Created: {formatTimestamp(checksheet.timestamp)}</p>
+                                                    <p>Created by: {createdBy}</p>
+                                                    <p>Updated: {formatTimestamp(updatedTime)}</p>
+                                                    <p>Date: {checksheet.date || '-'} | Shift: {checksheet.shift || '-'}</p>
+                                                    <p>Production Order: {checksheet.productionOrderNo || '-'} | Module: {checksheet.moduleType || '-'}</p>
+                                                    {checksheet.submittedAt && <p>Submitted: {formatTimestamp(checksheet.submittedAt)} by {checksheet.submittedBy || '-'}</p>}
+                                                    {state === 'returned' && checksheet.returnComments && (
+                                                        <p className="text-amber-700 dark:text-amber-300">Return comments: {checksheet.returnComments}</p>
+                                                    )}
+                                                    {state === 'returned' && (
+                                                        <p>Returned: {formatTimestamp(checksheet.returnedAt)} by {checksheet.returnedBy || '-'}</p>
+                                                    )}
+                                                    {isReviewerRole && state !== 'submitted' && !isSystemAdminRole && (
+                                                        <p className="text-gray-500 dark:text-gray-400">Metadata only until submitted.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
+                                                <button
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => canExport && exportSavedReportToExcel(index)}
+                                                    disabled={!canExport}
+                                                    title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
+                                                >
+                                                    Excel
+                                                </button>
+                                                <button
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => canOpen && (isReturnedList ? editReturnedChecksheet(index) : editSavedChecksheet(index))}
+                                                    disabled={!canOpen}
+                                                >
+                                                    {getOpenActionLabel(checksheet)}
+                                                </button>
+                                                {canReturn && (
+                                                    <button
+                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
+                                                        onClick={() => openReturnModal(index)}
+                                                    >
+                                                        Return
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
+                                                        onClick={() => {
+                                                            showConfirm({
+                                                                title: 'Delete Checksheet',
+                                                                message: `Are you sure you want to delete "${checksheet.name}"? This action cannot be undone.`,
+                                                                type: 'warning',
+                                                                confirmText: 'Delete',
+                                                                onConfirm: () => deleteSavedChecksheet(index),
+                                                            });
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <ReportPagination
+                            totalItems={totalItems}
+                            page={page}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(nextPageSize) => {
+                                setPageSize(nextPageSize);
+                                setPage(1);
+                            }}
+                            itemLabel="checksheets"
+                        />
+                    </>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div>
@@ -1096,27 +1776,128 @@ export default function QualityAudit() {
                         </div>
                     </div>
                 )}
-                {autoSaveStatus !== 'idle' && (
-                    <div className={`fixed bottom-0 right-0 text-white rounded-sm px-3 py-1 text-xs z-40 ${autoSaveStatus === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
-                        {autoSaveStatus === 'saving' ? 'Saving...' : autoSaveStatus === 'saved' ? 'Saved' : 'Auto-save failed'}
+                {returnModalChecksheetIndex !== null && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                        <div className="w-full max-w-md rounded-md bg-white p-4 shadow-xl dark:bg-gray-900">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Return for Correction</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {savedChecksheets[returnModalChecksheetIndex]?.name}
+                            </p>
+                            <textarea
+                                value={returnComment}
+                                onChange={(event) => {
+                                    setReturnComment(event.target.value);
+                                    if (returnCommentError) setReturnCommentError('');
+                                }}
+                                rows={4}
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                placeholder="Enter correction comments"
+                            />
+                            {returnCommentError && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{returnCommentError}</p>
+                            )}
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                    onClick={closeReturnModal}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                                    onClick={submitReturnForCorrection}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
                 <div className="flex justify-center mb-2">
-                    <button
-                        onClick={() => setActiveTab('create-edit')}
-                        className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                    >
-                        Create/Edit Checksheet
-                    </button>
+                    {canCreateChecksheet && (
+                        <button
+                            onClick={() => {
+                                clearCurrentChecksheet();
+                                setActiveTab('create-edit');
+                            }}
+                            className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        >
+                            Create Checksheet
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab('saved-reports')}
                         className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
-                        Saved Checksheets
+                        Submitted/Draft Checksheets
                     </button>
+                    {isOperatorRole && returnedChecksheetsTotal > 0 && (
+                        <button
+                            onClick={() => setActiveTab('returned-reports')}
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        >
+                            Returned Checksheets
+                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
+                                {returnedChecksheetsTotal}
+                            </span>
+                        </button>
+                    )}
                 </div>
                 {activeTab === 'create-edit' && (
                     <div>
+                        {currentWorkflowState === 'returned' && currentChecksheetMeta?.returnComments && (
+                            <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
+                                <strong>Returned for correction:</strong> {currentChecksheetMeta.returnComments}
+                                <div className="mt-1 text-xs">
+                                    Returned by {currentChecksheetMeta.returnedBy || '-'} on {formatTimestamp(currentChecksheetMeta.returnedAt)}
+                                </div>
+                            </div>
+                        )}
+                        <div className="mb-2 flex flex-col sm:flex-row justify-center items-center gap-3">
+                            {currentChecksheetId && (
+                                <div className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    {currentChecksheetMeta?.name || generateChecksheetName(auditData.lineNumber, auditData.date, auditData.shift)}
+                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                        {formatWorkflowState(currentWorkflowState)}
+                                    </span>
+                                    {isAutosaving && (
+                                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-300">
+                                            Auto-saving...
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            {canEditCurrentChecksheet && (
+                                <button
+                                    className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    onClick={saveChecksheet}
+                                    disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet}
+                                    title={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'Prepared By signature is required before submission' : undefined}
+                                >
+                                    {currentWorkflowState === 'submitted' ? 'Save Changes' : currentWorkflowState === 'returned' ? 'Resubmit Checksheet' : 'Submit Checksheet'}
+                                </button>
+                            )}
+                            {canExportCurrentChecksheet && (
+                                <button
+                                    className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                                    onClick={generateExcelReport}
+                                >
+                                    Generate Audit Excel
+                                </button>
+                            )}
+                            {currentChecksheetId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                                <button
+                                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                                    onClick={() => {
+                                        const index = savedChecksheets.findIndex(sheet => sheet._id === currentChecksheetId);
+                                        if (index >= 0) openReturnModal(index);
+                                    }}
+                                >
+                                    Return for Correction
+                                </button>
+                            )}
+                        </div>
+                        <div aria-disabled={!canEditCurrentChecksheet} className={!canEditCurrentChecksheet ? 'opacity-90' : ''}>
                         {currentView === 'basicInfo' && (
                             <div className="flex flex-col justify-center">
                                 <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-6">
@@ -1207,7 +1988,9 @@ export default function QualityAudit() {
                                     <div className="text-center">
                                         <button
                                             onClick={handleNextFromBasicInfo}
-                                            className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm sm:text-lg font-semibold"
+                                            disabled={!canProceedFromBasicInfo}
+                                            className={`px-6 sm:px-8 py-2 sm:py-3 text-white rounded-lg transition-colors text-sm sm:text-lg font-semibold ${canProceedFromBasicInfo ? 'bg-blue-600 dark:bg-blue-700 cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
+                                            title={!canProceedFromBasicInfo ? 'Complete all required basic information before continuing' : undefined}
                                         >
                                             Next
                                         </button>
@@ -1224,12 +2007,6 @@ export default function QualityAudit() {
                                             className="bg-gray-600 dark:bg-gray-700 text-white border border-gray-600 dark:border-gray-700 p-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-gray-700 dark:hover:bg-gray-600 hover:border-gray-700 dark:hover:border-gray-600"
                                         >
                                             ← Back to Basic Info
-                                        </button>
-                                        <button
-                                            onClick={generateExcelReport}
-                                            className="p-2 bg-green-600 dark:bg-green-700 text-white rounded-lg shadow-lg cursor-pointer hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-xs sm:text-sm font-semibold"
-                                        >
-                                            Generate Audit Excel
                                         </button>
                                     </div>
                                     <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -1455,18 +2232,18 @@ export default function QualityAudit() {
                                                                                                 stageId: selectedStageId,
                                                                                                 paramId: param.id,
                                                                                                 timeSlot: obs.timeSlot,
-                                                                                                value: savedObservation?.value || obs.value,
-                                                                                                observationData: savedObservation || obs,
+                                                                                                value: savedObservation?.value ?? obs.value,
+                                                                                                observationData: savedObservation ?? obs,
                                                                                                 onUpdate: updateObservation,
                                                                                                 lineOptions: getDynamicLineOptions(auditData.lineNumber),
                                                                                                 onLineMappingUpdate: updateObservationLineMapping
                                                                                             })
                                                                                         ) : (
                                                                                             <div className="w-full flex justify-center">
-                                                                                                {typeof (savedObservation?.value || obs.value) === 'string' ? (
+                                                                                                {typeof (savedObservation?.value ?? obs.value) === 'string' ? (
                                                                                                     <input
                                                                                                         type="text"
-                                                                                                        value={(savedObservation?.value || obs.value) as string}
+                                                                                                        value={(savedObservation?.value ?? obs.value) as string}
                                                                                                         onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
                                                                                                         placeholder="Enter value"
                                                                                                         className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
@@ -1493,29 +2270,17 @@ export default function QualityAudit() {
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 )}
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        <SavedReportsNChecksheets
-                            reports={savedChecksheets.map(sheet => ({
-                                ...sheet,
-                                timestamp: sheet.timestamp,
-                                updatedTimestamp: sheet.updatedTimestamp
-                            }))}
-                            onExportExcel={exportSavedReportToExcel}
-                            onEdit={editSavedChecksheet}
-                            onDelete={deleteSavedChecksheet}
-                            emptyMessage={{
-                                title: 'No saved checksheets found.',
-                                description: 'Create and save your first checksheet in the "Create/Edit Checksheet" tab.'
-                            }}
-                            showAdditionalInfo={(report: any) => (
-                                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                    Product: {report.data.productionOrderNo} | Module: {report.data.moduleType}
-                                </p>
-                            )}
-                        />
+                        {renderChecksheetsList(savedChecksheets, isOperatorRole ? 'Submitted/Draft Checksheets' : 'Checksheets')}
+                    </div>
+                )}
+                {activeTab === 'returned-reports' && isOperatorRole && (
+                    <div className="tab-content active">
+                        {renderChecksheetsList(returnedChecksheets, 'Returned Checksheets', 'returned')}
                     </div>
                 )}
             </div>

@@ -165,17 +165,17 @@ export const renderGroupedSampleInputs = (
     const lineMapping = getSampleGroupedLineMapping(sampleValue, props.observationData.lineMapping || {}, fallbackLine);
 
     return (
-        <div className="w-full rounded-lg bg-white shadow-sm border border-gray-300 overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="w-full min-w-0 rounded-lg bg-white shadow-sm border border-gray-300 overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4">
                 {SAMPLE_GROUPS.map(group => (
-                    <div key={group.label} className="border-r last:border-r-0 border-gray-200">
-                        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-gray-700 bg-gray-50 border-b border-gray-200 px-2 py-2">
+                    <div key={group.label} className="min-w-0 border-r last:border-r-0 border-gray-200">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-gray-700 bg-gray-50 border-b border-gray-200 px-2 py-2">
                             <span>{group.label}</span>
-                            <label className="flex items-center gap-1 font-normal text-gray-500">Line - 
+                            <label className="flex min-w-0 items-center gap-1 font-normal text-gray-500">Line -
                                 <select
                                     value={lineMapping[group.key] || fallbackLine}
                                     onChange={(e) => props.onLineMappingUpdate?.(props.stageId, props.paramId, props.timeSlot, group.key, e.target.value)}
-                                    className="px-1 py-0.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="max-w-full px-1 py-0.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 >
                                     {lineOptions.map(line => (
                                         <option key={line} value={line}>{line}</option>
@@ -204,7 +204,7 @@ export const renderGroupedSampleInputs = (
                                             );
                                             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                         }}
-                                        className={`w-full px-1 py-1 text-center border border-gray-300 rounded text-xs focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(currentSampleValue)}`}
+                                        className={`w-full min-w-0 px-1 py-1 text-center border border-gray-300 rounded text-xs focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(currentSampleValue)}`}
                                     />
                                 </div>
                                 );

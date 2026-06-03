@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 import TestHeading from '../components/TestHeading';
+import ReportPagination from '../components/ReportPagination';
+import ReportListControls, { filterSortReports, ReportSortOption } from '../components/ReportListControls';
+
+type GelWorkflowState = 'draft' | 'submitted' | 'returned';
 
 interface GelTestReport {
     _id?: string;
@@ -10,6 +13,19 @@ interface GelTestReport {
     timestamp: string;
     formData: { [key: string]: string | boolean; };
     averages: { [key: string]: string; };
+    workflowState?: GelWorkflowState;
+    createdByUserId?: string | null;
+    createdByEmployeeName?: string | null;
+    createdByEmployeeId?: string | null;
+    submittedAt?: string | null;
+    submittedBy?: string | null;
+    returnedAt?: string | null;
+    returnedBy?: string | null;
+    returnComments?: string | null;
+    isSigned?: boolean;
+    signedAt?: string | null;
+    updatedAt?: string | null;
+    s3_key?: string;
 }
 
 interface DateShiftTimeValue {
@@ -42,14 +58,38 @@ const cloneGelReport = (report: GelTestReport): GelTestReport => (
         : JSON.parse(JSON.stringify(report))
 );
 
+const getWorkflowState = (report?: Pick<GelTestReport, 'workflowState'> | null): GelWorkflowState =>
+    report?.workflowState || 'submitted';
+
+const formatWorkflowState = (state: GelWorkflowState) =>
+    state.charAt(0).toUpperCase() + state.slice(1);
+
+const formatTimestamp = (value?: string | null) =>
+    value ? new Date(value).toLocaleString() : '-';
+
 export default function GelTest() {
-    const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports'>('edit-report');
+    const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports' | 'returned-reports'>('edit-report');
     const [savedReports, setSavedReports] = useState<GelTestReport[]>([]);
     const [gelReportName, setGelReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
+    const [currentReportId, setCurrentReportId] = useState<string | null>(null);
+    const [currentWorkflowState, setCurrentWorkflowState] = useState<GelWorkflowState>('draft');
+    const [currentReportMeta, setCurrentReportMeta] = useState<GelTestReport | null>(null);
+    const [returnModalReportIndex, setReturnModalReportIndex] = useState<number | null>(null);
+    const [returnComment, setReturnComment] = useState('');
+    const [returnCommentError, setReturnCommentError] = useState('');
+    const [mainReportPage, setMainReportPage] = useState(1);
+    const [mainReportPageSize, setMainReportPageSize] = useState(10);
+    const [returnedReportPage, setReturnedReportPage] = useState(1);
+    const [returnedReportPageSize, setReturnedReportPageSize] = useState(10);
+    const [mainReportSearch, setMainReportSearch] = useState('');
+    const [mainReportSort, setMainReportSort] = useState<ReportSortOption>('newest-updated');
+    const [returnedReportSearch, setReturnedReportSearch] = useState('');
+    const [returnedReportSort, setReturnedReportSort] = useState<ReportSortOption>('newest-updated');
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -61,6 +101,22 @@ export default function GelTest() {
     const [checkboxValues, setCheckboxValues] = useState<{ [key: string]: boolean }>({});
     const [averageValues, setAverageValues] = useState<string[]>(Array(7).fill('0'));
     const [meanValue, setMeanValue] = useState('0');
+    const isOperatorRole = userRole === 'Operator';
+    const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
+    const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const canCreateReport = isOperatorRole || isSystemAdminRole;
+    const canEditCurrentReport = isSystemAdminRole
+        || (isOperatorRole && (!currentReportId || ['draft', 'returned'].includes(currentWorkflowState)))
+        || (isReviewerRole && currentReportId !== null && currentWorkflowState === 'submitted');
+    const canSaveDraftCurrentReport = (isOperatorRole || isSystemAdminRole) && currentWorkflowState !== 'submitted';
+    const canSubmitCurrentReport = (isOperatorRole || isSystemAdminRole)
+        && currentWorkflowState !== 'submitted'
+        && preparedBySignature.trim().length > 0;
+    const canExportCurrentReport = currentReportId !== null && currentWorkflowState === 'submitted';
+    const returnedReports = savedReports.filter(report => getWorkflowState(report) === 'returned');
+    const reportsForMainList = isOperatorRole
+        ? savedReports.filter(report => getWorkflowState(report) !== 'returned')
+        : savedReports;
 
     const buildFieldKey = (index: number) => `gel_editable_${index}`;
     const totalFieldCount = 81;
@@ -90,6 +146,13 @@ export default function GelTest() {
     const suppressAutoSaveRef = useRef(true);
     const isRouteActiveRef = useRef(true);
     const editSessionRef = useRef(0);
+    const authHeaders = (includeJson = false): HeadersInit => ({
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
+        'X-User-Name': sessionStorage.getItem('username') || username || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+    });
+
     const getDateShiftTimeFieldType = (key: string): 'date' | 'shift' | 'time' => {
         if (key === 'gel_editable_42') return 'date';
         if (key === 'gel_editable_53') return 'shift';
@@ -97,7 +160,9 @@ export default function GelTest() {
     };
     const apiService = {
         getAllReports: async (): Promise<GelTestReport[]> => {
-            const response = await fetch(`${GEL_API_BASE_URL}/`);
+            const response = await fetch(`${GEL_API_BASE_URL}/`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -105,7 +170,9 @@ export default function GelTest() {
             return response.json();
         },
         getReportById: async (id: string): Promise<GelTestReport> => {
-            const response = await fetch(`${GEL_API_BASE_URL}/${id}`);
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch report: ${response.status} ${errorText}`);
@@ -115,7 +182,7 @@ export default function GelTest() {
         createReport: async (report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
             const response = await fetch(`${GEL_API_BASE_URL}/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -127,7 +194,7 @@ export default function GelTest() {
         updateReport: async (id: string, report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
             const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -137,11 +204,38 @@ export default function GelTest() {
             return response.json();
         },
         deleteReport: async (id: string): Promise<void> => {
-            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
             }
+        },
+        submitReport: async (id: string, report: Omit<GelTestReport, '_id'>): Promise<GelTestReport> => {
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}/submit`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to submit report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        returnReport: async (id: string, returnComments: string): Promise<GelTestReport> => {
+            const response = await fetch(`${GEL_API_BASE_URL}/${id}/return`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ returnComments }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to return report: ${response.status} ${errorText}`);
+            }
+            return response.json();
         },
         checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
             const url = `${GEL_API_BASE_URL}/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
@@ -158,8 +252,13 @@ export default function GelTest() {
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
         setUserRole(storedUserRole);
         setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
+        if (!['Operator', 'Admin', 'System Administrator'].includes(storedUserRole || '')) {
+            setActiveTab('saved-reports');
+        }
     }, []);
 
     useEffect(() => {
@@ -183,6 +282,12 @@ export default function GelTest() {
             clearGelDraftStorage();
         };
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'returned-reports' && returnedReports.length === 0) {
+            setActiveTab('saved-reports');
+        }
+    }, [activeTab, returnedReports.length]);
 
     const initializeForm = () => {
         setAverageValues(Array(7).fill('0'));
@@ -285,6 +390,14 @@ export default function GelTest() {
         averages.mean = meanValue;
         return averages;
     };
+
+    const buildReportPayload = (): Omit<GelTestReport, '_id'> => ({
+        name: gelReportName.trim(),
+        timestamp: currentReportMeta?.timestamp || new Date().toISOString(),
+        formData: buildFormData(),
+        averages: buildAverages(),
+        workflowState: currentWorkflowState,
+    });
 
     const applyStoredFormData = (formData: { [key: string]: string | boolean }, reportName?: string) => {
         suppressAutoSaveRef.current = true;
@@ -449,6 +562,7 @@ export default function GelTest() {
     };
 
     const handleEditableChange = (key: string, value: string) => {
+        if (!canEditCurrentReport) return;
         setEditableValues(prev => ({ ...prev, [key]: value }));
         setHasUnsavedChanges(true);
     };
@@ -458,6 +572,7 @@ export default function GelTest() {
         field: 'date' | 'shift' | 'time',
         value: string
     ) => {
+        if (!canEditCurrentReport) return;
         setDateShiftTimeValues(prev => ({
             ...prev,
             [key]: {
@@ -473,6 +588,7 @@ export default function GelTest() {
     };
 
     const handleDataChange = (key: string, value: string) => {
+        if (!canEditCurrentReport) return;
         setDataValues(prev => ({ ...prev, [key]: value }));
         setHasUnsavedChanges(true);
     };
@@ -495,6 +611,7 @@ export default function GelTest() {
     };
 
     const handleCheckboxChange = (key: string, checked: boolean) => {
+        if (!canEditCurrentReport) return;
         setCheckboxValues(prev => ({ ...prev, [key]: checked }));
         setHasUnsavedChanges(true);
     };
@@ -527,6 +644,10 @@ export default function GelTest() {
     ]);
 
     const handleAddSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -566,6 +687,10 @@ export default function GelTest() {
     };
 
     const handleRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -596,6 +721,7 @@ export default function GelTest() {
     };
 
     const canRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) return false;
         if (!username) return false;
         let currentSignature = '';
         switch (section) {
@@ -610,6 +736,7 @@ export default function GelTest() {
     };
 
     const canAddSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) return false;
         if (!username) return false;
         let currentSignature = '';
         switch (section) {
@@ -634,12 +761,20 @@ export default function GelTest() {
     const editSavedReport = async (index: number) => {
         try {
             setIsLoading(true);
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const reportMetadata = reports[index];
+            const reportMetadata = savedReports[index];
+            const state = getWorkflowState(reportMetadata);
+            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
+                showAlert('error', 'Draft and returned reports are locked until the operator submits them');
+                return;
+            }
+            if (!reportMetadata._id) {
+                showAlert('error', 'Report ID not found');
+                return;
+            }
             const fullReport = await apiService.getReportById(reportMetadata._id!);
             const selectedReport = cloneGelReport(fullReport);
             const editSessionId = editSessionRef.current + 1;
@@ -649,13 +784,16 @@ export default function GelTest() {
             clearFormData();
             sessionStorage.setItem(GEL_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
             sessionStorage.setItem(GEL_EDITING_REPORT_ID_KEY, selectedReport._id!);
+            setCurrentReportId(selectedReport._id || null);
+            setCurrentWorkflowState(getWorkflowState(selectedReport));
+            setCurrentReportMeta(selectedReport);
             setActiveTab('edit-report');
             setTimeout(() => {
                 if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
                 loadReportData(cloneGelReport(selectedReport));
-                setHasUnsavedChanges(true);
+                setHasUnsavedChanges(getWorkflowState(selectedReport) !== 'submitted');
             }, 150);
-            showAlert('info', `Now editing: ${selectedReport.name}`);
+            showAlert('info', `${state === 'submitted' && isOperatorRole ? 'Viewing' : 'Opened'}: ${selectedReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -677,8 +815,11 @@ export default function GelTest() {
                 setTimeout(() => {
                     if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
                     const report = cloneGelReport(JSON.parse(editingReportData) as GelTestReport);
+                    setCurrentReportId(report._id || null);
+                    setCurrentWorkflowState(getWorkflowState(report));
+                    setCurrentReportMeta(report);
                     loadReportData(report);
-                    setHasUnsavedChanges(true);
+                    setHasUnsavedChanges(getWorkflowState(report) !== 'submitted');
                 }, 100);
             } else {
                 loadFormData();
@@ -707,6 +848,9 @@ export default function GelTest() {
 
         if (clearEditingState) {
             setGelReportName('');
+            setCurrentReportId(null);
+            setCurrentWorkflowState('draft');
+            setCurrentReportMeta(null);
             sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
             sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
         }
@@ -734,97 +878,109 @@ export default function GelTest() {
         }
     };
 
-    const saveReport = async () => {
+    const saveDraftReport = async () => {
+        if (!canSaveDraftCurrentReport || !canEditCurrentReport) {
+            showAlert('error', 'You are not authorized to save this report');
+            return;
+        }
         if (!gelReportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
-
-        if (!validateDataFields()) {
-            return;
-        }
+        if (!validateDataFields()) return;
 
         try {
             setIsLoading(true);
-            const reportData: Omit<GelTestReport, '_id'> = {
-                name: gelReportName,
-                timestamp: new Date().toISOString(),
-                formData: buildFormData(),
-                averages: buildAverages(),
-            };
-            const editingId = sessionStorage.getItem(GEL_EDITING_REPORT_ID_KEY);
-            if (editingId) {
-                const existingReport = await apiService.getReportById(editingId);
-                if (gelReportName === existingReport.name) {
-                    await apiService.updateReport(editingId, reportData);
-                    showAlert('success', 'Report updated successfully!');
-                } else {
-                    const nameExists = await apiService.checkReportNameExists(gelReportName, editingId);
-                    if (nameExists) {
-                        showConfirm({
-                            title: 'Report Name Exists',
-                            message: `A report named "${gelReportName}" already exists. Do you want to replace it?`,
-                            type: 'warning',
-                            confirmText: 'Replace',
-                            cancelText: 'Cancel',
-                            onConfirm: async () => {
-                                const allReports = await apiService.getAllReports();
-                                const existingReportWithSameName = allReports.find(report => report.name === gelReportName);
-                                if (existingReportWithSameName) {
-                                    await apiService.updateReport(existingReportWithSameName._id!, reportData);
-                                    showAlert('success', 'Report updated successfully!');
-                                } else {
-                                    await apiService.createReport(reportData);
-                                    showAlert('success', 'New report created successfully!');
-                                }
-                                sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
-                                sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
-                                clearFormData();
-                                loadSavedReports();
-                                setActiveTab('saved-reports');
-                            }
-                        });
-                        return;
-                    } else {
-                        await apiService.createReport(reportData);
-                        showAlert('success', 'New report created with updated name!');
-                    }
-                }
-                sessionStorage.removeItem(GEL_EDITING_REPORT_ID_KEY);
-                sessionStorage.removeItem(GEL_EDITING_REPORT_DATA_KEY);
+            const reportData = buildReportPayload();
+            if (currentReportId) {
+                const updatedReport = await apiService.updateReport(currentReportId, reportData);
+                setCurrentReportMeta(updatedReport);
+                setCurrentWorkflowState(getWorkflowState(updatedReport));
+                showAlert('success', 'Draft saved successfully');
             } else {
                 const nameExists = await apiService.checkReportNameExists(gelReportName);
                 if (nameExists) {
-                    showConfirm({
-                        title: 'Report Name Exists',
-                        message: `A report named "${gelReportName}" already exists. Do you want to replace it?`,
-                        type: 'warning',
-                        confirmText: 'Replace',
-                        cancelText: 'Cancel',
-                        onConfirm: async () => {
-                            const allReports = await apiService.getAllReports();
-                            const existingReport = allReports.find(report => report.name === gelReportName);
-                            if (existingReport) {
-                                await apiService.updateReport(existingReport._id!, reportData);
-                                showAlert('success', 'Report updated successfully!');
-                            } else {
-                                await apiService.createReport(reportData);
-                                showAlert('success', 'New report created successfully!');
-                            }
-                            clearFormData();
-                            loadSavedReports();
-                            setActiveTab('saved-reports');
-                        }
-                    });
+                    showAlert('error', 'Report name already exists. Open it from the saved reports list.');
                     return;
-                } else {
-                    await apiService.createReport(reportData);
-                    showAlert('success', 'Report saved successfully!');
                 }
+                const createdReport = await apiService.createReport(reportData);
+                setCurrentReportId(createdReport._id || null);
+                setCurrentReportMeta(createdReport);
+                setCurrentWorkflowState(getWorkflowState(createdReport));
+                sessionStorage.setItem(GEL_EDITING_REPORT_ID_KEY, createdReport._id || '');
             }
+            setHasUnsavedChanges(false);
+            await loadSavedReports();
+        } catch (error) {
+            console.error('Error saving draft:', error);
+            showAlert('error', 'Failed to save draft');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const submitReport = async () => {
+        if (!gelReportName.trim()) {
+            showAlert('error', 'Please enter a report name');
+            return;
+        }
+        if (!preparedBySignature.trim()) {
+            showAlert('error', 'Prepared By signature is required before submission');
+            return;
+        }
+        if (!validateDataFields()) return;
+
+        try {
+            setIsLoading(true);
+            const reportData = buildReportPayload();
+            let reportId = currentReportId;
+            if (!reportId) {
+                const nameExists = await apiService.checkReportNameExists(gelReportName);
+                if (nameExists) {
+                    showAlert('error', 'Report name already exists. Open it from the saved reports list.');
+                    return;
+                }
+                const createdReport = await apiService.createReport(reportData);
+                reportId = createdReport._id || null;
+                setCurrentReportId(reportId);
+            } else {
+                await apiService.updateReport(reportId, reportData);
+            }
+            if (!reportId) {
+                showAlert('error', 'Unable to submit report without a saved draft ID');
+                return;
+            }
+            const submittedReport = await apiService.submitReport(reportId, reportData);
+            setCurrentWorkflowState('submitted');
+            setCurrentReportMeta(submittedReport);
+            setHasUnsavedChanges(false);
+            clearGelDraftStorage();
+            await loadSavedReports();
             clearFormData();
-            loadSavedReports();
             setActiveTab('saved-reports');
+            showAlert('success', currentWorkflowState === 'returned' ? 'Report resubmitted successfully' : 'Report submitted successfully');
+        } catch (error) {
+            console.error('Error submitting report:', error);
+            showAlert('error', 'Failed to submit report');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveSubmittedChanges = async () => {
+        if (!currentReportId || !canEditCurrentReport || currentWorkflowState !== 'submitted') {
+            showAlert('error', 'You are not authorized to modify this report');
+            return;
+        }
+        if (!validateDataFields()) return;
+
+        try {
+            setIsLoading(true);
+            const updatedReport = await apiService.updateReport(currentReportId, buildReportPayload());
+            setCurrentReportMeta(updatedReport);
+            setHasUnsavedChanges(false);
+            await loadSavedReports();
+            showAlert('success', 'Report changes saved successfully');
         } catch (error) {
             console.error('Error saving report:', error);
             showAlert('error', 'Failed to save report');
@@ -833,15 +989,31 @@ export default function GelTest() {
         }
     };
 
+    const saveReport = async () => {
+        if (currentWorkflowState === 'submitted') {
+            await saveSubmittedChanges();
+            return;
+        }
+        await submitReport();
+    };
+
     const deleteSavedReport = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const report = reports[index];
+            const report = savedReports[index];
+            const state = getWorkflowState(report);
+            const canDelete = isSystemAdminRole
+                || (isOperatorRole && state === 'draft')
+                || (isReviewerRole && state === 'submitted');
+            if (!canDelete) {
+                showAlert('error', 'You are not authorized to delete this report');
+                return;
+            }
             await apiService.deleteReport(report._id!);
+            if (report._id === currentReportId) clearFormData();
             await loadSavedReports();
             showAlert('info', 'Report deleted successfully');
         } catch (error) {
@@ -851,22 +1023,16 @@ export default function GelTest() {
     };
 
     const exportToExcel = async () => {
-        if (!validateDataFields()) {
-            return;
-        }
-
         try {
+            if (!currentReportId || currentWorkflowState !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
+                return;
+            }
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const gelReportData = {
-                report_name: gelReportName.trim() || 'Gel_Test_Report',
-                timestamp: new Date().toISOString(),
-                form_data: buildFormData(),
-                averages: buildAverages(),
-            };
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(gelReportData),
+                headers: authHeaders(true),
+                body: JSON.stringify({ report_id: currentReportId }),
             });
             if (!response.ok) throw new Error('Failed to generate report');
             const blob = await response.blob();
@@ -887,16 +1053,19 @@ export default function GelTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const report = reports[index];
+            const report = savedReports[index];
+            if (getWorkflowState(report) !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
+                return;
+            }
             const response = await fetch(`${GEL_API_BASE_URL}/generate-gel-report`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify({ report_id: report._id }),
             });
             if (!response.ok) throw new Error('Failed to generate report');
@@ -914,6 +1083,223 @@ export default function GelTest() {
             console.error('Error exporting to Excel:', error);
             showAlert('error', 'Failed to export Excel file');
         }
+    };
+
+    const openReturnModal = (index: number) => {
+        if (index < 0 || index >= savedReports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+        const report = savedReports[index];
+        if (getWorkflowState(report) !== 'submitted') {
+            showAlert('error', 'Only submitted reports can be returned');
+            return;
+        }
+        setReturnModalReportIndex(index);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const closeReturnModal = () => {
+        setReturnModalReportIndex(null);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const submitReturnForCorrection = async () => {
+        if (returnModalReportIndex === null) return;
+
+        const trimmedComments = returnComment.trim();
+        if (!trimmedComments) {
+            setReturnCommentError('Comment is required');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const report = savedReports[returnModalReportIndex];
+            await apiService.returnReport(report._id!, trimmedComments);
+            if (currentReportId === report._id) {
+                setCurrentWorkflowState('returned');
+                setCurrentReportMeta(prev => prev ? {
+                    ...prev,
+                    workflowState: 'returned',
+                    returnComments: trimmedComments,
+                    returnedAt: new Date().toISOString(),
+                    returnedBy: username,
+                } : prev);
+            }
+            await loadSavedReports();
+            closeReturnModal();
+            showAlert('success', 'Report returned for correction');
+            setActiveTab('saved-reports');
+        } catch (error) {
+            console.error('Error returning report:', error);
+            showAlert('error', 'Failed to return report');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const canOpenListedReport = (report: GelTestReport) =>
+        isSystemAdminRole || isOperatorRole || (isReviewerRole && getWorkflowState(report) === 'submitted');
+
+    const canDeleteListedReport = (report: GelTestReport) =>
+        isSystemAdminRole
+        || ((isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted')
+        || (isOperatorRole && getWorkflowState(report) === 'draft');
+
+    const canReturnListedReport = (report: GelTestReport) =>
+        (isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted';
+
+    const getOpenActionLabel = (report: GelTestReport) => {
+        const state = getWorkflowState(report);
+        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
+        if (isOperatorRole && state === 'submitted') return 'View';
+        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+    };
+
+    const renderGelReportsList = (reports: GelTestReport[], title: string, listType: 'main' | 'returned' = 'main') => {
+        const page = listType === 'returned' ? returnedReportPage : mainReportPage;
+        const pageSize = listType === 'returned' ? returnedReportPageSize : mainReportPageSize;
+        const setPage = listType === 'returned' ? setReturnedReportPage : setMainReportPage;
+        const setPageSize = listType === 'returned' ? setReturnedReportPageSize : setMainReportPageSize;
+        const searchTerm = listType === 'returned' ? returnedReportSearch : mainReportSearch;
+        const sortOption = listType === 'returned' ? returnedReportSort : mainReportSort;
+        const setSearchTerm = listType === 'returned' ? setReturnedReportSearch : setMainReportSearch;
+        const setSortOption = listType === 'returned' ? setReturnedReportSort : setMainReportSort;
+        const filteredReports = filterSortReports(reports, searchTerm, sortOption);
+        const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
+        const safePage = Math.min(Math.max(1, page), totalPages);
+        const paginatedReports = filteredReports.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+        return (
+            <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+                <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
+                    {title}
+                </h2>
+                <ReportListControls
+                    searchTerm={searchTerm}
+                    sortOption={sortOption}
+                    totalCount={reports.length}
+                    filteredCount={filteredReports.length}
+                    onSearchTermChange={(value) => {
+                        setSearchTerm(value);
+                        setPage(1);
+                    }}
+                    onSortOptionChange={(value) => {
+                        setSortOption(value);
+                        setPage(1);
+                    }}
+                    searchPlaceholder="Search by report, creator, employee ID, or status..."
+                />
+                {filteredReports.length === 0 ? (
+                    <div className="text-center py-6 md:py-8">
+                        <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
+                            {reports.length === 0 ? 'No gel reports found.' : 'No matching gel reports found.'}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="reports-list">
+                            {paginatedReports.map((report, index) => {
+                                const originalIndex = report._id
+                                    ? savedReports.findIndex(savedReport => savedReport._id === report._id)
+                                    : savedReports.indexOf(report);
+                                const state = getWorkflowState(report);
+                                const canOpen = canOpenListedReport(report);
+                                const canExport = state === 'submitted' && canOpen;
+
+                                return (
+                                    <div
+                                        key={report._id || `${report.name}-${index}`}
+                                        className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
+                                    >
+                                        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
+                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state === 'submitted' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200' : state === 'returned' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                                        {formatWorkflowState(state)}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                                                    <p>Created: {formatTimestamp(report.timestamp)}</p>
+                                                    <p>Created by: {report.createdByEmployeeName || report.createdByEmployeeId || 'Legacy report'}</p>
+                                                    <p>Updated: {formatTimestamp(report.updatedAt || report.timestamp)}</p>
+                                                    {report.submittedAt && <p>Submitted: {formatTimestamp(report.submittedAt)} by {report.submittedBy || '-'}</p>}
+                                                    {state === 'returned' && report.returnComments && (
+                                                        <p className="text-amber-700 dark:text-amber-300">Return comments: {report.returnComments}</p>
+                                                    )}
+                                                    {state === 'returned' && (
+                                                        <p>Returned: {formatTimestamp(report.returnedAt)} by {report.returnedBy || '-'}</p>
+                                                    )}
+                                                    {isReviewerRole && state !== 'submitted' && !isSystemAdminRole && (
+                                                        <p className="text-gray-500 dark:text-gray-400">Metadata only until submitted.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
+                                                <button
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
+                                                    disabled={!canExport}
+                                                    title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
+                                                >
+                                                    Excel
+                                                </button>
+                                                <button
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    onClick={() => canOpen && originalIndex >= 0 && editSavedReport(originalIndex)}
+                                                    disabled={!canOpen}
+                                                >
+                                                    {getOpenActionLabel(report)}
+                                                </button>
+                                                {canReturnListedReport(report) && (
+                                                    <button
+                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
+                                                        onClick={() => originalIndex >= 0 && openReturnModal(originalIndex)}
+                                                    >
+                                                        Return
+                                                    </button>
+                                                )}
+                                                {canDeleteListedReport(report) && (
+                                                    <button
+                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
+                                                        onClick={() => {
+                                                            showConfirm({
+                                                                title: 'Delete Report',
+                                                                message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
+                                                                type: 'warning',
+                                                                confirmText: 'Delete',
+                                                                onConfirm: () => originalIndex >= 0 && deleteSavedReport(originalIndex),
+                                                            });
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <ReportPagination
+                            totalItems={filteredReports.length}
+                            page={safePage}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(nextPageSize) => {
+                                setPageSize(nextPageSize);
+                                setPage(1);
+                            }}
+                            itemLabel="reports"
+                        />
+                    </>
+                )}
+            </div>
+        );
     };
 
     const inputBaseClassName = 'w-full min-w-0 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white';
@@ -1060,23 +1446,76 @@ export default function GelTest() {
                         </div>
                     </div>
                 )}
+                {returnModalReportIndex !== null && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                        <div className="w-full max-w-md rounded-md bg-white p-4 shadow-xl dark:bg-gray-900">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Return for Correction</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {savedReports[returnModalReportIndex]?.name}
+                            </p>
+                            <textarea
+                                value={returnComment}
+                                onChange={(event) => {
+                                    setReturnComment(event.target.value);
+                                    if (returnCommentError) setReturnCommentError('');
+                                }}
+                                rows={4}
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                placeholder="Enter correction comments"
+                            />
+                            {returnCommentError && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{returnCommentError}</p>
+                            )}
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                    onClick={closeReturnModal}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                                    onClick={submitReturnForCorrection}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <TestHeading
                     heading="Gel Content Test"
                     criteria="Gel Content should be 75 to 95% for EVA and EPE and ≥ 60% for POE"
                 />
                 <div className="flex justify-center mb-2">
-                    <div
-                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                        onClick={() => setActiveTab('edit-report')}
-                    >
-                        Edit Report
-                    </div>
+                    {canCreateReport && (
+                        <div
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={() => {
+                                clearFormData();
+                                setActiveTab('edit-report');
+                            }}
+                        >
+                            Create Report
+                        </div>
+                    )}
                     <div
                         className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
-                        Saved Reports
+                        {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
                     </div>
+                    {isOperatorRole && returnedReports.length > 0 && (
+                        <div
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={() => setActiveTab('returned-reports')}
+                        >
+                            Returned Reports
+                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
+                                {returnedReports.length}
+                            </span>
+                        </div>
+                    )}
                 </div>
                 {activeTab === 'edit-report' && (
                     <div className="tab-content active">
@@ -1087,21 +1526,56 @@ export default function GelTest() {
                                 onChange={(e) => setGelReportName(e.target.value)}
                                 className="gel-report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter report name"
+                                disabled={!canEditCurrentReport}
                             />
-                            <button
-                                className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-blue-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                onClick={saveReport}
-                            >
-                                Save Report
-                            </button>
-                            <button
-                                className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                onClick={exportToExcel}
-                            >
-                                Export as Excel
-                            </button>
+                            {canSaveDraftCurrentReport && (
+                                <button
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-gray-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={saveDraftReport}
+                                >
+                                    Save Draft
+                                </button>
+                            )}
+                            {canEditCurrentReport && (
+                                <button
+                                    className={`save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
+                                    onClick={saveReport}
+                                    disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport}
+                                    title={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'Prepared By signature is required before submission' : undefined}
+                                >
+                                    {currentWorkflowState === 'submitted' ? 'Save Changes' : currentWorkflowState === 'returned' ? 'Resubmit Report' : 'Submit Report'}
+                                </button>
+                            )}
+                            {canExportCurrentReport && (
+                                <button
+                                    className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={exportToExcel}
+                                >
+                                    Export as Excel
+                                </button>
+                            )}
+                            {currentReportId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                                <button
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-amber-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={() => {
+                                        const index = savedReports.findIndex(report => report._id === currentReportId);
+                                        if (index >= 0) openReturnModal(index);
+                                    }}
+                                >
+                                    Return for Correction
+                                </button>
+                            )}
                         </div>
                         <div className="test-report-container bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg custom-scrollbar">
+                            {currentWorkflowState === 'returned' && currentReportMeta?.returnComments && (
+                                <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
+                                    <strong>Returned for correction:</strong> {currentReportMeta.returnComments}
+                                    <div className="mt-1 text-xs">
+                                        Returned by {currentReportMeta.returnedBy || '-'} on {formatTimestamp(currentReportMeta.returnedAt)}
+                                    </div>
+                                </div>
+                            )}
+                            <fieldset disabled={!canEditCurrentReport} className={!canEditCurrentReport ? 'w-full min-w-0 opacity-90' : 'w-full min-w-0'}>
                             <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
                                 <table ref={tableRef} className="w-full table-fixed border-collapse min-w-[1000px] text-xs sm:text-sm">
                                     <tbody>
@@ -1371,17 +1845,18 @@ export default function GelTest() {
                                     </div>
                                 </div>
                             </div>
+                            </fieldset>
                         </div>
                     </div>
                 )}
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        <SavedReportsNChecksheets
-                            reports={savedReports}
-                            onExportExcel={exportSavedReportToExcel}
-                            onEdit={editSavedReport}
-                            onDelete={deleteSavedReport}
-                        />
+                        {renderGelReportsList(reportsForMainList, isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports', 'main')}
+                    </div>
+                )}
+                {activeTab === 'returned-reports' && isOperatorRole && (
+                    <div className="tab-content active">
+                        {renderGelReportsList(returnedReports, 'Returned Reports', 'returned')}
                     </div>
                 )}
             </div>

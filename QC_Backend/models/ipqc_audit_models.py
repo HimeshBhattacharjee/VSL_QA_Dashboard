@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from pymongo import ASCENDING, DESCENDING, MongoClient
 from typing import Optional, Dict, Any
 from urllib.parse import unquote, urlparse
 from constants import MONGODB_URI, MONGODB_DB_NAME
@@ -7,6 +7,24 @@ from s3_service import S3Service
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 ipqc_audit_collection = db["ipqc_audits"]
+
+def ensure_ipqc_audit_indexes() -> None:
+    try:
+        ipqc_audit_collection.create_index([("timestamp", DESCENDING)], name="ipqc_timestamp_desc_idx")
+        ipqc_audit_collection.create_index([("updated_timestamp", DESCENDING)], name="ipqc_updated_timestamp_desc_idx")
+        ipqc_audit_collection.create_index([("name", ASCENDING)], name="ipqc_name_idx")
+        ipqc_audit_collection.create_index(
+            [("lineNumber", ASCENDING), ("date", ASCENDING), ("shift", ASCENDING)],
+            name="ipqc_line_date_shift_idx"
+        )
+        ipqc_audit_collection.create_index([("status", ASCENDING)], name="ipqc_status_idx")
+        ipqc_audit_collection.create_index([("createdBy", ASCENDING)], name="ipqc_created_by_idx")
+        ipqc_audit_collection.create_index([("workflowState", ASCENDING)], name="ipqc_workflow_state_idx")
+        ipqc_audit_collection.create_index([("createdByEmployeeId", ASCENDING)], name="ipqc_created_by_employee_id_idx")
+    except Exception as exc:
+        print(f"Warning: failed to ensure IPQC audit indexes: {exc}")
+
+ensure_ipqc_audit_indexes()
 
 DYNAMIC_LINE_PARAMETER_IDS = {
     "2-4", "2-5", "2-6",
@@ -168,6 +186,20 @@ def normalize_signature_images(data: Dict[str, Any]) -> Dict[str, Any]:
         normalize_signature_images(nested_data)
 
     return data
+
+def build_ipqc_audit_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+    signatures = data.get("signatures") if isinstance(data.get("signatures"), dict) else {}
+    created_by = data.get("createdBy") or data.get("created_by") or signatures.get("auditBy", "")
+
+    return {
+        "lineNumber": data.get("lineNumber", ""),
+        "date": data.get("date", ""),
+        "shift": data.get("shift", ""),
+        "productionOrderNo": data.get("productionOrderNo", ""),
+        "moduleType": data.get("moduleType", ""),
+        "status": data.get("status", "draft"),
+        "createdBy": created_by,
+    }
 
 def get_default_sample_group_line_mapping(line_number: str) -> Dict[str, str]:
     first_line, second_line = ("1", "2") if line_number == "I" else ("3", "4")

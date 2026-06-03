@@ -1,5 +1,6 @@
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useState, useMemo } from 'react';
+import ReportPagination from './ReportPagination';
 
 export interface SavedReport {
     id?: string;
@@ -30,6 +31,10 @@ interface SavedReportsProps {
     };
     showAdditionalInfo?: (report: SavedReport) => React.ReactNode;
     customActions?: (report: SavedReport, index: number) => React.ReactNode;
+    canExportExcel?: (report: SavedReport, index: number) => boolean;
+    canEdit?: (report: SavedReport, index: number) => boolean;
+    canDelete?: (report: SavedReport, index: number) => boolean;
+    getEditLabel?: (report: SavedReport, index: number) => string;
     // New props for search and filter
     enableSearch?: boolean;
     enableFilters?: boolean;
@@ -37,9 +42,21 @@ interface SavedReportsProps {
     searchPlaceholder?: string;
     onSearch?: (searchTerm: string) => void; // Optional callback for external search handling
     onFilter?: (filterType: string, filterValue: string) => void; // Optional callback for external filter handling
+    onSortChange?: (sortOption: SortOption) => void;
+    serverSide?: boolean;
+    isLoading?: boolean;
+    pagination?: ServerPaginationConfig;
 }
 
-type SortOption = 'newest-created' | 'oldest-created' | 'recently-updated' | 'least-recently-updated' | 'name-asc' | 'name-desc';
+export type SortOption = 'newest-created' | 'oldest-created' | 'recently-updated' | 'least-recently-updated' | 'name-asc' | 'name-desc';
+
+interface ServerPaginationConfig {
+    totalItems: number;
+    currentPage: number;
+    pageSize: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+}
 
 export default function SavedReportsNChecksheets({
     reports,
@@ -52,13 +69,21 @@ export default function SavedReportsNChecksheets({
     },
     showAdditionalInfo,
     customActions,
+    canExportExcel,
+    canEdit,
+    canDelete,
+    getEditLabel,
     // New props with defaults
     enableSearch = true,
     enableFilters = true,
     filterConfigs = [],
     searchPlaceholder = "Search reports by name...",
     onSearch,
-    onFilter
+    onFilter,
+    onSortChange,
+    serverSide = false,
+    isLoading = false,
+    pagination
 }: SavedReportsProps) {
     const { showConfirm } = useConfirmModal();
     const [searchTerm, setSearchTerm] = useState('');
@@ -87,6 +112,10 @@ export default function SavedReportsNChecksheets({
     // Filter, search, and sort reports without changing the source order.
     const filteredReports = useMemo(() => {
         let filtered = [...reports];
+
+        if (serverSide) {
+            return filtered;
+        }
 
         // Apply search filter
         if (searchTerm.trim()) {
@@ -138,11 +167,12 @@ export default function SavedReportsNChecksheets({
         });
 
         return filtered;
-    }, [reports, searchTerm, activeFilters, filterConfigs, sortOption]);
+    }, [reports, searchTerm, activeFilters, filterConfigs, sortOption, serverSide]);
 
     const handleDelete = (report: SavedReport) => {
         const originalIndex = getOriginalIndex(report);
         if (originalIndex < 0) return;
+        if (canDelete && !canDelete(report, originalIndex)) return;
 
         showConfirm({
             title: 'Delete Report',
@@ -171,9 +201,22 @@ export default function SavedReportsNChecksheets({
         }
     };
 
+    const handleSortChange = (value: SortOption) => {
+        setSortOption(value);
+        if (onSortChange) {
+            onSortChange(value);
+        }
+    };
+
     const clearFilters = () => {
         setSearchTerm('');
         setActiveFilters({});
+        if (onSearch) {
+            onSearch('');
+        }
+        if (onFilter) {
+            Object.keys(activeFilters).forEach(filterType => onFilter(filterType, ''));
+        }
     };
 
     const hasActiveFilters = searchTerm || Object.values(activeFilters).some(v => v);
@@ -237,7 +280,7 @@ export default function SavedReportsNChecksheets({
                         <div className="sm:w-56">
                             <select
                                 value={sortOption}
-                                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                                onChange={(e) => handleSortChange(e.target.value as SortOption)}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                 aria-label="Sort saved reports"
                             >
@@ -321,11 +364,19 @@ export default function SavedReportsNChecksheets({
 
             {/* Reports List */}
             <div className="reports-list">
-                {filteredReports.length === 0 ? (
+                {isLoading ? (
+                    <div className="text-center py-6 md:py-8 text-gray-500 dark:text-gray-400">
+                        Loading saved reports...
+                    </div>
+                ) : filteredReports.length === 0 ? (
                     renderEmptyState()
                 ) : (
                     filteredReports.map((report, index) => {
                         const originalIndex = getOriginalIndex(report);
+                        const exportAllowed = originalIndex >= 0 && (canExportExcel ? canExportExcel(report, originalIndex) : true);
+                        const editAllowed = originalIndex >= 0 && (canEdit ? canEdit(report, originalIndex) : true);
+                        const deleteAllowed = originalIndex >= 0 && (canDelete ? canDelete(report, originalIndex) : true);
+                        const editLabel = originalIndex >= 0 && getEditLabel ? getEditLabel(report, originalIndex) : 'Edit';
 
                         return (
                         <div
@@ -349,8 +400,9 @@ export default function SavedReportsNChecksheets({
                                 </div>
                                 <div className="flex flex-wrap gap-2 md:gap-2 md:flex-nowrap justify-start md:justify-end">
                                     <button
-                                        className="excel-export-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 dark:bg-blue-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-green-500 dark:hover:bg-green-600 hover:scale-105 active:scale-95 flex items-center justify-center min-w-[36px] md:min-w-[44px]"
-                                        onClick={() => originalIndex >= 0 && onExportExcel(originalIndex)}
+                                        className={`excel-export-btn px-3 md:px-4 py-1.5 md:py-2 text-white text-xs md:text-sm rounded-md font-medium transition-all flex items-center justify-center min-w-[36px] md:min-w-[44px] ${exportAllowed ? 'cursor-pointer bg-blue-500 dark:bg-blue-600 hover:bg-green-500 dark:hover:bg-green-600 hover:scale-105 active:scale-95' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700 opacity-70'}`}
+                                        onClick={() => exportAllowed && onExportExcel(originalIndex)}
+                                        disabled={!exportAllowed}
                                         title="Export to Excel"
                                         aria-label="Export to Excel"
                                     >
@@ -361,16 +413,18 @@ export default function SavedReportsNChecksheets({
                                         />
                                     </button>
                                     <button
-                                        className="edit-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-green-500 dark:bg-green-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-green-600 dark:hover:bg-green-700 hover:scale-105 active:scale-95 whitespace-nowrap"
-                                        onClick={() => originalIndex >= 0 && onEdit(originalIndex)}
+                                        className={`edit-btn px-3 md:px-4 py-1.5 md:py-2 text-white text-xs md:text-sm rounded-md font-medium transition-all whitespace-nowrap ${editAllowed ? 'cursor-pointer bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700 hover:scale-105 active:scale-95' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700 opacity-70'}`}
+                                        onClick={() => editAllowed && onEdit(originalIndex)}
+                                        disabled={!editAllowed}
                                         aria-label={`Edit ${report.name}`}
                                     >
-                                        Edit
+                                        {editLabel}
                                     </button>
                                     {customActions && customActions(report, originalIndex)}
                                     <button
-                                        className="delete-btn cursor-pointer px-3 md:px-4 py-1.5 md:py-2 bg-red-500 dark:bg-red-600 text-white text-xs md:text-sm rounded-md font-medium transition-all hover:bg-red-600 dark:hover:bg-red-700 hover:scale-105 active:scale-95 whitespace-nowrap"
-                                        onClick={() => handleDelete(report)}
+                                        className={`delete-btn px-3 md:px-4 py-1.5 md:py-2 text-white text-xs md:text-sm rounded-md font-medium transition-all whitespace-nowrap ${deleteAllowed ? 'cursor-pointer bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 hover:scale-105 active:scale-95' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700 opacity-70'}`}
+                                        onClick={() => deleteAllowed && handleDelete(report)}
+                                        disabled={!deleteAllowed}
                                         aria-label={`Delete ${report.name}`}
                                     >
                                         Delete
@@ -386,8 +440,17 @@ export default function SavedReportsNChecksheets({
             {/* Results count */}
             {filteredReports.length > 0 && (
                 <div className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                    Showing {filteredReports.length} of {reports.length} reports
+                    Showing {filteredReports.length} of {pagination?.totalItems ?? reports.length} reports
                 </div>
+            )}
+            {pagination && (
+                <ReportPagination
+                    totalItems={pagination.totalItems}
+                    page={pagination.currentPage}
+                    pageSize={pagination.pageSize}
+                    onPageChange={pagination.onPageChange}
+                    onPageSizeChange={pagination.onPageSizeChange}
+                />
             )}
         </div>
     );

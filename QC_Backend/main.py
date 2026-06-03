@@ -10,18 +10,18 @@ from routes.qa_route import qa_router
 from routes.bGrade_route import bgrade_router
 from routes.peel_route import peel_router
 from routes.user_route import user_router
-from routes.gel_route import gel_router
+from routes.gel_route import gel_router, get_gel_current_user, require_gel_export_access
 from routes.adhesion_route import adhesion_router, get_adhesion_current_user, require_adhesion_export_access
 from routes.potting_ratio_route import potting_router
 from routes.jb_sealant_wt_route import jb_sealant_router
 from routes.frame_sealant_wt_route import frame_sealant_router
 from routes.ssh_route import ssh_router
-from routes.peel_test_route import peel_test_router
+from routes.peel_test_route import peel_test_router, get_peel_current_user, require_peel_export_access
 from routes.rot_route import rot_router
 from routes.task_routes import task_router
 from routes.goal_routes import goal_router
 from routes.wet_leakage_route import wet_leakage_router
-from routes.ipqc_audit_route import ipqc_audit_router
+from routes.ipqc_audit_route import ipqc_audit_router, get_ipqc_current_user, require_ipqc_export_access
 from generators.AuditReportGenerator import generate_audit_report
 from generators.GelReportGenerator import generate_gel_report
 from generators.AdhesionReportGenerator import generate_adhesion_report
@@ -69,9 +69,12 @@ app.include_router(goal_router)
 app.include_router(wet_leakage_router)
 app.include_router(ipqc_audit_router)
 
+_extractors_started = False
+
 @app.post("/api/ipqc-audits/generate-audit-report")
-async def generate_audit_report_endpoint(request: dict):
+async def generate_audit_report_endpoint(request: dict, x_employee_id: str | None = Header(default=None)):
     try:
+        user = get_ipqc_current_user(x_employee_id)
         audit_id = request.get("audit_id")
         
         if audit_id:
@@ -85,6 +88,7 @@ async def generate_audit_report_endpoint(request: dict):
             audit = ipqc_audit_collection.find_one({"_id": ObjectId(audit_id)})
             if not audit:
                 raise HTTPException(status_code=404, detail="Audit not found")
+            require_ipqc_export_access(audit, user)
 
             # Fetch data from S3
             ipqc_audit = IPQCAudit.from_dict(audit)
@@ -95,10 +99,7 @@ async def generate_audit_report_endpoint(request: dict):
             report_data = s3_data.copy()
             report_data["name"] = audit["name"]
         else:
-            # Current report export - use data from request
-            report_data = request.copy()
-            if "audit_id" in report_data:
-                del report_data["audit_id"]
+            raise HTTPException(status_code=403, detail="Audit Excel can be generated only from submitted saved checksheets")
 
         output, filename = generate_audit_report(report_data)
         return StreamingResponse(
@@ -115,7 +116,7 @@ async def generate_audit_report_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/gel-test-reports/generate-gel-report")
-async def generate_gel_report_endpoint(request: dict):
+async def generate_gel_report_endpoint(request: dict, x_employee_id: str | None = Header(default=None)):
     try:
         report_id = request.get("report_id")
         
@@ -130,6 +131,8 @@ async def generate_gel_report_endpoint(request: dict):
             report = gel_test_collection.find_one({"_id": ObjectId(report_id)})
             if not report:
                 raise HTTPException(status_code=404, detail="Report not found")
+            user = get_gel_current_user(x_employee_id)
+            require_gel_export_access(report, user)
 
             # Fetch data from S3
             gel_report = GelTestReport.from_dict(report)
@@ -278,8 +281,9 @@ async def generate_jb_sealant_report_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
-async def generate_peel_report_endpoint(request: dict):
+async def generate_peel_report_endpoint(request: dict, x_employee_id: str | None = Header(default=None)):
     try:
+        user = get_peel_current_user(x_employee_id)
         report_id = request.get("report_id")
         
         if report_id:
@@ -293,6 +297,7 @@ async def generate_peel_report_endpoint(request: dict):
             report = peel_test_collection.find_one({"_id": ObjectId(report_id)})
             if not report:
                 raise HTTPException(status_code=404, detail="Report not found")
+            require_peel_export_access(report, user)
 
             # Fetch data from S3
             peel_report = PeelTestReport.from_dict(report)
@@ -303,16 +308,11 @@ async def generate_peel_report_endpoint(request: dict):
                 "form_data": peel_data.get("form_data", {}),
                 "row_data": peel_data.get("row_data", []),
                 "averages": peel_data.get("averages", {}),
-                "name": report["name"]
+                "name": report["name"],
+                "line": report.get("line")
             }
         else:
-            # Current report export - use data from request
-            report_data = {
-                "form_data": request.get("form_data", {}),
-                "row_data": request.get("row_data", []),
-                "averages": request.get("averages", {}),
-                "name": request.get("report_name", "Peel_Test_Report")
-            }
+            raise HTTPException(status_code=403, detail="Peel Excel can be generated only from submitted saved reports")
 
         output, filename = generate_peel_report(report_data)
         return StreamingResponse(
@@ -451,6 +451,11 @@ async def root():
 
 def run_extractors():
     """Run all data extractors in background threads"""
+    global _extractors_started
+    if _extractors_started:
+        return
+    _extractors_started = True
+
     def run_qa():
         try:
             from extractors.qa_extractor import main as qa_main
@@ -464,23 +469,27 @@ def run_extractors():
             b_main()
         except Exception as e:
             print(f"B-grade extractor failed: {e}")
-    
-    def run_peel():
-        try:
-            from extractors.peel_extractor import main as peel_main
-            peel_main()
-        except Exception as e:
-            print(f"Peel extractor failed: {e}")
-    
+
     qa_thread = threading.Thread(target=run_qa, daemon=True)
-    peel_thread = threading.Thread(target=run_peel, daemon=True)
     b_thread = threading.Thread(target=run_b, daemon=True)
-    
+
     qa_thread.start()
-    peel_thread.start()
     b_thread.start()
-    
-    print("Data extractors started in background threads")
+
+    try:
+        from services.peel_scheduler import start_peel_scheduler
+        start_peel_scheduler(run_immediately=True)
+    except Exception as e:
+        print(f"Peel scheduler failed to start: {e}")
+
+    print("Data extractors and peel scheduler started in background threads")
+
+
+@app.on_event("startup")
+async def start_background_extractors():
+    if os.getenv("DISABLE_BACKGROUND_EXTRACTORS", "false").lower() in {"1", "true", "yes"}:
+        return
+    run_extractors()
 
 @app.get("/health")
 async def global_health_check():
@@ -506,5 +515,4 @@ async def global_health_check():
     return health_status
 
 if __name__ == "__main__":
-    run_extractors()    
     uvicorn.run("main:app", host=SERVER_URL, port=int(PORT), reload=True)

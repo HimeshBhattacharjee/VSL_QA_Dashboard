@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ZoomableChart from '../components/ZoomableChart';
-import SavedReportsNChecksheets from '../components/SavedReportsNChecksheets';
 import TestHeading from '../components/TestHeading';
+import ReportPagination from '../components/ReportPagination';
+import ReportListControls, { filterSortReports, ReportSortOption } from '../components/ReportListControls';
+
+type PeelWorkflowState = 'draft' | 'submitted' | 'returned';
+type PeelLine = 'FAB-II Line-I' | 'FAB-II Line-II';
 
 interface ReportData {
     _id?: string;
@@ -12,9 +16,23 @@ interface ReportData {
     formData: Record<string, string>;
     rowData: any[];
     averages?: { [key: string]: string; };
+    line?: PeelLine | string;
+    workflowState?: PeelWorkflowState;
+    createdByUserId?: string | null;
+    createdByEmployeeName?: string | null;
+    createdByEmployeeId?: string | null;
+    submittedAt?: string | null;
+    submittedBy?: string | null;
+    returnedAt?: string | null;
+    returnedBy?: string | null;
+    returnComments?: string | null;
+    isSigned?: boolean;
+    signedAt?: string | null;
+    updatedAt?: string | null;
+    s3_key?: string;
 }
 
-type TabType = 'edit-report' | 'saved-reports' | 'report-analysis';
+type TabType = 'edit-report' | 'saved-reports' | 'returned-reports' | 'report-analysis';
 
 type GraphData = {
     date: string;
@@ -23,18 +41,96 @@ type GraphData = {
     min_value: number;
 };
 
+type ExtractedPeelRecord = {
+    _id: string;
+    year?: number;
+    month?: string;
+    month_name?: string;
+    date?: string;
+    Date?: string;
+    shift?: string;
+    Shift?: string;
+    machine?: string;
+    module_type?: string;
+    cell_vendor?: string;
+    Cell_Vendor?: string;
+    po_number?: string;
+    PO?: string;
+    file_name?: string;
+    Stringer?: number;
+    Unit?: string;
+    sample_results?: Array<{
+        side: string;
+        bus_pad_position: number;
+        ribbon: number;
+        value: number | string;
+    }>;
+    [key: string]: any;
+};
+
 const PEEL_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/peel';
+const PEEL_REPORT_ROW_COUNT = 12;
+const PEEL_LINES: Array<{ value: PeelLine; label: string; stringers: number[] }> = [
+    { value: 'FAB-II Line-I', label: 'FAB-II Line-I', stringers: [1, 2, 3, 4, 5, 6] },
+    { value: 'FAB-II Line-II', label: 'FAB-II Line-II', stringers: [7, 8, 9, 10, 11, 12] },
+];
+const PEEL_SESSION_KEYS = [
+    'editingPeelReportIndex',
+    'editingPeelReportData',
+    'editingPeelReportId',
+    'peelTestFormData',
+    'suppressPeelAutoRestore',
+];
+
+const getWorkflowState = (report?: Pick<ReportData, 'workflowState'> | null): PeelWorkflowState =>
+    report?.workflowState || 'submitted';
+
+const formatWorkflowState = (state: PeelWorkflowState) =>
+    state.charAt(0).toUpperCase() + state.slice(1);
+
+const formatTimestamp = (value?: string | null) =>
+    value ? new Date(value).toLocaleString() : '-';
+
+const normalizePeelLine = (value?: string | null): PeelLine | '' => {
+    if (value === 'FAB-II Line-I' || value === 'FAB-II Line-II') return value;
+    const compact = (value || '').toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (['fab ii line i', 'line i', 'line 1', 'line one'].includes(compact)) return 'FAB-II Line-I';
+    if (['fab ii line ii', 'line ii', 'line 2', 'line two'].includes(compact)) return 'FAB-II Line-II';
+    return '';
+};
+
+const getLineStringers = (line: string) =>
+    PEEL_LINES.find(item => item.value === normalizePeelLine(line))?.stringers || [];
+
+const sanitizeReportPart = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+const isUnknownValue = (value?: string) => {
+    const raw = (value || '').trim();
+    return !raw || raw.toUpperCase() === 'UNKNOWN';
+};
+
+const clearPeelSessionStorage = () => {
+    PEEL_SESSION_KEYS.forEach(key => sessionStorage.removeItem(key));
+};
 
 export default function PeelTest() {
     const [activeTab, setActiveTab] = useState<TabType>('edit-report');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [currentEditingReport, setCurrentEditingReport] = useState<string | null>(null);
+    const [currentReportId, setCurrentReportId] = useState<string | null>(null);
+    const [currentWorkflowState, setCurrentWorkflowState] = useState<PeelWorkflowState>('draft');
+    const [currentReportMeta, setCurrentReportMeta] = useState<ReportData | null>(null);
     const [savedReports, setSavedReports] = useState<ReportData[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [returnModalReportIndex, setReturnModalReportIndex] = useState<number | null>(null);
+    const [returnComment, setReturnComment] = useState('');
+    const [returnCommentError, setReturnCommentError] = useState('');
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
 
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [selectedShift, setSelectedShift] = useState('');
+    const [selectedLine, setSelectedLine] = useState<PeelLine | ''>('');
     const [showReportEditor, setShowReportEditor] = useState(false);
     const [formData, setFormData] = useState<Record<string, string>>({});
     const [tableData, setTableData] = useState<Record<string, string>>({});
@@ -42,17 +138,52 @@ export default function PeelTest() {
     const [verifiedBySignature, setVerifiedBySignature] = useState<string>('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
+    const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
 
     const [monthYear, setMonthYear] = useState(() => new Date().toISOString().slice(0, 7));
     const [stringer, setStringer] = useState('1');
     const [cellFace, setCellFace] = useState('');
     const [showChart, setShowChart] = useState(false);
     const [graphData, setGraphData] = useState<GraphData[]>([]);
+    const [mainReportPage, setMainReportPage] = useState(1);
+    const [mainReportPageSize, setMainReportPageSize] = useState(10);
+    const [returnedReportPage, setReturnedReportPage] = useState(1);
+    const [returnedReportPageSize, setReturnedReportPageSize] = useState(10);
+    const [mainReportSearch, setMainReportSearch] = useState('');
+    const [mainReportSort, setMainReportSort] = useState<ReportSortOption>('newest-updated');
+    const [returnedReportSearch, setReturnedReportSearch] = useState('');
+    const [returnedReportSort, setReturnedReportSort] = useState<ReportSortOption>('newest-updated');
+
+    const isOperatorRole = userRole === 'Operator';
+    const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
+    const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const canCreateReport = isOperatorRole || isSystemAdminRole;
+    const canEditCurrentReport = isSystemAdminRole
+        || (isOperatorRole && (!currentReportId || ['draft', 'returned'].includes(currentWorkflowState)))
+        || (isReviewerRole && currentReportId !== null && currentWorkflowState === 'submitted');
+    const canSaveDraftCurrentReport = (isOperatorRole || isSystemAdminRole) && currentWorkflowState !== 'submitted';
+    const canSubmitCurrentReport = (isOperatorRole || isSystemAdminRole)
+        && currentWorkflowState !== 'submitted'
+        && Boolean(selectedLine && selectedShift)
+        && preparedBySignature.trim().length > 0
+        && hasValidSubmissionMetadata();
+    const canExportCurrentReport = currentReportId !== null && currentWorkflowState === 'submitted';
+    const returnedReports = savedReports.filter(report => getWorkflowState(report) === 'returned');
+    const reportsForMainList = isOperatorRole
+        ? savedReports.filter(report => getWorkflowState(report) !== 'returned')
+        : savedReports;
+
+    const authHeaders = (includeJson = false): HeadersInit => ({
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
+        'X-User-Name': sessionStorage.getItem('username') || username || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+    });
 
     useEffect(() => {
-        initializeForm();
+        clearPeelSessionStorage();
         loadSavedReports();
-        loadFormData();
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (hasUnsavedChanges) {
                 e.preventDefault();
@@ -63,19 +194,57 @@ export default function PeelTest() {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
+            resetEditReportState();
+            clearPeelSessionStorage();
         };
     }, []);
 
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
         setUserRole(storedUserRole);
         setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
+        if (!['Operator', 'Admin', 'System Administrator'].includes(storedUserRole || '')) {
+            setActiveTab('saved-reports');
+        }
     }, []);
+
+    useEffect(() => {
+        const observer = new MutationObserver(() => {
+            setIsDarkMode(document.documentElement.classList.contains('dark'));
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'edit-report') return;
+        resetEditReportState();
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (activeTab === 'returned-reports' && returnedReports.length === 0) {
+            setActiveTab('saved-reports');
+        }
+    }, [activeTab, returnedReports.length]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(reportsForMainList.length / mainReportPageSize));
+        setMainReportPage(page => Math.min(page, totalPages));
+    }, [reportsForMainList.length, mainReportPageSize]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(returnedReports.length / returnedReportPageSize));
+        setReturnedReportPage(page => Math.min(page, totalPages));
+    }, [returnedReports.length, returnedReportPageSize]);
 
     const apiService = {
         getAllReports: async (): Promise<ReportData[]> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/`);
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
@@ -83,7 +252,9 @@ export default function PeelTest() {
             return response.json();
         },
         getReportById: async (id: string): Promise<ReportData> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`);
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch report: ${response.status} ${errorText}`);
@@ -93,7 +264,7 @@ export default function PeelTest() {
         createReport: async (report: Omit<ReportData, '_id'>): Promise<ReportData> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -105,7 +276,7 @@ export default function PeelTest() {
         updateReport: async (id: string, report: Omit<ReportData, '_id'>): Promise<ReportData> => {
             const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(report),
             });
             if (!response.ok) {
@@ -115,7 +286,10 @@ export default function PeelTest() {
             return response.json();
         },
         deleteReport: async (id: string): Promise<void> => {
-            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to delete report: ${response.status} ${errorText}`);
@@ -131,24 +305,48 @@ export default function PeelTest() {
             const result = await response.json();
             return result.exists;
         },
+        submitReport: async (id: string, report: Omit<ReportData, '_id'>): Promise<ReportData> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}/submit`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify(report),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to submit report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        returnReport: async (id: string, returnComments: string): Promise<ReportData> => {
+            const response = await fetch(`${PEEL_API_BASE_URL}/peel-test-reports/${id}/return`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ returnComments }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to return report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
     };
 
-    const PEEL_SUPPRESS_KEY = 'suppressPeelAutoRestore';
-
-    const extractDateShiftFromReport = (report: ReportData) => {
+    const extractReportContext = (report: ReportData) => {
         try {
+            const line = normalizePeelLine(report.line || report.formData?.selectedLine);
             if (report.formData?.selectedDate || report.formData?.selectedShift) {
                 return {
                     date: (report.formData?.selectedDate as string) || '',
-                    shift: (report.formData?.selectedShift as string) || ''
+                    shift: (report.formData?.selectedShift as string) || '',
+                    line
                 };
             }
             const dateKey = Object.keys(report.formData).find(k => /^row_\d+_cell_0$/.test(k));
             const shiftKey = Object.keys(report.formData).find(k => /^row_\d+_cell_1$/.test(k));
             const dateVal = dateKey ? (report.formData[dateKey] as string) : '';
             const shiftVal = shiftKey ? (report.formData[shiftKey] as string) : '';
-            if (dateVal || shiftVal) return { date: dateVal || '', shift: shiftVal || '' };
-            const match = /Peel_Test_Report_(\d+)_([A-Za-z]+)_(\d+)_Shift_(\d+)/.exec(report.name);
+            if (dateVal || shiftVal || line) return { date: dateVal || '', shift: shiftVal || '', line };
+            const match = /Peel_Test_Report_(\d+)_([A-Za-z]+)_(\d+)_Shift_([A-Za-z]+)/.exec(report.name);
             if (match) {
                 const day = match[1];
                 const monthName = match[2];
@@ -156,64 +354,20 @@ export default function PeelTest() {
                 const shift = match[4];
                 const parsedDate = new Date(`${monthName} ${day}, ${year}`);
                 const isoDate = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString().split('T')[0] : '';
-                return { date: isoDate, shift };
+                return { date: isoDate, shift, line };
             }
-            return { date: '', shift: '' };
+            return { date: '', shift: '', line };
         } catch (e) {
             console.error('Failed to extract date/shift from report', e);
-            return { date: '', shift: '' };
-        }
-    };
-
-    const initializeForm = () => {
-        const editingReportData = sessionStorage.getItem('editingPeelReportData');
-        if (editingReportData) {
-            try {
-                const report = JSON.parse(editingReportData) as ReportData;
-                const { date, shift } = extractDateShiftFromReport(report);
-                if (date) setSelectedDate(date);
-                if (shift) setSelectedShift(shift);
-                sessionStorage.setItem(PEEL_SUPPRESS_KEY, 'true');
-                loadReportForEditing(report);
-                setShowReportEditor(true);
-                setHasUnsavedChanges(true);
-            } catch (err) {
-                console.error('Failed to initialize editing report', err);
-            }
-        }
-    };
-
-    const loadFormData = () => {
-        const savedData = sessionStorage.getItem('peelTestFormData');
-        const suppressRestore = sessionStorage.getItem(PEEL_SUPPRESS_KEY) === 'true';
-        const editingReportData = sessionStorage.getItem('editingPeelReportData');
-        if (savedData) {
-            const formData = JSON.parse(savedData);
-            if (!suppressRestore && !editingReportData) {
-                if (formData.selectedDate) setSelectedDate(formData.selectedDate);
-                if (formData.selectedShift) setSelectedShift(formData.selectedShift);
-            }
-            const editingActive = !!editingReportData;
-            if (!editingActive) {
-                if (formData.currentEditingReport) setCurrentEditingReport(formData.currentEditingReport);
-                if (formData.activeTab) setActiveTab(formData.activeTab);
-                if (formData.tableData) setTableData(formData.tableData);
-                if (formData.formData) setFormData(formData.formData);
-                if (formData.showReportEditor) setShowReportEditor(true);
-            } else {
-                if (formData.activeTab) setActiveTab(formData.activeTab);
-            }
-            if (!editingActive) {
-                if (formData.preparedBySignature) setPreparedBySignature(formData.preparedBySignature);
-                if (formData.verifiedBySignature) setVerifiedBySignature(formData.verifiedBySignature);
-            }
-            if (Object.keys(formData.tableData || {}).length > 0 || Object.keys(formData.formData || {}).length > 0) {
-                setHasUnsavedChanges(true);
-            }
+            return { date: '', shift: '', line: '' as PeelLine | '' };
         }
     };
 
     const handleAddSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -249,11 +403,14 @@ export default function PeelTest() {
                 break;
         }
         setHasUnsavedChanges(true);
-        saveFormData();
         showAlert('success', `Signature added to ${section} section`);
     };
 
     const handleRemoveSignature = (section: 'prepared' | 'verified') => {
+        if (!canEditCurrentReport) {
+            showAlert('error', 'This report is locked in its current workflow state');
+            return;
+        }
         if (!username) {
             showAlert('error', 'User not logged in');
             return;
@@ -280,12 +437,11 @@ export default function PeelTest() {
                 break;
         }
         setHasUnsavedChanges(true);
-        saveFormData();
         showAlert('info', `Signature removed from ${section} section`);
     };
 
     const canRemoveSignature = (section: 'prepared' | 'verified') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentReport) return false;
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -299,7 +455,7 @@ export default function PeelTest() {
     };
 
     const canAddSignature = (section: 'prepared' | 'verified') => {
-        if (!username) return false;
+        if (!username || !canEditCurrentReport) return false;
         let currentSignature = '';
         switch (section) {
             case 'prepared':
@@ -320,40 +476,21 @@ export default function PeelTest() {
         }
     };
 
-    const saveFormData = () => {
-        const formDataToSave = {
-            selectedDate,
-            selectedShift,
-            currentEditingReport,
-            activeTab,
-            tableData,
-            formData,
-            showReportEditor,
-            preparedBySignature,
-            verifiedBySignature,
-            timestamp: new Date().toISOString()
-        };
-        sessionStorage.setItem('peelTestFormData', JSON.stringify(formDataToSave));
-    };
-
-    useEffect(() => {
-        saveFormData();
-    }, [selectedDate, selectedShift, currentEditingReport, activeTab, tableData, formData, showReportEditor]);
-
-    const clearFormData = () => {
+    const resetEditReportState = () => {
         setHasUnsavedChanges(false);
         setCurrentEditingReport(null);
+        setCurrentReportId(null);
+        setCurrentWorkflowState('draft');
+        setCurrentReportMeta(null);
         setFormData({});
         setTableData({});
         setShowReportEditor(false);
         setSelectedDate(new Date().toISOString().split('T')[0]);
         setSelectedShift('');
+        setSelectedLine('');
         setPreparedBySignature('');
         setVerifiedBySignature('');
-        sessionStorage.removeItem('editingPeelReportIndex');
-        sessionStorage.removeItem('editingPeelReportData');
-        sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
-        sessionStorage.removeItem('peelTestFormData');
+        clearPeelSessionStorage();
     };
 
     const getSavedReports = async (): Promise<ReportData[]> => {
@@ -375,12 +512,66 @@ export default function PeelTest() {
         }
     };
 
-    const generateReportName = (dateString: string, shift: string) => {
+    const getPeelRecordDate = (record: ExtractedPeelRecord) => record.date || record.Date || '';
+    const getPeelRecordShift = (record: ExtractedPeelRecord) => record.shift || record.Shift || '';
+    const getPeelRecordPO = (record: ExtractedPeelRecord) => record.po_number || record.PO || '';
+    const getPeelRecordVendor = (record: ExtractedPeelRecord) => record.cell_vendor || record.Cell_Vendor || '';
+
+    function getPopulatedReportRows(source: Record<string, string> = tableData) {
+        const rowIndexes = Array.from(
+            new Set(
+                Object.keys(source)
+                    .map(key => /^row_(\d+)_cell_\d+$/.exec(key)?.[1])
+                    .filter((value): value is string => Boolean(value))
+                    .map(Number)
+            )
+        ).sort((a, b) => a - b);
+
+        return rowIndexes.filter(rowIndex => {
+            for (let cellIndex = 0; cellIndex < 230; cellIndex++) {
+                if ((source[`row_${rowIndex}_cell_${cellIndex}`] || '').trim()) return true;
+            }
+            return false;
+        });
+    }
+
+    function hasValidSubmissionMetadata() {
+        const populatedRows = getPopulatedReportRows();
+        if (populatedRows.length === 0) return false;
+        return populatedRows.every(rowIndex =>
+            !isUnknownValue(tableData[`row_${rowIndex}_cell_4`])
+            && !isUnknownValue(tableData[`row_${rowIndex}_cell_5`])
+        );
+    }
+
+    const getSubmissionBlocker = () => {
+        if (!selectedLine) return 'FAB-II line is required before submission';
+        if (!selectedShift) return 'Shift is required before submission';
+        if (!preparedBySignature.trim()) return 'Prepared By signature is required before submission';
+        const populatedRows = getPopulatedReportRows();
+        if (populatedRows.length === 0) return 'At least one peel test row is required before submission';
+        if (populatedRows.some(rowIndex => isUnknownValue(tableData[`row_${rowIndex}_cell_4`]))) return 'PO cannot be UNKNOWN before submission';
+        if (populatedRows.some(rowIndex => isUnknownValue(tableData[`row_${rowIndex}_cell_5`]))) return 'Cell Vendor cannot be UNKNOWN before submission';
+        return '';
+    };
+
+    const getPeelMeasurementValue = (record: ExtractedPeelRecord, side: 'Front' | 'Back', position: number, ribbon: number) => {
+        const flatValue = record[`${side}_${position}_${ribbon}`];
+        if (flatValue !== undefined && flatValue !== null) return flatValue;
+        const sampleValue = record.sample_results?.find(item =>
+            item.side?.toLowerCase() === side.toLowerCase()
+            && item.bus_pad_position === position
+            && item.ribbon === ribbon
+        );
+        return sampleValue?.value;
+    };
+
+    const generateReportName = (dateString: string, shift: string, line: PeelLine) => {
         const date = new Date(dateString);
         const day = date.getDate();
         const month = date.toLocaleString('default', { month: 'short' });
         const year = date.getFullYear();
-        return `Peel_Test_Report_${day}_${month}_${year}_Shift_${shift}`;
+        return `Peel_Test_Report_${day}_${month}_${year}_Shift_${shift}_${sanitizeReportPart(line)}`;
     };
 
     const fetchPeelData = async (date: string, shift: string) => {
@@ -396,6 +587,10 @@ export default function PeelTest() {
     };
 
     const loadOrCreateReport = async () => {
+        if (!canCreateReport) {
+            showAlert('error', 'Only operators can create peel reports');
+            return;
+        }
         if (!selectedDate) {
             showAlert('error', 'Please select a date');
             return;
@@ -404,7 +599,11 @@ export default function PeelTest() {
             showAlert('error', 'Please select a shift');
             return;
         }
-        const reportName = generateReportName(selectedDate, selectedShift);
+        if (!selectedLine) {
+            showAlert('error', 'Please select a FAB-II line');
+            return;
+        }
+        const reportName = generateReportName(selectedDate, selectedShift, selectedLine);
         const savedReports = await getSavedReports();
         const existingLocalReport = savedReports.find(report => report.name === reportName);
         if (existingLocalReport) {
@@ -419,8 +618,12 @@ export default function PeelTest() {
         } else {
             try {
                 const mongoData = await fetchPeelData(selectedDate, selectedShift);
-                if (mongoData && mongoData.length > 0) {
-                    createReportFromMongoData(reportName, mongoData);
+                const allowedStringers = getLineStringers(selectedLine);
+                const lineData = (mongoData || []).filter((record: ExtractedPeelRecord) =>
+                    allowedStringers.includes(Number(record.Stringer ?? record.stringer))
+                );
+                if (lineData.length > 0) {
+                    createReportFromMongoData(reportName, lineData);
                     showAlert('success', 'Report created from database data');
                 } else {
                     createNewReport(reportName);
@@ -436,52 +639,61 @@ export default function PeelTest() {
     };
 
     const loadReportForEditing = (report: ReportData) => {
+        const reportState = getWorkflowState(report);
         const signatureFields: Record<string, string> = {};
         Object.keys(report.formData).forEach(key => {
             if (key === 'preparedBySignature' || key === 'verifiedBySignature') signatureFields[key] = report.formData[key];
         });
         setTableData(report.formData);
         setFormData(signatureFields);
-        if (report.formData.preparedBySignature) setPreparedBySignature(report.formData.preparedBySignature as string);
-        if (report.formData.verifiedBySignature) setVerifiedBySignature(report.formData.verifiedBySignature as string);
+        setPreparedBySignature((report.formData.preparedBySignature as string) || '');
+        setVerifiedBySignature((report.formData.verifiedBySignature as string) || '');
         setCurrentEditingReport(report.name);
-        const { date: reportDate, shift: reportShift } = extractDateShiftFromReport(report);
+        setCurrentReportId(report._id || null);
+        setCurrentWorkflowState(reportState);
+        setCurrentReportMeta(report);
+        const { date: reportDate, shift: reportShift, line: reportLine } = extractReportContext(report);
         if (reportDate) setSelectedDate(reportDate);
         if (reportShift) setSelectedShift(reportShift);
-        sessionStorage.setItem(PEEL_SUPPRESS_KEY, 'true');
-        setHasUnsavedChanges(true);
-        sessionStorage.setItem('editingPeelReportData', JSON.stringify(report));
-        sessionStorage.setItem('editingPeelReportId', report._id!);
+        if (reportLine) setSelectedLine(reportLine);
+        setShowReportEditor(true);
+        setHasUnsavedChanges(reportState !== 'submitted');
     };
 
     const createReportFromMongoData = (reportName: string, mongoData: any[]) => {
-        sessionStorage.removeItem('editingPeelReportId');
-        sessionStorage.removeItem('editingPeelReportData');
-        sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
-        const newFormData: Record<string, string> = {};
-        mongoData.forEach((record, repIndex) => {
-            if (repIndex >= 24) return;
-            newFormData[`row_${repIndex}_cell_0`] = record.Date || '';
-            newFormData[`row_${repIndex}_cell_1`] = record.Shift || '';
-            newFormData[`row_${repIndex}_cell_2`] = record.Stringer?.toString() || '';
-            newFormData[`row_${repIndex}_cell_3`] = record.Unit || '';
-            newFormData[`row_${repIndex}_cell_4`] = record.PO || '';
-            newFormData[`row_${repIndex}_cell_5`] = record.Cell_Vendor || record['Cell Vendor'] || '';
+        clearPeelSessionStorage();
+        const sortedData = [...mongoData].sort((a, b) =>
+            Number(a.Stringer ?? a.stringer ?? 0) - Number(b.Stringer ?? b.stringer ?? 0)
+            || String(a.Unit ?? a.unit ?? '').localeCompare(String(b.Unit ?? b.unit ?? ''))
+        );
+        const newFormData: Record<string, string> = {
+            selectedDate,
+            selectedShift,
+            selectedLine,
+        };
+        sortedData.forEach((record, repIndex) => {
+            if (repIndex >= PEEL_REPORT_ROW_COUNT) return;
+            newFormData[`row_${repIndex}_cell_0`] = getPeelRecordDate(record) || '';
+            newFormData[`row_${repIndex}_cell_1`] = getPeelRecordShift(record) || '';
+            newFormData[`row_${repIndex}_cell_2`] = (record.Stringer ?? record.stringer)?.toString() || '';
+            newFormData[`row_${repIndex}_cell_3`] = record.Unit || record.unit || '';
+            newFormData[`row_${repIndex}_cell_4`] = getPeelRecordPO(record);
+            newFormData[`row_${repIndex}_cell_5`] = getPeelRecordVendor(record) || record['Cell Vendor'] || '';
             for (let position = 1; position <= 16; position++) {
                 for (let ribbon = 1; ribbon <= 7; ribbon++) {
-                    const key = `Front_${position}_${ribbon}`;
-                    if (record[key] !== undefined) {
+                    const value = getPeelMeasurementValue(record, 'Front', position, ribbon);
+                    if (value !== undefined) {
                         const cellIndex = 6 + (position - 1) * 7 + (ribbon - 1);
-                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = record[key]?.toString() || '';
+                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = value?.toString() || '';
                     }
                 }
             }
             for (let position = 1; position <= 16; position++) {
                 for (let ribbon = 1; ribbon <= 7; ribbon++) {
-                    const key = `Back_${position}_${ribbon}`;
-                    if (record[key] !== undefined) {
+                    const value = getPeelMeasurementValue(record, 'Back', position, ribbon);
+                    if (value !== undefined) {
                         const cellIndex = 118 + (position - 1) * 7 + (ribbon - 1);
-                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = record[key]?.toString() || '';
+                        newFormData[`row_${repIndex}_cell_${cellIndex}`] = value?.toString() || '';
                     }
                 }
             }
@@ -496,19 +708,24 @@ export default function PeelTest() {
         if (newFormData['verifiedBy']) signatureFields['verifiedBy'] = newFormData['verifiedBy'];
         setFormData(signatureFields);
         setCurrentEditingReport(reportName);
+        setCurrentReportId(null);
+        setCurrentWorkflowState('draft');
+        setCurrentReportMeta(null);
         setHasUnsavedChanges(true);
     };
 
     const createNewReport = (reportName: string) => {
-        sessionStorage.removeItem('editingPeelReportId');
-        sessionStorage.removeItem('editingPeelReportData');
-        sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
-        setTableData({});
+        clearPeelSessionStorage();
+        setTableData({ selectedDate, selectedShift, selectedLine });
         setCurrentEditingReport(reportName);
+        setCurrentReportId(null);
+        setCurrentWorkflowState('draft');
+        setCurrentReportMeta(null);
         setHasUnsavedChanges(true);
     };
 
     const handleCellChange = (rowIndex: number, cellIndex: number, value: string) => {
+        if (!canEditCurrentReport) return;
         const cellId = `row_${rowIndex}_cell_${cellIndex}`;
         setTableData(prev => ({...prev, [cellId]: value }));
         setHasUnsavedChanges(true);
@@ -534,48 +751,50 @@ export default function PeelTest() {
 
     const editSavedReport = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            setIsLoading(true);
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const report = reports[index];
+            const report = savedReports[index];
+            const state = getWorkflowState(report);
+            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
+                showAlert('error', 'Draft and returned reports are locked until the operator submits them');
+                return;
+            }
             if (!report._id) {
                 showAlert('error', 'Report ID not found');
                 return;
             }
             const fullReport = await apiService.getReportById(report._id);
-            const dateShiftMatch = fullReport.name.match(/Peel_Test_Report_(\d+)_(\w+)_(\d+)_Shift_([ABC])/);
-            if (dateShiftMatch) {
-                const day = dateShiftMatch[1];
-                const month = dateShiftMatch[2];
-                const year = dateShiftMatch[3];
-                const shift = dateShiftMatch[4];
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthIndex = monthNames.findIndex(m => m.toLowerCase() === month.toLowerCase()) + 1;
-                const formattedDate = `${year}-${monthIndex.toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
-                setSelectedDate(formattedDate);
-                setSelectedShift(shift);
-            }
             loadReportForEditing(fullReport);
-            setShowReportEditor(true);
             setActiveTab('edit-report');
-            showAlert('success', 'Report loaded for editing');
+            showAlert('info', `${state === 'submitted' && isOperatorRole ? 'Viewing' : 'Opened'}: ${fullReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const deleteSavedReport = async (index: number) => {
         try {
-            const reports = await apiService.getAllReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const report = reports[index];
+            const report = savedReports[index];
+            const state = getWorkflowState(report);
+            const canDelete = isSystemAdminRole
+                || (isOperatorRole && state === 'draft')
+                || (isReviewerRole && state === 'submitted');
+            if (!canDelete) {
+                showAlert('error', 'You are not authorized to delete this report');
+                return;
+            }
             await apiService.deleteReport(report._id!);
+            if (report._id === currentReportId) resetEditReportState();
             await loadSavedReports();
             showAlert('info', 'Report deleted successfully');
         } catch (error) {
@@ -638,14 +857,9 @@ export default function PeelTest() {
         }
     };
 
-    const saveReport = async () => {
-        console.log('saveReport called, currentEditingReport:', currentEditingReport);
-        if (!currentEditingReport) {
-            showAlert('error', 'Please load or create a report first');
-            return;
-        }
+    const buildAverages = () => {
         const averages: { [key: string]: string } = {};
-        for (let rep = 0; rep < 24; rep++) {
+        for (let rep = 0; rep < PEEL_REPORT_ROW_COUNT; rep++) {
             for (let position = 1; position <= 16; position++) {
                 const startCell = 6 + (position - 1) * 7;
                 const average = calculateAverage(rep, startCell, 7);
@@ -657,129 +871,150 @@ export default function PeelTest() {
                 averages[`back_avg_${rep}_${position}`] = average;
             }
         }
-        const reportData: Omit<ReportData, '_id'> = {
-            name: currentEditingReport,
-            timestamp: new Date().toISOString(),
+        return averages;
+    };
+
+    const buildReportPayload = (): Omit<ReportData, '_id'> => {
+        const averages = buildAverages();
+        return {
+            name: currentEditingReport || '',
+            timestamp: currentReportMeta?.timestamp || new Date().toISOString(),
+            line: selectedLine,
             formData: {
                 ...tableData,
                 ...formData,
                 ...averages,
+                selectedDate,
+                selectedShift,
+                selectedLine,
                 preparedBySignature,
                 verifiedBySignature
             },
             rowData: [],
-            averages: averages
+            averages,
+            workflowState: currentWorkflowState
         };
-        const editingId = sessionStorage.getItem('editingPeelReportId');
+    };
+
+    const saveDraftReport = async () => {
+        if (!canSaveDraftCurrentReport || !canEditCurrentReport) {
+            showAlert('error', 'You are not authorized to save this report');
+            return;
+        }
+        if (!currentEditingReport || !selectedLine || !selectedShift) {
+            showAlert('error', 'Please select line, date, and shift before saving a draft');
+            return;
+        }
         try {
-            if (editingId) {
-                const existingReport = await apiService.getReportById(editingId);
-                if (currentEditingReport === existingReport.name) {
-                    await apiService.updateReport(editingId, reportData);
-                    showAlert('success', 'Report updated successfully!');
-                } else {
-                    const nameExists = await apiService.checkReportNameExists(currentEditingReport, editingId);
-                    if (nameExists) {
-                        showConfirm({
-                            title: 'Report Name Exists',
-                            message: `A report named "${currentEditingReport}" already exists. Do you want to replace it?`,
-                            type: 'warning',
-                            confirmText: 'Replace',
-                            cancelText: 'Cancel',
-                            onConfirm: async () => {
-                                const allReports = await apiService.getAllReports();
-                                const existingReportWithSameName = allReports.find(report => report.name === currentEditingReport);
-                                if (existingReportWithSameName) {
-                                    await apiService.updateReport(existingReportWithSameName._id!, reportData);
-                                    showAlert('success', 'Report updated successfully!');
-                                } else {
-                                    await apiService.createReport(reportData);
-                                    showAlert('success', 'New report created successfully!');
-                                }
-                                sessionStorage.removeItem('editingPeelReportId');
-                                sessionStorage.removeItem('editingPeelReportData');
-                                sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
-                                clearFormData();
-                                loadSavedReports();
-                                setActiveTab('saved-reports');
-                            }
-                        });
-                        return;
-                    } else {
-                        await apiService.createReport(reportData);
-                        showAlert('success', 'New report created with updated name!');
-                    }
-                }
-                sessionStorage.removeItem('editingPeelReportId');
-                sessionStorage.removeItem('editingPeelReportData');
-                sessionStorage.removeItem(PEEL_SUPPRESS_KEY);
+            setIsLoading(true);
+            const reportData = buildReportPayload();
+            if (currentReportId) {
+                const updatedReport = await apiService.updateReport(currentReportId, reportData);
+                setCurrentReportMeta(updatedReport);
+                setCurrentWorkflowState(getWorkflowState(updatedReport));
+                showAlert('success', 'Draft saved successfully');
             } else {
                 const nameExists = await apiService.checkReportNameExists(currentEditingReport);
                 if (nameExists) {
-                    showConfirm({
-                        title: 'Report Name Exists',
-                        message: `A report named "${currentEditingReport}" already exists. Do you want to replace it?`,
-                        type: 'warning',
-                        confirmText: 'Replace',
-                        cancelText: 'Cancel',
-                        onConfirm: async () => {
-                            const allReports = await apiService.getAllReports();
-                            const existingReport = allReports.find(report => report.name === currentEditingReport);
-                            if (existingReport) {
-                                await apiService.updateReport(existingReport._id!, reportData);
-                                showAlert('success', 'Report updated successfully!');
-                            } else {
-                                await apiService.createReport(reportData);
-                                showAlert('success', 'New report created successfully!');
-                            }
-                            clearFormData();
-                            loadSavedReports();
-                            setActiveTab('saved-reports');
-                        }
-                    });
+                    showAlert('error', 'Report name already exists. Open it from the saved reports list.');
                     return;
-                } else {
-                    await apiService.createReport(reportData);
-                    showAlert('success', 'Report saved successfully!');
                 }
+                const createdReport = await apiService.createReport(reportData);
+                setCurrentReportId(createdReport._id || null);
+                setCurrentReportMeta(createdReport);
+                setCurrentWorkflowState(getWorkflowState(createdReport));
+                showAlert('success', 'Draft saved successfully');
             }
-            clearFormData();
-            loadSavedReports();
+            setHasUnsavedChanges(false);
+            await loadSavedReports();
+        } catch (error) {
+            console.error('Error saving draft:', error);
+            showAlert('error', 'Failed to save draft');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const submitReport = async () => {
+        if (!currentEditingReport) {
+            showAlert('error', 'Please load or create a report first');
+            return;
+        }
+        const blocker = getSubmissionBlocker();
+        if (blocker) {
+            showAlert('error', blocker);
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const reportData = buildReportPayload();
+            let reportId = currentReportId;
+            if (!reportId) {
+                const createdReport = await apiService.createReport(reportData);
+                reportId = createdReport._id || null;
+                setCurrentReportId(reportId);
+            } else {
+                await apiService.updateReport(reportId, reportData);
+            }
+            if (!reportId) {
+                showAlert('error', 'Unable to submit report without a saved draft ID');
+                return;
+            }
+            const submittedReport = await apiService.submitReport(reportId, reportData);
+            setCurrentWorkflowState('submitted');
+            setCurrentReportMeta(submittedReport);
+            setHasUnsavedChanges(false);
+            await loadSavedReports();
+            resetEditReportState();
             setActiveTab('saved-reports');
+            showAlert('success', currentWorkflowState === 'returned' ? 'Report resubmitted successfully' : 'Report submitted successfully');
+        } catch (error) {
+            console.error('Error submitting report:', error);
+            showAlert('error', 'Failed to submit report');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveSubmittedChanges = async () => {
+        if (!currentReportId || !canEditCurrentReport || currentWorkflowState !== 'submitted') {
+            showAlert('error', 'You are not authorized to modify this report');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const updatedReport = await apiService.updateReport(currentReportId, buildReportPayload());
+            setCurrentReportMeta(updatedReport);
+            setHasUnsavedChanges(false);
+            await loadSavedReports();
+            showAlert('success', 'Report changes saved successfully');
         } catch (error) {
             console.error('Error saving report:', error);
             showAlert('error', 'Failed to save report');
+        } finally {
+            setIsLoading(false);
         }
+    };
+
+    const saveReport = async () => {
+        if (currentWorkflowState === 'submitted') {
+            await saveSubmittedChanges();
+            return;
+        }
+        await submitReport();
     };
 
     const exportToExcel = async () => {
         try {
-            if (!currentEditingReport) {
-                showAlert('error', 'Please load or create a report first');
+            if (!currentReportId || currentWorkflowState !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
                 return;
             }
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const averages: { [key: string]: string } = {};
-            for (let rep = 0; rep < 24; rep++) {
-                for (let position = 1; position <= 16; position++) {
-                    const frontStartCell = 6 + (position - 1) * 7;
-                    averages[`front_avg_${rep}_${position}`] = calculateAverage(rep, frontStartCell, 7);
-
-                    const backStartCell = 118 + (position - 1) * 7;
-                    averages[`back_avg_${rep}_${position}`] = calculateAverage(rep, backStartCell, 7);
-                }
-            }
-            const peelReportData = {
-                report_name: currentEditingReport,
-                timestamp: new Date().toISOString(),
-                form_data: { ...tableData, ...formData, ...averages }, // Include averages
-                averages: averages
-            };
-            console.log(peelReportData);
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(peelReportData),
+                headers: authHeaders(true),
+                body: JSON.stringify({ report_id: currentReportId }),
             });
             if (!response.ok) {
                 throw new Error('Failed to generate report');
@@ -802,18 +1037,19 @@ export default function PeelTest() {
 
     const exportSavedReportToExcel = async (index: number) => {
         try {
-            const reports = await getSavedReports();
-            if (index < 0 || index >= reports.length) {
+            if (index < 0 || index >= savedReports.length) {
                 showAlert('error', 'Report not found');
                 return;
             }
+            const report = savedReports[index];
+            if (getWorkflowState(report) !== 'submitted') {
+                showAlert('error', 'Excel can be generated only for submitted reports');
+                return;
+            }
             showAlert('info', 'Please wait! Exporting Excel will take some time...');
-            const report = reports[index];
             const response = await fetch(`${PEEL_API_BASE_URL}/generate-peel-report`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: authHeaders(true),
                 body: JSON.stringify({ report_id: report._id }),
             });
             if (!response.ok) {
@@ -836,9 +1072,81 @@ export default function PeelTest() {
         }
     };
 
+    const openReturnModal = (index: number) => {
+        if (index < 0 || index >= savedReports.length) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+        const report = savedReports[index];
+        if (getWorkflowState(report) !== 'submitted') {
+            showAlert('error', 'Only submitted reports can be returned');
+            return;
+        }
+        setReturnModalReportIndex(index);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const closeReturnModal = () => {
+        setReturnModalReportIndex(null);
+        setReturnComment('');
+        setReturnCommentError('');
+    };
+
+    const submitReturnForCorrection = async () => {
+        if (returnModalReportIndex === null) return;
+        const trimmedComments = returnComment.trim();
+        if (!trimmedComments) {
+            setReturnCommentError('Comment is required');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const report = savedReports[returnModalReportIndex];
+            await apiService.returnReport(report._id!, trimmedComments);
+            if (currentReportId === report._id) {
+                setCurrentWorkflowState('returned');
+                setCurrentReportMeta(prev => prev ? {
+                    ...prev,
+                    workflowState: 'returned',
+                    returnComments: trimmedComments,
+                    returnedAt: new Date().toISOString(),
+                    returnedBy: username,
+                } : prev);
+            }
+            await loadSavedReports();
+            closeReturnModal();
+            showAlert('success', 'Report returned for correction');
+            setActiveTab('saved-reports');
+        } catch (error) {
+            console.error('Error returning report:', error);
+            showAlert('error', 'Failed to return report');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const canOpenListedReport = (report: ReportData) =>
+        isSystemAdminRole || isOperatorRole || (isReviewerRole && getWorkflowState(report) === 'submitted');
+
+    const canDeleteListedReport = (report: ReportData) =>
+        isSystemAdminRole
+        || ((isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted')
+        || (isOperatorRole && getWorkflowState(report) === 'draft');
+
+    const canReturnListedReport = (report: ReportData) =>
+        (isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted';
+
+    const getOpenActionLabel = (report: ReportData) => {
+        const state = getWorkflowState(report);
+        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
+        if (isOperatorRole && state === 'submitted') return 'View';
+        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+    };
+
     const generateTableRows = () => {
         const rows = [];
-        const repetitions = 24;
+        const repetitions = PEEL_REPORT_ROW_COUNT;
         for (let rep = 0; rep < repetitions; rep++) {
             rows.push(
                 <tr key={`front-header-${rep}`}>
@@ -991,10 +1299,33 @@ export default function PeelTest() {
 
     const renderEditReportTab = () => (
         <>
+            {currentWorkflowState === 'returned' && currentReportMeta?.returnComments && (
+                <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
+                    <strong>Returned for correction:</strong> {currentReportMeta.returnComments}
+                    <div className="mt-1 text-xs">
+                        Returned by {currentReportMeta.returnedBy || '-'} on {formatTimestamp(currentReportMeta.returnedAt)}
+                    </div>
+                </div>
+            )}
+            {canCreateReport && !showReportEditor && (
             <div className="date-selector bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="flex flex-row gap-2 items-center justify-center flex-wrap">
+                    <label htmlFor="line-select" className="font-semibold text-gray-700 dark:text-gray-300">
+                        Line:
+                    </label>
+                    <select
+                        id="line-select"
+                        value={selectedLine}
+                        onChange={(e) => setSelectedLine(e.target.value as PeelLine | '')}
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                    >
+                        <option value="" className="dark:bg-gray-800">-- Select Line --</option>
+                        {PEEL_LINES.map(line => (
+                            <option key={line.value} value={line.value} className="dark:bg-gray-800">{line.label}</option>
+                        ))}
+                    </select>
                     <label htmlFor="date-select" className="font-semibold text-gray-700 dark:text-gray-300">
-                        Select Date:
+                        Date:
                     </label>
                     <input
                         type="date"
@@ -1004,7 +1335,7 @@ export default function PeelTest() {
                         className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     />
                     <label htmlFor="shift-select" className="font-semibold text-gray-700 dark:text-gray-300">
-                        Select Shift:
+                        Shift:
                     </label>
                     <select
                         id="shift-select"
@@ -1021,33 +1352,67 @@ export default function PeelTest() {
                         onClick={loadOrCreateReport}
                         className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-blue-700 dark:to-purple-700 border-transparent text-black dark:text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                     >
-                        Load / Create Report
+                        Load Report
                     </button>
                 </div>
             </div>
+            )}
+            {!canCreateReport && !showReportEditor && (
+                <div className="rounded-md border border-gray-200 bg-white p-4 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                    Open a submitted report from the reports tab to review it.
+                </div>
+            )}
             {showReportEditor && currentEditingReport && (
                 <div className="report-info py-1 rounded-lg">
                     <div className="save-actions flex flex-col sm:flex-row items-center justify-center gap-2 flex-wrap">
                         <p className="current-report-title text-red-600 dark:text-red-400 font-bold bg-white dark:bg-gray-800 rounded p-2 text-sm text-center w-full">
-                            Currently editing: <span className="break-all">{currentEditingReport}</span>
+                            {canEditCurrentReport ? 'Current report' : 'Viewing'}: <span className="break-all">{currentEditingReport}</span>
+                            {selectedLine && <span className="ml-2 text-gray-600 dark:text-gray-300">({selectedLine})</span>}
+                            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-200">{formatWorkflowState(currentWorkflowState)}</span>
                         </p>
-                        <button
-                            className="save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-blue-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                            onClick={saveReport}
-                        >
-                            Save Report
-                        </button>
-                        <button
-                            className="export-excel w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                            onClick={exportToExcel}
-                        >
-                            Export as Excel
-                        </button>
+                        {canSaveDraftCurrentReport && canEditCurrentReport && (
+                            <button
+                                className="save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-gray-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                onClick={saveDraftReport}
+                            >
+                                Save Draft
+                            </button>
+                        )}
+                        {canEditCurrentReport && (
+                            <button
+                                className={`save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
+                                onClick={saveReport}
+                                disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport}
+                                title={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? getSubmissionBlocker() : undefined}
+                            >
+                                {currentWorkflowState === 'submitted' ? 'Save Changes' : currentWorkflowState === 'returned' ? 'Resubmit Report' : 'Submit Report'}
+                            </button>
+                        )}
+                        {canExportCurrentReport && (
+                            <button
+                                className="export-excel w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                onClick={exportToExcel}
+                            >
+                                Export as Excel
+                            </button>
+                        )}
+                        {currentReportId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                            <button
+                                className="save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-amber-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                onClick={() => {
+                                    const index = savedReports.findIndex(report => report._id === currentReportId);
+                                    if (index >= 0) openReturnModal(index);
+                                }}
+                            >
+                                Return for Correction
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
             {showReportEditor && (
                 <div className="report-editor bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <fieldset disabled={!canEditCurrentReport} className={!canEditCurrentReport ? 'opacity-90' : ''}>
                     <div className="test-report-container p-1">
                         <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
                             <table className="w-full border-collapse min-w-[1200px] text-xs sm:text-sm">
@@ -1150,25 +1515,169 @@ export default function PeelTest() {
                             </div>
                         </div>
                     </div>
+                    </fieldset>
                 </div>
             )}
         </>
     );
 
-    const renderSavedReportsTab = () => (
-        <>
-            <SavedReportsNChecksheets
-                reports={savedReports}
-                onExportExcel={exportSavedReportToExcel}
-                onEdit={editSavedReport}
-                onDelete={deleteSavedReport}
+    const renderPeelReportsList = (reports: ReportData[], title: string, listType: 'main' | 'returned' = 'main') => {
+        const page = listType === 'returned' ? returnedReportPage : mainReportPage;
+        const pageSize = listType === 'returned' ? returnedReportPageSize : mainReportPageSize;
+        const setPage = listType === 'returned' ? setReturnedReportPage : setMainReportPage;
+        const setPageSize = listType === 'returned' ? setReturnedReportPageSize : setMainReportPageSize;
+        const searchTerm = listType === 'returned' ? returnedReportSearch : mainReportSearch;
+        const sortOption = listType === 'returned' ? returnedReportSort : mainReportSort;
+        const setSearchTerm = listType === 'returned' ? setReturnedReportSearch : setMainReportSearch;
+        const setSortOption = listType === 'returned' ? setReturnedReportSort : setMainReportSort;
+        const filteredReports = filterSortReports(reports, searchTerm, sortOption);
+        const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
+        const safePage = Math.min(Math.max(1, page), totalPages);
+        const paginatedReports = filteredReports.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+        return (
+        <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
+            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
+                {title}
+            </h2>
+            <ReportListControls
+                searchTerm={searchTerm}
+                sortOption={sortOption}
+                totalCount={reports.length}
+                filteredCount={filteredReports.length}
+                onSearchTermChange={(value) => {
+                    setSearchTerm(value);
+                    setPage(1);
+                }}
+                onSortOptionChange={(value) => {
+                    setSortOption(value);
+                    setPage(1);
+                }}
+                searchPlaceholder="Search by report, creator, employee ID, or status..."
             />
-        </>
+            {filteredReports.length === 0 ? (
+                <div className="text-center py-6 md:py-8">
+                    <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
+                        {reports.length === 0 ? 'No peel reports found.' : 'No matching peel reports found.'}
+                    </p>
+                </div>
+            ) : (
+                <>
+                <div className="reports-list">
+                    {paginatedReports.map((report, index) => {
+                        const originalIndex = report._id
+                            ? savedReports.findIndex(savedReport => savedReport._id === report._id)
+                            : savedReports.indexOf(report);
+                        const state = getWorkflowState(report);
+                        const canOpen = canOpenListedReport(report);
+                        const canExport = state === 'submitted' && canOpen;
+
+                        return (
+                            <div
+                                key={report._id || `${report.name}-${index}`}
+                                className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
+                            >
+                                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
+                                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state === 'submitted' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200' : state === 'returned' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                                {formatWorkflowState(state)}
+                                            </span>
+                                            {report.line && (
+                                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                                                    {report.line}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                                            <p>Created: {formatTimestamp(report.timestamp)}</p>
+                                            <p>Created by: {report.createdByEmployeeName || report.createdByEmployeeId || 'Legacy report'}</p>
+                                            <p>Updated: {formatTimestamp(report.updatedAt || report.timestamp)}</p>
+                                            {report.submittedAt && <p>Submitted: {formatTimestamp(report.submittedAt)} by {report.submittedBy || '-'}</p>}
+                                            {state === 'returned' && report.returnComments && (
+                                                <p className="text-amber-700 dark:text-amber-300">Return comments: {report.returnComments}</p>
+                                            )}
+                                            {state === 'returned' && (
+                                                <p>Returned: {formatTimestamp(report.returnedAt)} by {report.returnedBy || '-'}</p>
+                                            )}
+                                            {isReviewerRole && state !== 'submitted' && !isSystemAdminRole && (
+                                                <p className="text-gray-500 dark:text-gray-400">Metadata only until submitted.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
+                                        <button
+                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
+                                            disabled={!canExport}
+                                            title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
+                                        >
+                                            Excel
+                                        </button>
+                                        <button
+                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            onClick={() => canOpen && originalIndex >= 0 && editSavedReport(originalIndex)}
+                                            disabled={!canOpen}
+                                        >
+                                            {getOpenActionLabel(report)}
+                                        </button>
+                                        {canReturnListedReport(report) && (
+                                            <button
+                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
+                                                onClick={() => originalIndex >= 0 && openReturnModal(originalIndex)}
+                                            >
+                                                Return
+                                            </button>
+                                        )}
+                                        {canDeleteListedReport(report) && (
+                                            <button
+                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
+                                                onClick={() => {
+                                                    showConfirm({
+                                                        title: 'Delete Report',
+                                                        message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
+                                                        type: 'warning',
+                                                        confirmText: 'Delete',
+                                                        onConfirm: () => originalIndex >= 0 && deleteSavedReport(originalIndex),
+                                                    });
+                                                }}
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <ReportPagination
+                    totalItems={filteredReports.length}
+                    page={safePage}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={(nextPageSize) => {
+                        setPageSize(nextPageSize);
+                        setPage(1);
+                    }}
+                    itemLabel="reports"
+                />
+                </>
+            )}
+        </div>
+        );
+    };
+
+    const renderSavedReportsTab = () => renderPeelReportsList(
+        reportsForMainList,
+        isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports',
+        'main'
     );
 
     const renderReportAnalysisTab = () => (
-        <div className="report-analysis-container bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
-            <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-center flex-wrap">
+        <div className="report-analysis-container bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
+            <div className="flex flex-col md:flex-row gap-2 items-center justify-center flex-wrap rounded-md">
                 <label htmlFor="monthYear" className="font-semibold text-gray-700 dark:text-gray-300">
                     Month & Year:
                 </label>
@@ -1177,7 +1686,7 @@ export default function PeelTest() {
                     id="monthYear"
                     value={monthYear}
                     onChange={(e) => setMonthYear(e.target.value)}
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 />
                 <label htmlFor="stringer-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Stringer:
@@ -1189,7 +1698,7 @@ export default function PeelTest() {
                     onChange={(e) => setStringer(e.target.value)}
                     min="1"
                     max="12"
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white w-20"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white w-20"
                 />
                 <label htmlFor="face-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Cell Face:
@@ -1198,7 +1707,7 @@ export default function PeelTest() {
                     id="face-select"
                     value={cellFace}
                     onChange={(e) => setCellFace(e.target.value)}
-                    className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 >
                     <option value="" className="dark:bg-gray-800">-- Select --</option>
                     <option value="front" className="dark:bg-gray-800">Front</option>
@@ -1213,8 +1722,8 @@ export default function PeelTest() {
                 </button>
             </div>
             {showChart && graphData.length > 0 && (
-                <div className="chart-container bg-white dark:bg-gray-800 rounded-lg p-3 mt-4">
-                    <div className="h-64 sm:h-80 md:h-96">
+                <div className="chart-container bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 md:p-4 mt-4 shadow-sm">
+                    <div className="min-h-[360px] h-[48vh] max-h-[620px] w-full [&_.h-80]:h-full">
                         <ZoomableChart
                             chartData={prepareChartData()}
                             options={prepareChartOptions()}
@@ -1247,37 +1756,41 @@ export default function PeelTest() {
                 {
                     label: `Average Peel Strength (N/mm)`,
                     data: dataPoints,
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    borderWidth: 2,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.14)',
+                    borderWidth: 2.5,
                     fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
                     tension: 0.4
                 },
                 {
                     label: `Maximum Value (N/mm)`,
                     data: maxValues,
-                    borderColor: '#28a745',
-                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderColor: '#16a34a',
+                    backgroundColor: 'rgba(22, 163, 74, 0.12)',
                     borderWidth: 2,
                     fill: true,
                     pointRadius: 3,
+                    pointHoverRadius: 6,
                     tension: 0.4
                 },
                 {
                     label: `Minimum Value (N/mm)`,
                     data: minValues,
-                    borderColor: '#ddb505',
-                    backgroundColor: 'rgba(255, 250, 0, 0.1)',
+                    borderColor: '#ca8a04',
+                    backgroundColor: 'rgba(202, 138, 4, 0.12)',
                     borderWidth: 2,
                     fill: true,
                     pointRadius: 3,
+                    pointHoverRadius: 6,
                     tension: 0.4
                 },
                 {
                     label: 'Minimum Requirement (1.0 N/mm)',
                     data: Array(labels.length).fill(1.0),
-                    borderColor: '#ff4444',
-                    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                    borderColor: '#dc2626',
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     borderWidth: 2,
                     borderDash: [5, 5],
                     fill: false,
@@ -1292,20 +1805,41 @@ export default function PeelTest() {
         const [year, month] = monthYear.split('-');
         const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         const monthName = monthNames[parseInt(month) - 1];
+        const textColor = isDarkMode ? '#e5e7eb' : '#1f2937';
+        const mutedColor = isDarkMode ? '#9ca3af' : '#4b5563';
+        const gridColor = isDarkMode ? 'rgba(156, 163, 175, 0.22)' : 'rgba(107, 114, 128, 0.18)';
+        const tooltipBg = isDarkMode ? 'rgba(17, 24, 39, 0.96)' : 'rgba(255, 255, 255, 0.96)';
+        const tooltipBorder = isDarkMode ? '#374151' : '#d1d5db';
 
         return {
             responsive: true,
             maintainAspectRatio: false,
+            resizeDelay: 100,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 title: {
                     display: true,
                     text: `Peel Strength Analysis - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}, Stringer ${stringer}, ${getCellFaceDisplayName(cellFace)}`,
                     font: {
                         size: 16,
+                        weight: '600',
                     },
-                    color: '#333'
+                    color: textColor,
+                    padding: {
+                        bottom: 18
+                    }
                 },
                 tooltip: {
+                    backgroundColor: tooltipBg,
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: tooltipBorder,
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: true,
                     callbacks: {
                         label: function (context: any) {
                             const datasetLabel = context.dataset.label || '';
@@ -1325,8 +1859,12 @@ export default function PeelTest() {
                 },
                 legend: {
                     display: true,
+                    position: 'bottom',
                     labels: {
-                        color: '#333'
+                        color: textColor,
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        padding: 18
                     }
                 }
             },
@@ -1335,32 +1873,34 @@ export default function PeelTest() {
                     title: {
                         display: true,
                         text: 'Day of Month',
-                        color: '#333'
+                        color: mutedColor
                     },
                     grid: {
                         display: true,
-                        color: 'rgba(0, 0, 0, 0.1)'
+                        color: gridColor
                     },
                     ticks: {
-                        color: '#333'
+                        color: textColor,
+                        maxRotation: 0,
+                        autoSkipPadding: 18
                     }
                 },
                 y: {
                     title: {
                         display: true,
                         text: 'Peel Strength (N/mm)',
-                        color: '#333'
+                        color: mutedColor
                     },
                     min: 0,
                     grid: {
                         display: true,
-                        color: 'rgba(0, 0, 0, 0.1)'
+                        color: gridColor
                     },
                     ticks: {
                         callback: function (value: any) {
                             return value + ' N/mm';
                         },
-                        color: '#333'
+                        color: textColor
                     }
                 }
             },
@@ -1373,23 +1913,84 @@ export default function PeelTest() {
     return (
         <>
             <div className="mx-auto">
+                {isLoading && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                        <div className="rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800">
+                            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
+                            <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
+                        </div>
+                    </div>
+                )}
+                {returnModalReportIndex !== null && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                        <div className="w-full max-w-md rounded-md bg-white p-4 shadow-xl dark:bg-gray-900">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Return for Correction</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {savedReports[returnModalReportIndex]?.name}
+                            </p>
+                            <textarea
+                                value={returnComment}
+                                onChange={(event) => {
+                                    setReturnComment(event.target.value);
+                                    if (returnCommentError) setReturnCommentError('');
+                                }}
+                                rows={4}
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                placeholder="Enter correction comments"
+                            />
+                            {returnCommentError && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{returnCommentError}</p>
+                            )}
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                    onClick={closeReturnModal}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                                    onClick={submitReturnForCorrection}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <TestHeading
                     heading="Solar Cell Peel Strength Test"
                     criteria="Peel strength average ≥ 1.0 N/mm"
                 />
                 <div className="flex justify-center mb-2">
-                    <div
-                        className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                        onClick={() => setActiveTab('edit-report')}
-                    >
-                        Edit Report
-                    </div>
+                    {canCreateReport && (
+                        <div
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={() => {
+                                resetEditReportState();
+                                setActiveTab('edit-report');
+                            }}
+                        >
+                            Create Report
+                        </div>
+                    )}
                     <div
                         className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
-                        Saved Reports
+                        {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
                     </div>
+                    {isOperatorRole && returnedReports.length > 0 && (
+                        <div
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            onClick={() => setActiveTab('returned-reports')}
+                        >
+                            Returned Reports
+                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
+                                {returnedReports.length}
+                            </span>
+                        </div>
+                    )}
                     <div
                         className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('report-analysis')}
@@ -1401,6 +2002,7 @@ export default function PeelTest() {
                 <div className="tab-content">
                     {activeTab === 'edit-report' && renderEditReportTab()}
                     {activeTab === 'saved-reports' && renderSavedReportsTab()}
+                    {activeTab === 'returned-reports' && isOperatorRole && renderPeelReportsList(returnedReports, 'Returned Reports', 'returned')}
                     {activeTab === 'report-analysis' && renderReportAnalysisTab()}
                 </div>
             </div>
