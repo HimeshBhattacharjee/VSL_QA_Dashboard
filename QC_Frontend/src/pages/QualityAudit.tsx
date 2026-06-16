@@ -874,6 +874,7 @@ export default function QualityAudit() {
             || !canSaveDraftCurrentChecksheet
             || !canEditCurrentChecksheet
             || !['draft', 'returned'].includes(currentWorkflowState)
+            || isAutosaving
         ) {
             return;
         }
@@ -918,6 +919,7 @@ export default function QualityAudit() {
         canSaveDraftCurrentChecksheet,
         currentChecksheetId,
         currentWorkflowState,
+        isAutosaving,
         buildChecksheetPayload,
         getLatestSnapshot
     ]);

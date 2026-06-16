@@ -51,7 +51,16 @@ AUTO_BUSSING_SPLIT_FIELD_MAP = {
     "Expiry Date": "Expiry Date Top & Bottom",
 }
 
-SAFETY_MODULE_FIELDS = ("moduleId4Hours", "moduleId8Hours")
+SAFETY_MODULE_FIELDS = (
+    "lineA_4hr_moduleId",
+    "lineA_8hr_moduleId",
+    "lineB_4hr_moduleId",
+    "lineB_8hr_moduleId",
+)
+LEGACY_SAFETY_MODULE_FIELDS = {
+    "4hr": "moduleId4Hours",
+    "8hr": "moduleId8Hours",
+}
 LINE_OPTIONS_BY_STAGE = {
     7: {"I": ("Line-1", "Line-2", "Line-3"), "II": ("Line-4", "Line-5")},
     8: {"I": ("Line-1", "Line-2"), "II": ("Line-3", "Line-4")},
@@ -111,6 +120,7 @@ LINE_KEY_DEFAULTS = {
     "24-8": "Checked OK",
     "24-9": "Checked OK",
     "26-1": "Pass",
+    "26-2": "Pass",
     "26-3": "Pass",
 }
 LINE_SAMPLE_TIME_DEFAULTS = {
@@ -371,6 +381,13 @@ def apply_default_observation_value(stage_id: int, param_id: str, value: Any, li
                     normalized_value[key] = default_value
     return normalized_value
 
+def normalize_safety_module_ids(value: Dict[str, Any]) -> None:
+    for field in SAFETY_MODULE_FIELDS:
+        if field in value and value.get(field) is not None:
+            continue
+        legacy_key = LEGACY_SAFETY_MODULE_FIELDS["4hr" if "_4hr_" in field else "8hr"]
+        value[field] = value.get(legacy_key, "") or ""
+
 def normalize_dynamic_line_selections(data: Dict[str, Any]) -> Dict[str, Any]:
     """Backfill selectedLine and per-time lineMapping for older audits while preserving payload shape."""
     for stage in data.get("stages", []):
@@ -416,8 +433,7 @@ def normalize_ipqc_audit_data(data: Dict[str, Any]) -> Dict[str, Any]:
                             if key.endswith(suffix):
                                 value.setdefault(f"{key[:-len(suffix)]}-{new_label}", old_value)
                 elif param_id == "26-1":
-                    for field in SAFETY_MODULE_FIELDS:
-                        value.setdefault(field, "")
+                    normalize_safety_module_ids(value)
     return data
 
 class IPQCAudit:

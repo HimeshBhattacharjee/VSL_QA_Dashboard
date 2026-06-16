@@ -15,6 +15,7 @@ from routes.adhesion_route import adhesion_router, get_adhesion_current_user, re
 from routes.potting_ratio_route import potting_router
 from routes.jb_sealant_wt_route import jb_sealant_router
 from routes.frame_sealant_wt_route import frame_sealant_router
+from routes.bus_ribbon_pull_strength_route import bus_ribbon_pull_strength_router
 from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router, get_peel_current_user, require_peel_export_access
 from routes.rot_route import rot_router
@@ -61,6 +62,7 @@ app.include_router(adhesion_router)
 app.include_router(potting_router)
 app.include_router(jb_sealant_router)
 app.include_router(frame_sealant_router)
+app.include_router(bus_ribbon_pull_strength_router)
 app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
@@ -430,6 +432,14 @@ async def root():
                 "base_path": "/generate-jb-sealant-report",
                 "description": "Generate JB sealant weight test reports"
             },
+            "bus_ribbon_pull_strength_reports": {
+                "base_path": "/api/bus-ribbon-pull-strength-reports",
+                "description": "Bus Ribbon to INTC Ribbon Pull Strength reports management with MongoDB"
+            },
+            "bus_ribbon_pull_strength_report_generation": {
+                "base_path": "/api/bus-ribbon-pull-strength-reports/export/excel",
+                "description": "Generate bus ribbon pull strength test reports"
+            },
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
                 "description": "Generate peel test reports"
@@ -509,6 +519,7 @@ async def global_health_check():
             "gel_test_reports": "available",
             "adhesion_test_reports": "available",
             "jb_sealant_weight_reports": "available",
+            "bus_ribbon_pull_strength_reports": "available",
             "peel_test_reports": "available"
         }
     }

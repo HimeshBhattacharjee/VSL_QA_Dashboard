@@ -60,6 +60,7 @@ const MENU_ITEMS: MenuItem[] = [
         path: null,
         children: [
             { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
+            { id: 'bus-ribbon-pull-strength', label: 'Bus Ribbon to INTC Ribbon Pull Strength Test', path: '/bus-ribbon-pull-strength' },
             { id: 'frame-sealant-wt', label: 'Frame Sealant Weight Report', path: '/frame-sealant-wt' },
             { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
             { id: 'jb-sealant-wt', label: 'JB Sealant Weight Measurement', path: '/jb-sealant-wt' },

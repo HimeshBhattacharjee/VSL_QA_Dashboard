@@ -119,6 +119,7 @@ export default function PottingRatioMeasurement() {
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
     const [dateSignatures, setDateSignatures] = useState<{ [contextKey: string]: Signatures }>({});
     const [showShiftSelector, setShowShiftSelector] = useState(false);
+    const [shiftSelectorLineGroup, setShiftSelectorLineGroup] = useState<LineGroup | null>(null);
     const [showExportLineSelector, setShowExportLineSelector] = useState(false);
     const [selectedExportLineGroup, setSelectedExportLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
@@ -346,6 +347,7 @@ export default function PottingRatioMeasurement() {
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
     }, []);
 
     const handleNextMonth = useCallback(() => {
@@ -355,6 +357,7 @@ export default function PottingRatioMeasurement() {
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
     }, []);
 
     const handleMonthChange = useCallback((monthIndex: number) => {
@@ -364,6 +367,7 @@ export default function PottingRatioMeasurement() {
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
     }, []);
 
     const handleYearChange = useCallback((year: number) => {
@@ -373,12 +377,14 @@ export default function PottingRatioMeasurement() {
         setSelectedShift(null);
         setCurrentEntry(null);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
     }, []);
 
     const handleDateSelect = useCallback((date: string) => {
         const normalized = normalizeDate(date);
         setSelectedDate(normalized);
         setShowShiftSelector(true);
+        setShiftSelectorLineGroup(null);
         setCurrentEntry(null);
         setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
@@ -388,6 +394,7 @@ export default function PottingRatioMeasurement() {
         setSelectedLineGroup(lineGroup);
         setSelectedShift(shift);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
 
         const entryKey = getEntryKey(selectedDate, lineGroup, shift);
         const entry = monthlyEntries.get(entryKey);
@@ -424,6 +431,7 @@ export default function PottingRatioMeasurement() {
 
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
         setSelectedDate('');
         setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
@@ -845,6 +853,7 @@ export default function PottingRatioMeasurement() {
         setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
         setShowShiftSelector(false);
+        setShiftSelectorLineGroup(null);
         setHasUnsavedChanges(false);
     }, []);
 
@@ -1107,7 +1116,7 @@ export default function PottingRatioMeasurement() {
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-semibold dark:text-white">
-                                    Select Shift for {new Date(selectedDate).toLocaleDateString('en-US', {
+                                    {shiftSelectorLineGroup ? 'Select Shift' : 'Select Line'} for {new Date(selectedDate).toLocaleDateString('en-US', {
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
@@ -1121,23 +1130,38 @@ export default function PottingRatioMeasurement() {
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                {LINE_GROUPS.map(lineGroup => (
+                            {!shiftSelectorLineGroup ? (
+                                <div className="space-y-3">
+                                    {LINE_GROUPS.map(lineGroup => {
+                                        const lineEntries = dateEntries[selectedDate]?.[lineGroup] || {};
+                                        const filledCount = SHIFTS.filter(shift => !!lineEntries[shift]).length;
+                                        return (
+                                            <button
+                                                key={lineGroup}
+                                                onClick={() => {
+                                                    setSelectedLineGroup(lineGroup);
+                                                    setShiftSelectorLineGroup(lineGroup);
+                                                }}
+                                                className="flex w-full items-center justify-between rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
+                                            >
+                                                <span className="font-semibold text-gray-900 dark:text-white">{getLineGroupLabel(lineGroup)}</span>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">{filledCount} / 3 shifts</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div>
                                     <button
-                                        key={lineGroup}
-                                        onClick={() => setSelectedLineGroup(lineGroup)}
-                                        className={`p-3 rounded-lg border-2 text-sm font-semibold transition-colors ${selectedLineGroup === lineGroup
-                                            ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300'
-                                            : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white'}`}
+                                        onClick={() => setShiftSelectorLineGroup(null)}
+                                        className="mb-4 flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                                     >
-                                        {getLineGroupLabel(lineGroup)}
+                                        <ChevronLeft className="h-4 w-4" />
+                                        {getLineGroupLabel(shiftSelectorLineGroup)}
                                     </button>
-                                ))}
-                            </div>
-
-                            <div className="space-y-3">
+                                    <div className="space-y-3">
                                 {SHIFTS.map(shift => {
-                                    const entry = dateEntries[selectedDate]?.[selectedLineGroup]?.[shift];
+                                    const entry = dateEntries[selectedDate]?.[shiftSelectorLineGroup]?.[shift];
                                     const isFilled = !!entry;
 
                                     const line1Ratio = entry?.lines['1']?.ratio;
@@ -1159,7 +1183,7 @@ export default function PottingRatioMeasurement() {
                                     return (
                                         <button
                                             key={shift}
-                                            onClick={() => handleShiftSelect(selectedLineGroup, shift)}
+                                            onClick={() => handleShiftSelect(shiftSelectorLineGroup, shift)}
                                             className={`w-full p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${statusClass}`}
                                         >
                                             <div className="flex-shrink-0">
@@ -1193,7 +1217,9 @@ export default function PottingRatioMeasurement() {
                                         </button>
                                     );
                                 })}
-                            </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

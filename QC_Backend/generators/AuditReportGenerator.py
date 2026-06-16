@@ -72,7 +72,34 @@ LINE_KEY_DEFAULTS = {
     '17-3': 'Both side of length', '17-4': 'Checked OK',
     '18-4': 'Checked OK', '19-1': 'ESD band used',
     '24-2': 'Checked OK', '24-3': 'Checked OK', '24-8': 'Checked OK',
-    '24-9': 'Checked OK', '26-1': 'Pass', '26-3': 'Pass',
+    '24-9': 'Checked OK', '26-1': 'Pass', '26-2': 'Pass', '26-3': 'Pass',
+}
+SAFETY_TEST_PARAM_IDS = {'26-1', '26-2', '26-3'}
+SAFETY_TIME_KEYS = ('4hrs', '8hrs')
+SAFETY_MODULE_FIELDS = {
+    'lineA_4hr_moduleId',
+    'lineA_8hr_moduleId',
+    'lineB_4hr_moduleId',
+    'lineB_8hr_moduleId',
+}
+LEGACY_SAFETY_MODULE_FIELDS_BY_TIME = {
+    '4hrs': 'moduleId4Hours',
+    '8hrs': 'moduleId8Hours',
+}
+SAFETY_MODULE_FIELD_BY_LINE_TIME = {
+    ('Line-1', '4hrs'): 'lineA_4hr_moduleId',
+    ('Line-1', '8hrs'): 'lineA_8hr_moduleId',
+    ('Line-3', '4hrs'): 'lineA_4hr_moduleId',
+    ('Line-3', '8hrs'): 'lineA_8hr_moduleId',
+    ('Line-2', '4hrs'): 'lineB_4hr_moduleId',
+    ('Line-2', '8hrs'): 'lineB_8hr_moduleId',
+    ('Line-4', '4hrs'): 'lineB_4hr_moduleId',
+    ('Line-4', '8hrs'): 'lineB_8hr_moduleId',
+}
+SAFETY_LINE_PAIRS = (('Line-1', 'Line-3'), ('Line-2', 'Line-4'))
+SAFETY_TEMPLATE_LINE_ALIAS = {
+    'Line-1': 'Line-3',
+    'Line-2': 'Line-4',
 }
 TIME_SLOT_DEFAULTS = {
     '10-1': 'OFF', '10-2': 'OFF', '10-3': 'OFF',
@@ -97,7 +124,32 @@ SIGNATURE_S3_PREFIX = 'users/signatures/'
 def is_empty_value(value):
     return value is None or value == ''
 
-def apply_export_defaults(param_id, value, param_mapping):
+def is_safety_module_id_field(key):
+    return key in SAFETY_MODULE_FIELDS or key in LEGACY_SAFETY_MODULE_FIELDS_BY_TIME.values()
+
+def split_safety_result_key(key):
+    if not isinstance(key, str):
+        return None, None
+    line_key, separator, time_key = key.rpartition('-')
+    if not separator or time_key not in SAFETY_TIME_KEYS:
+        return None, None
+    return line_key, time_key
+
+def apply_safety_export_defaults(param_id, value, line_number):
+    normalized_value = {} if not isinstance(value, dict) else dict(value)
+    default_value = LINE_KEY_DEFAULTS[param_id]
+    target_line_index = 0 if line_number == 'I' else 1
+
+    for line_pair in SAFETY_LINE_PAIRS:
+        target_line = line_pair[target_line_index]
+        for time_key in SAFETY_TIME_KEYS:
+            equivalent_keys = [f"{line}-{time_key}" for line in line_pair]
+            if any(not is_empty_value(normalized_value.get(key)) for key in equivalent_keys):
+                continue
+            normalized_value[f"{target_line}-{time_key}"] = default_value
+    return normalized_value
+
+def apply_export_defaults(param_id, value, param_mapping, line_number=None):
     """Match frontend selector defaults during export without overwriting user input."""
     if param_id in SIMPLE_DEFAULTS and is_empty_value(value):
         return SIMPLE_DEFAULTS[param_id]
@@ -127,13 +179,15 @@ def apply_export_defaults(param_id, value, param_mapping):
         return normalized_value
     if param_id in NESTED_STRING_DEFAULTS and isinstance(param_mapping, dict):
         return apply_nested_string_default(value, param_mapping, NESTED_STRING_DEFAULTS[param_id])
+    if param_id in SAFETY_TEST_PARAM_IDS:
+        return apply_safety_export_defaults(param_id, value, line_number)
     if param_id not in LINE_KEY_DEFAULTS or not isinstance(param_mapping, dict):
         return value
 
     normalized_value = {} if not isinstance(value, dict) else dict(value)
     default_value = LINE_KEY_DEFAULTS[param_id]
     for key in param_mapping:
-        if key.startswith('moduleId'):
+        if is_safety_module_id_field(key):
             continue
         if is_empty_value(normalized_value.get(key)):
             normalized_value[key] = default_value
@@ -157,6 +211,43 @@ def combine_result_with_module_id(result, module_id):
     if module_id:
         return f"{result} - {module_id}" if result else module_id
     return result
+
+def normalize_safety_module_id_source(value):
+    if not isinstance(value, dict):
+        return {}
+
+    source = dict(value)
+    for field in SAFETY_MODULE_FIELDS:
+        if field in source and source.get(field) is not None:
+            continue
+        legacy_key = LEGACY_SAFETY_MODULE_FIELDS_BY_TIME['4hrs' if '_4hr_' in field else '8hrs']
+        source[field] = source.get(legacy_key, '') or ''
+    return source
+
+def get_safety_module_id_for_result(module_source, result_key):
+    if not isinstance(module_source, dict):
+        return ''
+
+    line_key, time_key = split_safety_result_key(result_key)
+    module_field = SAFETY_MODULE_FIELD_BY_LINE_TIME.get((line_key, time_key))
+    if module_field:
+        if module_field in module_source:
+            return module_source.get(module_field, '') or ''
+
+    legacy_key = LEGACY_SAFETY_MODULE_FIELDS_BY_TIME.get(time_key)
+    return (module_source.get(legacy_key, '') or '') if legacy_key else ''
+
+def get_safety_mapping_key(key, param_mapping):
+    if key in param_mapping:
+        return key
+
+    line_key, time_key = split_safety_result_key(key)
+    alias_line = SAFETY_TEMPLATE_LINE_ALIAS.get(line_key)
+    if not alias_line:
+        return None
+
+    alias_key = f"{alias_line}-{time_key}"
+    return alias_key if alias_key in param_mapping else None
 
 def parse_numeric(value):
     """Write numeric-only strings to Excel as real numeric cells."""
@@ -290,10 +381,7 @@ def extract_safety_module_ids(stages):
             for observation in parameter.get('observations', []):
                 value = observation.get('value', {})
                 if isinstance(value, dict):
-                    return {
-                        'moduleId4Hours': value.get('moduleId4Hours', ''),
-                        'moduleId8Hours': value.get('moduleId8Hours', ''),
-                    }
+                    return normalize_safety_module_id_source(value)
     return {}
 
 def get_writable_cell(worksheet, cell_ref):
@@ -1486,6 +1574,8 @@ def get_template_config(line_number):
                 'Line-4-2-contact-block': 'V365', 'Line-4-2-positive': 'Z365', 'Line-4-2-negative': 'AD365'
             },
             '26-1': {
+                'lineA_4hr_moduleId': 'L369', 'lineA_8hr_moduleId': 'X369',
+                'lineB_4hr_moduleId': 'L372', 'lineB_8hr_moduleId': 'X372',
                 'moduleId4Hours': 'L369', 'moduleId8Hours': 'X369',
                 'Line-3-4hrs': 'G369', 'Line-3-8hrs': 'S369',
                 'Line-4-4hrs': 'G372', 'Line-4-8hrs': 'S372'
@@ -2591,6 +2681,8 @@ def get_template_config(line_number):
                 'Line-4-2-contact-block': 'V365', 'Line-4-2-positive': 'Z365', 'Line-4-2-negative': 'AD365'
             },
             '26-1': {
+                'lineA_4hr_moduleId': 'L369', 'lineA_8hr_moduleId': 'X369',
+                'lineB_4hr_moduleId': 'L372', 'lineB_8hr_moduleId': 'X372',
                 'moduleId4Hours': 'L369', 'moduleId8Hours': 'X369',
                 'Line-3-4hrs': 'G369', 'Line-3-8hrs': 'S369',
                 'Line-4-4hrs': 'G372', 'Line-4-8hrs': 'S372'
@@ -2776,7 +2868,7 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                         time_slot = observation.get('timeSlot', '')
                         selected_line = observation.get('selectedLine')
                         line_time_slot = format_line_key(selected_line) if selected_line else time_slot
-                        value = apply_export_defaults(param_id, observation.get('value', ''), param_mapping)
+                        value = apply_export_defaults(param_id, observation.get('value', ''), param_mapping, audit_data.get('lineNumber'))
                         if param_id in ['2-2', '3-6', '9-5', '11-2']:
                             # Sample-based parameters (Sample-1, Sample-2, etc.)
                             handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping)
@@ -3113,15 +3205,16 @@ def handle_time_based_line_parameter(worksheet, param_id, value, param_mapping, 
     if isinstance(value, dict):
         safety_module_ids = safety_module_ids or {}
         for key, val in value.items():
-            if param_id == '26-1' and key.startswith('moduleId'):
+            if param_id == '26-1' and is_safety_module_id_field(key):
                 continue
-            if key in param_mapping:
-                cell_ref = param_mapping[key]
+            mapping_key = get_safety_mapping_key(key, param_mapping) if param_id in SAFETY_TEST_PARAM_IDS else key
+            if mapping_key in param_mapping:
+                cell_ref = param_mapping[mapping_key]
                 cell = get_writable_cell(worksheet, cell_ref)
-                if param_id in ('26-1', '26-3'):
-                    module_id_key = 'moduleId4Hours' if key.endswith('-4hrs') else 'moduleId8Hours'
+                if param_id in SAFETY_TEST_PARAM_IDS:
                     source = value if param_id == '26-1' else safety_module_ids
-                    val = combine_result_with_module_id(val, source.get(module_id_key, ''))
+                    module_id = get_safety_module_id_for_result(source, key)
+                    val = combine_result_with_module_id(val, module_id)
                 set_cell_value(cell, val)
                 apply_cell_formatting(cell, horizontal='center')
 

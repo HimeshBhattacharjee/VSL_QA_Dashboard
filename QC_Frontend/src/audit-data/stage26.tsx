@@ -28,12 +28,59 @@ const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'mea
     return 'bg-white';
 };
 
+type SafetyTimeSlot = '4hrs' | '8hrs';
+type SafetyLineSlot = 'lineA' | 'lineB';
+type SafetyModuleIdKey =
+    | 'lineA_4hr_moduleId'
+    | 'lineA_8hr_moduleId'
+    | 'lineB_4hr_moduleId'
+    | 'lineB_8hr_moduleId';
+type LegacySafetyModuleIdKey = 'moduleId4Hours' | 'moduleId8Hours';
+
+const SAFETY_TIME_SLOTS: SafetyTimeSlot[] = ['4hrs', '8hrs'];
+const SAFETY_STATUS_OPTIONS = [
+    { value: "Pass", label: "Pass" },
+    { value: "Fail", label: "Fail" },
+    { value: "OFF", label: "OFF" }
+];
+const MODULE_ID_KEY_BY_SLOT: Record<SafetyLineSlot, Record<SafetyTimeSlot, SafetyModuleIdKey>> = {
+    lineA: {
+        '4hrs': 'lineA_4hr_moduleId',
+        '8hrs': 'lineA_8hr_moduleId'
+    },
+    lineB: {
+        '4hrs': 'lineB_4hr_moduleId',
+        '8hrs': 'lineB_8hr_moduleId'
+    }
+};
+const LEGACY_MODULE_ID_KEY_BY_TIME: Record<SafetyTimeSlot, LegacySafetyModuleIdKey> = {
+    '4hrs': 'moduleId4Hours',
+    '8hrs': 'moduleId8Hours'
+};
+
+const getLineSlot = (lineIndex: number): SafetyLineSlot => lineIndex === 0 ? 'lineA' : 'lineB';
+
+const getModuleIdKey = (lineIndex: number, timeSlot: SafetyTimeSlot): SafetyModuleIdKey =>
+    MODULE_ID_KEY_BY_SLOT[getLineSlot(lineIndex)][timeSlot];
+
+const getModuleIdValue = (
+    sampleValue: Record<string, string>,
+    lineIndex: number,
+    timeSlot: SafetyTimeSlot
+): string => {
+    const moduleIdKey = getModuleIdKey(lineIndex, timeSlot);
+    if (Object.prototype.hasOwnProperty.call(sampleValue, moduleIdKey)) {
+        return sampleValue[moduleIdKey] || '';
+    }
+    return sampleValue[LEGACY_MODULE_ID_KEY_BY_TIME[timeSlot]] || '';
+};
+
 const LineSection = {
     TimeBasedSection: ({ line, value: _value, onUpdate: _onUpdate, children }: {
         line: string;
         value: Record<string, string>;
         onUpdate: (updatedValue: Record<string, string>) => void;
-        children: (timeSlot: '4hrs' | '8hrs') => React.ReactNode;
+        children: (timeSlot: SafetyTimeSlot) => React.ReactNode;
     }) => (
         <div className="flex flex-col border border-gray-200 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
@@ -80,7 +127,6 @@ const InputComponents = {
             onChange={(e) => onChange(e.target.value)}
             className={`w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type)} ${className}`}
         >
-            <option value="">Select</option>
             {options.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
             ))}
@@ -125,46 +171,46 @@ const SafetyTestObservations = {
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
                 lines.flatMap(line =>
-                    ['4hrs', '8hrs'].map(timeSlot =>
+                    SAFETY_TIME_SLOTS.map(timeSlot =>
                         [`${line}-${timeSlot}`, ""]
                     )
                 )
             )
             : props.value as Record<string, string>;
 
-        const handleModuleIdUpdate = (key: 'moduleId4Hours' | 'moduleId8Hours', value: string) => {
+        const handleModuleIdUpdate = (key: SafetyModuleIdKey, value: string) => {
             const updatedValue = { ...sampleValue, [key]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
-        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: SafetyTimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
 
         return (
             <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
-                    <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 mb-1">Module ID (4 Hours)</span>
-                        <InputComponents.TextInput
-                            value={sampleValue.moduleId4Hours || ''}
-                            onChange={(value) => handleModuleIdUpdate('moduleId4Hours', value)}
-                            placeholder=""
-                            type="status"
-                        />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 mb-1">Module ID (8 Hours)</span>
-                        <InputComponents.TextInput
-                            value={sampleValue.moduleId8Hours || ''}
-                            onChange={(value) => handleModuleIdUpdate('moduleId8Hours', value)}
-                            placeholder=""
-                            type="status"
-                        />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                    {lines.map((line, lineIndex) => (
+                        <div key={`${line}-module-id`} className="flex flex-col gap-2">
+                            <span className="text-xs font-medium text-gray-600">{line} Module ID</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                {SAFETY_TIME_SLOTS.map(timeSlot => (
+                                    <div key={`${line}-${timeSlot}-module-id`} className="flex flex-col">
+                                        <span className="text-xs text-gray-500 mb-1">{timeSlot === '4hrs' ? '4 Hr' : '8 Hr'}</span>
+                                        <InputComponents.TextInput
+                                            value={getModuleIdValue(sampleValue, lineIndex, timeSlot)}
+                                            onChange={(value) => handleModuleIdUpdate(getModuleIdKey(lineIndex, timeSlot), value)}
+                                            placeholder=""
+                                            type="status"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
-                <div className="flex justify-between gap-4">
+                <div className="flex justify-center gap-4">
                     {lines.map(line => (
                         <LineSection.TimeBasedSection
                             key={line}
@@ -176,11 +222,7 @@ const SafetyTestObservations = {
                                 <InputComponents.Select
                                     value={sampleValue[`${line}-${timeSlot}`] || 'Pass'}
                                     onChange={(value) => handleUpdate(line, timeSlot, value)}
-                                    options={[
-                                        { value: "Pass", label: "Pass" },
-                                        { value: "Fail", label: "Fail" },
-                                        { value: "OFF", label: "OFF" }
-                                    ]}
+                                    options={SAFETY_STATUS_OPTIONS}
                                     type="status"
                                 />
                             )}
@@ -196,54 +238,14 @@ const SafetyTestObservations = {
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
                 lines.flatMap(line =>
-                    ['4hrs', '8hrs'].map(timeSlot =>
+                    SAFETY_TIME_SLOTS.map(timeSlot =>
                         [`${line}-${timeSlot}`, ""]
                     )
                 )
             )
             : props.value as Record<string, string>;
 
-        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
-            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
-            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
-        };
-
-        return (
-            <div className="flex justify-between gap-4">
-                {lines.map(line => (
-                    <LineSection.TimeBasedSection
-                        key={line}
-                        line={line}
-                        value={sampleValue}
-                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
-                    >
-                        {(timeSlot) => (
-                            <InputComponents.TextInput
-                                value={sampleValue[`${line}-${timeSlot}`] || ''}
-                                onChange={(value) => handleUpdate(line, timeSlot, value)}
-                                placeholder=""
-                                type="measurement"
-                            />
-                        )}
-                    </LineSection.TimeBasedSection>
-                ))}
-            </div>
-        );
-    },
-
-    renderGroundingTest: (props: ObservationRenderProps & { lineNumber?: string }) => {
-        const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(
-                lines.flatMap(line =>
-                    ['4hrs', '8hrs'].map(timeSlot =>
-                        [`${line}-${timeSlot}`, ""]
-                    )
-                )
-            )
-            : props.value as Record<string, string>;
-
-        const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
+        const handleUpdate = (line: string, timeSlot: SafetyTimeSlot, value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
             props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
         };
@@ -261,11 +263,47 @@ const SafetyTestObservations = {
                             <InputComponents.Select
                                 value={sampleValue[`${line}-${timeSlot}`] || 'Pass'}
                                 onChange={(value) => handleUpdate(line, timeSlot, value)}
-                                options={[
-                                    { value: "Pass", label: "Pass" },
-                                    { value: "Fail", label: "Fail" },
-                                    { value: "OFF", label: "OFF" }
-                                ]}
+                                options={SAFETY_STATUS_OPTIONS}
+                                type="status"
+                            />
+                        )}
+                    </LineSection.TimeBasedSection>
+                ))}
+            </div>
+        );
+    },
+
+    renderGroundingTest: (props: ObservationRenderProps & { lineNumber?: string }) => {
+        const lines = getLineConfiguration(props.lineNumber || 'II');
+        const sampleValue = typeof props.value === 'string'
+            ? Object.fromEntries(
+                lines.flatMap(line =>
+                    SAFETY_TIME_SLOTS.map(timeSlot =>
+                        [`${line}-${timeSlot}`, ""]
+                    )
+                )
+            )
+            : props.value as Record<string, string>;
+
+        const handleUpdate = (line: string, timeSlot: SafetyTimeSlot, value: string) => {
+            const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
+            props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
+        };
+
+        return (
+            <div className="flex justify-between gap-4">
+                {lines.map(line => (
+                    <LineSection.TimeBasedSection
+                        key={line}
+                        line={line}
+                        value={sampleValue}
+                        onUpdate={(updatedValue) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue)}
+                    >
+                        {(timeSlot) => (
+                            <InputComponents.Select
+                                value={sampleValue[`${line}-${timeSlot}`] || 'Pass'}
+                                onChange={(value) => handleUpdate(line, timeSlot, value)}
+                                options={SAFETY_STATUS_OPTIONS}
                                 type="status"
                             />
                         )}

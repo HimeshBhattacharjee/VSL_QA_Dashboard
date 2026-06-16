@@ -206,7 +206,7 @@ class FrameSealantDailyEntry:
                                 ]
                                 total_gm = sum(net_weights)
                                 line["totalSealantWeightPerModule"] = str(total_gm)
-                                line["sealantWeightPerModulePerMeter"] = str(total_gm / 6.824)
+                                line["sealantWeightPerModulePerMeter"] = str(total_gm / 7.032)
                             except (ValueError, TypeError):
                                 line["totalSealantWeightPerModule"] = ""
                                 line["sealantWeightPerModulePerMeter"] = ""

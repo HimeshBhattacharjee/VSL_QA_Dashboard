@@ -424,7 +424,7 @@ function GoalMeetingTable({
                                         return (
                                             <tr
                                                 key={goal.id}
-                                                className="bg-white transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+                                                className="bg-white transition-colors hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-600/70"
                                                 style={{ height: `${rowHeight}px` }}
                                             >
                                                 {goalIndex === 0 && (
@@ -1092,3 +1092,19 @@ export default function GoalMeeting() {
         </div>
     );
 }
+/*
+Create a new section in the sidebar under Quality Tests named as Bus Ribbon to INTC Ribbon Pull Strength Test and 
+then you have to implement the exact logic as it has been done in JB Sealant Weight Measurement Test. The Date, Shift
+FAB-II Line-I and FAB-II Line-II segregation needs to be done as done there. Now for each shift there will be an input 
+field for PO number, one for INTC Ribbon Status (which will be a dropdown with options that I will change later), and one 
+for Bus Ribbon Status (which will be a dropdown with options that I will change later). Then there will be Auto Bussing numbers
+such as Auto Bussing 1, 2 and 3 for FAB-II Line-I and Auto Bussing 4 and 5 for FAB-II Line-II. Now, under each Auto Bussing numbers, 
+there will be inputs for Position field (with dropdowns namely 1-TOP, 1-MIDDLE, 1-BOTTOM, 2-TOP, 2-MIDDLE, 2-BOTTOM, 3-TOP, 3-MIDDLE, 
+3-BOTTOM for both FAB-II Line-I and FAB-II Line-II) and then under each Auto Bussing numbers, there will be a section named Strength 
+which will have total 32 fields which can take numerical input. Lastly, under each Auto Bussing numbers, the averages will be calculated 
+separately for 16 fields out of 32 fields so two averages will be calculated for each Auto Bussing numbers and displayed at the end of the 
+section. The signatures, excel exporting and all other things need to be maintained as its done in JB Sealant Weight Measurement Test. 
+Write a powerful Codex prompt to implement the above requirements in a React application, ensuring that the UI is user-friendly and responsive, 
+and that the data handling is efficient and secure. The implementation should also include proper state management, form validation, and error 
+handling to ensure a smooth user experience.
+*/

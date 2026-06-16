@@ -12,6 +12,7 @@ import AdhesionTest from './pages/AdhesionTest';
 import PottingRatioMeasurement from './pages/PottingRatioMeasurement';
 import JBSealantWtMeasurement from './pages/JBSealantWtMeasurement';
 import FrameSealantWtMeasurement from './pages/FrameSealantWtMeasurement';
+import BusRibbonPullStrengthTest from './pages/BusRibbonPullStrengthTest';
 import SSHTest from './pages/SSHTest';
 import PeelTest from './pages/PeelTest';
 import RoTTest from './pages/RoTTest';
@@ -122,6 +123,11 @@ export default function App() {
                             <Route path="/frame-sealant-wt" element={
                                 <UserRoute>
                                     <FrameSealantWtMeasurement />
+                                </UserRoute>
+                            } />
+                            <Route path="/bus-ribbon-pull-strength" element={
+                                <UserRoute>
+                                    <BusRibbonPullStrengthTest />
                                 </UserRoute>
                             } />
                             <Route path="/ssh-test" element={
