@@ -7,7 +7,6 @@ import {
     CircleDot,
     CircleOff,
     Clock,
-    FileSpreadsheet,
     Moon,
     Save,
     Sun,
