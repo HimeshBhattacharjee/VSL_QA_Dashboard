@@ -24,14 +24,14 @@ const PasswordInput = ({
             type={showPassword ? "text" : "password"}
             value={value}
             onChange={onChange}
-            className="w-full px-4 py-3 pr-12 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-sm focus:bg-white/90 dark:focus:bg-white/20 focus:outline-none text-gray-900 dark:text-white placeholder-gray-600 dark:placeholder-gray-400 border border-white/30 dark:border-white/20 focus:border-blue-500/50 dark:focus:border-blue-400/50 transition-all duration-300"
+            className="w-full px-4 py-3 pr-12 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-sm focus:bg-white/90 dark:focus:bg-white/20 focus:outline-none text-gray-900 dark:text-white placeholder-gray-600 dark:placeholder-gray-400 border border-white/30 dark:border-white/20 focus:border-brand-primary/50 dark:focus:border-brand-primary-light/50 transition-all duration-300"
             placeholder={placeholder}
             required
             disabled={disabled}
         />
         <button
             type="button"
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 p-1 rounded-full hover:bg-white/30"
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-700 dark:text-gray-300 hover:text-brand-primary dark:hover:text-brand-primary-light transition-colors duration-200 p-1 rounded-full hover:bg-white/30"
             onClick={onToggle}
             disabled={disabled}
         >
@@ -194,7 +194,7 @@ export default function Login() {
                     type="text"
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-sm focus:bg-white/90 dark:focus:bg-white/20 focus:outline-none text-gray-900 dark:text-white placeholder-gray-600 dark:placeholder-gray-400 border border-white/30 dark:border-white/20 focus:border-blue-500/50 dark:focus:border-blue-400/50 transition-all duration-300"
+                    className="w-full px-4 py-3 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-sm focus:bg-white/90 dark:focus:bg-white/20 focus:outline-none text-gray-900 dark:text-white placeholder-gray-600 dark:placeholder-gray-400 border border-white/30 dark:border-white/20 focus:border-brand-primary/50 dark:focus:border-brand-primary-light/50 transition-all duration-300"
                     placeholder="Enter your employee ID"
                     required
                     disabled={loading}
@@ -214,7 +214,7 @@ export default function Login() {
             <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3.5 mt-2 cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-700 dark:to-indigo-800 hover:from-blue-700 hover:to-indigo-800 dark:hover:from-blue-600 dark:hover:to-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-semibold rounded-xl shadow-lg hover:shadow-xl shadow-blue-500/20 dark:shadow-blue-900/30 text-white ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full py-3.5 mt-2 cursor-pointer bg-gradient-to-r from-brand-primary to-brand-primary-hover hover:from-brand-primary-hover hover:to-brand-primary-deep hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-semibold rounded-xl shadow-lg hover:shadow-xl shadow-brand-primary/20 dark:shadow-brand-primary-deep/30 text-white ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
                 {loading ? (
                     <span className="flex items-center justify-center">
@@ -239,7 +239,7 @@ export default function Login() {
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 dark:text-white">Set New Password</h2>
                 <p className="text-gray-600 dark:text-gray-300 text-sm mt-2">This is your first login. Please set a new password.</p>
-                <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                <div className="mt-3 p-3 bg-gradient-to-r from-brand-primary-soft to-brand-primary-muted dark:from-brand-primary/10 dark:to-brand-primary/15 rounded-lg border border-brand-primary-muted dark:border-brand-primary/30">
                     <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">
                         Password Requirements:
                     </p>
@@ -280,7 +280,7 @@ export default function Login() {
             <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3.5 mt-2 cursor-pointer bg-gradient-to-r from-green-600 to-emerald-700 dark:from-green-700 dark:to-emerald-800 hover:from-green-700 hover:to-emerald-800 dark:hover:from-green-600 dark:hover:to-emerald-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-semibold rounded-xl shadow-lg hover:shadow-xl shadow-green-500/20 dark:shadow-green-900/30 text-white ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full py-3.5 mt-2 cursor-pointer bg-gradient-to-r from-brand-primary to-brand-primary-hover hover:from-brand-primary-hover hover:to-brand-primary-deep hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-semibold rounded-xl shadow-lg hover:shadow-xl shadow-brand-primary/20 dark:shadow-brand-primary-deep/30 text-white ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
                 {loading ? (
                     <span className="flex items-center justify-center">
@@ -297,26 +297,26 @@ export default function Login() {
 
     return (
         <>
-            <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-blue-900">
+            <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-gray-50 to-brand-primary-soft dark:from-gray-900 dark:to-brand-primary-deep">
                 {/* Background Image with Overlay */}
                 <div className="absolute inset-0 z-0">
                     <div className="absolute inset-0 bg-[url('../LOGOS/BG.jpg')] bg-cover bg-center bg-no-repeat opacity-30 dark:opacity-20"></div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-transparent to-transparent dark:from-gray-900/90 dark:via-gray-900/80 dark:to-blue-900/70"></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-transparent to-transparent dark:from-gray-900/90 dark:via-gray-900/80 dark:to-brand-primary-deep/70"></div>
                     
                     {/* Animated Background Elements */}
-                    <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-blue-400/10 to-cyan-400/10 rounded-full blur-3xl animate-pulse"></div>
-                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-r from-indigo-400/10 to-purple-400/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-                    <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-gradient-to-r from-emerald-400/10 to-teal-400/10 rounded-full blur-3xl animate-pulse delay-500"></div>
+                    <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-brand-primary/10 to-brand-primary-light/10 rounded-full blur-3xl animate-pulse"></div>
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-r from-brand-primary-hover/10 to-brand-primary/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+                    <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-gradient-to-r from-slate-400/10 to-brand-primary/10 rounded-full blur-3xl animate-pulse delay-500"></div>
                 </div>
 
                 {/* Main Login Container */}
                 <div className="relative z-10 w-full max-w-md">
-                    <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-3xl shadow-2xl shadow-blue-500/10 dark:shadow-blue-900/20 border border-white/40 dark:border-white/10 hover:shadow-3xl hover:shadow-blue-500/20 dark:hover:shadow-blue-900/30 transition-all duration-500 overflow-hidden">
+                    <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-3xl shadow-2xl shadow-brand-primary/10 dark:shadow-brand-primary-deep/20 border border-white/40 dark:border-white/10 hover:shadow-3xl hover:shadow-brand-primary/20 dark:hover:shadow-brand-primary-deep/30 transition-all duration-500 overflow-hidden">
                         {/* Glass Morphism Header */}
-                        <div className="relative p-4 bg-gradient-to-r from-blue-500/20 to-indigo-600/20 dark:from-blue-900/30 dark:to-indigo-900/30 backdrop-blur-lg border-b border-white/20 dark:border-white/10">
+                        <div className="relative p-4 bg-gradient-to-r from-brand-primary/15 to-brand-primary-hover/15 dark:from-brand-primary/20 dark:to-brand-primary-hover/20 backdrop-blur-lg border-b border-white/20 dark:border-white/10">
                             <div className="flex items-center justify-center mb-6">
                                 <div className="relative">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl blur-xl opacity-50"></div>
+                                    <div className="absolute inset-0 bg-gradient-to-r from-brand-primary to-brand-primary-hover rounded-2xl blur-xl opacity-50"></div>
                                     <img
                                         src="../LOGOS/VSL_Logo (1).png"
                                         alt="VSL Logo"
@@ -324,7 +324,7 @@ export default function Login() {
                                     />
                                 </div>
                             </div>
-                            <h1 className="text-xl sm:text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                            <h1 className="text-xl sm:text-2xl font-bold text-center bg-gradient-to-r from-brand-primary to-brand-primary-hover dark:from-brand-primary-light dark:to-brand-primary-muted bg-clip-text text-transparent">
                                 Welcome Viking
                             </h1>
                             <p className="text-center text-sm text-gray-600 dark:text-gray-300 mt-2">
@@ -346,9 +346,9 @@ export default function Login() {
                                 Optimized for all devices • Secure login protocol
                             </p>
                             <div className="flex items-center justify-center mt-3 space-x-2">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse delay-150"></div>
-                            <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse delay-300"></div>
+                            <div className="w-1.5 h-1.5 bg-brand-primary rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-brand-primary-hover rounded-full animate-pulse delay-150"></div>
+                            <div className="w-1.5 h-1.5 bg-brand-primary-light rounded-full animate-pulse delay-300"></div>
                         </div>
                         </div>
                     </div>
