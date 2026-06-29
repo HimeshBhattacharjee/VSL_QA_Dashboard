@@ -79,7 +79,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 ${getBackgroundColor(value, type)} ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary ${getBackgroundColor(value, type)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (

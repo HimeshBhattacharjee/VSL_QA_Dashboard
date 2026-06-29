@@ -330,9 +330,10 @@ export default function SummaryGraph({ type, title, subtitle, dashboardLink }: S
                         text-sm font-medium 
                         shadow-sm dark:shadow-gray-900/20 
                         transition-all duration-200 
+                        focus:outline-none focus:ring-2 focus:ring-brand-primary
                         hover:bg-gray-50 dark:hover:bg-gray-700 
                         hover:shadow-md dark:hover:shadow-gray-900/30
-                        hover:text-blue-600 dark:hover:text-blue-400
+                        hover:text-brand-primary dark:hover:text-brand-primary-light
                         whitespace-nowrap
                     "
                     onClick={() => window.location.href = dashboardLink}

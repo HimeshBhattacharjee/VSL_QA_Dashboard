@@ -16,6 +16,9 @@ from routes.potting_ratio_route import potting_router
 from routes.jb_sealant_wt_route import jb_sealant_router
 from routes.frame_sealant_wt_route import frame_sealant_router
 from routes.bus_ribbon_pull_strength_route import bus_ribbon_pull_strength_router
+from routes.peel_strength_bus_ribbon_jb_soldering_route import peel_strength_bus_ribbon_jb_router
+from routes.jb_contact_block_maintenance_route import jb_contact_block_maintenance_router
+from routes.stringer_parameter_report_route import stringer_parameter_report_router
 from routes.ssh_route import ssh_router
 from routes.peel_test_route import peel_test_router, get_peel_current_user, require_peel_export_access
 from routes.rot_route import rot_router
@@ -63,6 +66,9 @@ app.include_router(potting_router)
 app.include_router(jb_sealant_router)
 app.include_router(frame_sealant_router)
 app.include_router(bus_ribbon_pull_strength_router)
+app.include_router(peel_strength_bus_ribbon_jb_router)
+app.include_router(jb_contact_block_maintenance_router)
+app.include_router(stringer_parameter_report_router)
 app.include_router(ssh_router)
 app.include_router(peel_test_router)
 app.include_router(rot_router)
@@ -440,6 +446,22 @@ async def root():
                 "base_path": "/api/bus-ribbon-pull-strength-reports/export/excel",
                 "description": "Generate bus ribbon pull strength test reports"
             },
+            "peel_strength_bus_ribbon_jb_soldering_reports": {
+                "base_path": "/api/peel-strength-bus-ribbon-jb-soldering-reports",
+                "description": "Peel Strength of Bus Ribbon to JB Soldering reports management with MongoDB"
+            },
+            "peel_strength_bus_ribbon_jb_soldering_report_generation": {
+                "base_path": "/api/peel-strength-bus-ribbon-jb-soldering-reports/export/excel",
+                "description": "Generate peel strength of bus ribbon to JB soldering test reports"
+            },
+            "jb_contact_block_maintenance_reports": {
+                "base_path": "/api/jb-contact-block-maintenance-reports",
+                "description": "JB Contact Block Maintenance reports management with MongoDB"
+            },
+            "jb_contact_block_maintenance_report_generation": {
+                "base_path": "/api/jb-contact-block-maintenance-reports/export/excel",
+                "description": "Generate JB contact block maintenance reports"
+            },
             "peel_test_reports": {
                 "base_path": "/generate-peel-report",
                 "description": "Generate peel test reports"
@@ -492,7 +514,13 @@ def run_extractors():
     except Exception as e:
         print(f"Peel scheduler failed to start: {e}")
 
-    print("Data extractors and peel scheduler started in background threads")
+    try:
+        from services.calibration_scheduler import start_calibration_scheduler
+        start_calibration_scheduler(run_immediately=True)
+    except Exception as e:
+        print(f"Calibration scheduler failed to start: {e}")
+
+    print("Data extractors, peel scheduler, and calibration scheduler started in background threads")
 
 
 @app.on_event("startup")
@@ -520,6 +548,9 @@ async def global_health_check():
             "adhesion_test_reports": "available",
             "jb_sealant_weight_reports": "available",
             "bus_ribbon_pull_strength_reports": "available",
+            "peel_strength_bus_ribbon_jb_soldering_reports": "available",
+            "jb_contact_block_maintenance_reports": "available",
+            "calibration_extractor": "available",
             "peel_test_reports": "available"
         }
     }

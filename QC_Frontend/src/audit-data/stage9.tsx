@@ -29,7 +29,7 @@ const RearEncapsulantObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string, criteria)}`}
+                    className={`w-full px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string, criteria)}`}
                 />
                 <span className="text-xs text-gray-500 mt-1">
                     {props.paramId.includes('humidity') ? '%' : '°C'}
@@ -52,7 +52,7 @@ const RearEncapsulantObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -71,7 +71,7 @@ const RearEncapsulantObservations = {
                 <select
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
                     <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
@@ -103,7 +103,7 @@ const RearEncapsulantObservations = {
                     type="date"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -123,7 +123,7 @@ const RearEncapsulantObservations = {
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
                 <option value="New Box Open">New Box Open</option>
@@ -156,7 +156,7 @@ const RearEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="Checked OK">Checked OK</option>
@@ -176,7 +176,7 @@ const RearEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="Checked OK">Checked OK</option>
@@ -246,7 +246,7 @@ const RearEncapsulantObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
                             />
                             <span className="text-xs text-gray-500 mt-1">mm</span>
                         </div>
@@ -270,7 +270,7 @@ const RearEncapsulantObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );

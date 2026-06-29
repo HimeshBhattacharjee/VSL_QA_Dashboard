@@ -26,7 +26,7 @@ const PreLamRepairNAutoEdgeSealObservations = {
                         type="text"
                         value={props.value as string}
                         onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                        className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500 text-center shadow-sm ${getBackgroundColor(props.value as string || '')}`}
+                        className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:border-brand-primary text-center shadow-sm ${getBackgroundColor(props.value as string || '')}`}
                     />
                     <span className="text-xs text-gray-500 mt-1">
                         {props.paramId.includes('peel-strength') ? 'N/mm' : '°C'}
@@ -53,7 +53,7 @@ const PreLamRepairNAutoEdgeSealObservations = {
                     <select
                         value={props.value as string}
                         onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                        className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string || '')}`}
+                        className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string || '')}`}
                     >
                         <option value="">Select</option>
                         <option value="Checked OK">Checked OK</option>

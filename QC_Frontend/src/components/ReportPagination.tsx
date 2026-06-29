@@ -35,7 +35,7 @@ export default function ReportPagination({
                 <select
                     value={pageSize}
                     onChange={(event) => onPageSizeChange(Number(event.target.value))}
-                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-white text-sm"
+                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
                     aria-label="Items per page"
                 >
                     {pageSizeOptions.map(option => (
@@ -47,7 +47,7 @@ export default function ReportPagination({
                 <button
                     onClick={() => onPageChange(Math.max(1, safePage - 1))}
                     disabled={safePage <= 1}
-                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 disabled:opacity-50"
+                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 transition-colors hover:border-brand-primary hover:text-brand-primary disabled:opacity-50 disabled:hover:border-gray-300 disabled:hover:text-inherit dark:hover:border-brand-primary-light dark:hover:text-brand-primary-light dark:disabled:hover:border-gray-700"
                 >
                     Previous
                 </button>
@@ -55,7 +55,7 @@ export default function ReportPagination({
                 <button
                     onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
                     disabled={safePage >= totalPages}
-                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 disabled:opacity-50"
+                    className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 transition-colors hover:border-brand-primary hover:text-brand-primary disabled:opacity-50 disabled:hover:border-gray-300 disabled:hover:text-inherit dark:hover:border-brand-primary-light dark:hover:text-brand-primary-light dark:disabled:hover:border-gray-700"
                 >
                     Next
                 </button>

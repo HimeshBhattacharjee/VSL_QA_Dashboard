@@ -15,7 +15,7 @@ const RearGlassLoadingObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -34,7 +34,7 @@ const RearGlassLoadingObservations = {
                 <select
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
                     <option value="Xinyi Solar">Xinyi Solar</option>
@@ -62,7 +62,7 @@ const RearGlassLoadingObservations = {
                 <select
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
                     <option value="White Mesh">White Mesh</option>
@@ -91,7 +91,7 @@ const RearGlassLoadingObservations = {
                     type="date"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -120,7 +120,7 @@ const RearGlassLoadingObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="Checked OK">Checked OK</option>
@@ -140,7 +140,7 @@ const RearGlassLoadingObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '')}`}
                             >
                                 <option value="">Select</option>
                                 <option value="Checked OK">Checked OK</option>
@@ -211,7 +211,7 @@ const RearGlassLoadingObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
                             />
                             <span className="text-xs text-gray-500 mt-1">mm</span>
                         </div>
@@ -235,7 +235,7 @@ const RearGlassLoadingObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`px-2 py-1 text-center border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
                 <span className="text-xs text-gray-500 mt-1">mm</span>
             </div>

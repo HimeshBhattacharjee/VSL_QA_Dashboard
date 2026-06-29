@@ -1241,7 +1241,7 @@ export default function GelTest() {
                                             </div>
                                             <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
                                                 <button
-                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-brand-primary dark:bg-brand-primary text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                                     onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
                                                     disabled={!canExport}
                                                     title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
@@ -1441,7 +1441,7 @@ export default function GelTest() {
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto"></div>
                             <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
                         </div>
                     </div>
@@ -1460,7 +1460,7 @@ export default function GelTest() {
                                     if (returnCommentError) setReturnCommentError('');
                                 }}
                                 rows={4}
-                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                                 placeholder="Enter correction comments"
                             />
                             {returnCommentError && (
@@ -1490,7 +1490,7 @@ export default function GelTest() {
                 <div className="flex justify-center mb-2">
                     {canCreateReport && (
                         <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => {
                                 clearFormData();
                                 setActiveTab('edit-report');
@@ -1500,14 +1500,14 @@ export default function GelTest() {
                         </div>
                     )}
                     <div
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
                         {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
                     </div>
                     {isOperatorRole && returnedReports.length > 0 && (
                         <div
-                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('returned-reports')}
                         >
                             Returned Reports
@@ -1524,7 +1524,7 @@ export default function GelTest() {
                                 type="text"
                                 value={gelReportName}
                                 onChange={(e) => setGelReportName(e.target.value)}
-                                className="gel-report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-[rgba(48,30,107,0.3)] dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="gel-report-name-input p-2.5 rounded-md bg-white dark:bg-gray-800 border-2 border-brand-primary/30 dark:border-gray-600 w-full sm:w-[50%] text-center text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                 placeholder="Enter report name"
                                 disabled={!canEditCurrentReport}
                             />
@@ -1538,7 +1538,7 @@ export default function GelTest() {
                             )}
                             {canEditCurrentReport && (
                                 <button
-                                    className={`save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
+                                    className={`save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-primary cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
                                     onClick={saveReport}
                                     disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport}
                                     title={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'Prepared By signature is required before submission' : undefined}
@@ -1605,7 +1605,7 @@ export default function GelTest() {
                                         </tr>
                                         <tr>
                                             <td colSpan={10} rowSpan={3}>
-                                                <div className="allowable-limit p-2.5 bg-gray-50 dark:bg-gray-900 border-l-4 border-l-blue-500 dark:border-l-blue-400 text-left">
+                                                <div className="allowable-limit p-2.5 bg-gray-50 dark:bg-gray-900 border-l-4 border-l-brand-primary dark:border-l-brand-primary-light text-left">
                                                     <strong className="px-2.5 text-gray-800 dark:text-white">Allowable Limit:</strong>
                                                     <div className="checkbox-container flex flex-col sm:flex-row gap-2 mt-2">
                                                         <div className="checkbox-item flex items-center mx-2">
@@ -1615,7 +1615,7 @@ export default function GelTest() {
                                                                 id="gel-limit-eva-epe"
                                                                 checked={checkboxValues[checkboxKeys[0]] || false}
                                                                 onChange={(e) => handleCheckboxChange(checkboxKeys[0], e.target.checked)}
-                                                                className="ml-1 w-4 h-4 dark:accent-blue-500"
+                                                                className="ml-1 w-4 h-4 dark:accent-brand-primary"
                                                             />
                                                         </div>
                                                     </div>
@@ -1627,7 +1627,7 @@ export default function GelTest() {
                                                                 id="gel-limit-poe"
                                                                 checked={checkboxValues[checkboxKeys[1]] || false}
                                                                 onChange={(e) => handleCheckboxChange(checkboxKeys[1], e.target.checked)}
-                                                                className="ml-1 w-4 h-4 dark:accent-blue-500"
+                                                                className="ml-1 w-4 h-4 dark:accent-brand-primary"
                                                             />
                                                         </div>
                                                     </div>
@@ -1671,7 +1671,7 @@ export default function GelTest() {
                                                             id="gel-material-eva"
                                                             checked={checkboxValues[checkboxKeys[2]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[2], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
+                                                            className="ml-1 w-4 h-4 dark:accent-brand-primary"
                                                         />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
@@ -1681,7 +1681,7 @@ export default function GelTest() {
                                                             id="gel-material-epe"
                                                             checked={checkboxValues[checkboxKeys[3]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[3], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
+                                                            className="ml-1 w-4 h-4 dark:accent-brand-primary"
                                                         />
                                                     </div>
                                                     <div className="checkbox-item flex items-center mx-1">
@@ -1691,7 +1691,7 @@ export default function GelTest() {
                                                             id="gel-material-poe"
                                                             checked={checkboxValues[checkboxKeys[4]] || false}
                                                             onChange={(e) => handleCheckboxChange(checkboxKeys[4], e.target.checked)}
-                                                            className="ml-1 w-4 h-4 dark:accent-blue-500"
+                                                            className="ml-1 w-4 h-4 dark:accent-brand-primary"
                                                         />
                                                     </div>
                                                 </div>

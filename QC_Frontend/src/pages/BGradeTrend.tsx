@@ -368,7 +368,7 @@ export default function BGradeTrend() {
                                 id="startDate"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                             />
                         </div>
 
@@ -379,7 +379,7 @@ export default function BGradeTrend() {
                                 id="endDate"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                             />
                         </div>
 
@@ -387,8 +387,8 @@ export default function BGradeTrend() {
                             <button
                                 onClick={() => setActiveButton('defect')}
                                 className={`bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-4 py-2 sm:px-5 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'defect'
-                                        ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white'
-                                        : 'border-b-2 border-b-[#667eea] dark:border-gray-600 hover:-translate-y-0.5'
+                                        ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white'
+                                        : 'border-b-2 border-b-brand-primary dark:border-gray-600 hover:-translate-y-0.5'
                                     }`}
                             >
                                 Defect Reason Analysis
@@ -397,8 +397,8 @@ export default function BGradeTrend() {
                             <button
                                 onClick={() => setActiveButton('b-grade')}
                                 className={`bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-4 py-2 sm:px-5 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentAnalysisType === 'b-grade'
-                                        ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white'
-                                        : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                                        ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white'
+                                        : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                     }`}
                             >
                                 B-Grade Analysis
@@ -425,17 +425,17 @@ export default function BGradeTrend() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                             <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.totalProduction.toLocaleString()}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Total Production</div>
                         </div>
 
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                             <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.totalDefect.toLocaleString()}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Total Defects</div>
                         </div>
 
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                             <div className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2">{metrics.defectRate}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-300 font-medium">Defect Rate (in %)</div>
                         </div>

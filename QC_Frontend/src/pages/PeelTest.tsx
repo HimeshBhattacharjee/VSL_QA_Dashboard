@@ -1153,7 +1153,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_0`] || ''}
                             onChange={(e) => handleCellChange(rep, 0, e.target.value)}
                         />
@@ -1161,7 +1161,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_1`] || ''}
                             onChange={(e) => handleCellChange(rep, 1, e.target.value)}
                         />
@@ -1169,7 +1169,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_2`] || ''}
                             onChange={(e) => handleCellChange(rep, 2, e.target.value)}
                         />
@@ -1177,7 +1177,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_3`] || ''}
                             onChange={(e) => handleCellChange(rep, 3, e.target.value)}
                         />
@@ -1185,7 +1185,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_4`] || ''}
                             onChange={(e) => handleCellChange(rep, 4, e.target.value)}
                         />
@@ -1193,7 +1193,7 @@ export default function PeelTest() {
                     <td rowSpan={34} className="border border-gray-300 dark:border-gray-700 p-1 editable rowspan-cell bg-white dark:bg-gray-800">
                         <input
                             type="text"
-                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                            className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                             value={tableData[`row_${rep}_cell_5`] || ''}
                             onChange={(e) => handleCellChange(rep, 5, e.target.value)}
                         />
@@ -1230,7 +1230,7 @@ export default function PeelTest() {
                                 >
                                     <input
                                         type="text"
-                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                                         value={value}
                                         onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
                                     />
@@ -1279,7 +1279,7 @@ export default function PeelTest() {
                                 >
                                     <input
                                         type="text"
-                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-center bg-transparent dark:text-white"
+                                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light text-center bg-transparent dark:text-white"
                                         value={value}
                                         onChange={(e) => handleCellChange(rep, cellIndex, e.target.value)}
                                     />
@@ -1317,7 +1317,7 @@ export default function PeelTest() {
                         id="line-select"
                         value={selectedLine}
                         onChange={(e) => setSelectedLine(e.target.value as PeelLine | '')}
-                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     >
                         <option value="" className="dark:bg-gray-800">-- Select Line --</option>
                         {PEEL_LINES.map(line => (
@@ -1332,7 +1332,7 @@ export default function PeelTest() {
                         id="date-select"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     />
                     <label htmlFor="shift-select" className="font-semibold text-gray-700 dark:text-gray-300">
                         Shift:
@@ -1341,7 +1341,7 @@ export default function PeelTest() {
                         id="shift-select"
                         value={selectedShift}
                         onChange={(e) => setSelectedShift(e.target.value)}
-                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                        className="cursor-pointer px-3 py-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                     >
                         <option value="" className="dark:bg-gray-800">-- Select Shift --</option>
                         <option value="A" className="dark:bg-gray-800">Shift-A</option>
@@ -1350,7 +1350,7 @@ export default function PeelTest() {
                     </select>
                     <button
                         onClick={loadOrCreateReport}
-                        className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-blue-700 dark:to-purple-700 border-transparent text-black dark:text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                        className="bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                     >
                         Load Report
                     </button>
@@ -1380,7 +1380,7 @@ export default function PeelTest() {
                         )}
                         {canEditCurrentReport && (
                             <button
-                                className={`save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
+                                className={`save-btn w-full sm:w-auto p-2.5 rounded-md border-2 border-white dark:border-gray-600 font-semibold transition-all duration-300 ease-in-out text-white text-sm ${currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-primary cursor-pointer hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg'}`}
                                 onClick={saveReport}
                                 disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport}
                                 title={currentWorkflowState !== 'submitted' && !canSubmitCurrentReport ? getSubmissionBlocker() : undefined}
@@ -1585,7 +1585,7 @@ export default function PeelTest() {
                                                 {formatWorkflowState(state)}
                                             </span>
                                             {report.line && (
-                                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                                                <span className="rounded-full bg-brand-primary-soft px-2 py-0.5 text-xs font-semibold text-brand-primary dark:bg-brand-primary/15 dark:text-brand-primary-light">
                                                     {report.line}
                                                 </span>
                                             )}
@@ -1608,7 +1608,7 @@ export default function PeelTest() {
                                     </div>
                                     <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
                                         <button
-                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-brand-primary dark:bg-brand-primary text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                             onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
                                             disabled={!canExport}
                                             title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
@@ -1686,7 +1686,7 @@ export default function PeelTest() {
                     id="monthYear"
                     value={monthYear}
                     onChange={(e) => setMonthYear(e.target.value)}
-                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 />
                 <label htmlFor="stringer-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Stringer:
@@ -1698,7 +1698,7 @@ export default function PeelTest() {
                     onChange={(e) => setStringer(e.target.value)}
                     min="1"
                     max="12"
-                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white w-20"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white w-20"
                 />
                 <label htmlFor="face-select" className="font-semibold text-gray-700 dark:text-gray-300">
                     Cell Face:
@@ -1707,7 +1707,7 @@ export default function PeelTest() {
                     id="face-select"
                     value={cellFace}
                     onChange={(e) => setCellFace(e.target.value)}
-                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] dark:border-b-blue-500 focus:outline-none focus:ring-2 focus:ring-[#667eea] dark:focus:ring-blue-500 hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                    className="cursor-pointer p-2 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary dark:border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary hover:-translate-y-0.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 >
                     <option value="" className="dark:bg-gray-800">-- Select --</option>
                     <option value="front" className="dark:bg-gray-800">Front</option>
@@ -1716,7 +1716,7 @@ export default function PeelTest() {
                 </select>
                 <button
                     onClick={analyzeReport}
-                    className="bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-blue-700 dark:to-purple-700 border-transparent text-black dark:text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                    className="bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 >
                     Analyze
                 </button>
@@ -1916,7 +1916,7 @@ export default function PeelTest() {
                 {isLoading && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                         <div className="rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800">
-                            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
+                            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-brand-primary"></div>
                             <p className="mt-2 text-gray-700 dark:text-gray-300">Loading...</p>
                         </div>
                     </div>
@@ -1935,7 +1935,7 @@ export default function PeelTest() {
                                     if (returnCommentError) setReturnCommentError('');
                                 }}
                                 rows={4}
-                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                                 placeholder="Enter correction comments"
                             />
                             {returnCommentError && (
@@ -1965,7 +1965,7 @@ export default function PeelTest() {
                 <div className="flex justify-center mb-2">
                     {canCreateReport && (
                         <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => {
                                 resetEditReportState();
                                 setActiveTab('edit-report');
@@ -1975,14 +1975,14 @@ export default function PeelTest() {
                         </div>
                     )}
                     <div
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('saved-reports')}
                     >
                         {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
                     </div>
                     {isOperatorRole && returnedReports.length > 0 && (
                         <div
-                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                             onClick={() => setActiveTab('returned-reports')}
                         >
                             Returned Reports
@@ -1992,7 +1992,7 @@ export default function PeelTest() {
                         </div>
                     )}
                     <div
-                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'report-analysis' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         onClick={() => setActiveTab('report-analysis')}
                     >
                         Report Analysis

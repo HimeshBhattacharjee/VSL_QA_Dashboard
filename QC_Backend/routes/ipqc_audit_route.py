@@ -5,6 +5,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 
+from models.calibration_data_models import apply_calibration_autofill_to_audit_data
 from models.ipqc_audit_models import build_ipqc_audit_metadata, ipqc_audit_collection, IPQCAudit, normalize_ipqc_audit_data
 from users.user_db import users_collection
 
@@ -116,6 +117,7 @@ def serialize_ipqc_audit(audit: dict, include_data: bool = False) -> dict:
     if include_data:
         audit_data = IPQCAudit.from_dict(audit).to_dict(include_data=True)
         data = audit_data.get("data", {})
+        data = apply_calibration_autofill_to_audit_data(data)
         metadata = build_ipqc_audit_metadata(data)
 
     state = normalize_workflow_state(audit)
@@ -408,6 +410,7 @@ async def create_ipqc_audit(audit_data: dict, x_employee_id: str | None = Header
         validate_audit_payload(audit_data)
         audit_name = audit_data["name"].strip()
         metadata, normalized_data = build_metadata_update({**audit_data, "name": audit_name}, None, user, "draft")
+        normalized_data = apply_calibration_autofill_to_audit_data(normalized_data)
         validate_draft_required_metadata(normalized_data)
 
         existing_draft = find_matching_draft_audit(normalized_data, user)

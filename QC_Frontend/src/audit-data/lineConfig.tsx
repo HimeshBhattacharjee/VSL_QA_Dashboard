@@ -50,7 +50,7 @@ export const LINE_DEPENDENT_CONFIG: { [stageId: number]: { parameters: string[];
             '8-11', '8-12', '8-13', '8-14', '8-15', '8-16'
         ],
         lineMapping: {
-            'I': ['Line-1', 'Line-2'],
+            'I': ['Line-1', 'Line-2', 'Line-3'],
             'II': ['Line-3', 'Line-4']
         }
     },

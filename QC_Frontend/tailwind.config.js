@@ -8,6 +8,18 @@ export default {
     ],
     theme: {
         extend: {
+            colors: {
+                'vsl-red': '#CF181F',
+                'accent-primary': '#CF181F',
+                brand: {
+                    primary: '#CF181F',
+                    'primary-hover': '#A9141A',
+                    'primary-deep': '#7F0D12',
+                    'primary-light': '#FF7A7F',
+                    'primary-soft': '#FEF2F2',
+                    'primary-muted': '#FEE2E2',
+                },
+            },
             fontFamily: {
                 'poppins': ['Poppins', 'sans-serif'],
             },

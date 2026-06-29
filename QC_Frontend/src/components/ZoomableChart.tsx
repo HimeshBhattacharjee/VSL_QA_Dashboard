@@ -64,7 +64,7 @@ const ZoomableChart: React.FC<ZoomableChartProps> = ({ chartData, options, type 
             </div>
             <div className="text-center mt-4">
                 <button
-                    className="px-4 py-2 bg-gradient-to-r from-[#5b78fa] to-[#ceaaf2] border-transparent text-black cursor-pointer rounded-lg hover:-translate-y-0.5 hover:shadow-lg transition-colors duration-200"
+                    className="px-4 py-2 bg-brand-primary border-transparent text-white cursor-pointer rounded-lg hover:-translate-y-0.5 hover:bg-brand-primary-hover hover:shadow-lg transition-all duration-200"
                     onClick={handleResetZoom}
                 >
                     Reset Zoom

@@ -96,7 +96,7 @@ export default function ReportListControls({
                     value={searchTerm}
                     onChange={(event) => onSearchTermChange(event.target.value)}
                     placeholder={searchPlaceholder}
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -108,7 +108,7 @@ export default function ReportListControls({
                     id="report-list-sort"
                     value={sortOption}
                     onChange={(event) => onSortOptionChange(event.target.value as ReportSortOption)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                     aria-label="Sort reports"
                 >
                     <option value="newest-created">Newest Created</option>

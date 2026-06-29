@@ -2,6 +2,17 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+    --color-vsl-red: #CF181F;
+    --color-accent-primary: #CF181F;
+    --color-brand-primary: #CF181F;
+    --color-brand-primary-hover: #A9141A;
+    --color-brand-primary-deep: #7F0D12;
+    --color-brand-primary-light: #FF7A7F;
+    --color-brand-primary-soft: #FEF2F2;
+    --color-brand-primary-muted: #FEE2E2;
+}
+
 @layer base {
     body {
         @apply font-["poppins"];
@@ -68,7 +79,7 @@
 
 .adhesion-editable:hover,
 .gel-editable:hover {
-    border-color: #3498db;
+    border-color: var(--color-brand-primary);
 }
 
 .adhesion-data-cell,

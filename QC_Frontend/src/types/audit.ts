@@ -54,7 +54,12 @@ export interface SampleGroupedValue {
     sampleGroups: SampleGroupedGroupValue[];
 }
 
-export type ObservationValue = string | Record<string, string> | Record<string, Record<string, string>> | SampleGroupedValue;
+export type ObservationValue =
+    | string
+    | Record<string, string>
+    | Record<string, Record<string, string>>
+    | Record<string, Record<string, Record<string, string>>>
+    | SampleGroupedValue;
 
 export interface ObservationData {
     timeSlot: string;
@@ -71,6 +76,8 @@ export interface ObservationRenderProps {
     value: ObservationValue;
     observationData: ObservationData;
     onUpdate: (stageId: number, paramId: string, timeSlot: string, value: ObservationValue) => void;
+    auditDate?: string;
+    auditShift?: string;
     lineOptions?: string[];
     onLineMappingUpdate?: (stageId: number, paramId: string, timeSlot: string, groupKey: string, selectedLine: string) => void;
 }

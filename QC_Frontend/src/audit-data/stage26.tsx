@@ -125,7 +125,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type)} ${className}`}
+            className={`w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary ${getBackgroundColor(value, type)} ${className}`}
         >
             {options.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -146,7 +146,7 @@ const InputComponents = {
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type)} ${className}`}
+                className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary text-center ${getBackgroundColor(value, type)} ${className}`}
             />
         </div>
     ),
@@ -160,7 +160,7 @@ const InputComponents = {
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, 'date')} ${className}`}
+            className={`px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary text-center ${getBackgroundColor(value, 'date')} ${className}`}
         />
     )
 };

@@ -280,18 +280,18 @@ const Admin = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-brand-primary-deep/40 dark:to-slate-900 flex items-center justify-center">
                 <div className="text-gray-800 dark:text-white text-xl">Loading...</div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-200 via-purple-100 to-gray-200 dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 relative overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-gray-200 via-brand-primary-soft to-gray-200 dark:from-slate-900 dark:via-brand-primary-deep/40 dark:to-slate-900 relative overflow-hidden">
             <div className="absolute inset-0 overflow-hidden block">
-                <div className="absolute -top-40 -right-32 w-80 h-80 bg-purple-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-                <div className="absolute -bottom-40 -left-32 w-80 h-80 bg-blue-500 rounded-full blur-3xl opacity-20 animate-pulse delay-1000"></div>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500 rounded-full blur-3xl opacity-10 animate-pulse delay-500"></div>
+                <div className="absolute -top-40 -right-32 w-80 h-80 bg-brand-primary rounded-full blur-3xl opacity-20 animate-pulse"></div>
+                <div className="absolute -bottom-40 -left-32 w-80 h-80 bg-brand-primary-hover rounded-full blur-3xl opacity-20 animate-pulse delay-1000"></div>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-primary-light rounded-full blur-3xl opacity-10 animate-pulse delay-500"></div>
             </div>
             <Header onToggleSidebar={() => {}} />
             {editingUser && (
@@ -313,7 +313,7 @@ const Admin = () => {
                                         onChange={handleEditInputChange}
                                         required
                                         disabled={isSavingEdit}
-                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                                         placeholder="Enter employee name"
                                     />
                                 </div>
@@ -328,7 +328,7 @@ const Admin = () => {
                                         onChange={handleEditInputChange}
                                         required
                                         disabled={isSavingEdit}
-                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                                         placeholder="Enter employee ID"
                                     />
                                 </div>
@@ -342,7 +342,7 @@ const Admin = () => {
                                         onChange={handleEditInputChange}
                                         required
                                         disabled={isSavingEdit}
-                                        className="w-full cursor-pointer appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                                        className="w-full cursor-pointer appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-900 transition-all duration-300 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                                     >
                                         {EDITABLE_ROLES.map((role) => (
                                             <option key={role} value={role}>{role}</option>
@@ -362,7 +362,7 @@ const Admin = () => {
                                 <button
                                     type="submit"
                                     disabled={isSavingEdit}
-                                    className="rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:from-purple-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="rounded-xl bg-gradient-to-r from-brand-primary to-brand-primary-hover px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:from-brand-primary-hover hover:to-brand-primary-deep disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     {isSavingEdit ? 'Saving...' : 'Save Changes'}
                                 </button>
@@ -382,13 +382,13 @@ const Admin = () => {
                             }`}
                     >
                         <div
-                            className={`bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'create' ? 'h-auto' : 'cursor-pointer hover:shadow-xl dark:hover:shadow-purple-900/30 transition-shadow duration-300'
+                            className={`bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'create' ? 'h-auto' : 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-primary-deep/30 transition-shadow duration-300'
                                 }`}
                             onClick={() => !activeTab && setActiveTab('create')}
                         >
                             <div className={`p-6 md:p-8 ${activeTab === 'create' ? 'text-left' : 'text-center'} ${activeTab === 'create'
-                                ? 'bg-gradient-to-r from-cyan-500 to-blue-500'
-                                : 'bg-gradient-to-r from-cyan-600 to-blue-600'
+                                ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover'
+                                : 'bg-gradient-to-r from-brand-primary-hover to-brand-primary-deep'
                                 }`}>
                                 <div className={`flex flex-wrap items-center gap-4 ${activeTab === 'create' ? 'justify-start' : 'justify-center'}`}>
                                     {activeTab === 'create' && (
@@ -398,7 +398,7 @@ const Admin = () => {
                                                 event.stopPropagation();
                                                 collapseActivePanel();
                                             }}
-                                            className={`${topBackButtonClass} hover:shadow-cyan-900/30`}
+                                            className={`${topBackButtonClass} hover:shadow-brand-primary-deep/30`}
                                         >
                                             <ChevronLeft className="w-8 h-8"/>
                                         </button>
@@ -428,7 +428,7 @@ const Admin = () => {
                                                         value={newUser.name}
                                                         onChange={handleInputChange}
                                                         required
-                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-cyan-500 dark:focus:border-cyan-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-brand-primary dark:focus:border-brand-primary text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 focus:ring-2 focus:ring-brand-primary/20 focus:outline-none"
                                                         placeholder="Enter full name"
                                                     />
                                                 </div>
@@ -443,7 +443,7 @@ const Admin = () => {
                                                         value={newUser.employeeId}
                                                         onChange={handleInputChange}
                                                         required
-                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-cyan-500 dark:focus:border-cyan-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-brand-primary dark:focus:border-brand-primary text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 focus:ring-2 focus:ring-brand-primary/20 focus:outline-none"
                                                         placeholder="Enter employee ID"
                                                     />
                                                 </div>
@@ -456,7 +456,7 @@ const Admin = () => {
                                                         name="role"
                                                         value={newUser.role}
                                                         onChange={handleInputChange}
-                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-cyan-500 dark:focus:border-cyan-500 text-gray-900 dark:text-white transition-all duration-300 cursor-pointer focus:ring-2 focus:ring-cyan-500/20 focus:outline-none appearance-none"
+                                                        className="w-full px-4 py-3 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:border-brand-primary dark:focus:border-brand-primary text-gray-900 dark:text-white transition-all duration-300 cursor-pointer focus:ring-2 focus:ring-brand-primary/20 focus:outline-none appearance-none"
                                                     >
                                                         <option value="Operator">Operator</option>
                                                         <option value="Supervisor">Supervisor</option>
@@ -485,7 +485,7 @@ const Admin = () => {
                                             <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-4">
                                                 <button
                                                     type="submit"
-                                                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-6 sm:px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-cyan-500/25 dark:hover:shadow-cyan-500/40 cursor-pointer w-full sm:w-auto"
+                                                    className="bg-gradient-to-r from-brand-primary to-brand-primary-hover hover:from-brand-primary-hover hover:to-brand-primary-deep text-white font-semibold py-3 px-6 sm:px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-brand-primary/25 dark:hover:shadow-brand-primary/40 cursor-pointer w-full sm:w-auto"
                                                 >
                                                     Create User
                                                 </button>
@@ -505,14 +505,14 @@ const Admin = () => {
                                 <div className="p-6 md:p-8 text-center">
                                     <p className="text-gray-600 dark:text-gray-400 text-base md:text-lg mb-4">Click to create new users</p>
                                     <div className="flex justify-center space-x-2">
-                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce delay-150"></div>
-                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce delay-300"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce delay-150"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce delay-300"></div>
                                     </div>
                                 </div>
                             )}
                         </div>
-                        <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-cyan-500 to-blue-500 blur-xl opacity-20 -z-10 transition-all duration-1000 hidden dark:block ${activeTab === 'create' ? 'scale-105 animate-pulse' : 'scale-95'
+                        <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-brand-primary to-brand-primary-hover blur-xl opacity-20 -z-10 transition-all duration-1000 hidden dark:block ${activeTab === 'create' ? 'scale-105 animate-pulse' : 'scale-95'
                             }`}></div>
                     </div>
 
@@ -526,13 +526,13 @@ const Admin = () => {
                             }`}
                     >
                         <div
-                            className={`bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'manage' ? 'h-auto' : 'cursor-pointer hover:shadow-xl dark:hover:shadow-purple-900/30 transition-shadow duration-300'
+                            className={`bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-2xl overflow-hidden backdrop-blur-lg ${activeTab === 'manage' ? 'h-auto' : 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-primary-deep/30 transition-shadow duration-300'
                                 }`}
                             onClick={() => !activeTab && setActiveTab('manage')}
                         >
                             <div className={`p-6 md:p-8 ${activeTab === 'manage' ? 'text-left' : 'text-center'} ${activeTab === 'manage'
-                                ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                                : 'bg-gradient-to-r from-purple-600 to-pink-600'
+                                ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover'
+                                : 'bg-gradient-to-r from-brand-primary-hover to-brand-primary-deep'
                                 }`}>
                                 <div className={`flex flex-wrap items-center gap-4 ${activeTab === 'manage' ? 'justify-start' : 'justify-center'}`}>
                                     {activeTab === 'manage' && (
@@ -542,7 +542,7 @@ const Admin = () => {
                                                 event.stopPropagation();
                                                 collapseActivePanel();
                                             }}
-                                            className={`${topBackButtonClass} hover:shadow-purple-900/30`}
+                                            className={`${topBackButtonClass} hover:shadow-brand-primary-deep/30`}
                                         >
                                             <ChevronLeft className="w-8 h-8"/>
                                         </button>
@@ -575,7 +575,7 @@ const Admin = () => {
                                                     value={searchQuery}
                                                     onChange={(e) => setSearchQuery(e.target.value)}
                                                     placeholder="Search users"
-                                                    className="w-full rounded-xl border-2 border-gray-200 bg-white py-3 pl-11 pr-4 text-gray-900 transition-all duration-300 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:focus:border-purple-400"
+                                                    className="w-full rounded-xl border-2 border-gray-200 bg-white py-3 pl-11 pr-4 text-gray-900 transition-all duration-300 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:focus:border-brand-primary-light"
                                                 />
                                                 <svg
                                                     className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
@@ -617,7 +617,7 @@ const Admin = () => {
                                                             <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors duration-200">
                                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                                     <div className="flex items-center">
-                                                                        <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                                                        <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-brand-primary to-brand-primary-hover rounded-full flex items-center justify-center text-white font-semibold text-sm">
                                                                             {user.avatar}
                                                                         </div>
                                                                         <div className="ml-4">
@@ -636,7 +636,7 @@ const Admin = () => {
                                                                         </span>
                                                                         <button
                                                                             onClick={() => togglePasswordVisibility(user.id)}
-                                                                            className="text-gray-500 dark:text-gray-400 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors duration-200 cursor-pointer"
+                                                                            className="text-gray-500 dark:text-gray-400 hover:text-brand-primary dark:hover:text-brand-primary-light transition-colors duration-200 cursor-pointer"
                                                                             type="button"
                                                                         >
                                                                             {visiblePasswords[user.id] ? (
@@ -659,10 +659,10 @@ const Admin = () => {
                                                                     <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${isSystemAdministrator(user)
                                                                         ? 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-100'
                                                                         : user.role === 'Operator'
-                                                                            ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-100'
+                                                                            ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-100'
                                                                             : user.role === 'Supervisor' 
-                                                                            ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-800 dark:text-purple-100' 
-                                                                            : 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-100'
+                                                                            ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-100' 
+                                                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-100'
                                                                         }`}>
                                                                         {user.role}
                                                                     </span>
@@ -699,7 +699,7 @@ const Admin = () => {
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => openEditUser(user)}
-                                                                                className="text-blue-600 dark:text-blue-500 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-200 font-semibold cursor-pointer ml-3"
+                                                                                className="text-brand-primary dark:text-brand-primary-light hover:text-brand-primary-hover dark:hover:text-brand-primary-light transition-colors duration-200 font-semibold cursor-pointer ml-3"
                                                                                 title="Edit user"
                                                                             >
                                                                                 <Pencil className="w-4 h-4" />
@@ -746,14 +746,14 @@ const Admin = () => {
                                 <div className="p-6 md:p-8 text-center">
                                     <p className="text-gray-600 dark:text-gray-400 text-base md:text-lg mb-4">Click to manage existing users</p>
                                     <div className="flex justify-center space-x-2">
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-150"></div>
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-300"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce delay-150"></div>
+                                        <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce delay-300"></div>
                                     </div>
                                 </div>
                             )}
                         </div>
-                        <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500 to-pink-500 blur-xl opacity-20 -z-10 transition-all duration-1000 hidden dark:block ${activeTab === 'manage' ? 'scale-105 animate-pulse' : 'scale-95'
+                        <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r from-brand-primary to-brand-primary-hover blur-xl opacity-20 -z-10 transition-all duration-1000 hidden dark:block ${activeTab === 'manage' ? 'scale-105 animate-pulse' : 'scale-95'
                             }`}></div>
                     </div>
                 </div>
@@ -763,8 +763,8 @@ const Admin = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 p-4 md:p-8">
                         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md dark:shadow-xl border border-gray-200 dark:border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
-                                <div className="p-3 bg-cyan-100 dark:bg-cyan-500/20 rounded-xl">
-                                    <svg className="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="p-3 bg-brand-primary-soft dark:bg-brand-primary/15 rounded-xl">
+                                    <svg className="w-6 h-6 text-brand-primary dark:text-brand-primary-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                                     </svg>
                                 </div>
@@ -793,8 +793,8 @@ const Admin = () => {
 
                         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md dark:shadow-xl border border-gray-200 dark:border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
-                                <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl">
-                                    <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="p-3 bg-brand-primary-soft dark:bg-brand-primary/15 rounded-xl">
+                                    <svg className="w-6 h-6 text-brand-primary dark:text-brand-primary-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
@@ -810,8 +810,8 @@ const Admin = () => {
 
                         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md dark:shadow-xl border border-gray-200 dark:border-slate-700 backdrop-blur-lg">
                             <div className="flex items-center">
-                                <div className="p-3 bg-purple-100 dark:bg-purple-500/20 rounded-xl">
-                                    <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="p-3 bg-brand-primary-soft dark:bg-brand-primary/15 rounded-xl">
+                                    <svg className="w-6 h-6 text-brand-primary dark:text-brand-primary-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
                                 </div>

@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query
@@ -36,6 +36,13 @@ SORT_FIELDS = {
 }
 
 ALLOWED_SHIFTS = {"A", "B", "C"}
+AUDIT_PEEL_POSITION_COUNT = 16
+AUDIT_PEEL_RIBBON_COUNT = 7
+AUDIT_PEEL_SIDES = ("Front", "Back")
+AUDIT_PEEL_SIDE_RESPONSE_KEYS = {
+    "Front": "frontSide",
+    "Back": "backSide",
+}
 
 
 def _normalize_month_filter(month: Optional[str]) -> Optional[str]:
@@ -60,6 +67,94 @@ def _normalize_shift_filter(value: Optional[str]) -> Optional[str]:
     if compact not in ALLOWED_SHIFTS:
         raise HTTPException(status_code=400, detail="Shift must be one of Shift-A, Shift-B, or Shift-C")
     return compact
+
+
+def _normalize_unit_key(value: Any) -> str:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return ""
+    return re.sub(r"^UNIT\s*-?\s*", "", raw).strip()
+
+
+def _numeric_measurement(value: Any) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sample_result_measurements(record: Dict[str, Any], side: str, position: int) -> List[float]:
+    sample_results = record.get("sample_results")
+    if not isinstance(sample_results, list):
+        return []
+
+    values: List[float] = []
+    for item in sample_results:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("side") or "").strip().lower() != side.lower():
+            continue
+        try:
+            bus_pad_position = int(item.get("bus_pad_position"))
+        except (TypeError, ValueError):
+            continue
+        if bus_pad_position != position:
+            continue
+        numeric_value = _numeric_measurement(item.get("value"))
+        if numeric_value is not None:
+            values.append(numeric_value)
+    return values
+
+
+def _flat_measurements(record: Dict[str, Any], side: str, position: int) -> List[float]:
+    values: List[float] = []
+    for ribbon in range(1, AUDIT_PEEL_RIBBON_COUNT + 1):
+        numeric_value = _numeric_measurement(record.get(f"{side}_{position}_{ribbon}"))
+        if numeric_value is not None:
+            values.append(numeric_value)
+    return values
+
+
+def _position_measurements(record: Dict[str, Any], side: str, position: int) -> List[float]:
+    sample_values = _sample_result_measurements(record, side, position)
+    if sample_values:
+        return sample_values
+    return _flat_measurements(record, side, position)
+
+
+def _build_audit_side_values(record: Dict[str, Any], side: str) -> Dict[str, str]:
+    side_values: Dict[str, str] = {}
+    for position in range(1, AUDIT_PEEL_POSITION_COUNT + 1):
+        values = _position_measurements(record, side, position)
+        if values:
+            side_values[str(position)] = f"{sum(values) / len(values):.2f}"
+    return side_values
+
+
+def _audit_stringer_key(record: Dict[str, Any]) -> Optional[str]:
+    raw_stringer = record.get("Stringer", record.get("stringer"))
+    try:
+        return f"Stringer-{int(raw_stringer)}"
+    except (TypeError, ValueError):
+        return None
+
+
+def _audit_projection() -> Dict[str, int]:
+    projection = {
+        "_id": 0,
+        "Stringer": 1,
+        "stringer": 1,
+        "Unit": 1,
+        "unit": 1,
+        "sample_results": 1,
+    }
+    for side in AUDIT_PEEL_SIDES:
+        for position in range(1, AUDIT_PEEL_POSITION_COUNT + 1):
+            for ribbon in range(1, AUDIT_PEEL_RIBBON_COUNT + 1):
+                projection[f"{side}_{position}_{ribbon}"] = 1
+    return projection
 
 
 def _build_query(
@@ -184,6 +279,7 @@ async def peel_info():
             "POST /api/peel": "Create a peel test record",
             "PUT /api/peel/{id}": "Update a peel test record",
             "DELETE /api/peel/{id}": "Delete a peel test record",
+            "/audit/date/{date}/shift/{shift}": "Audit-ready peel strength values grouped by stringer and unit",
             "/date/{date}/shift/{shift}": "Compatibility endpoint for report generation",
             "/graph-data": "Compatibility endpoint for peel strength charts",
         },
@@ -343,6 +439,53 @@ async def get_data_by_date_and_shift(date: str, shift: str):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error fetching data: {str(exc)}")
+
+
+@peel_router.get("/audit/date/{date}/shift/{shift}")
+async def get_audit_peel_data_by_date_and_shift(date: str, shift: str):
+    try:
+        ensure_peel_indexes()
+        normalized_shift = _normalize_shift_filter(shift)
+        query = {
+            "date": _date_key(date),
+            "shift": {"$regex": f"^{re.escape(normalized_shift or '')}$", "$options": "i"},
+        }
+        cursor = peel_data_collection.find(query, _audit_projection()).sort(
+            [("Stringer", ASCENDING), ("Unit", ASCENDING), ("updated_at", DESCENDING)]
+        )
+
+        grouped_data: Dict[str, Dict[str, Dict[str, Dict[str, str]]]] = {}
+        record_count = 0
+        for record in cursor:
+            record_count += 1
+            stringer_key = _audit_stringer_key(record)
+            unit_key = _normalize_unit_key(record.get("Unit", record.get("unit")))
+            if not stringer_key or not unit_key:
+                continue
+
+            unit_data = grouped_data.setdefault(stringer_key, {}).setdefault(
+                unit_key,
+                {"frontSide": {}, "backSide": {}},
+            )
+            for side in AUDIT_PEEL_SIDES:
+                side_key = AUDIT_PEEL_SIDE_RESPONSE_KEYS[side]
+                side_values = _build_audit_side_values(record, side)
+                for position, value in side_values.items():
+                    unit_data[side_key].setdefault(position, value)
+
+        unit_count = sum(len(units) for units in grouped_data.values())
+        return {
+            "status": "success",
+            "date": _date_key(date),
+            "shift": normalized_shift,
+            "record_count": record_count,
+            "count": unit_count,
+            "data": grouped_data,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error fetching audit peel data: {str(exc)}")
 
 
 @peel_router.get("/graph-data")

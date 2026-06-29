@@ -20,7 +20,7 @@ const LaminateInspectionObservations = {
                     isOutOfRange = numericValue < 12;
                     break;
                 case "16-6":
-                    isOutOfRange = numericValue < 10 || numericValue > 20;
+                    isOutOfRange = numericValue < 8 || numericValue > 18;
                     break;
                 default:
                     isOutOfRange = false;
@@ -36,7 +36,7 @@ const LaminateInspectionObservations = {
                     type="text"
                     value={value}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full min-w-0 px-3 py-2 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${bgColor}`}
+                    className={`w-full min-w-0 px-3 py-2 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${bgColor}`}
                 />
                 <span className="text-xs text-gray-500 mt-1">mm</span>
             </div>
@@ -96,7 +96,7 @@ export const laminateInspectionStage: StageData = {
         {
             id: "16-6",
             parameters: "Space between 2 portion of half cut cell module",
-            criteria: "Middle gap 15 ± 5 mm",
+            criteria: "Middle gap 13 ± 5 mm",
             typeOfInspection: "Measurements",
             inspectionFrequency: "Every 4 hours",
             observations: [{ timeSlot: "4 hours", value: "" }, { timeSlot: "8 hours", value: "" }],

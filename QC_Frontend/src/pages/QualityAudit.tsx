@@ -7,6 +7,7 @@ import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import ReportListControls, { ReportSortOption } from '../components/ReportListControls';
 import ReportPagination from '../components/ReportPagination';
+import BusRibbonAuditPeelStrengthInput from '../components/BusRibbonAuditPeelStrengthInput';
 import { createTabbingStringingStage } from '../audit-data/stage5';
 import { createAutoBussingStage } from '../audit-data/stage7';
 import { createAutoTapingNLayupStage } from '../audit-data/stage8';
@@ -20,7 +21,7 @@ import { createCuringStage } from '../audit-data/stage21';
 import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDot, X } from 'lucide-react';
 import {
     createTwentySampleValue,
     normalizeSampleGroupedValue,
@@ -32,6 +33,273 @@ const SAMPLE_GROUPED_STAGE_IDS = new Set([12, 16, 23, 27, 29]);
 const SAMPLE_GROUPED_PARAMETER_IDS = new Set(["12-1", "12-2", "16-1", "23-1", "27-1", "29-1"]);
 const SAMPLE_GROUP_KEYS = ["2h", "4h", "6h", "8h"] as const;
 const AUTOSAVE_DELAY_MS = 1200;
+const COMPLETION_METADATA_KEYS = new Set([
+    'schemaVersion',
+    'parameterId',
+    'sampleGroup',
+    'sampleNumber',
+    'sampleLabel',
+    'groupKey',
+    'groupLabel',
+    'order',
+    'selectedLine',
+]);
+
+type StageCompletionStatus = 'not_started' | 'in_progress' | 'completed';
+
+type CompletionCounts = {
+    userFilled: number;
+    userTotal: number;
+    systemFilled: number;
+    systemTotal: number;
+};
+
+interface CompletionMetadata {
+    treatEmptyAsComplete?: boolean;
+    systemKeyNames?: string[];
+    systemKeySuffixes?: string[];
+}
+
+const createEmptyCompletionCounts = (): CompletionCounts => ({
+    userFilled: 0,
+    userTotal: 0,
+    systemFilled: 0,
+    systemTotal: 0,
+});
+
+const addCompletionCounts = (left: CompletionCounts, right: CompletionCounts): CompletionCounts => ({
+    userFilled: left.userFilled + right.userFilled,
+    userTotal: left.userTotal + right.userTotal,
+    systemFilled: left.systemFilled + right.systemFilled,
+    systemTotal: left.systemTotal + right.systemTotal,
+});
+
+const DEFAULT_COMPLETED_PARAMETER_IDS = new Set([
+    '2-2',
+    '3-6',
+    '5-2',
+    '7-5',
+    '8-1',
+    '8-2',
+    '8-3',
+    '8-4',
+    '8-5',
+    '9-5',
+    '10-4',
+    '10-5',
+    '10-6',
+    '11-2',
+    '15-1',
+    '15-2',
+    '17-3',
+    '17-4',
+    '18-4',
+    '19-1',
+    '20-2',
+    '20-4',
+    '21-5',
+    '22-1',
+    '22-2',
+    '24-2',
+    '24-3',
+    '24-8',
+    '24-9',
+    '25-1',
+    '25-2',
+    '25-3',
+    '26-2',
+    '26-3',
+    '28-1',
+    '29-2',
+    '30-1',
+    '30-2',
+    '31-2',
+    '31-3',
+    '31-4',
+    '31-5',
+    '31-6',
+    '31-7',
+    '31-8',
+    '31-10',
+    '31-11',
+    '31-12',
+    '31-13',
+]);
+
+const AUDIT_COMPLETION_METADATA: Record<string, CompletionMetadata> = {
+    ...Object.fromEntries(
+        Array.from(DEFAULT_COMPLETED_PARAMETER_IDS).map(parameterId => [
+            parameterId,
+            { treatEmptyAsComplete: true },
+        ]),
+    ),
+    '18-1': { systemKeySuffixes: ['-type'] },
+    '20-3': { systemKeySuffixes: ['-Ratio'] },
+    '26-1': { systemKeySuffixes: ['-4hrs', '-8hrs'] },
+};
+
+const isRecordValue = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isEmptyCompletionValue = (value: unknown) =>
+    value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+
+const hasFilledCompletionValue = (value: unknown) => !isEmptyCompletionValue(value);
+
+const isCompletionSystemPath = (path: string[], metadata?: CompletionMetadata) => {
+    if (!metadata) return false;
+
+    const leafKey = path[path.length - 1] || '';
+    return Boolean(
+        metadata.treatEmptyAsComplete ||
+        metadata.systemKeyNames?.includes(leafKey) ||
+        metadata.systemKeySuffixes?.some(suffix => leafKey.endsWith(suffix)),
+    );
+};
+
+const getCompletionFieldCounts = (
+    value: unknown,
+    baselineValue: unknown,
+    metadata: CompletionMetadata | undefined,
+    path: string[],
+): CompletionCounts => {
+    const isSystemPath = isCompletionSystemPath(path, metadata);
+    const isSameBaselineDefault =
+        hasFilledCompletionValue(value) &&
+        hasFilledCompletionValue(baselineValue) &&
+        JSON.stringify(value) === JSON.stringify(baselineValue);
+    const isSystemField = isSystemPath || isSameBaselineDefault;
+    const isFilled = hasFilledCompletionValue(value) || isSystemPath;
+
+    if (isSystemField) {
+        return {
+            userFilled: 0,
+            userTotal: 0,
+            systemFilled: isFilled ? 1 : 0,
+            systemTotal: 1,
+        };
+    }
+
+    return {
+        userFilled: isFilled ? 1 : 0,
+        userTotal: 1,
+        systemFilled: 0,
+        systemTotal: 0,
+    };
+};
+
+const getSectionOffCompletionCounts = (
+    sectionValue: Record<string, unknown>,
+    recipeKey: string,
+    baselineValue: unknown,
+    metadata: CompletionMetadata | undefined,
+    path: string[],
+) => getObservationCompletionCounts(
+    sectionValue[recipeKey],
+    isRecordValue(baselineValue) ? baselineValue[recipeKey] : undefined,
+    metadata,
+    [...path, recipeKey],
+);
+
+const getObservationCompletionCounts = (
+    value: unknown,
+    baselineValue?: unknown,
+    metadata?: CompletionMetadata,
+    path: string[] = [],
+): CompletionCounts => {
+    if (typeof value === 'string') {
+        return getCompletionFieldCounts(value, baselineValue, metadata, path);
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return getCompletionFieldCounts(value, baselineValue, metadata, path);
+        const baselineItems = Array.isArray(baselineValue) ? baselineValue : [];
+        return value.reduce(
+            (counts, item, index) => {
+                const itemCounts = getObservationCompletionCounts(item, baselineItems[index], metadata, [...path, String(index)]);
+                return addCompletionCounts(counts, itemCounts);
+            },
+            createEmptyCompletionCounts()
+        );
+    }
+
+    if (isRecordValue(value)) {
+        const baselineObject = isRecordValue(baselineValue) ? baselineValue : {};
+        const entries = Array.from(new Set([
+            ...Object.keys(value),
+            ...Object.keys(baselineObject),
+        ])).filter(key => !COMPLETION_METADATA_KEYS.has(key));
+        if (entries.length === 0) return getCompletionFieldCounts(value, baselineValue, metadata, path);
+
+        return entries.reduce(
+            (counts, key) => {
+                const nestedValue = value[key];
+                const nestedBaselineValue = baselineObject[key];
+
+                if (
+                    key === 'upper' &&
+                    isRecordValue(nestedValue) &&
+                    String(nestedValue.selectedRecipeUpper || '').toUpperCase() === 'OFF'
+                ) {
+                    return addCompletionCounts(
+                        counts,
+                        getSectionOffCompletionCounts(nestedValue, 'selectedRecipeUpper', nestedBaselineValue, metadata, [...path, key]),
+                    );
+                }
+
+                if (
+                    key === 'lower' &&
+                    isRecordValue(nestedValue) &&
+                    String(nestedValue.selectedRecipeLower || '').toUpperCase() === 'OFF'
+                ) {
+                    return addCompletionCounts(
+                        counts,
+                        getSectionOffCompletionCounts(nestedValue, 'selectedRecipeLower', nestedBaselineValue, metadata, [...path, key]),
+                    );
+                }
+
+                const nestedCounts = getObservationCompletionCounts(nestedValue, nestedBaselineValue, metadata, [...path, key]);
+                return addCompletionCounts(counts, nestedCounts);
+            },
+            createEmptyCompletionCounts()
+        );
+    }
+
+    return getCompletionFieldCounts(value, baselineValue, metadata, path);
+};
+
+const getStageCompletionStatus = (stage: StageData, baselineStage?: StageData): StageCompletionStatus => {
+    const counts = stage.parameters.reduce(
+        (stageCounts, parameter) => {
+            const baselineParameter = baselineStage?.parameters.find(item => item.id === parameter.id);
+            const metadata = AUDIT_COMPLETION_METADATA[parameter.id];
+
+            return parameter.observations.reduce(
+                (parameterCounts, observation) => {
+                    const baselineObservation = baselineParameter?.observations.find(item => item.timeSlot === observation.timeSlot);
+                    const observationCounts = getObservationCompletionCounts(
+                        observation.value,
+                        baselineObservation?.value,
+                        metadata,
+                    );
+                    return addCompletionCounts(parameterCounts, observationCounts);
+                },
+                stageCounts
+            );
+        },
+        createEmptyCompletionCounts()
+    );
+
+    if (counts.userTotal === 0) {
+        return counts.systemTotal > 0 && counts.systemFilled === counts.systemTotal
+            ? 'completed'
+            : 'not_started';
+    }
+
+    if (counts.userFilled === 0) return 'not_started';
+    if (counts.userFilled === counts.userTotal && counts.systemFilled === counts.systemTotal) return 'completed';
+    return 'in_progress';
+};
 
 type AuditWorkflowState = 'draft' | 'submitted' | 'returned';
 
@@ -45,6 +313,9 @@ const formatTimestamp = (value?: string | number | null) =>
     value ? new Date(value).toLocaleString() : '-';
 
 const getDynamicLineOptions = (lineNumber: string) => lineNumber === 'II' ? ['3', '4'] : ['1', '2'];
+
+const getBusRibbonAuditLineOptions = (lineNumber: string) =>
+    lineNumber === 'II' ? ['Line-4', 'Line-5'] : ['Line-1', 'Line-2', 'Line-3'];
 
 const getSelectedLineFromSlot = (timeSlot: string) => timeSlot.replace('Line-', '');
 
@@ -1596,12 +1867,18 @@ export default function QualityAudit() {
 
     const canProceedFromBasicInfo = isBasicInfoComplete() && (currentChecksheetId !== null || canCreateChecksheet) && !isLoading;
 
-    const stageButtons = Array.from({ length: 31 }, (_, index) => ({
-        id: index + 1,
-        label: `Stage ${index + 1}`,
-        enabled: index < 31,
-        hasUnsavedChanges: stageChanges.has(index + 1)
-    }));
+    const baselineStagesById = useMemo(
+        () => new Map(lineDependentStages.map(stage => [stage.id, stage])),
+        [lineDependentStages]
+    );
+
+    const stageButtons = useMemo(() => auditData.stages.map(stage => ({
+        id: stage.id,
+        label: stage.name || `Stage ${stage.id}`,
+        enabled: true,
+        hasUnsavedChanges: stageChanges.has(stage.id),
+        completionStatus: getStageCompletionStatus(stage, baselineStagesById.get(stage.id)),
+    })), [auditData.stages, baselineStagesById, stageChanges]);
 
     const getStateBadgeClass = (state: AuditWorkflowState) => {
         if (state === 'submitted') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
@@ -1679,7 +1956,7 @@ export default function QualityAudit() {
                                                         {formatWorkflowState(state)}
                                                     </span>
                                                     {checksheet.lineNumber && (
-                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                                                        <span className="rounded-full bg-brand-primary-soft px-2 py-0.5 text-xs font-semibold text-brand-primary dark:bg-brand-primary/15 dark:text-brand-primary-light">
                                                             Line {checksheet.lineNumber}
                                                         </span>
                                                     )}
@@ -1704,7 +1981,7 @@ export default function QualityAudit() {
                                             </div>
                                             <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
                                                 <button
-                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-blue-500 dark:bg-blue-600 text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-brand-primary dark:bg-brand-primary text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                                     onClick={() => canExport && exportSavedReportToExcel(index)}
                                                     disabled={!canExport}
                                                     title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
@@ -1771,7 +2048,7 @@ export default function QualityAudit() {
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 dark:border-blue-400 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary dark:border-brand-primary-light mx-auto"></div>
                             <p className="mt-2 text-gray-700 dark:text-gray-300">
                                 Loading...
                             </p>
@@ -1792,7 +2069,7 @@ export default function QualityAudit() {
                                     if (returnCommentError) setReturnCommentError('');
                                 }}
                                 rows={4}
-                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                                 placeholder="Enter correction comments"
                             />
                             {returnCommentError && (
@@ -1822,21 +2099,21 @@ export default function QualityAudit() {
                                 clearCurrentChecksheet();
                                 setActiveTab('create-edit');
                             }}
-                            className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         >
                             Create Checksheet
                         </button>
                     )}
                     <button
                         onClick={() => setActiveTab('saved-reports')}
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                     >
                         Submitted/Draft Checksheets
                     </button>
                     {isOperatorRole && returnedChecksheetsTotal > 0 && (
                         <button
                             onClick={() => setActiveTab('returned-reports')}
-                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-blue-500 border-b-2 border-b-blue-500 translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
                         >
                             Returned Checksheets
                             <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
@@ -1863,7 +2140,7 @@ export default function QualityAudit() {
                                         {formatWorkflowState(currentWorkflowState)}
                                     </span>
                                     {isAutosaving && (
-                                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-300">
+                                        <span className="ml-2 text-xs text-brand-primary dark:text-brand-primary-light">
                                             Auto-saving...
                                         </span>
                                     )}
@@ -1871,7 +2148,7 @@ export default function QualityAudit() {
                             )}
                             {canEditCurrentChecksheet && (
                                 <button
-                                    className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-primary hover:bg-brand-primary-hover'}`}
                                     onClick={saveChecksheet}
                                     disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet}
                                     title={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'Prepared By signature is required before submission' : undefined}
@@ -1915,9 +2192,10 @@ export default function QualityAudit() {
                                                 <select
                                                     value={auditData.lineNumber}
                                                     onChange={(e) => handleLineChange(e.target.value)}
-                                                    className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                    className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                                 >
                                                     <option value="">Select</option>
+                                                    <option value="I">I</option>
                                                     <option value="II">II</option>
                                                 </select>
                                             </div>
@@ -1928,7 +2206,7 @@ export default function QualityAudit() {
                                                 type="date"
                                                 value={auditData.date}
                                                 onChange={(e) => updateBasicInfo('date', e.target.value)}
-                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
                                         <div className="w-full sm:w-[48%]">
@@ -1936,7 +2214,7 @@ export default function QualityAudit() {
                                             <select
                                                 value={auditData.shift}
                                                 onChange={(e) => updateBasicInfo('shift', e.target.value)}
-                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             >
                                                 <option value="">Select Shift</option>
                                                 <option value="A">Shift-A</option>
@@ -1953,7 +2231,7 @@ export default function QualityAudit() {
                                                 type="text"
                                                 value={auditData.productionOrderNo}
                                                 onChange={(e) => updateBasicInfo('productionOrderNo', e.target.value)}
-                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
                                         <div className="w-full sm:w-[48%]">
@@ -1962,7 +2240,7 @@ export default function QualityAudit() {
                                                 type="text"
                                                 value={auditData.moduleType}
                                                 onChange={(e) => updateBasicInfo('moduleType', e.target.value)}
-                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 border focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
                                         <div className="w-full flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-10 mt-4">
@@ -1971,7 +2249,7 @@ export default function QualityAudit() {
                                                     type="checkbox"
                                                     checked={auditData.customerSpecAvailable}
                                                     onChange={(e) => updateBasicInfo('customerSpecAvailable', e.target.checked)}
-                                                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
+                                                    className="rounded border-gray-300 dark:border-gray-600 text-brand-primary dark:text-brand-primary-light hover:border-brand-primary-light w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Customer Specification Available</span>
                                             </label>
@@ -1980,7 +2258,7 @@ export default function QualityAudit() {
                                                     type="checkbox"
                                                     checked={auditData.specificationSignedOff}
                                                     onChange={(e) => updateBasicInfo('specificationSignedOff', e.target.checked)}
-                                                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 hover:border-blue-500 w-4 h-4 sm:w-5 sm:h-5"
+                                                    className="rounded border-gray-300 dark:border-gray-600 text-brand-primary dark:text-brand-primary-light hover:border-brand-primary-light w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Specification Signed Off With Customer</span>
                                             </label>
@@ -1991,7 +2269,7 @@ export default function QualityAudit() {
                                         <button
                                             onClick={handleNextFromBasicInfo}
                                             disabled={!canProceedFromBasicInfo}
-                                            className={`px-6 sm:px-8 py-2 sm:py-3 text-white rounded-lg transition-colors text-sm sm:text-lg font-semibold ${canProceedFromBasicInfo ? 'bg-blue-600 dark:bg-blue-700 cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
+                                            className={`px-6 sm:px-8 py-2 sm:py-3 text-white rounded-lg transition-colors text-sm sm:text-lg font-semibold ${canProceedFromBasicInfo ? 'bg-brand-primary dark:bg-brand-primary-hover cursor-pointer hover:bg-brand-primary-hover dark:hover:bg-brand-primary-hover' : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'}`}
                                             title={!canProceedFromBasicInfo ? 'Complete all required basic information before continuing' : undefined}
                                         >
                                             Next
@@ -2081,18 +2359,66 @@ export default function QualityAudit() {
                                                 key={button.id}
                                                 onClick={() => button.enabled && handleStageButtonClick(button.id)}
                                                 disabled={!button.enabled}
-                                                className={`p-3 sm:p-4 md:p-6 rounded-lg transition-all duration-300 transform hover:scale-105 relative ${button.enabled
-                                                    ? button.hasUnsavedChanges
-                                                        ? 'bg-orange-500 dark:bg-orange-600 text-white hover:bg-orange-600 dark:hover:bg-orange-500 cursor-pointer'
-                                                        : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600 cursor-pointer'
-                                                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                    }`}
+                                                className={`group relative flex min-h-24 flex-col items-center justify-center gap-2 rounded-md border bg-white px-3 pb-3 pt-10 text-center transition-all duration-200 sm:px-4 sm:pb-4 dark:bg-gray-800 ${
+                                                    button.enabled
+                                                        ? selectedStageId === button.id
+                                                            ? 'border-brand-primary bg-brand-primary-soft shadow-sm hover:bg-brand-primary-soft dark:border-brand-primary-light dark:bg-brand-primary/15'
+                                                            : button.completionStatus === 'completed'
+                                                                ? 'border-green-200 hover:border-brand-primary hover:bg-brand-primary-soft hover:shadow-sm dark:border-green-900/70 dark:hover:border-brand-primary-light dark:hover:bg-brand-primary/10'
+                                                                : button.completionStatus === 'in_progress'
+                                                                    ? 'border-amber-200 hover:border-brand-primary hover:bg-brand-primary-soft hover:shadow-sm dark:border-amber-900/70 dark:hover:border-brand-primary-light dark:hover:bg-brand-primary/10'
+                                                                    : 'border-slate-200 hover:border-brand-primary hover:bg-brand-primary-soft hover:shadow-sm dark:border-slate-700 dark:hover:border-brand-primary-light dark:hover:bg-brand-primary/10'
+                                                        : 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+                                                }`}
                                             >
-                                                <span className="text-xs sm:text-sm font-medium">
-                                                    {auditData.stages.find(stage => stage.id === button.id)?.name || button.label}
+                                                <span
+                                                    className={`text-xs font-semibold leading-5 transition-colors duration-200 sm:text-sm ${
+                                                        button.enabled
+                                                            ? selectedStageId === button.id
+                                                                ? 'text-brand-primary dark:text-brand-primary-light'
+                                                                : 'text-slate-700 group-hover:text-brand-primary dark:text-slate-200 dark:group-hover:text-brand-primary-light'
+                                                            : 'text-gray-400 dark:text-gray-500'
+                                                    }`}
+                                                >
+                                                    {button.label}
+                                                </span>
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={`absolute right-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded border px-1.5 ${
+                                                        button.completionStatus === 'completed'
+                                                            ? 'border-green-300 bg-green-100 text-green-700 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                            : button.completionStatus === 'in_progress'
+                                                                ? 'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                                : 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200'
+                                                    }`}
+                                                >
+                                                    {button.completionStatus === 'completed' ? (
+                                                        <CheckCircle2 className="h-4 w-4" />
+                                                    ) : button.completionStatus === 'in_progress' ? (
+                                                        <CircleDot className="h-4 w-4" />
+                                                    ) : (
+                                                        <Circle className="h-4 w-4" />
+                                                    )}
+                                                </span>
+                                                <span className={`text-[11px] font-medium sm:text-xs ${
+                                                    button.completionStatus === 'completed'
+                                                        ? 'text-green-600 dark:text-green-400'
+                                                        : button.completionStatus === 'in_progress'
+                                                            ? 'text-amber-600 dark:text-amber-400'
+                                                            : 'text-slate-500 dark:text-slate-400'
+                                                }`}>
+                                                    {button.completionStatus === 'completed'
+                                                        ? 'Completed'
+                                                        : button.completionStatus === 'in_progress'
+                                                            ? 'In Progress'
+                                                            : 'Not Started'}
                                                 </span>
                                                 {button.hasUnsavedChanges && (
-                                                    <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-yellow-400 dark:bg-yellow-500 rounded-full"></span>
+                                                    <span
+                                                        className="absolute left-2 top-2 h-2 w-2 rounded-full bg-amber-400"
+                                                        title="Changes are being auto-saved"
+                                                        aria-label="Changes are being auto-saved"
+                                                    />
                                                 )}
                                             </button>
                                         ))}
@@ -2102,7 +2428,7 @@ export default function QualityAudit() {
                         )}
                         {currentView === 'stageDetail' && selectedStageId && (
                             <div className="bg-transparent dark:bg-gray-800 rounded-lg overflow-hidden animate-fade-in max-h-[calc(100vh-7rem)] flex flex-col min-h-0">
-                                <div className="sticky top-0 z-30 bg-blue-600 dark:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">
+                                <div className="sticky top-0 z-30 bg-brand-primary dark:bg-brand-primary-hover text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">
                                     <h2 className="text-lg sm:text-xl font-semibold">
                                         {auditData.stages.find(stage => stage.id === selectedStageId)?.name || `Stage ${selectedStageId}`}
                                         {stageChanges.has(selectedStageId) && (
@@ -2120,14 +2446,14 @@ export default function QualityAudit() {
                                                     <button
                                                         onClick={() => previousStage && handleStageNavigation(previousStage.id)}
                                                         disabled={!previousStage}
-                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
+                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-brand-primary-hover dark:hover:bg-gray-800 dark:hover:text-brand-primary-light disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
                                                     >
                                                         <ChevronLeft />
                                                     </button>
                                                     <button
                                                         onClick={() => nextStage && handleStageNavigation(nextStage.id)}
                                                         disabled={!nextStage}
-                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
+                                                        className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-brand-primary-hover dark:hover:bg-gray-800 dark:hover:text-brand-primary-light disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20 disabled:hover:text-white"
                                                     >
                                                         <ChevronRight />
                                                     </button>
@@ -2136,7 +2462,7 @@ export default function QualityAudit() {
                                         })()}
                                         <button
                                             onClick={handleBackToStageSelection}
-                                            className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+                                            className="bg-white/20 dark:bg-gray-800/20 text-white border border-white dark:border-gray-300 px-3 sm:px-4 py-1 sm:py-2 rounded-lg cursor-pointer text-xs sm:text-sm font-bold transition-all duration-300 hover:bg-white hover:text-brand-primary-hover dark:hover:bg-gray-800 dark:hover:text-brand-primary-light"
                                         >
                                             <X />
                                         </button>
@@ -2170,7 +2496,7 @@ export default function QualityAudit() {
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white dark:bg-gray-800">
-                                                                <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
+                                                                <tr className="bg-brand-primary-soft dark:bg-brand-primary/10 font-bold">
                                                                     <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
                                                                         {param.parameters}
                                                                     </td>
@@ -2179,9 +2505,9 @@ export default function QualityAudit() {
                                                                     </td>
                                                                     <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-normal text-xs sm:text-sm text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
                                                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${param.typeOfInspection === 'Aesthetics' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                                                                            param.typeOfInspection === 'Measurements' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
-                                                                                param.typeOfInspection === 'Functionality' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
-                                                                                    param.typeOfInspection === 'RFID Scanner' ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300' :
+                                                                            ['Measurement', 'Measurements'].includes(param.typeOfInspection) ? 'bg-brand-primary-muted dark:bg-brand-primary/15 text-brand-primary-deep dark:text-brand-primary-light' :
+                                                                                param.typeOfInspection === 'Functionality' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' :
+                                                                                    param.typeOfInspection === 'RFID Scanner' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' :
                                                                                         'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                                                                             }`}>
                                                                             {param.typeOfInspection}
@@ -2219,7 +2545,7 @@ export default function QualityAudit() {
                                                                                                 <select
                                                                                                     value={savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot)}
                                                                                                     onChange={(e) => updateObservationLineSelection(selectedStageId, param.id, obs.timeSlot, e.target.value)}
-                                                                                                    className="px-1 py-0.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                                    className="px-1 py-0.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-primary"
                                                                                                 >
                                                                                                     {getDynamicLineOptions(auditData.lineNumber).map(line => (
                                                                                                         <option key={line} value={line}>{line}</option>
@@ -2229,7 +2555,20 @@ export default function QualityAudit() {
                                                                                         ) : (
                                                                                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">{obs.timeSlot}</label>
                                                                                         )}
-                                                                                        {param.renderObservation ? (
+                                                                                        {selectedStageId === 7 && param.id === '7-9' ? (
+                                                                                            <BusRibbonAuditPeelStrengthInput
+                                                                                                stageId={selectedStageId}
+                                                                                                paramId={param.id}
+                                                                                                timeSlot={obs.timeSlot}
+                                                                                                value={savedObservation?.value ?? obs.value}
+                                                                                                observationData={savedObservation ?? obs}
+                                                                                                onUpdate={updateObservation}
+                                                                                                auditDate={auditData.date}
+                                                                                                auditShift={auditData.shift}
+                                                                                                lineOptions={getBusRibbonAuditLineOptions(auditData.lineNumber)}
+                                                                                                onLineMappingUpdate={updateObservationLineMapping}
+                                                                                            />
+                                                                                        ) : param.renderObservation ? (
                                                                                             param.renderObservation({
                                                                                                 stageId: selectedStageId,
                                                                                                 paramId: param.id,
@@ -2237,6 +2576,8 @@ export default function QualityAudit() {
                                                                                                 value: savedObservation?.value ?? obs.value,
                                                                                                 observationData: savedObservation ?? obs,
                                                                                                 onUpdate: updateObservation,
+                                                                                                auditDate: auditData.date,
+                                                                                                auditShift: auditData.shift,
                                                                                                 lineOptions: getDynamicLineOptions(auditData.lineNumber),
                                                                                                 onLineMappingUpdate: updateObservationLineMapping
                                                                                             })
@@ -2248,7 +2589,7 @@ export default function QualityAudit() {
                                                                                                         value={(savedObservation?.value ?? obs.value) as string}
                                                                                                         onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
                                                                                                         placeholder="Enter value"
-                                                                                                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                                                                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                                                                                     />
                                                                                                 ) : (
                                                                                                     <div className="text-xs text-gray-500 dark:text-gray-400 p-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-900">

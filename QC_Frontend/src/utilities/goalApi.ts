@@ -1,5 +1,6 @@
 import {
     getCurrentFinancialYearQuarter,
+    getQuarterLifecycle,
     normalizeGoalDate,
     type GoalData,
     type GoalMilestone,
@@ -33,6 +34,7 @@ interface GoalApiRecord {
     originGoalId?: string | null;
     carryForwardSourceId?: string | null;
     carryForwardEligible?: boolean;
+    quarterLifecycle?: GoalData['quarterLifecycle'];
 }
 
 export interface GoalMutationMilestonePayload {
@@ -61,6 +63,8 @@ const normalizeMilestone = (milestone: GoalApiMilestoneRecord): GoalMilestone =>
 
 const normalizeGoal = (goal: GoalApiRecord): GoalData => {
     const fallbackQuarter = getCurrentFinancialYearQuarter();
+    const financialYear = goal.financialYear ?? fallbackQuarter.financialYear;
+    const quarter = goal.quarter ?? fallbackQuarter.quarter;
     const normalizedGoal: GoalData = {
         id: goal.id,
         title: goal.title,
@@ -68,8 +72,8 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         createdAt: goal.createdAt,
         milestones: goal.milestones.map(normalizeMilestone),
         goalStatus: goal.goalStatus ?? '',
-        financialYear: goal.financialYear ?? fallbackQuarter.financialYear,
-        quarter: goal.quarter ?? fallbackQuarter.quarter,
+        financialYear,
+        quarter,
         isDropped: goal.isDropped ?? false,
         droppedAt: goal.droppedAt ?? undefined,
         droppedBy: goal.droppedBy ?? undefined,
@@ -78,6 +82,7 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         originGoalId: goal.originGoalId ?? undefined,
         carryForwardSourceId: goal.carryForwardSourceId ?? undefined,
         carryForwardEligible: goal.carryForwardEligible ?? false,
+        quarterLifecycle: goal.quarterLifecycle ?? getQuarterLifecycle(financialYear, quarter),
     };
 
     return normalizedGoal;

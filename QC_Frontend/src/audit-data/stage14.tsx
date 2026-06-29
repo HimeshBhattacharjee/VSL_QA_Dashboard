@@ -118,7 +118,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
     }, [localData, updateParent]);
 
     const getSelectClassName = (isOff: boolean): string => {
-        const baseClass = "px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-white shadow-sm";
+        const baseClass = "px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary bg-white shadow-sm";
         return isOff ? `${baseClass} bg-yellow-100` : baseClass;
     };
 
@@ -176,7 +176,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
                                         type="text"
                                         value={data[`Chamber_${chamberNum}_Pumping`] || ''}
                                         onChange={(e) => onUpdate(`Chamber_${chamberNum}_Pumping`, e.target.value)}
-                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_Pumping`] || '')}`}
+                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary ${getBackgroundColor(data[`Chamber_${chamberNum}_Pumping`] || '')}`}
                                     />
                                 </div>
                                 <div className="col-span-1">
@@ -184,7 +184,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
                                         type="text"
                                         value={data[`Chamber_${chamberNum}_PressingCooling`] || ''}
                                         onChange={(e) => onUpdate(`Chamber_${chamberNum}_PressingCooling`, e.target.value)}
-                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_PressingCooling`] || '')}`}
+                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary ${getBackgroundColor(data[`Chamber_${chamberNum}_PressingCooling`] || '')}`}
                                     />
                                 </div>
                                 <div className="col-span-1">
@@ -192,7 +192,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
                                         type="text"
                                         value={data[`Chamber_${chamberNum}_Venting`] || ''}
                                         onChange={(e) => onUpdate(`Chamber_${chamberNum}_Venting`, e.target.value)}
-                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_Venting`] || '')}`}
+                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary ${getBackgroundColor(data[`Chamber_${chamberNum}_Venting`] || '')}`}
                                     />
                                 </div>
                                 <div className="col-span-1">
@@ -200,7 +200,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
                                         type="text"
                                         value={data[`Chamber_${chamberNum}_LowerTemp`] || ''}
                                         onChange={(e) => onUpdate(`Chamber_${chamberNum}_LowerTemp`, e.target.value)}
-                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_LowerTemp`] || '')}`}
+                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary ${getBackgroundColor(data[`Chamber_${chamberNum}_LowerTemp`] || '')}`}
                                     />
                                 </div>
                                 <div className="col-span-1">
@@ -208,7 +208,7 @@ const LaminatorParametersComponent = (props: ObservationRenderProps & { lineNumb
                                         type="text"
                                         value={data[`Chamber_${chamberNum}_UpperTemp`] || ''}
                                         onChange={(e) => onUpdate(`Chamber_${chamberNum}_UpperTemp`, e.target.value)}
-                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 ${getBackgroundColor(data[`Chamber_${chamberNum}_UpperTemp`] || '')}`}
+                                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary ${getBackgroundColor(data[`Chamber_${chamberNum}_UpperTemp`] || '')}`}
                                     />
                                 </div>
                             </div>

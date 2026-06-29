@@ -21,7 +21,7 @@ const Greeting: React.FC = () => {
     return (
         <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {greeting},{" "}
-            <span className="text-[#e31e24] dark:text-[#ff3b41]">
+            <span className="text-brand-primary dark:text-brand-primary-light">
                 Viking!
             </span>
         </h1>

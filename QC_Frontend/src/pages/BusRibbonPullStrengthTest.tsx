@@ -95,6 +95,7 @@ const LINE_BUSSING_KEYS: Record<LineOption, BussingKey[]> = {
 const BUSSING_KEYS = Object.keys(BUSSING_LABELS) as BussingKey[];
 const DEFAULT_LINE: LineOption = 'FAB-II Line-I';
 const STRENGTH_MIN_LIMIT = 1.5;
+const getDisplayedStrengthNumber = (index: number) => (index % 16) + 1;
 
 const defaultMonthlyStats: MonthlyStats = {
     totalDays: 0,
@@ -476,7 +477,7 @@ export default function BusRibbonPullStrengthTest() {
             for (let index = 0; index < strengths.length; index += 1) {
                 const value = strengths[index];
                 if (value && parseCompletedNumber(value) === null) {
-                    showAlert('error', `${BUSSING_LABELS[machineKey]} Strength ${index + 1} must be a valid number`);
+                    showAlert('error', `${BUSSING_LABELS[machineKey]} Strength ${getDisplayedStrengthNumber(index)} must be a valid number`);
                     return false;
                 }
             }
@@ -693,7 +694,7 @@ export default function BusRibbonPullStrengthTest() {
                 <button
                     key={dateStr}
                     onClick={() => handleDateSelect(dateStr)}
-                    className={`relative min-h-[96px] rounded-lg border-2 p-2 transition-all hover:-translate-y-0.5 hover:shadow-md ${isSelected ? 'border-blue-500 ring-2 ring-blue-500' : hasAny ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800'} ${isToday ? 'font-bold' : ''}`}
+                    className={`relative min-h-[96px] rounded-lg border-2 p-2 transition-all hover:-translate-y-0.5 hover:shadow-md ${isSelected ? 'border-brand-primary ring-2 ring-brand-primary' : hasAny ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800'} ${isToday ? 'font-bold' : ''}`}
                 >
                     <div className="mb-1 flex items-center justify-between">
                         <span className="text-sm dark:text-white">{day}</span>
@@ -795,14 +796,14 @@ export default function BusRibbonPullStrengthTest() {
                                 : 'border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100';
                         return (
                             <div key={errorKey} className="min-w-0">
-                                <label className="mb-1 block text-[11px] font-medium text-gray-600 dark:text-gray-400">{index + 1}</label>
+                                <label className="mb-1 block text-[11px] font-medium text-gray-600 dark:text-gray-400">{getDisplayedStrengthNumber(index)}</label>
                                 <input
                                     type="text"
                                     inputMode="decimal"
                                     value={value}
                                     onChange={(event) => handleStrengthChange(machineKey, index, event.target.value)}
                                     onPaste={(event) => handleStrengthPaste(machineKey, index, event)}
-                                    className={`w-full rounded-md border px-2 py-2 text-center text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputStateClass}`}
+                                    className={`w-full rounded-md border px-2 py-2 text-center text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary ${inputStateClass}`}
                                     placeholder="0"
                                 />
                             </div>
@@ -824,7 +825,7 @@ export default function BusRibbonPullStrengthTest() {
                         <select
                             value={currentEntry.bussingData[machineKey].position}
                             onChange={(event) => handlePositionChange(machineKey, event.target.value)}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                         >
                             <option value="">Select position</option>
                             {POSITION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
@@ -839,7 +840,7 @@ export default function BusRibbonPullStrengthTest() {
                         <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{averages.average1 || '-'}</p>
                     </div>
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Average 2 (Fields 17-32)</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Average 2 (Fields 1-16)</p>
                         <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{averages.average2 || '-'}</p>
                     </div>
                 </div>
@@ -852,7 +853,7 @@ export default function BusRibbonPullStrengthTest() {
             {isLoading && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
-                        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-blue-500"></div>
+                        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary"></div>
                         <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
                     </div>
                 </div>
@@ -870,7 +871,7 @@ export default function BusRibbonPullStrengthTest() {
                         <select
                             value={selectedExportLine}
                             onChange={(event) => setSelectedExportLine(event.target.value as LineOption)}
-                            className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                            className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         >
                             {LINE_OPTIONS.map(line => <option key={line} value={line}>{line}</option>)}
                         </select>
@@ -883,7 +884,7 @@ export default function BusRibbonPullStrengthTest() {
                                     setShowExportLineSelector(false);
                                     handleExportMonthlyExcel(selectedExportLine);
                                 }}
-                                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                                className="rounded-lg bg-brand-primary px-4 py-2 text-white hover:bg-brand-primary-hover"
                             >
                                 Export
                             </button>
@@ -916,7 +917,7 @@ export default function BusRibbonPullStrengthTest() {
                                                 setSelectedLine(line);
                                                 setShiftSelectorLine(line);
                                             }}
-                                            className="flex w-full items-center justify-between rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
+                                            className="flex w-full items-center justify-between rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:border-brand-primary hover:bg-brand-primary-soft dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-primary-light dark:hover:bg-brand-primary/10"
                                         >
                                             <span className="font-semibold text-gray-900 dark:text-white">{line}</span>
                                             <span className="text-sm text-gray-500 dark:text-gray-400">{filledCount} / 3 shifts</span>
@@ -928,7 +929,7 @@ export default function BusRibbonPullStrengthTest() {
                             <div>
                                 <button
                                     onClick={() => setShiftSelectorLine(null)}
-                                    className="mb-4 flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                    className="mb-4 flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft dark:text-brand-primary-light dark:hover:bg-brand-primary/10"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                     {shiftSelectorLine}
@@ -977,14 +978,14 @@ export default function BusRibbonPullStrengthTest() {
                                     <select
                                         value={currentDate.getMonth()}
                                         onChange={(event) => handleMonthChange(Number(event.target.value))}
-                                        className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                        className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                     >
                                         {months.map((month, index) => <option key={month} value={index}>{month}</option>)}
                                     </select>
                                     <select
                                         value={currentDate.getFullYear()}
                                         onChange={(event) => handleYearChange(Number(event.target.value))}
-                                        className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                        className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                     >
                                         {years.map(year => <option key={year} value={year}>{year}</option>)}
                                     </select>
@@ -996,7 +997,7 @@ export default function BusRibbonPullStrengthTest() {
                             <div className="flex gap-2">
                                 <button
                                     onClick={handleTodayEntry}
-                                    className="rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400"
+                                    className="rounded-lg bg-brand-primary-soft px-4 py-2 text-sm font-medium text-brand-primary transition-colors hover:bg-brand-primary-muted dark:bg-brand-primary/10 dark:text-brand-primary-light"
                                 >
                                     Today
                                 </button>
@@ -1072,7 +1073,7 @@ export default function BusRibbonPullStrengthTest() {
                                         type="text"
                                         value={currentEntry.shiftDetails.poNumber}
                                         onChange={(event) => handleShiftDetailsChange('poNumber', event.target.value)}
-                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                                         placeholder="Enter PO number"
                                     />
                                 </div>
@@ -1081,7 +1082,7 @@ export default function BusRibbonPullStrengthTest() {
                                     <select
                                         value={currentEntry.shiftDetails.intcRibbonStatus}
                                         onChange={(event) => handleShiftDetailsChange('intcRibbonStatus', event.target.value)}
-                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                                     >
                                         <option value="">Select</option>
                                         {['Juren', 'Sunby', 'YourBest'].map(option => <option key={option} value={option}>{option}</option>)}
@@ -1092,7 +1093,7 @@ export default function BusRibbonPullStrengthTest() {
                                     <select
                                         value={currentEntry.shiftDetails.busRibbonStatus}
                                         onChange={(event) => handleShiftDetailsChange('busRibbonStatus', event.target.value)}
-                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                                     >
                                         <option value="">Select</option>
                                         {['Juren', 'Sunby', 'YourBest'].map(option => <option key={option} value={option}>{option}</option>)}
@@ -1110,7 +1111,7 @@ export default function BusRibbonPullStrengthTest() {
                                 <button onClick={resetSelection} className="rounded-lg px-4 py-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
                                     Cancel
                                 </button>
-                                <button onClick={handleSaveEntry} className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2 text-white transition-colors hover:bg-blue-700">
+                                <button onClick={handleSaveEntry} className="flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-2 text-white transition-colors hover:bg-brand-primary-hover">
                                     <Save className="h-4 w-4" />
                                     {isEditing ? 'Update Entry' : 'Save Entry'}
                                 </button>
@@ -1123,7 +1124,7 @@ export default function BusRibbonPullStrengthTest() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="rounded-xl bg-white p-4 shadow-lg dark:bg-gray-900">
                             <div className="mb-2 flex items-center justify-between">
-                                <BarChart3 className="h-5 w-5 text-blue-500" />
+                                <BarChart3 className="h-5 w-5 text-brand-primary" />
                                 <span className="text-xs text-gray-500 dark:text-gray-400">Completion</span>
                             </div>
                             <div className="text-2xl font-bold text-gray-800 dark:text-white">{monthlyStats.completionRate}%</div>
@@ -1140,7 +1141,7 @@ export default function BusRibbonPullStrengthTest() {
                     </div>
                     <div className="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900">
                         <h3 className="mb-4 flex items-center gap-2 text-md font-semibold dark:text-white">
-                            <Clock className="h-4 w-4 text-blue-500" />
+                            <Clock className="h-4 w-4 text-brand-primary" />
                             Shift-wise Statistics
                         </h3>
                         <div className="space-y-4">
@@ -1157,7 +1158,7 @@ export default function BusRibbonPullStrengthTest() {
                                             <span className="text-sm text-gray-600 dark:text-gray-400">{filled} / {total}</span>
                                         </div>
                                         <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                                            <div className="h-2 rounded-full bg-blue-500 transition-all" style={{ width: `${total > 0 ? (filled / total) * 100 : 0}%` }}></div>
+                                            <div className="h-2 rounded-full bg-brand-primary transition-all" style={{ width: `${total > 0 ? (filled / total) * 100 : 0}%` }}></div>
                                         </div>
                                     </div>
                                 );

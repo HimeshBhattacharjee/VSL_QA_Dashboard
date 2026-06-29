@@ -15,7 +15,7 @@ function ThemeToggle() {
             title="Toggle theme"
             className="cursor-pointer h-9 w-9 rounded-full flex items-center justify-center bg-white/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/50 shadow-md"
         >
-            {theme === 'light' ? <Moon className="w-5 h-5 text-violet-700 fill-violet-700" /> : <Sun className="w-5 h-5 text-yellow-500 fill-yellow-500" />}
+            {theme === 'light' ? <Moon className="w-5 h-5 text-brand-primary fill-brand-primary" /> : <Sun className="w-5 h-5 text-yellow-500 fill-yellow-500" />}
         </button>
     );
 }
@@ -45,14 +45,14 @@ function PasswordInput({
                 type={showPassword ? "text" : "password"}
                 value={value}
                 onChange={onChange}
-                className="w-full px-4 py-3 pr-12 rounded-xl bg-white dark:bg-slate-900/50 focus:outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border border-gray-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 transition-all duration-300"
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-white dark:bg-slate-900/50 focus:outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border border-gray-200 dark:border-slate-600 focus:border-brand-primary dark:focus:border-brand-primary-light transition-all duration-300"
                 placeholder={placeholder}
                 required
                 disabled={disabled}
             />
             <button
                 type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 p-1 rounded-full hover:bg-white/30 cursor-pointer"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300 hover:text-brand-primary dark:hover:text-brand-primary-light transition-colors duration-200 p-1 rounded-full hover:bg-white/30 cursor-pointer"
                 onClick={onToggle}
                 disabled={disabled}
             >
@@ -483,7 +483,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                                 type="file"
                                 accept="image/*"
                                 onChange={handleFileSelect}
-                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-primary-soft file:text-brand-primary hover:file:bg-brand-primary-muted cursor-pointer"
                             />
                             <p className="text-[10px] text-center text-gray-400 mt-1">Supported formats: JPG, PNG, GIF. Max size: 5MB</p>
                         </div>
@@ -497,7 +497,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                             <button
                                 onClick={uploadSignature}
                                 disabled={!file || uploading}
-                                className="bg-blue-600 text-white py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed cursor-pointer transition-all text-sm font-medium"
+                                className="bg-brand-primary text-white py-2 px-4 rounded-md shadow-sm hover:bg-brand-primary-hover disabled:bg-brand-primary/40 disabled:cursor-not-allowed cursor-pointer transition-all text-sm font-medium"
                             >
                                 {uploading ? 'Uploading...' : 'Save Signature'}
                             </button>
@@ -546,12 +546,12 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                                     disabled={changingPassword}
                                 />
                             </div>
-                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900/40 dark:bg-blue-950/30">
+                            <div className="rounded-lg border border-brand-primary-muted bg-brand-primary-soft px-4 py-3 dark:border-brand-primary/40 dark:bg-brand-primary/10">
                                 <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">Password Requirements</p>
                                 <ul className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
                                     {PASSWORD_REQUIREMENTS.map((requirement) => (
                                         <li key={requirement} className="flex items-center gap-2">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
                                             {requirement}
                                         </li>
                                     ))}
@@ -569,7 +569,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                                 <button
                                     type="submit"
                                     disabled={changingPassword}
-                                    className="bg-blue-600 text-white py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed cursor-pointer transition-all text-sm font-medium"
+                                    className="bg-brand-primary text-white py-2 px-4 rounded-md shadow-sm hover:bg-brand-primary-hover disabled:bg-brand-primary/40 disabled:cursor-not-allowed cursor-pointer transition-all text-sm font-medium"
                                 >
                                     {changingPassword ? 'Changing...' : 'Change Password'}
                                 </button>

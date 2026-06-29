@@ -32,6 +32,7 @@ import {
     getNextMilestoneTargetDate,
     getVisibleFinancialYearQuarters,
     groupGoalsByOwner,
+    isQuarterOpenForPlanning,
     processGoals,
     type FinancialYearQuarter,
     type GoalData,
@@ -104,6 +105,32 @@ const goalMeetingColumnDefinitions = [
     { key: 'actions', label: 'Actions', defaultSize: 160, minSize: 160, maxSize: 240 },
 ] as const;
 
+const getQuarterLifecycleLabel = (lifecycle: FinancialYearQuarter['lifecycle']) => {
+    if (lifecycle === 'active') return 'Active';
+    if (lifecycle === 'upcoming') return 'Upcoming';
+    if (lifecycle === 'past') return 'Past';
+    return 'Locked';
+};
+
+const getQuarterLifecycleClasses = (lifecycle: FinancialYearQuarter['lifecycle']) => {
+    if (lifecycle === 'active') {
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300';
+    }
+
+    if (lifecycle === 'upcoming') {
+        return 'border-brand-primary-muted bg-brand-primary-soft text-brand-primary dark:border-brand-primary/40 dark:bg-brand-primary/15 dark:text-brand-primary-light';
+    }
+
+    if (lifecycle === 'past') {
+        return 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    }
+
+    return 'border-slate-200 bg-slate-50 text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500';
+};
+
+const isGoalOpenForDetailEditing = (goal: GoalData) =>
+    goal.quarterLifecycle === 'active' || goal.quarterLifecycle === 'upcoming';
+
 function QuarterSelector({
     quarters,
     selectedQuarter,
@@ -114,12 +141,13 @@ function QuarterSelector({
     onSelectQuarter: (quarter: FinancialYearQuarter) => void;
 }) {
     return (
-        <section className="rounded-3xl border border-slate-200/80 bg-gradient-to-r from-white via-slate-50 to-white p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/80 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-            <div className="grid grid-cols-2 sm:grid-cols-8 items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/75 p-1 shadow-inner dark:border-slate-700/80 dark:bg-slate-950/30">
+        <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                 {quarters.map((quarter) => {
                     const isSelected =
                         quarter.financialYear === selectedQuarter.financialYear &&
                         quarter.quarter === selectedQuarter.quarter;
+                    const lifecycleLabel = getQuarterLifecycleLabel(quarter.lifecycle);
 
                     return (
                         <button
@@ -127,16 +155,25 @@ function QuarterSelector({
                             type="button"
                             disabled={quarter.isLocked}
                             onClick={() => onSelectQuarter(quarter)}
-                            className={`flex justify-center items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold tracking-[0.01em] shadow-sm transition-all duration-200 disabled:cursor-not-allowed ${
+                            className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition-colors disabled:cursor-not-allowed ${
                                 isSelected
-                                    ? 'border-slate-900 bg-slate-950 text-white shadow-[0_10px_24px_-14px_rgba(15,23,42,0.9)] dark:border-white dark:bg-white dark:text-slate-950'
+                                    ? 'border-brand-primary bg-brand-primary text-white dark:border-brand-primary-light dark:bg-brand-primary dark:text-white'
                                     : quarter.isLocked
-                                        ? 'border-slate-200 bg-slate-100/75 text-slate-400 opacity-75 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500'
-                                        : 'border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_-20px_rgba(15,23,42,0.7)] dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
+                                        ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-80 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-brand-primary-muted hover:bg-brand-primary-soft hover:text-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-primary/50 dark:hover:bg-brand-primary/10 dark:hover:text-brand-primary-light'
                             }`}
                         >
                             <span>{quarter.label}</span>
-                            {quarter.isLocked && <Lock className="h-3.5 w-3.5" />}
+                            <span
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${
+                                    isSelected
+                                        ? 'border-white/40 bg-white/15 text-white'
+                                        : getQuarterLifecycleClasses(quarter.lifecycle)
+                                }`}
+                            >
+                                {quarter.isLocked && <Lock className="h-3 w-3" />}
+                                {lifecycleLabel}
+                            </span>
                         </button>
                     );
                 })}
@@ -174,7 +211,7 @@ function GoalViewControls({
     onGoalStatusChange
 }: GoalViewControlsProps) {
     return (
-        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 <div>
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -185,7 +222,7 @@ function GoalViewControls({
                         value={searchQuery}
                         onChange={(event) => onSearchChange(event.target.value)}
                         placeholder="Search by goal title or employee"
-                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-brand-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-primary-light"
                     />
                 </div>
 
@@ -196,7 +233,7 @@ function GoalViewControls({
                     <select
                         value={sortOption}
                         onChange={(event) => onSortChange(event.target.value as GoalSortOption)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-brand-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-primary-light"
                     >
                         <option value="createdAtDesc">Creation Date (Desc)</option>
                         <option value="createdAtAsc">Creation Date (Asc)</option>
@@ -216,7 +253,7 @@ function GoalViewControls({
                         onChange={(event) =>
                             onGoalStatusChange(event.target.value as GoalFilters['goalStatus'])
                         }
-                        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition-colors focus:border-brand-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-primary-light"
                     >
                         <option value="All">All Statuses</option>
                         <option value={EMPTY_GOAL_STATUS_FILTER_VALUE}>Not Started</option>
@@ -320,7 +357,7 @@ function GoalMeetingTable({
     ];
 
     return (
-        <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="mb-2 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5">
                 {stats.map((stat) => {
                     const StatIcon = stat.icon;
@@ -346,7 +383,7 @@ function GoalMeetingTable({
                 })}
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900">
                 <div className="max-h-[calc(100vh-18rem)] overflow-auto">
                     <table
                         className="w-full border-separate border-spacing-0 text-left"
@@ -394,6 +431,9 @@ function GoalMeetingTable({
                                         const rowHeight = rowSizes[goal.id] ?? 112;
                                         const nextTargetDate = getNextMilestoneTargetDate(goal);
                                         const breakdown = getMilestoneBreakdown(goal);
+                                        const canEditThisGoal = canEditGoal && isGoalOpenForDetailEditing(goal);
+                                        const canDropThisGoal = canDropGoals && isGoalOpenForDetailEditing(goal);
+                                        const canReviveThisGoal = canReviveGoals && isGoalOpenForDetailEditing(goal);
                                         const milestoneSummary = [
                                             {
                                                 label: 'Done',
@@ -515,7 +555,9 @@ function GoalMeetingTable({
                                                                                 checked={milestone.completed}
                                                                                 disabled={
                                                                                     !canUpdateMilestones ||
-                                                                                    goal.isDropped
+                                                                                    goal.isDropped ||
+                                                                                    goal.quarterLifecycle === 'future' ||
+                                                                                    (goal.quarterLifecycle === 'past' && milestone.completed)
                                                                                 }
                                                                                 onChange={(event) =>
                                                                                     onToggleMilestone(
@@ -583,8 +625,8 @@ function GoalMeetingTable({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onEditGoal(goal)}
-                                                                disabled={goal.isDropped}
-                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                                disabled={goal.isDropped || !canEditThisGoal}
+                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                                                             >
                                                                 Edit
                                                             </button>
@@ -600,7 +642,7 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
 
-                                                        {canDropGoals && goal.goalStatus === 'Not Done' && !goal.isDropped && (
+                                                        {canDropThisGoal && goal.goalStatus === 'Not Done' && !goal.isDropped && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onDropGoal(goal)}
@@ -610,7 +652,7 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
 
-                                                        {canReviveGoals && goal.isDropped && (
+                                                        {canReviveThisGoal && goal.isDropped && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onReviveGoal(goal)}
@@ -656,7 +698,7 @@ function GoalMeetingTable({
 
 const createGoalPayloadFromFormValues = (
     formValues: GoalFormValues,
-    selectedQuarter: FinancialYearQuarter,
+    selectedQuarter: Pick<FinancialYearQuarter, 'financialYear' | 'quarter'>,
 ) => ({
     title: formValues.title.trim(),
     assignedTo: normalizeAssignedTo(formValues.assignedTo),
@@ -705,6 +747,7 @@ export default function GoalMeeting() {
         () => processGoals(quarterGoals, searchQuery, filters, sortOption),
         [filters, quarterGoals, searchQuery, sortOption],
     );
+    const canCreateInSelectedQuarter = permissions.canCreateGoals && isQuarterOpenForPlanning(selectedQuarter);
 
     useEffect(() => {
         let isActive = true;
@@ -779,7 +822,8 @@ export default function GoalMeeting() {
     };
 
     const handleOpenCreateModal = () => {
-        if (!permissions.canCreateGoals) {
+        if (!canCreateInSelectedQuarter) {
+            showAlert('error', 'Goals can only be created for the active quarter or the upcoming quarter planning window.');
             return;
         }
 
@@ -790,7 +834,8 @@ export default function GoalMeeting() {
     };
 
     const handleOpenEditModal = (goal: GoalData) => {
-        if (!permissions.canEditGoalDetails) {
+        if (!permissions.canEditGoalDetails || !isGoalOpenForDetailEditing(goal)) {
+            showAlert('error', 'This quarter is read-only.');
             return;
         }
 
@@ -805,7 +850,7 @@ export default function GoalMeeting() {
     };
 
     const handleCreateGoal = async (formValues: GoalFormValues) => {
-        if (!permissions.canCreateGoals) {
+        if (!canCreateInSelectedQuarter) {
             return;
         }
 
@@ -822,7 +867,12 @@ export default function GoalMeeting() {
     };
 
     const handleUpdateGoal = async (formValues: GoalFormValues) => {
-        if (!modalState || modalState.mode !== 'edit' || !permissions.canEditGoalDetails) {
+        if (
+            !modalState ||
+            modalState.mode !== 'edit' ||
+            !permissions.canEditGoalDetails ||
+            !isGoalOpenForDetailEditing(modalState.goal)
+        ) {
             return;
         }
 
@@ -832,8 +882,6 @@ export default function GoalMeeting() {
                 createGoalPayloadFromFormValues(formValues, {
                     financialYear: modalState.goal.financialYear,
                     quarter: modalState.goal.quarter,
-                    label: `${modalState.goal.financialYear} Q${modalState.goal.quarter}`,
-                    isLocked: false,
                 }),
             );
             setGoals((current) =>
@@ -847,7 +895,8 @@ export default function GoalMeeting() {
     };
 
     const handleDeleteGoalConfirmed = async (goalId: string) => {
-        if (!permissions.canDeleteGoals) {
+        const goal = goals.find((item) => item.id === goalId);
+        if (!permissions.canDeleteGoals || (goal && !isGoalOpenForDetailEditing(goal))) {
             return;
         }
 
@@ -867,7 +916,8 @@ export default function GoalMeeting() {
     };
 
     const handleDeleteGoal = (goalId: string) => {
-        if (!permissions.canDeleteGoals) {
+        const goal = goals.find((item) => item.id === goalId);
+        if (!permissions.canDeleteGoals || (goal && !isGoalOpenForDetailEditing(goal))) {
             return;
         }
 
@@ -890,7 +940,7 @@ export default function GoalMeeting() {
     };
 
     const handleDropGoalConfirmed = async (goal: GoalData) => {
-        if (!permissions.canDropGoals) {
+        if (!permissions.canDropGoals || !isGoalOpenForDetailEditing(goal)) {
             return;
         }
 
@@ -904,7 +954,7 @@ export default function GoalMeeting() {
     };
 
     const handleDropGoal = (goal: GoalData) => {
-        if (!permissions.canDropGoals) {
+        if (!permissions.canDropGoals || !isGoalOpenForDetailEditing(goal)) {
             return;
         }
 
@@ -921,7 +971,7 @@ export default function GoalMeeting() {
     };
 
     const handleReviveGoal = async (goal: GoalData) => {
-        if (!permissions.canReviveGoals) {
+        if (!permissions.canReviveGoals || !isGoalOpenForDetailEditing(goal)) {
             return;
         }
 
@@ -952,11 +1002,18 @@ export default function GoalMeeting() {
 
                 return [carriedForwardGoal, ...current];
             });
-            setSelectedQuarter({
+            const matchingQuarter = visibleQuarters.find(
+                (quarter) =>
+                    quarter.financialYear === carriedForwardGoal.financialYear &&
+                    quarter.quarter === carriedForwardGoal.quarter,
+            );
+            setSelectedQuarter(matchingQuarter ?? {
                 financialYear: carriedForwardGoal.financialYear,
                 quarter: carriedForwardGoal.quarter,
                 label: `${carriedForwardGoal.financialYear} Q${carriedForwardGoal.quarter}`,
-                isLocked: false,
+                isLocked: carriedForwardGoal.quarterLifecycle === 'future',
+                lifecycle: carriedForwardGoal.quarterLifecycle,
+                startsOn: '',
             });
         } catch (error) {
             console.error('Failed to carry forward goal:', error);
@@ -969,7 +1026,11 @@ export default function GoalMeeting() {
         milestoneId: string,
         nextCompleted: boolean,
     ) => {
-        if (!permissions.canUpdateMilestones) {
+        if (
+            !permissions.canUpdateMilestones ||
+            goal.quarterLifecycle === 'future' ||
+            (goal.quarterLifecycle === 'past' && !nextCompleted)
+        ) {
             return;
         }
 
@@ -1003,24 +1064,27 @@ export default function GoalMeeting() {
     };
 
     return (
-        <div className="relative min-h-[85vh] overflow-hidden rounded-3xl bg-slate-50 p-2 transition-colors duration-300 dark:bg-slate-900 sm:p-4">
-            <div className="pointer-events-none absolute left-[-10%] top-[-5%] h-72 w-72 rounded-full bg-red-500/15 blur-[90px] dark:bg-red-400/20" />
-            <div className="pointer-events-none absolute bottom-[-15%] right-[-5%] h-80 w-80 rounded-full bg-blue-500/10 blur-[110px] dark:bg-blue-400/10" />
-
-            <div className="relative z-10 mx-auto flex h-full max-w-[96rem] flex-col gap-2 custom-scrollbar">
+        <div className="min-h-[85vh] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-3 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950 sm:p-4">
+            <div className="mx-auto flex h-full max-w-[96rem] flex-col gap-3 custom-scrollbar">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
-                        Goal Meeting
-                    </h1>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
+                            Goal Meeting
+                        </h1>
+                        <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getQuarterLifecycleClasses(selectedQuarter.lifecycle)}`}>
+                            {getQuarterLifecycleLabel(selectedQuarter.lifecycle)}
+                        </span>
+                    </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                         {permissions.canCreateGoals && (
                             <button
                                 type="button"
                                 onClick={handleOpenCreateModal}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
+                                disabled={!canCreateInSelectedQuarter}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
                             >
                                 <Plus className="h-4 w-4" />
-                                <span>Create Goal</span>
+                                <span>{selectedQuarter.lifecycle === 'upcoming' ? 'Plan Goal' : 'Create Goal'}</span>
                             </button>
                         )}
                     </div>
@@ -1054,7 +1118,7 @@ export default function GoalMeeting() {
                 />
 
                 {isLoading && goals.length === 0 ? (
-                    <section className="rounded-3xl border border-slate-200 bg-white/90 p-8 text-center shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
+                    <section className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                             Loading goals...
                         </p>
@@ -1093,7 +1157,7 @@ export default function GoalMeeting() {
     );
 }
 /*
-Create a new section in the sidebar under Quality Tests named as Bus Ribbon to INTC Ribbon Pull Strength Test and 
+Create a new section in the sidebar under IPQC named as Bus Ribbon to INTC Ribbon Pull Strength Test and
 then you have to implement the exact logic as it has been done in JB Sealant Weight Measurement Test. The Date, Shift
 FAB-II Line-I and FAB-II Line-II segregation needs to be done as done there. Now for each shift there will be an input 
 field for PO number, one for INTC Ribbon Status (which will be a dropdown with options that I will change later), and one 

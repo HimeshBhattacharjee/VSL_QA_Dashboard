@@ -1077,10 +1077,10 @@ export default function JBSealantWeightMeasurement() {
                     onClick={() => handleDateSelect(dateStr)}
                     className={`
                         relative p-2 rounded-lg border-2 transition-all min-h-[100px]
-                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : statusClass}
+                        ${isSelected ? 'ring-2 ring-brand-primary border-brand-primary' : statusClass}
                         ${isToday ? 'font-bold' : ''}
                         hover:shadow-md hover:-translate-y-0.5
-                        ${!hasAny && !hasSignatures ? 'hover:border-blue-300' : ''}
+                        ${!hasAny && !hasSignatures ? 'hover:border-brand-primary/40' : ''}
                     `}
                 >
                     <div className="flex items-center justify-between mb-1">
@@ -1198,7 +1198,7 @@ export default function JBSealantWeightMeasurement() {
         const isNetWeightOutOfRange = isNetSealantWeightOutOfRange(positionData.netSealantWeight);
         
         return (
-            <div className="border-l-4 border-violet-500 pl-4 mb-4">
+            <div className="border-l-4 border-brand-primary pl-4 mb-4">
                 <h5 className="text-sm font-semibold mb-2 dark:text-white">{title}</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1209,7 +1209,7 @@ export default function JBSealantWeightMeasurement() {
                             type="text"
                             value={positionData.jbWeight}
                             onChange={(e) => handleJBPositionChange(line, position, 'jbWeight', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                             placeholder="Enter JB weight"
                         />
                     </div>
@@ -1221,7 +1221,7 @@ export default function JBSealantWeightMeasurement() {
                             type="text"
                             value={positionData.jbWeightWithSealant}
                             onChange={(e) => handleJBPositionChange(line, position, 'jbWeightWithSealant', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                             placeholder="Enter JB weight with sealant"
                         />
                     </div>
@@ -1252,7 +1252,7 @@ export default function JBSealantWeightMeasurement() {
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-primary mx-auto"></div>
                             <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
                         </div>
                     </div>
@@ -1272,7 +1272,7 @@ export default function JBSealantWeightMeasurement() {
                             <select
                                 value={selectedExportLineGroup}
                                 onChange={(e) => setSelectedExportLineGroup(e.target.value as LineGroup)}
-                                className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-2.5 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                             >
                                 {LINE_GROUPS.map(lineGroup => (
                                     <option key={lineGroup} value={lineGroup}>{getLineGroupLabel(lineGroup)}</option>
@@ -1290,7 +1290,7 @@ export default function JBSealantWeightMeasurement() {
                                         setShowExportLineSelector(false);
                                         handleExportMonthlyExcel(selectedExportLineGroup);
                                     }}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
                                 >
                                     Export
                                 </button>
@@ -1333,7 +1333,7 @@ export default function JBSealantWeightMeasurement() {
                                                     setSelectedLineGroup(lineGroup);
                                                     setShiftSelectorLineGroup(lineGroup);
                                                 }}
-                                                className="flex w-full items-center justify-between rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
+                                                className="flex w-full items-center justify-between rounded-lg border-2 border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:border-brand-primary hover:bg-brand-primary-soft dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-primary-light dark:hover:bg-brand-primary/10"
                                             >
                                                 <span className="font-semibold text-gray-900 dark:text-white">{getLineGroupLabel(lineGroup)}</span>
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">{filledCount} / 3 shifts</span>
@@ -1345,7 +1345,7 @@ export default function JBSealantWeightMeasurement() {
                                 <div>
                                     <button
                                         onClick={() => setShiftSelectorLineGroup(null)}
-                                        className="mb-4 flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                        className="mb-4 flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft dark:text-brand-primary-light dark:hover:bg-brand-primary/10"
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                         {getLineGroupLabel(shiftSelectorLineGroup)}
@@ -1428,7 +1428,7 @@ export default function JBSealantWeightMeasurement() {
                                             <select
                                                 value={currentDate.getMonth()}
                                                 onChange={(e) => handleMonthChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
                                             >
                                                 {months.map((month, index) => (
                                                     <option key={month} value={index}>
@@ -1440,7 +1440,7 @@ export default function JBSealantWeightMeasurement() {
                                             <select
                                                 value={currentDate.getFullYear()}
                                                 onChange={(e) => handleYearChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
                                             >
                                                 {years.map(year => (
                                                     <option key={year} value={year}>
@@ -1461,7 +1461,7 @@ export default function JBSealantWeightMeasurement() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleTodayEntry}
-                                            className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                            className="px-4 py-2 bg-brand-primary-soft dark:bg-brand-primary/10 text-brand-primary dark:text-brand-primary-light rounded-lg text-sm font-medium hover:bg-brand-primary-muted dark:hover:bg-brand-primary/15 transition-colors"
                                         >
                                             Today
                                         </button>
@@ -1559,9 +1559,9 @@ export default function JBSealantWeightMeasurement() {
                                         </div>
 
                                         {/* Line 1 */}
-                                        <div className="border-l-4 border-blue-500 pl-4">
+                                        <div className="border-l-4 border-brand-primary pl-4">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
-                                                <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm">1</span>
+                                                <span className="w-6 h-6 rounded-full bg-brand-primary-muted dark:bg-brand-primary/20 flex items-center justify-center text-brand-primary dark:text-brand-primary-light text-sm">1</span>
                                                 Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]} Details
                                             </h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1573,7 +1573,7 @@ export default function JBSealantWeightMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['1'].po}
                                                         onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="Enter PO number"
                                                     />
                                                 </div>
@@ -1584,7 +1584,7 @@ export default function JBSealantWeightMeasurement() {
                                                     <select
                                                         value={currentEntry.lines['1'].jbSupplier}
                                                         onChange={(e) => handleLineInputChange('1', 'jbSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     >
                                                         <option value="">Select</option>
                                                         <option value="Suzhou UKT New Energy Technology Co. Ltd">Suzhou UKT New Energy Technology Co. Ltd</option>
@@ -1598,7 +1598,7 @@ export default function JBSealantWeightMeasurement() {
                                                     <select
                                                         value={currentEntry.lines['1'].sealantSupplier}
                                                         onChange={(e) => handleLineInputChange('1', 'sealantSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     >
                                                         <option value="">Select</option>
                                                         <option value="Huitan">Huitan</option>
@@ -1616,7 +1616,7 @@ export default function JBSealantWeightMeasurement() {
                                                         type="date"
                                                         value={currentEntry.lines['1'].sealantExpiry}
                                                         onChange={(e) => handleLineInputChange('1', 'sealantExpiry', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="DD.MM.YYYY"
                                                     />
                                                 </div>
@@ -1645,7 +1645,7 @@ export default function JBSealantWeightMeasurement() {
                                                         value={currentEntry.lines['1'].remarks || ''}
                                                         onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
                                                         rows={2}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="Add any remarks for Line 1"
                                                     />
                                                 </div>
@@ -1665,7 +1665,7 @@ export default function JBSealantWeightMeasurement() {
                                                         type="text"
                                                         value={currentEntry.lines['2'].po}
                                                         onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="Enter PO number"
                                                     />
                                                 </div>
@@ -1676,7 +1676,7 @@ export default function JBSealantWeightMeasurement() {
                                                     <select
                                                         value={currentEntry.lines['2'].jbSupplier}
                                                         onChange={(e) => handleLineInputChange('2', 'jbSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     >
                                                         <option value="">Select</option>
                                                         <option value="Suzhou UKT New Energy Technology Co. Ltd">Suzhou UKT New Energy Technology Co. Ltd</option>
@@ -1690,7 +1690,7 @@ export default function JBSealantWeightMeasurement() {
                                                     <select
                                                         value={currentEntry.lines['2'].sealantSupplier}
                                                         onChange={(e) => handleLineInputChange('2', 'sealantSupplier', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     >
                                                         <option value="">Select</option>
                                                         <option value="Huitan">Huitan</option>
@@ -1708,7 +1708,7 @@ export default function JBSealantWeightMeasurement() {
                                                         type="date"
                                                         value={currentEntry.lines['2'].sealantExpiry}
                                                         onChange={(e) => handleLineInputChange('2', 'sealantExpiry', e.target.value)}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="DD.MM.YYYY"
                                                     />
                                                 </div>
@@ -1737,7 +1737,7 @@ export default function JBSealantWeightMeasurement() {
                                                         value={currentEntry.lines['2'].remarks || ''}
                                                         onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
                                                         rows={2}
-                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                         placeholder="Add any remarks for Line 2"
                                                     />
                                                 </div>
@@ -1753,7 +1753,7 @@ export default function JBSealantWeightMeasurement() {
                                             </button>
                                             <button
                                                 onClick={handleSaveEntry}
-                                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                                className="flex items-center gap-2 px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
                                             >
                                                 <Save className="w-4 h-4" />
                                                 {isEditing ? 'Update Entry' : 'Save Entry'}
@@ -1769,7 +1769,7 @@ export default function JBSealantWeightMeasurement() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <Percent className="w-5 h-5 text-blue-500" />
+                                        <Percent className="w-5 h-5 text-brand-primary" />
                                         <span className="text-xs text-gray-500 dark:text-gray-400">Completion</span>
                                     </div>
                                     <div className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -1798,7 +1798,7 @@ export default function JBSealantWeightMeasurement() {
 
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <Clock className="w-4 h-4 text-blue-500" />
+                                    <Clock className="w-4 h-4 text-brand-primary" />
                                     Shift-wise Statistics
                                 </h3>
                                 <div className="space-y-4">
@@ -1837,7 +1837,7 @@ export default function JBSealantWeightMeasurement() {
                                                 </div>
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
-                                                        className="bg-blue-500 h-2 rounded-full transition-all"
+                                                        className="bg-brand-primary h-2 rounded-full transition-all"
                                                         style={{ width: `${monthlyStats.totalDays > 0 ? (stats.filled / (monthlyStats.totalDays * 2)) * 100 : 0}%` }}
                                                     ></div>
                                                 </div>
@@ -1849,7 +1849,7 @@ export default function JBSealantWeightMeasurement() {
 
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <BarChart3 className="w-4 h-4 text-blue-500" />
+                                    <BarChart3 className="w-4 h-4 text-brand-primary" />
                                     {months[currentDate.getMonth()]} {currentDate.getFullYear()} Summary
                                 </h3>
                                 <div className="space-y-3">
@@ -1874,7 +1874,7 @@ export default function JBSealantWeightMeasurement() {
 
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                                    <TrendingUp className="w-4 h-4 text-brand-primary" />
                                     Weight Range Breakdown
                                 </h3>
 

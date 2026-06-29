@@ -15,7 +15,7 @@ const BackSheetObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -34,7 +34,7 @@ const BackSheetObservations = {
                 <select
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
                     <option value="Hangzhou First PV Material Co., Ltd">Hangzhou First PV Material Co., Ltd</option>
@@ -66,7 +66,7 @@ const BackSheetObservations = {
                     type="date"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -86,7 +86,7 @@ const BackSheetObservations = {
             <select
                 value={props.value as string}
                 onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
             >
                 <option value="">Select</option>
                 <option value="New Box Open">New Box Open</option>
@@ -110,7 +110,7 @@ const BackSheetObservations = {
                     type="text"
                     value={props.value as string}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 />
             </div>
         );
@@ -173,7 +173,7 @@ const BackSheetObservations = {
                                     const updatedValue = { ...sampleValue, [sample]: e.target.value };
                                     props.onUpdate(props.stageId, props.paramId, props.timeSlot, updatedValue);
                                 }}
-                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
+                                className={`w-full px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(sampleValue[sample] || '', criteria)}`}
                             />
                             <span className="text-xs text-gray-500 mt-1">mm</span>
                         </div>

@@ -4,6 +4,7 @@ import { ConfirmModalProvider } from './context/ConfirmModalContext';
 import { LineProvider } from './context/LineContext';
 import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedLayout from './components/ProtectedLayout';
+import ScrollToTop from './components/ScrollToTop';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
@@ -13,6 +14,8 @@ import PottingRatioMeasurement from './pages/PottingRatioMeasurement';
 import JBSealantWtMeasurement from './pages/JBSealantWtMeasurement';
 import FrameSealantWtMeasurement from './pages/FrameSealantWtMeasurement';
 import BusRibbonPullStrengthTest from './pages/BusRibbonPullStrengthTest';
+import PeelStrengthBusRibbonJBSolderingTest from './pages/PeelStrengthBusRibbonJBSolderingTest';
+import JBContactBlockMaintenanceReport from './pages/JBContactBlockMaintenanceReport';
 import SSHTest from './pages/SSHTest';
 import PeelTest from './pages/PeelTest';
 import RoTTest from './pages/RoTTest';
@@ -24,8 +27,14 @@ import Visual from './pages/Visual';
 import LamQC from './pages/LamQC';
 import FQC from './pages/FQC';
 import QualityAudit from './pages/QualityAudit';
+import StringerParameterReport from './pages/StringerParameterReport';
 import DailyMeeting from './pages/DailyMeeting';
 import GoalMeeting from './pages/GoalMeeting';
+import {
+    IPQCLandingPage,
+    QualityAnalysisLandingPage,
+    TaskManagementLandingPage,
+} from './pages/SectionLandingPages';
 import {
     getCurrentTaskManagementRole,
     getTaskManagementPermissions,
@@ -79,6 +88,7 @@ export default function App() {
     return (
         <AppProviders>
             <Router>
+                <ScrollToTop />
                 <div className="min-h-screen dark:bg-slate-800 bg-gray-100">
                     <Routes>
                         <Route path="/login" element={<Login />} />
@@ -90,6 +100,11 @@ export default function App() {
                                     <Home />
                                 </UserRoute>
                             } />
+                            <Route path="/task-management" element={
+                                <TaskManagementRoute>
+                                    <TaskManagementLandingPage />
+                                </TaskManagementRoute>
+                            } />
                             <Route path="/daily-meeting" element={
                                 <TaskManagementRoute>
                                     <DailyMeeting />
@@ -99,6 +114,11 @@ export default function App() {
                                 <TaskManagementRoute>
                                     <GoalMeeting />
                                 </TaskManagementRoute>
+                            } />
+                            <Route path="/ipqc" element={
+                                <UserRoute>
+                                    <IPQCLandingPage />
+                                </UserRoute>
                             } />
                             <Route path="/gel-test" element={
                                 <UserRoute>
@@ -130,6 +150,16 @@ export default function App() {
                                     <BusRibbonPullStrengthTest />
                                 </UserRoute>
                             } />
+                            <Route path="/peel-strength-bus-ribbon-jb-soldering" element={
+                                <UserRoute>
+                                    <PeelStrengthBusRibbonJBSolderingTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/jb-contact-block-maintenance" element={
+                                <UserRoute>
+                                    <JBContactBlockMaintenanceReport />
+                                </UserRoute>
+                            } />
                             <Route path="/ssh-test" element={
                                 <UserRoute>
                                     <SSHTest />
@@ -148,6 +178,11 @@ export default function App() {
                             <Route path="/wet-leakage-test" element={
                                 <UserRoute>
                                     <WetLeakageTest />
+                                </UserRoute>
+                            } />
+                            <Route path="/quality-analysis" element={
+                                <UserRoute>
+                                    <QualityAnalysisLandingPage />
                                 </UserRoute>
                             } />
                             <Route path="/b-grade-trend" element={
@@ -180,9 +215,15 @@ export default function App() {
                                     <FQC />
                                 </UserRoute>
                             } />
-                            <Route path="/quality-audit" element={
+                            <Route path="/quality-audit" element={<Navigate to="/ipqc-audits" replace />} />
+                            <Route path="/ipqc-audits" element={
                                 <UserRoute>
                                     <QualityAudit />
+                                </UserRoute>
+                            } />
+                            <Route path="/stringer-parameter-report" element={
+                                <UserRoute>
+                                    <StringerParameterReport />
                                 </UserRoute>
                             } />
                         </Route>

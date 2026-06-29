@@ -18,6 +18,7 @@ export type GoalSortOption =
     | 'targetDateAsc'
     | 'targetDateDesc';
 export type GoalStatusFilter = GoalStatus | 'All' | '__EMPTY__';
+export type GoalQuarterLifecycle = 'past' | 'active' | 'upcoming' | 'future';
 
 export interface GoalMilestone {
     id: string;
@@ -44,6 +45,7 @@ export interface GoalData {
     originGoalId?: string;
     carryForwardSourceId?: string;
     carryForwardEligible: boolean;
+    quarterLifecycle: GoalQuarterLifecycle;
 }
 
 export interface GoalFilters {
@@ -64,6 +66,8 @@ export const DEFAULT_GOAL_FILTERS: GoalFilters = {
     goalStatus: 'All',
     assignedUser: ALL_GOAL_ASSIGNEES_FILTER_VALUE,
 };
+export const GOAL_PLANNING_WINDOW_DAYS = 7;
+export const GOAL_MEETING_START_FINANCIAL_YEAR = 2026;
 
 const GOAL_STATUS_WEIGHT: Record<Exclude<GoalStatus, ''>, number> = {
     Dropped: 7,
@@ -79,6 +83,8 @@ export interface FinancialYearQuarter {
     quarter: 1 | 2 | 3 | 4;
     label: string;
     isLocked: boolean;
+    lifecycle: GoalQuarterLifecycle;
+    startsOn: string;
 }
 
 export const getDateKey = (value: string | Date) => {
@@ -126,6 +132,11 @@ export const getFinancialYearStart = (value = new Date()) => {
 export const formatFinancialYear = (startYear: number) =>
     `FY ${startYear}-${String(startYear + 1).slice(-2)}`;
 
+export const parseFinancialYearStart = (financialYear: string) => {
+    const startYear = Number(financialYear.replace('FY', '').trim().split('-')[0]);
+    return Number.isFinite(startYear) ? startYear : getFinancialYearStart();
+};
+
 export const getQuarterStartDate = (financialYearStart: number, quarter: 1 | 2 | 3 | 4) => {
     if (quarter === 1) {
         return new Date(financialYearStart, 3, 1);
@@ -142,9 +153,63 @@ export const getQuarterStartDate = (financialYearStart: number, quarter: 1 | 2 |
     return new Date(financialYearStart + 1, 0, 1);
 };
 
+export const getQuarterEndDate = (financialYearStart: number, quarter: 1 | 2 | 3 | 4) => {
+    if (quarter === 1) {
+        return new Date(financialYearStart, 5, 30);
+    }
+
+    if (quarter === 2) {
+        return new Date(financialYearStart, 8, 30);
+    }
+
+    if (quarter === 3) {
+        return new Date(financialYearStart, 11, 31);
+    }
+
+    return new Date(financialYearStart + 1, 2, 31);
+};
+
+const startOfLocalDay = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+const addDays = (value: Date, days: number) => {
+    const nextDate = new Date(value);
+    nextDate.setDate(nextDate.getDate() + days);
+    return nextDate;
+};
+
+export const getQuarterLifecycle = (
+    financialYear: string,
+    quarter: 1 | 2 | 3 | 4,
+    today = new Date(),
+): GoalQuarterLifecycle => {
+    const financialYearStart = parseFinancialYearStart(financialYear);
+    const todayStart = startOfLocalDay(today);
+    const quarterStart = startOfLocalDay(getQuarterStartDate(financialYearStart, quarter));
+    const quarterEnd = startOfLocalDay(getQuarterEndDate(financialYearStart, quarter));
+
+    if (todayStart > quarterEnd) {
+        return 'past';
+    }
+
+    if (todayStart >= quarterStart) {
+        return 'active';
+    }
+
+    if (todayStart >= addDays(quarterStart, -GOAL_PLANNING_WINDOW_DAYS)) {
+        return 'upcoming';
+    }
+
+    return 'future';
+};
+
+export const isQuarterOpenForPlanning = (quarter: Pick<FinancialYearQuarter, 'lifecycle'>) =>
+    quarter.lifecycle === 'active' || quarter.lifecycle === 'upcoming';
+
 export const getCurrentFinancialYearQuarter = (): FinancialYearQuarter => {
     const today = new Date();
     const financialYearStart = getFinancialYearStart(today);
+    const financialYear = formatFinancialYear(financialYearStart);
     const month = today.getMonth() + 1;
     const quarter = (month >= 4 && month <= 6
         ? 1
@@ -155,27 +220,42 @@ export const getCurrentFinancialYearQuarter = (): FinancialYearQuarter => {
                 : 4) as 1 | 2 | 3 | 4;
 
     return {
-        financialYear: formatFinancialYear(financialYearStart),
+        financialYear,
         quarter,
-        label: `${formatFinancialYear(financialYearStart)} Q${quarter}`,
+        label: `${financialYear} Q${quarter}`,
         isLocked: false,
+        lifecycle: 'active',
+        startsOn: getDateKey(getQuarterStartDate(financialYearStart, quarter)),
     };
 };
 
 export const getVisibleFinancialYearQuarters = (): FinancialYearQuarter[] => {
     const today = new Date();
-    const portalStartFinancialYear = getFinancialYearStart(today);
+    const currentFinancialYear = getFinancialYearStart(today);
+    const lastVisibleFinancialYear = Math.max(
+        currentFinancialYear + 1,
+        GOAL_MEETING_START_FINANCIAL_YEAR,
+    );
+    const visibleFinancialYears = Array.from(
+        {
+            length: lastVisibleFinancialYear - GOAL_MEETING_START_FINANCIAL_YEAR + 1,
+        },
+        (_, index) => GOAL_MEETING_START_FINANCIAL_YEAR + index,
+    );
 
-    return [portalStartFinancialYear, portalStartFinancialYear + 1].flatMap((startYear) =>
+    return visibleFinancialYears.flatMap((startYear) =>
         ([1, 2, 3, 4] as const).map((quarter) => {
             const financialYear = formatFinancialYear(startYear);
             const quarterStartDate = getQuarterStartDate(startYear, quarter);
+            const lifecycle = getQuarterLifecycle(financialYear, quarter, today);
 
             return {
                 financialYear,
                 quarter,
                 label: `${financialYear} Q${quarter}`,
-                isLocked: quarterStartDate > today,
+                isLocked: lifecycle === 'future',
+                lifecycle,
+                startsOn: getDateKey(quarterStartDate),
             };
         }),
     );

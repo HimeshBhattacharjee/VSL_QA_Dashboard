@@ -90,7 +90,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type, criteria)} ${className}`}
+            className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary ${getBackgroundColor(value, type, criteria)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -112,7 +112,7 @@ const InputComponents = {
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
+            className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
         />
     )
 };

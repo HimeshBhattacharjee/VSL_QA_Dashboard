@@ -61,9 +61,20 @@ LEGACY_SAFETY_MODULE_FIELDS = {
     "4hr": "moduleId4Hours",
     "8hr": "moduleId8Hours",
 }
+AUTO_TAPING_LEGACY_LINE_BY_INTERNAL = {
+    "line1_auto_taping_1": "Line-1",
+    "line1_auto_taping_2": "Line-2",
+    "line1_auto_taping_3": "Line-3",
+    "line2_auto_taping_3": "Line-3",
+    "line2_auto_taping_4": "Line-4",
+}
+AUTO_TAPING_FIELDS = ("4hrs", "8hrs", "Supplier", "Type", "Quantity")
 LINE_OPTIONS_BY_STAGE = {
     7: {"I": ("Line-1", "Line-2", "Line-3"), "II": ("Line-4", "Line-5")},
-    8: {"I": ("Line-1", "Line-2"), "II": ("Line-3", "Line-4")},
+    8: {
+        "I": ("line1_auto_taping_1", "line1_auto_taping_2", "line1_auto_taping_3"),
+        "II": ("line2_auto_taping_3", "line2_auto_taping_4"),
+    },
     15: {"I": ("Auto trimming - 1", "Auto trimming - 2"), "II": ("Auto trimming - 3", "Auto trimming - 4")},
     17: {"I": ("Line-1", "Line-2"), "II": ("Line-3", "Line-4")},
     18: {"I": ("Line-1", "Line-2"), "II": ("Line-3", "Line-4")},
@@ -147,6 +158,66 @@ TIME_KEYS_BY_PARAM = {
     "21-5": ("2hrs", "4hrs", "6hrs", "8hrs"),
     "22-1": ("2hrs", "4hrs", "6hrs", "8hrs"),
 }
+STRINGER_UNIT_KEYS = ("unitA", "unitB")
+LINE_I_MACHINE_TEMP_FIELDS = (
+    "Flux Temp",
+    "Preheat base-1",
+    "Preheat base-2",
+    "Solder base-1",
+    "Solder base-2",
+    "Holding base-1",
+    "Combined Plates",
+    "Holding base-2",
+    "Holding base-3",
+    "Drying base-1",
+    "Drying base-2",
+    "Drying base-3",
+    "Drying base-4",
+    "Drying base-5",
+)
+LINE_I_LIGHT_INTENSITY_FIELDS = (
+    "Solder Time ms",
+    "Solder Temp ˚C",
+    "#1",
+    "#2",
+    "#3",
+    "#4",
+    "#5",
+    "#6",
+    "#7",
+    "#8",
+    "#9",
+    "#10",
+    "#11",
+    "#12",
+    "#13",
+    "#14",
+    "#15",
+    "#16",
+    "#17",
+    "#18",
+    "#19",
+    "#20",
+)
+LINE_I_STRINGER_SETUP_FIELDS_BY_PARAM = {
+    "5-9-machine-temp-setup": LINE_I_MACHINE_TEMP_FIELDS,
+    "5-10-light-intensity-time": LINE_I_LIGHT_INTENSITY_FIELDS,
+}
+LINE_I_AUTO_BUSSING_SOLDERING_TIME_FIELDS = tuple(
+    f"{position}_tca_{tca_number}"
+    for tca_number in range(1, 7)
+    for position in ("front", "middle", "back")
+)
+LEGACY_LINE_I_AUTO_BUSSING_SOLDERING_TIME_FALLBACKS = {
+    "front_tca_1": "Front TCA 1 L",
+    "middle_tca_1": "Middle TCA 1 L",
+    "back_tca_1": "Back TCA 1 L",
+    "front_tca_2": "Front TCA 1 R",
+    "middle_tca_2": "Middle TCA 1 R",
+    "back_tca_2": "Back TCA 1 R",
+}
+AUTO_BUSSING_PATCH_SAMPLE_KEYS = ("sample_1", "sample_2")
+AUTO_BUSSING_PATCH_MEASUREMENT_FIELDS = ("length", "height", "width")
 
 def is_empty_value(value: Any) -> bool:
     return value is None or value == ""
@@ -388,6 +459,88 @@ def normalize_safety_module_ids(value: Dict[str, Any]) -> None:
         legacy_key = LEGACY_SAFETY_MODULE_FIELDS["4hr" if "_4hr_" in field else "8hr"]
         value[field] = value.get(legacy_key, "") or ""
 
+def normalize_line_i_stringer_setup_value(param_id: str, value: Any) -> Any:
+    fields = LINE_I_STRINGER_SETUP_FIELDS_BY_PARAM.get(param_id)
+    if not fields or not isinstance(value, dict):
+        return value
+
+    normalized_value = dict(value)
+    for stringer_key, stringer_value in list(normalized_value.items()):
+        if not isinstance(stringer_value, dict):
+            continue
+
+        normalized_stringer = dict(stringer_value)
+        for unit_key in STRINGER_UNIT_KEYS:
+            unit_value = normalized_stringer.get(unit_key)
+            normalized_unit = dict(unit_value) if isinstance(unit_value, dict) else {}
+            for field_name in fields:
+                normalized_unit.setdefault(field_name, "")
+            normalized_stringer[unit_key] = normalized_unit
+        normalized_value[stringer_key] = normalized_stringer
+
+    return normalized_value
+
+def normalize_line_i_auto_bussing_soldering_time_value(value: Any, line_number: str) -> Any:
+    line_options = get_line_options(7, line_number)
+    if not line_options:
+        return value
+
+    source = dict(value) if isinstance(value, dict) else {}
+    normalized_value = dict(source)
+    for line in line_options:
+        current_line_value = source.get(line)
+        current_line_data = dict(current_line_value) if isinstance(current_line_value, dict) else {}
+        normalized_line_data: Dict[str, str] = {}
+        for field_name in LINE_I_AUTO_BUSSING_SOLDERING_TIME_FIELDS:
+            legacy_field_name = LEGACY_LINE_I_AUTO_BUSSING_SOLDERING_TIME_FALLBACKS.get(field_name)
+            legacy_value = source.get(f"{line}-{legacy_field_name}") if legacy_field_name else ""
+            normalized_line_data[field_name] = current_line_data.get(field_name) or (legacy_value if isinstance(legacy_value, str) else "") or ""
+        normalized_value[line] = normalized_line_data
+    return normalized_value
+
+def normalize_auto_bussing_patch_value(value: Any, line_number: str) -> Any:
+    line_options = get_line_options(7, line_number)
+    if not line_options:
+        return value
+
+    source = dict(value) if isinstance(value, dict) else {}
+    normalized_value = dict(source)
+    for line in line_options:
+        current_line = source.get(line)
+        current_line_data = dict(current_line) if isinstance(current_line, dict) else {}
+        normalized_line_data = dict(current_line_data)
+        for sample_key in AUTO_BUSSING_PATCH_SAMPLE_KEYS:
+            current_sample = current_line_data.get(sample_key)
+            normalized_sample = dict(current_sample) if isinstance(current_sample, dict) else {}
+            for field_name in AUTO_BUSSING_PATCH_MEASUREMENT_FIELDS:
+                normalized_sample.setdefault(field_name, "")
+            normalized_line_data[sample_key] = normalized_sample
+        normalized_value[line] = normalized_line_data
+    return normalized_value
+
+def normalize_auto_taping_value(value: Any, line_number: str) -> Any:
+    line_options = get_line_options(8, line_number)
+    if not line_options:
+        return value
+
+    source = dict(value) if isinstance(value, dict) else {}
+    normalized_value = dict(source)
+    for internal_line in line_options:
+        legacy_line = AUTO_TAPING_LEGACY_LINE_BY_INTERNAL.get(internal_line, internal_line)
+        for field_name in AUTO_TAPING_FIELDS:
+            internal_key = f"{internal_line}-{field_name}"
+            legacy_key = f"{legacy_line}-{field_name}"
+            internal_value = normalized_value.get(internal_key)
+            legacy_value = normalized_value.get(legacy_key)
+
+            if not is_empty_value(legacy_value):
+                normalized_value[internal_key] = legacy_value
+                normalized_value[legacy_key] = legacy_value
+            elif not is_empty_value(internal_value):
+                normalized_value[legacy_key] = internal_value
+
+    return normalized_value
+
 def normalize_dynamic_line_selections(data: Dict[str, Any]) -> Dict[str, Any]:
     """Backfill selectedLine and per-time lineMapping for older audits while preserving payload shape."""
     for stage in data.get("stages", []):
@@ -422,7 +575,18 @@ def normalize_ipqc_audit_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 continue
 
             for observation in parameter.get("observations", []):
-                observation["value"] = apply_default_observation_value(stage_id, param_id, observation.get("value"), line_number)
+                value = observation.get("value")
+                if stage_id == 8:
+                    value = normalize_auto_taping_value(value, line_number)
+                observation["value"] = apply_default_observation_value(stage_id, param_id, value, line_number)
+                if stage_id == 8:
+                    observation["value"] = normalize_auto_taping_value(observation.get("value"), line_number)
+                if line_number == "I" and param_id == "7-2":
+                    observation["value"] = normalize_line_i_auto_bussing_soldering_time_value(observation.get("value"), line_number)
+                if param_id == "7-10":
+                    observation["value"] = normalize_auto_bussing_patch_value(observation.get("value"), line_number)
+                if line_number == "I" and param_id in LINE_I_STRINGER_SETUP_FIELDS_BY_PARAM:
+                    observation["value"] = normalize_line_i_stringer_setup_value(param_id, observation.get("value"))
                 value = observation.get("value")
                 if not isinstance(value, dict):
                     continue

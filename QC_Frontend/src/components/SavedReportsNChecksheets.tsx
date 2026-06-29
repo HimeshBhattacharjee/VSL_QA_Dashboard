@@ -232,7 +232,7 @@ export default function SavedReportsNChecksheets({
             {hasActiveFilters && (
                 <button
                     onClick={clearFilters}
-                    className="mt-4 px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+                    className="mt-4 px-4 py-2 bg-brand-primary text-white text-sm rounded-md hover:bg-brand-primary-hover transition-colors"
                 >
                     Clear all filters
                 </button>
@@ -258,7 +258,7 @@ export default function SavedReportsNChecksheets({
                                         value={searchTerm}
                                         onChange={handleSearchChange}
                                         placeholder={searchPlaceholder}
-                                        className="w-full px-4 py-2 pl-10 pr-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                        className="w-full px-4 py-2 pl-10 pr-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                     />
                                     <svg
                                         className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 dark:text-gray-500"
@@ -281,7 +281,7 @@ export default function SavedReportsNChecksheets({
                             <select
                                 value={sortOption}
                                 onChange={(e) => handleSortChange(e.target.value as SortOption)}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                 aria-label="Sort saved reports"
                             >
                                 <option value="newest-created">Newest Created</option>
@@ -298,7 +298,7 @@ export default function SavedReportsNChecksheets({
                                 onClick={() => setShowFilters(!showFilters)}
                                 className={`px-4 py-2 border rounded-lg transition-all flex items-center justify-center gap-2 ${
                                     showFilters 
-                                        ? 'bg-blue-500 dark:bg-blue-600 text-white border-blue-500 dark:border-blue-600' 
+                                        ? 'bg-brand-primary text-white border-brand-primary' 
                                         : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                                 }`}
                             >
@@ -329,13 +329,13 @@ export default function SavedReportsNChecksheets({
                                                 type="date"
                                                 value={activeFilters[config.type] || ''}
                                                 onChange={(e) => handleFilterChange(config.type, e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                             />
                                         ) : (
                                             <select
                                                 value={activeFilters[config.type] || ''}
                                                 onChange={(e) => handleFilterChange(config.type, e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                             >
                                                 <option value="">All {config.label}</option>
                                                 {config.options?.map(option => (
@@ -351,7 +351,7 @@ export default function SavedReportsNChecksheets({
                                 <div className="mt-3 flex justify-end">
                                     <button
                                         onClick={clearFilters}
-                                        className="text-sm text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                                        className="text-sm text-brand-primary dark:text-brand-primary-light hover:text-brand-primary-hover dark:hover:text-brand-primary-muted"
                                     >
                                         Clear all filters
                                     </button>
@@ -400,7 +400,7 @@ export default function SavedReportsNChecksheets({
                                 </div>
                                 <div className="flex flex-wrap gap-2 md:gap-2 md:flex-nowrap justify-start md:justify-end">
                                     <button
-                                        className={`excel-export-btn px-3 md:px-4 py-1.5 md:py-2 text-white text-xs md:text-sm rounded-md font-medium transition-all flex items-center justify-center min-w-[36px] md:min-w-[44px] ${exportAllowed ? 'cursor-pointer bg-blue-500 dark:bg-blue-600 hover:bg-green-500 dark:hover:bg-green-600 hover:scale-105 active:scale-95' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700 opacity-70'}`}
+                                        className={`excel-export-btn px-3 md:px-4 py-1.5 md:py-2 text-white text-xs md:text-sm rounded-md font-medium transition-all flex items-center justify-center min-w-[36px] md:min-w-[44px] ${exportAllowed ? 'cursor-pointer bg-brand-primary hover:bg-brand-primary-hover hover:scale-105 active:scale-95' : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700 opacity-70'}`}
                                         onClick={() => exportAllowed && onExportExcel(originalIndex)}
                                         disabled={!exportAllowed}
                                         title="Export to Excel"

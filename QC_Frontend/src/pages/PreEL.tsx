@@ -264,7 +264,7 @@ export default function PreEL() {
             <div className="text-center mb-2">
                 <button
                     onClick={handleBackToPreLamDashboard}
-                    className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-blue-500 px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300 hover:-translate-x-1"
+                    className="bg-white/20 dark:bg-gray-800/20 text-black dark:text-white border-2 border-brand-primary px-4 py-1 rounded-3xl cursor-pointer text-sm font-bold transition-all duration-300 hover:bg-white hover:text-brand-primary-hover dark:hover:bg-gray-700 dark:hover:text-brand-primary-light hover:-translate-x-1"
                 >
                     <span className="font-bold text-md">⇐</span> Back to Pre-Lam Dashboard
                 </button>
@@ -278,7 +278,7 @@ export default function PreEL() {
                             id="startDate"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                         />
                     </div>
 
@@ -289,41 +289,41 @@ export default function PreEL() {
                             id="endDate"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-[#667eea] focus:outline-none focus:ring-2 focus:ring-[#667eea] hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                            className="cursor-pointer px-3 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300 border-b-2 border-b-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary hover:-translate-y-0.5 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                         />
                     </div>
 
                     <div className="line-buttons flex flex-wrap justify-center gap-2 sm:gap-3 mt-4 w-full">
                         <button
-                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '1' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '1' ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white' : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('1')}
                         >
                             Line - 1
                         </button>
                         <button
-                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '2' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '2' ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white' : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('2')}
                         >
                             Line - 2
                         </button>
                         <button
-                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '3' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '3' ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white' : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('3')}
                         >
                             Line - 3
                         </button>
                         <button
-                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '4' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === '4' ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white' : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('4')}
                         >
                             Line - 4
                         </button>
                         <button
-                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === 'combined' ? 'bg-gradient-to-r from-[#8298f9] to-[#ceaaf2] dark:from-[#667eea] dark:to-[#764ba2] border-transparent text-white' : 'border-b-2 border-b-[#667eea] dark:border-gray-600'
+                            className={`line-btn bg-white dark:bg-gray-700 text-black dark:text-white rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${selectedLine === 'combined' ? 'bg-gradient-to-r from-brand-primary to-brand-primary-hover border-transparent text-white' : 'border-b-2 border-b-brand-primary dark:border-gray-600'
                                 }`}
                             onClick={() => handleLineSelect('combined')}
                         >
@@ -351,19 +351,19 @@ export default function PreEL() {
                 </div>
 
                 <div className="metrics-container grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                         <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="totalProduction">
                             {metrics.totalProduction.toLocaleString()}
                         </div>
                         <div className="metric-label text-sm text-gray-600 dark:text-gray-300 font-medium">Total Production</div>
                     </div>
-                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                         <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="totalRejection">
                             {metrics.totalRejection.toLocaleString()}
                         </div>
                         <div className="metric-label text-sm text-gray-600 dark:text-gray-300 font-medium">Total Rejections</div>
                     </div>
-                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-blue-500 transition-colors duration-300">
+                    <div className="metric-card bg-gray-50 dark:bg-gray-700 rounded-xl p-4 sm:p-5 text-center border-l-4 border-brand-primary transition-colors duration-300">
                         <div className="metric-value text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-2" id="rejectionRate">
                             {metrics.rejectionRate}
                         </div>

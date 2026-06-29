@@ -1,11 +1,39 @@
 import { StageData, ObservationRenderProps } from '../types/audit';
 import { LINE_DEPENDENT_CONFIG } from './lineConfig';
 
+const TIME_FIELDS = ['4hrs', '8hrs'] as const;
+const CELL_FIXING_FIELDS = ['Supplier', 'Type', 'Quantity'] as const;
+
 const getLineConfiguration = (lineNumber: string): string[] => {
     const stageConfig = LINE_DEPENDENT_CONFIG[8];
     if (!stageConfig) return ['Line-3', 'Line-4'];
     const lineOptions = stageConfig.lineMapping[lineNumber];
     return Array.isArray(lineOptions) ? lineOptions : ['Line-3', 'Line-4'];
+};
+
+const getAutoTapingDisplayNumber = (line: string) => {
+    return line.split('-')[1] || line;
+};
+
+const normalizeAutoTapingValue = (
+    value: unknown,
+    lines: string[],
+    fields: readonly string[]
+) => {
+    const normalizedValue = typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? { ...(value as Record<string, string>) }
+        : {};
+
+    lines.forEach(line => {
+        fields.forEach(field => {
+            const key = `${line}-${field}`;
+            if (normalizedValue[key] === undefined) {
+                normalizedValue[key] = '';
+            }
+        });
+    });
+
+    return normalizedValue;
 };
 
 const getBackgroundColor = (value: string, type: 'status' | 'temperature' | 'measurement' | 'date' = 'status', criteria?: string) => {
@@ -80,7 +108,7 @@ const LineSection = {
     }) => (
         <div className="flex w-full min-w-0 flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
-                <span className="text-sm font-semibold text-gray-700 break-words">Auto Tapping & Layup - {line.split('-')[1]}</span>
+                <span className="text-sm font-semibold text-gray-700 break-words">Auto Taping & Layup - {getAutoTapingDisplayNumber(line)}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="flex min-w-0 flex-col items-center justify-between">
@@ -103,7 +131,7 @@ const LineSection = {
     }) => (
         <div className="flex w-full min-w-0 flex-col border border-gray-300 rounded-lg bg-white shadow-sm p-2">
             <div className="text-center mb-2">
-                <span className="text-sm font-semibold text-gray-700 break-words">Auto Tapping & Layup - {line.split('-')[1]}</span>
+                <span className="text-sm font-semibold text-gray-700 break-words">Auto Taping & Layup - {getAutoTapingDisplayNumber(line)}</span>
             </div>
             {children}
         </div>
@@ -122,7 +150,7 @@ const InputComponents = {
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBackgroundColor(value, type, criteria)} ${className}`}
+            className={`w-full min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary ${getBackgroundColor(value, type, criteria)} ${className}`}
         >
             <option value="">Select</option>
             {options.map(option => (
@@ -145,7 +173,7 @@ const InputComponents = {
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className={`min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
+                className={`min-w-0 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary text-center ${getBackgroundColor(value, type, criteria)} ${className}`}
             />
         </div>
     )
@@ -154,9 +182,7 @@ const InputComponents = {
 const AutoTapingNLayupObservations = {
     renderStatusCheck: (props: ObservationRenderProps & { lineNumber?: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.flatMap(line => ['4hrs', '8hrs'].map(timeSlot => [`${line}-${timeSlot}`, ""])))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, TIME_FIELDS);
 
         const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
@@ -164,7 +190,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -192,9 +218,7 @@ const AutoTapingNLayupObservations = {
 
     renderRFID: (props: ObservationRenderProps & { lineNumber?: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.map(line => [line, ""]))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, TIME_FIELDS);
 
         const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
@@ -202,7 +226,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -230,9 +254,7 @@ const AutoTapingNLayupObservations = {
 
     renderCellFixingTape: (props: ObservationRenderProps & { lineNumber?: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.flatMap(line => ['Supplier', 'Type', 'Quantity'].map(field => [`${line}-${field}`, ""])))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, CELL_FIXING_FIELDS);
 
         const handleUpdate = (line: string, field: 'Supplier' | 'Type' | 'Quantity', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${field}`]: value };
@@ -240,7 +262,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.SingleInputSection
                         key={line}
@@ -291,9 +313,7 @@ const AutoTapingNLayupObservations = {
 
     renderGap: (props: ObservationRenderProps & { lineNumber?: string, criteria: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.flatMap(line => ['4hrs', '8hrs'].map(timeSlot => [`${line}-${timeSlot}`, ""])))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, TIME_FIELDS);
 
         const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
@@ -301,7 +321,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -329,9 +349,7 @@ const AutoTapingNLayupObservations = {
 
     renderDistance: (props: ObservationRenderProps & { lineNumber?: string, criteria: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.flatMap(line => ['4hrs', '8hrs'].map(timeSlot => [`${line}-${timeSlot}`, ""])))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, TIME_FIELDS);
 
         const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
@@ -339,7 +357,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}
@@ -367,9 +385,7 @@ const AutoTapingNLayupObservations = {
 
     renderTapeLength: (props: ObservationRenderProps & { lineNumber?: string }) => {
         const lines = getLineConfiguration(props.lineNumber || 'II');
-        const sampleValue = typeof props.value === 'string'
-            ? Object.fromEntries(lines.flatMap(line => ['4hrs', '8hrs'].map(timeSlot => [`${line}-${timeSlot}`, ""])))
-            : props.value as Record<string, string>;
+        const sampleValue = normalizeAutoTapingValue(props.value, lines, TIME_FIELDS);
 
         const handleUpdate = (line: string, timeSlot: '4hrs' | '8hrs', value: string) => {
             const updatedValue = { ...sampleValue, [`${line}-${timeSlot}`]: value };
@@ -377,7 +393,7 @@ const AutoTapingNLayupObservations = {
         };
 
         return (
-            <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid w-full min-w-0 ${lines.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {lines.map(line => (
                     <LineSection.TimeBasedSection
                         key={line}

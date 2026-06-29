@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,6 +7,7 @@ from constants import MONGODB_DB_NAME, MONGODB_URI
 from date_utils import IST_TIMEZONE, ensure_utc_datetime, serialize_datetime, to_ist_date_key, utc_now
 
 GOALS_COLLECTION_NAME = 'goals'
+GOAL_PLANNING_WINDOW_DAYS = 7
 
 goal_client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 goal_db = goal_client[MONGODB_DB_NAME]
@@ -102,6 +103,7 @@ class GoalResponse(GoalBase):
     originGoalId: str | None = None
     carryForwardSourceId: str | None = None
     carryForwardEligible: bool = False
+    quarterLifecycle: Literal['past', 'active', 'upcoming', 'future']
 
 
 def get_financial_year_start(value: datetime | None = None) -> int:
@@ -152,6 +154,14 @@ def get_quarter_end_date(financial_year: str | None, quarter: int | None) -> dat
     return date(quarter_year, end_month, end_day)
 
 
+def get_quarter_start_date(financial_year: str | None, quarter: int | None) -> date:
+    financial_year_start = parse_financial_year_start(financial_year) or get_financial_year_start()
+    normalized_quarter = normalize_quarter_value(quarter, get_financial_quarter()[1])
+    start_month, _ = FY_QUARTER_MONTHS[normalized_quarter]
+    quarter_year = financial_year_start + 1 if normalized_quarter == 4 else financial_year_start
+    return date(quarter_year, start_month, 1)
+
+
 def get_next_quarter(financial_year: str, quarter: int) -> tuple[str, int]:
     financial_year_start = parse_financial_year_start(financial_year) or get_financial_year_start()
 
@@ -164,12 +174,49 @@ def get_next_quarter(financial_year: str, quarter: int) -> tuple[str, int]:
     return format_financial_year(financial_year_start), quarter
 
 
+def get_quarter_lifecycle(
+    financial_year: str | None,
+    quarter: int | None,
+    today: date | None = None,
+) -> Literal['past', 'active', 'upcoming', 'future']:
+    today = today or utc_now().astimezone(IST_TIMEZONE).date()
+    start_date = get_quarter_start_date(financial_year, quarter)
+    end_date = get_quarter_end_date(financial_year, quarter)
+
+    if today > end_date:
+        return 'past'
+
+    if today >= start_date:
+        return 'active'
+
+    if today >= start_date - timedelta(days=GOAL_PLANNING_WINDOW_DAYS):
+        return 'upcoming'
+
+    return 'future'
+
+
+def get_goal_planning_quarter(value: datetime | None = None) -> tuple[str, int]:
+    reference_date = normalize_datetime_value(value).astimezone(IST_TIMEZONE).date()
+    financial_year, quarter = get_financial_quarter(value)
+    next_financial_year, next_quarter = get_next_quarter(financial_year, quarter)
+    next_quarter_start = get_quarter_start_date(next_financial_year, next_quarter)
+
+    if next_quarter_start - timedelta(days=GOAL_PLANNING_WINDOW_DAYS) <= reference_date < next_quarter_start:
+        return next_financial_year, next_quarter
+
+    return financial_year, quarter
+
+
 def get_completion_percentage(milestones: list[dict]) -> int:
     if len(milestones) == 0:
         return 0
 
     completed_count = sum(1 for milestone in milestones if bool(milestone.get('completed')))
     return round((completed_count / len(milestones)) * 100)
+
+
+def is_goal_quarter_open_for_planning(financial_year: str | None, quarter: int | None) -> bool:
+    return get_quarter_lifecycle(financial_year, quarter) in {'active', 'upcoming'}
 
 
 def evaluate_goal_status(document: dict) -> GoalStatus:
@@ -220,7 +267,7 @@ def evaluate_goal_status(document: dict) -> GoalStatus:
     return ''
 
 
-def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
+def normalize_goal_payload(payload: GoalCreate | GoalUpdate, enforce_open_quarter: bool = True) -> dict:
     goal = payload.model_dump()
     goal['title'] = goal['title'].strip()
     goal['assignedTo'] = list(
@@ -235,12 +282,15 @@ def normalize_goal_payload(payload: GoalCreate | GoalUpdate) -> dict:
     if len(goal['assignedTo']) == 0:
         raise ValueError('At least one assigned employee is required')
 
-    default_financial_year, default_quarter = get_financial_quarter()
+    default_financial_year, default_quarter = get_goal_planning_quarter()
     financial_year = goal.get('financialYear') or default_financial_year
     quarter = goal.get('quarter') or default_quarter
 
     if quarter not in FY_QUARTER_MONTHS:
         raise ValueError('Quarter must be between Q1 and Q4')
+
+    if enforce_open_quarter and not is_goal_quarter_open_for_planning(financial_year, quarter):
+        raise ValueError('Goals can only be created or edited for the active quarter or the upcoming quarter planning window')
 
     goal['financialYear'] = financial_year
     goal['quarter'] = quarter
@@ -308,6 +358,7 @@ def serialize_goal(document: dict) -> dict:
     }
     goal_status = evaluate_goal_status(lifecycle_document)
     completion_percentage = get_completion_percentage(document.get('milestones', []))
+    quarter_lifecycle = get_quarter_lifecycle(financial_year, quarter)
 
     return {
         'id': str(document['_id']),
@@ -328,23 +379,31 @@ def serialize_goal(document: dict) -> dict:
         'originGoalId': document.get('originGoalId'),
         'carryForwardSourceId': document.get('carryForwardSourceId'),
         'carryForwardEligible': goal_status == 'Not Done',
+        'quarterLifecycle': quarter_lifecycle,
     }
 
 
 def build_carry_forward_goal(source_goal: dict) -> dict:
     source_id = str(source_goal['_id'])
-    source_financial_year = source_goal.get('financialYear') or get_financial_quarter()[0]
-    source_quarter = source_goal.get('quarter') or get_financial_quarter()[1]
-    next_financial_year, next_quarter = get_next_quarter(source_financial_year, source_quarter)
+    source_milestones = source_goal.get('milestones', [])
+    target_financial_year, target_quarter = get_goal_planning_quarter()
+    copied_milestones = [
+        {
+            **milestone,
+            'completed': False,
+            'completedAt': None,
+        }
+        for milestone in source_milestones
+    ]
 
     return {
         'title': source_goal['title'],
         'assignedTo': source_goal.get('assignedTo', []),
         'createdAt': utc_now(),
-        'milestones': source_goal.get('milestones', []),
-        'financialYear': next_financial_year,
-        'quarter': next_quarter,
-        'completionPercentage': get_completion_percentage(source_goal.get('milestones', [])),
+        'milestones': copied_milestones,
+        'financialYear': target_financial_year,
+        'quarter': target_quarter,
+        'completionPercentage': get_completion_percentage(copied_milestones),
         'isDropped': False,
         'parentGoalId': source_goal.get('parentGoalId') or source_id,
         'originGoalId': source_goal.get('originGoalId') or source_id,
@@ -354,8 +413,12 @@ def build_carry_forward_goal(source_goal: dict) -> dict:
             {
                 'sourceGoalId': source_id,
                 'statusAtCarryForward': evaluate_goal_status(source_goal),
-                'completionPercentage': get_completion_percentage(source_goal.get('milestones', [])),
+                'completionPercentage': get_completion_percentage(source_milestones),
                 'carriedForwardAt': utc_now(),
+                'sourceFinancialYear': source_goal.get('financialYear'),
+                'sourceQuarter': source_goal.get('quarter'),
+                'targetFinancialYear': target_financial_year,
+                'targetQuarter': target_quarter,
             },
         ],
     }

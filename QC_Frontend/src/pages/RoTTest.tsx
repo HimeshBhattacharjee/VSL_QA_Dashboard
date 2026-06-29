@@ -602,10 +602,10 @@ export default function RoTTest() {
                     onClick={() => handleDateSelect(dateStr)}
                     className={`
                         relative p-3 rounded-lg border-2 transition-all
-                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : statusClass}
+                        ${isSelected ? 'ring-2 ring-brand-primary border-brand-primary' : statusClass}
                         ${isToday ? 'font-bold' : ''}
                         hover:shadow-md hover:-translate-y-0.5
-                        ${dateEntries.length === 0 ? 'hover:border-blue-300' : ''}
+                        ${dateEntries.length === 0 ? 'hover:border-brand-primary/40' : ''}
                     `}
                 >
                     <div className="flex items-center justify-between">
@@ -818,7 +818,7 @@ export default function RoTTest() {
                 {isLoading && (
                     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-primary mx-auto"></div>
                             <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
                         </div>
                     </div>
@@ -836,8 +836,8 @@ export default function RoTTest() {
                 />
                 <FabLineSelectionModal
                     isOpen={showLineSelector && Boolean(selectedDate)}
-                    title="Select Line"
-                    question="Which line do you want to fill details for?"
+                    title="Select FAB Line"
+                    question="Which FAB line do you want to fill details for?"
                     selectedLineGroup={selectedLineGroup}
                     onLineSelect={handleLineSelect}
                     onClose={handleCloseLineSelector}
@@ -863,7 +863,7 @@ export default function RoTTest() {
                                             <select
                                                 value={currentDate.getMonth()}
                                                 onChange={(e) => handleMonthChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
                                             >
                                                 {months.map((month, index) => (
                                                     <option key={month} value={index}>
@@ -875,7 +875,7 @@ export default function RoTTest() {
                                             <select
                                                 value={currentDate.getFullYear()}
                                                 onChange={(e) => handleYearChange(parseInt(e.target.value))}
-                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                                                className="p-2 pr-4 dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
                                             >
                                                 {years.map(year => (
                                                     <option key={year} value={year}>
@@ -896,7 +896,7 @@ export default function RoTTest() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleTodayEntry}
-                                            className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                            className="px-4 py-2 bg-brand-primary-soft dark:bg-brand-primary/10 text-brand-primary dark:text-brand-primary-light rounded-lg text-sm font-medium hover:bg-brand-primary-muted dark:hover:bg-brand-primary/15 transition-colors"
                                         >
                                             Today
                                         </button>
@@ -979,7 +979,7 @@ export default function RoTTest() {
                                                     type="text"
                                                     value={currentEntry.po}
                                                     onChange={(e) => handleInputChange('po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     placeholder="Enter PO number"
                                                 />
                                             </div>
@@ -991,7 +991,7 @@ export default function RoTTest() {
                                                     type="text"
                                                     value={currentEntry.moduleType}
                                                     onChange={(e) => handleInputChange('moduleType', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     placeholder="Enter module type"
                                                 />
                                             </div>
@@ -1003,7 +1003,7 @@ export default function RoTTest() {
                                                     type="text"
                                                     value={currentEntry.moduleSerial}
                                                     onChange={(e) => handleInputChange('moduleSerial', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     placeholder="Enter serial number"
                                                 />
                                             </div>
@@ -1014,7 +1014,7 @@ export default function RoTTest() {
                                                 <select
                                                     value={currentEntry.jbSupplier}
                                                     onChange={(e) => handleInputChange('jbSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                 >
                                                     <option value="">Select</option>
                                                     <option value="Suzhou UKT New Energy Technology Co. Ltd">Suzhou UKT New Energy Technology Co. Ltd</option>
@@ -1028,7 +1028,7 @@ export default function RoTTest() {
                                                 <select
                                                     value={currentEntry.sealantSupplier}
                                                     onChange={(e) => handleInputChange('sealantSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                 >
                                                     <option value="">Select</option>
                                                     <option value="Huitan">Huitan</option>
@@ -1045,7 +1045,7 @@ export default function RoTTest() {
                                                 <select
                                                     value={currentEntry.backsheetSupplier}
                                                     onChange={(e) => handleInputChange('backsheetSupplier', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                 >
                                                     <option value="">Select</option>
                                                     <option value="Xinyi Solar">Xinyi Solar</option>
@@ -1064,7 +1064,7 @@ export default function RoTTest() {
                                                 <select
                                                     value={currentEntry.result}
                                                     onChange={(e) => handleInputChange('result', e.target.value as 'Pass' | 'Fail')}
-                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getResultSelectClass(currentEntry.result)}`}
+                                                    className={`w-full p-2.5 rounded-lg text-xs border focus:outline-none focus:ring-2 focus:ring-brand-primary ${getResultSelectClass(currentEntry.result)}`}
                                                 >
                                                     <option value="">Select result</option>
                                                     <option value="Pass" className="bg-green-100 text-green-700">Pass</option>
@@ -1079,7 +1079,7 @@ export default function RoTTest() {
                                                     type="text"
                                                     value={currentEntry.testDoneBy}
                                                     onChange={(e) => handleInputChange('testDoneBy', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     placeholder="Enter tester name"
                                                 />
                                             </div>
@@ -1091,7 +1091,7 @@ export default function RoTTest() {
                                                     value={currentEntry.remarks || ''}
                                                     onChange={(e) => handleInputChange('remarks', e.target.value)}
                                                     rows={2}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                                     placeholder="Add any remarks"
                                                 />
                                             </div>
@@ -1106,7 +1106,7 @@ export default function RoTTest() {
                                             </button>
                                             <button
                                                 onClick={handleSaveEntry}
-                                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                                className="flex items-center gap-2 px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
                                             >
                                                 <Save className="w-4 h-4" />
                                                 {isEditing ? 'Update Entry' : 'Save Entry'}
@@ -1120,7 +1120,7 @@ export default function RoTTest() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <Percent className="w-5 h-5 text-blue-500" />
+                                        <Percent className="w-5 h-5 text-brand-primary" />
                                         <span className="text-xs text-gray-500 dark:text-gray-400">Completion</span>
                                     </div>
                                     <div className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -1148,7 +1148,7 @@ export default function RoTTest() {
                             </div>
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <BarChart3 className="w-4 h-4 text-blue-500" />
+                                    <BarChart3 className="w-4 h-4 text-brand-primary" />
                                     {months[currentDate.getMonth()]} {currentDate.getFullYear()} Summary
                                 </h3>
                                 <div className="space-y-3">
@@ -1168,7 +1168,7 @@ export default function RoTTest() {
                             </div>
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                                 <h3 className="text-md font-semibold flex items-center gap-2 mb-4 dark:text-white">
-                                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                                    <TrendingUp className="w-4 h-4 text-brand-primary" />
                                     Results Breakdown
                                 </h3>
 

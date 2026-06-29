@@ -16,7 +16,7 @@ const FQCObservations = {
                 <select
                     value={props.value as string || 'Checked OK'}
                     onChange={(e) => props.onUpdate(props.stageId, props.paramId, props.timeSlot, e.target.value)}
-                    className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 shadow-sm ${getBackgroundColor(props.value as string)}`}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:border-brand-primary shadow-sm ${getBackgroundColor(props.value as string)}`}
                 >
                     <option value="">Select</option>
                     <option value="Checked OK">Checked OK</option>

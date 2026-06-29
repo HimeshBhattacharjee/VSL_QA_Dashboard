@@ -1,25 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, type ReactNode } from 'react';
-import { BarChart3, ClipboardList, FlaskConical, Home, ShieldCheck, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import SidebarItem from './SidebarItem';
+import { sectionNavigation } from '../navigation/sectionNavigation';
 import {
     getCurrentTaskManagementRole,
     getTaskManagementPermissions,
 } from '../utilities/taskAccess';
 
-interface ChildItem {
-    id: string;
-    label: string;
-    path: string | null;
-    children?: ChildItem[] | null;
-}
-
 interface MenuItem {
     id: string;
     label: string;
     icon: ReactNode;
-    path: string | null;
-    children: ChildItem[] | null;
+    path: string;
+    activePaths: string[];
 }
 
 interface SidebarProps {
@@ -27,75 +21,19 @@ interface SidebarProps {
     onClose: () => void;
 }
 
-const hasActiveChildPath = (children: ChildItem[] | null, pathname: string): boolean => {
-    if (!children) {
-        return false;
-    }
+const MENU_ITEMS: MenuItem[] = sectionNavigation.map((section) => {
+    const Icon = section.icon;
 
-    return children.some((child) => child.path === pathname || hasActiveChildPath(child.children || null, pathname));
-};
-
-const MENU_ITEMS: MenuItem[] = [
-    {
-        id: 'home',
-        label: 'Home',
-        icon: <Home size={18} />,
-        path: '/home',
-        children: null,
-    },
-    {
-        id: 'task-management',
-        label: 'Task Management',
-        icon: <ClipboardList size={18} />,
-        path: null,
-        children: [
-            { id: 'daily-meeting', label: 'Daily Meeting', path: '/daily-meeting' },
-            { id: 'goal-meeting', label: 'Goal Meeting', path: '/goal-meeting' },
-        ],
-    },
-    {
-        id: 'quality-tests',
-        label: 'Quality Tests',
-        icon: <FlaskConical size={18} />,
-        path: null,
-        children: [
-            { id: 'adhesion-test', label: 'Adhesion Test', path: '/adhesion-test' },
-            { id: 'bus-ribbon-pull-strength', label: 'Bus Ribbon to INTC Ribbon Pull Strength Test', path: '/bus-ribbon-pull-strength' },
-            { id: 'frame-sealant-wt', label: 'Frame Sealant Weight Report', path: '/frame-sealant-wt' },
-            { id: 'gel-test', label: 'Gel Content Test', path: '/gel-test' },
-            { id: 'jb-sealant-wt', label: 'JB Sealant Weight Measurement', path: '/jb-sealant-wt' },
-            { id: 'potting', label: 'Potting Ratio Measurement', path: '/potting' },
-            { id: 'rot-test', label: 'Robustness of Termination Test', path: '/rot-test' },
-            { id: 'ssh-test', label: 'Sealant Shore Hardness Test', path: '/ssh-test' },
-            { id: 'peel-test', label: 'Solar Cell Peel Strength Test', path: '/peel-test' },
-            { id: 'wet-leakage-test', label: 'Wet Leakage Test', path: '/wet-leakage-test' },
-        ],
-    },
-    {
-        id: 'quality-analysis',
-        label: 'Quality Analysis',
-        icon: <BarChart3 size={18} />,
-        path: null,
-        children: [
-            { id: 'b-grade', label: 'B-Grade', path: '/b-grade-trend' },
-            { id: 'fqc-analysis', label: 'FQC Analysis', path: '/fqc' },
-            { id: 'lam-qc', label: 'Lam QC', path: '/lamqc' },
-            { id: 'pre-lam', label: 'Pre Lam', path: '/prelam' },
-        ],
-    },
-    {
-        id: 'audits',
-        label: 'Audits',
-        icon: <ShieldCheck size={18} />,
-        path: null,
-        children: [
-            { id: 'ipqc-audit', label: 'IPQC Audits', path: '/quality-audit' },
-        ],
-    },
-];
+    return {
+        id: section.id,
+        label: section.label,
+        icon: <Icon size={18} />,
+        path: section.path,
+        activePaths: section.children.map((child) => child.path),
+    };
+});
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-    const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
     const location = useLocation();
     const navigate = useNavigate();
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -113,38 +51,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    useEffect(() => {
-        const nextMenuItems = permissions.canAccessTaskManagement
-            ? MENU_ITEMS
-            : MENU_ITEMS.filter((item) => item.id !== 'task-management');
-        const newExpanded = new Set<string>();
-        nextMenuItems.forEach((item) => {
-            if (item.children) {
-                const hasActiveChild = hasActiveChildPath(item.children, location.pathname);
-                if (hasActiveChild) newExpanded.add(item.id);
-            }
-        });
-        setExpandedItems(newExpanded);
-    }, [location.pathname, permissions.canAccessTaskManagement]);
-
-    const toggleExpand = (itemId: string) => {
-        const newExpanded = new Set(expandedItems);
-        if (newExpanded.has(itemId)) newExpanded.delete(itemId);
-        else newExpanded.add(itemId);
-        setExpandedItems(newExpanded);
-    };
-
-    const handleMenuItemClick = (path: string | null) => {
-        if (path) {
-            navigate(path);
-            if (isMobile) onClose();
-        }
+    const handleMenuItemClick = (path: string) => {
+        navigate(path);
+        if (isMobile) onClose();
     };
 
     const isItemActive = (item: MenuItem): boolean => {
         if (item.path === location.pathname) return true;
-        if (item.children) return hasActiveChildPath(item.children, location.pathname);
-        return false;
+        return item.activePaths.includes(location.pathname);
     };
 
     const handleLogoClick = () => { navigate('/home'); };
@@ -189,9 +103,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         <SidebarItem
                             key={item.id}
                             item={item}
-                            isExpanded={expandedItems.has(item.id)}
                             isActive={isItemActive(item)}
-                            onToggleExpand={() => toggleExpand(item.id)}
                             onItemClick={handleMenuItemClick}
                         />
                     ))}

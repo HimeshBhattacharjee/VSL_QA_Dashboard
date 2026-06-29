@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from generators.BusRibbonPullStrengthReportGenerator import generate_bus_ribbon_pull_strength_report
 from models.bus_ribbon_pull_strength_models import BusRibbonPullStrengthDailyEntry, normalize_line
+from services.pull_strength_lookup_service import PullStrengthLookupService
 
 
 bus_ribbon_pull_strength_router = APIRouter(
@@ -37,6 +38,10 @@ BUSSING_LABELS = {
     "autoBussing4": "Auto Bussing 4",
     "autoBussing5": "Auto Bussing 5",
 }
+
+
+def display_strength_number(index: int) -> int:
+    return ((index - 1) % 16) + 1
 
 
 def signature_key(date: str, line: str, shift: str) -> str:
@@ -118,7 +123,7 @@ def normalize_entry_payload(entry: dict) -> dict:
         padded_strengths = [(strengths[index] if index < len(strengths) else "") for index in range(32)]
         for index, value in enumerate(padded_strengths, start=1):
             if value not in (None, "") and parse_numeric(value) is None:
-                raise HTTPException(status_code=400, detail=f"{machine_label} Strength {index} must be a valid number")
+                raise HTTPException(status_code=400, detail=f"{machine_label} Strength {display_strength_number(index)} must be a valid number")
 
         normalized_bussing_data[machine_key] = {
             "position": position,
@@ -230,6 +235,25 @@ async def get_monthly_stats(year: int = Query(...), month: int = Query(..., ge=1
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stats: {str(e)}")
+
+
+@bus_ribbon_pull_strength_router.get("/lookup")
+async def lookup_pull_strength_measurements(
+    date: str = Query(...),
+    shift: str = Query(...),
+    line: str = Query(...),
+    position: str = Query(...),
+    side: str = Query(...),
+):
+    try:
+        return {
+            "success": True,
+            "data": PullStrengthLookupService.lookup(date, shift, line, position, side),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to lookup pull strength measurements: {str(exc)}")
 
 
 @bus_ribbon_pull_strength_router.post("/entries")
