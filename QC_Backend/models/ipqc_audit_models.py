@@ -1,5 +1,5 @@
 from pymongo import ASCENDING, DESCENDING, MongoClient
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Iterable
 from urllib.parse import unquote, urlparse
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from s3_service import S3Service
@@ -21,6 +21,9 @@ def ensure_ipqc_audit_indexes() -> None:
         ipqc_audit_collection.create_index([("createdBy", ASCENDING)], name="ipqc_created_by_idx")
         ipqc_audit_collection.create_index([("workflowState", ASCENDING)], name="ipqc_workflow_state_idx")
         ipqc_audit_collection.create_index([("createdByEmployeeId", ASCENDING)], name="ipqc_created_by_employee_id_idx")
+        ipqc_audit_collection.create_index([("date", DESCENDING)], name="ipqc_date_desc_idx")
+        ipqc_audit_collection.create_index([("completionPercentage", DESCENDING)], name="ipqc_completion_percentage_desc_idx")
+        ipqc_audit_collection.create_index([("lockTimestamp", DESCENDING)], name="ipqc_lock_timestamp_desc_idx")
     except Exception as exc:
         print(f"Warning: failed to ensure IPQC audit indexes: {exc}")
 
@@ -218,6 +221,75 @@ LEGACY_LINE_I_AUTO_BUSSING_SOLDERING_TIME_FALLBACKS = {
 }
 AUTO_BUSSING_PATCH_SAMPLE_KEYS = ("sample_1", "sample_2")
 AUTO_BUSSING_PATCH_MEASUREMENT_FIELDS = ("length", "height", "width")
+IPQC_TOTAL_STAGE_COUNT = 31
+COMPLETION_METADATA_KEYS = {
+    "schemaVersion",
+    "parameterId",
+    "sampleGroup",
+    "sampleNumber",
+    "sampleLabel",
+    "groupKey",
+    "groupLabel",
+    "order",
+    "selectedLine",
+}
+DEFAULT_COMPLETED_PARAMETER_IDS = {
+    "2-2",
+    "3-6",
+    "5-2",
+    "7-5",
+    "8-1",
+    "8-2",
+    "8-3",
+    "8-4",
+    "8-5",
+    "9-5",
+    "10-4",
+    "10-5",
+    "10-6",
+    "11-2",
+    "15-1",
+    "15-2",
+    "17-3",
+    "17-4",
+    "18-4",
+    "19-1",
+    "20-2",
+    "20-4",
+    "21-5",
+    "22-1",
+    "22-2",
+    "24-2",
+    "24-3",
+    "24-8",
+    "24-9",
+    "25-1",
+    "25-2",
+    "25-3",
+    "26-2",
+    "26-3",
+    "28-1",
+    "29-2",
+    "30-1",
+    "30-2",
+    "31-2",
+    "31-3",
+    "31-4",
+    "31-5",
+    "31-6",
+    "31-7",
+    "31-8",
+    "31-10",
+    "31-11",
+    "31-12",
+    "31-13",
+}
+AUDIT_COMPLETION_METADATA = {
+    **{parameter_id: {"treat_empty_as_complete": True} for parameter_id in DEFAULT_COMPLETED_PARAMETER_IDS},
+    "18-1": {"system_key_suffixes": ("-type",)},
+    "20-3": {"system_key_suffixes": ("-Ratio",)},
+    "26-1": {"system_key_suffixes": ("-4hrs", "-8hrs")},
+}
 
 def is_empty_value(value: Any) -> bool:
     return value is None or value == ""
@@ -280,6 +352,212 @@ def build_ipqc_audit_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
         "moduleType": data.get("moduleType", ""),
         "status": data.get("status", "draft"),
         "createdBy": created_by,
+    }
+
+def create_empty_completion_counts() -> Dict[str, int]:
+    return {
+        "userFilled": 0,
+        "userTotal": 0,
+        "systemFilled": 0,
+        "systemTotal": 0,
+    }
+
+def add_completion_counts(left: Dict[str, int], right: Dict[str, int]) -> Dict[str, int]:
+    return {
+        "userFilled": left["userFilled"] + right["userFilled"],
+        "userTotal": left["userTotal"] + right["userTotal"],
+        "systemFilled": left["systemFilled"] + right["systemFilled"],
+        "systemTotal": left["systemTotal"] + right["systemTotal"],
+    }
+
+def is_empty_completion_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value != value
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) == 0
+    return False
+
+def has_filled_completion_value(value: Any) -> bool:
+    return not is_empty_completion_value(value)
+
+def get_parameter_system_defaults(parameter_id: str) -> set[str]:
+    defaults = set()
+    for mapping in (
+        SIMPLE_DEFAULTS,
+        SAMPLE_KEY_DEFAULTS,
+        LINE_KEY_DEFAULTS,
+        LINE_SAMPLE_TIME_DEFAULTS,
+        TIME_SLOT_DEFAULTS,
+    ):
+        default_value = mapping.get(parameter_id)
+        if isinstance(default_value, str) and default_value:
+            defaults.add(default_value)
+    return defaults
+
+def is_parameter_default_completion_value(parameter_id: str, value: Any) -> bool:
+    return isinstance(value, str) and value in get_parameter_system_defaults(parameter_id)
+
+def is_completion_system_path(path: list[str], metadata: Dict[str, Any] | None) -> bool:
+    if not metadata:
+        return False
+
+    leaf_key = path[-1] if path else ""
+    system_key_names = metadata.get("system_key_names") or ()
+    system_key_suffixes = metadata.get("system_key_suffixes") or ()
+    return bool(
+        metadata.get("treat_empty_as_complete")
+        or leaf_key in system_key_names
+        or any(leaf_key.endswith(suffix) for suffix in system_key_suffixes)
+    )
+
+def get_completion_field_counts(
+    parameter_id: str,
+    value: Any,
+    metadata: Dict[str, Any] | None,
+    path: list[str],
+) -> Dict[str, int]:
+    is_system_field = (
+        is_completion_system_path(path, metadata)
+        or is_parameter_default_completion_value(parameter_id, value)
+    )
+    is_filled = has_filled_completion_value(value) or is_system_field
+
+    if is_system_field:
+        return {
+            "userFilled": 0,
+            "userTotal": 0,
+            "systemFilled": 1 if is_filled else 0,
+            "systemTotal": 1,
+        }
+
+    return {
+        "userFilled": 1 if is_filled else 0,
+        "userTotal": 1,
+        "systemFilled": 0,
+        "systemTotal": 0,
+    }
+
+def get_section_off_completion_counts(
+    parameter_id: str,
+    section_value: Dict[str, Any],
+    recipe_key: str,
+    metadata: Dict[str, Any] | None,
+    path: list[str],
+) -> Dict[str, int]:
+    return get_observation_completion_counts(
+        parameter_id,
+        section_value.get(recipe_key),
+        metadata,
+        [*path, recipe_key],
+    )
+
+def get_observation_completion_counts(
+    parameter_id: str,
+    value: Any,
+    metadata: Dict[str, Any] | None = None,
+    path: list[str] | None = None,
+) -> Dict[str, int]:
+    current_path = path or []
+
+    if isinstance(value, str):
+        return get_completion_field_counts(parameter_id, value, metadata, current_path)
+
+    if isinstance(value, list):
+        if not value:
+            return get_completion_field_counts(parameter_id, value, metadata, current_path)
+
+        counts = create_empty_completion_counts()
+        for index, item in enumerate(value):
+            counts = add_completion_counts(
+                counts,
+                get_observation_completion_counts(parameter_id, item, metadata, [*current_path, str(index)]),
+            )
+        return counts
+
+    if isinstance(value, dict):
+        entries = [key for key in value.keys() if key not in COMPLETION_METADATA_KEYS]
+        if not entries:
+            return get_completion_field_counts(parameter_id, value, metadata, current_path)
+
+        counts = create_empty_completion_counts()
+        for key in entries:
+            nested_value = value.get(key)
+            if (
+                key == "upper"
+                and isinstance(nested_value, dict)
+                and str(nested_value.get("selectedRecipeUpper", "")).upper() == "OFF"
+            ):
+                nested_counts = get_section_off_completion_counts(
+                    parameter_id,
+                    nested_value,
+                    "selectedRecipeUpper",
+                    metadata,
+                    [*current_path, key],
+                )
+            elif (
+                key == "lower"
+                and isinstance(nested_value, dict)
+                and str(nested_value.get("selectedRecipeLower", "")).upper() == "OFF"
+            ):
+                nested_counts = get_section_off_completion_counts(
+                    parameter_id,
+                    nested_value,
+                    "selectedRecipeLower",
+                    metadata,
+                    [*current_path, key],
+                )
+            else:
+                nested_counts = get_observation_completion_counts(
+                    parameter_id,
+                    nested_value,
+                    metadata,
+                    [*current_path, key],
+                )
+            counts = add_completion_counts(counts, nested_counts)
+        return counts
+
+    return get_completion_field_counts(parameter_id, value, metadata, current_path)
+
+def get_stage_completion_status(stage: Dict[str, Any]) -> str:
+    counts = create_empty_completion_counts()
+    for parameter in stage.get("parameters", []):
+        if not isinstance(parameter, dict):
+            continue
+        parameter_id = str(parameter.get("id", ""))
+        metadata = AUDIT_COMPLETION_METADATA.get(parameter_id)
+        for observation in parameter.get("observations", []):
+            if not isinstance(observation, dict):
+                continue
+            counts = add_completion_counts(
+                counts,
+                get_observation_completion_counts(parameter_id, observation.get("value"), metadata),
+            )
+
+    if counts["userTotal"] == 0:
+        return "completed" if counts["systemTotal"] > 0 and counts["systemFilled"] == counts["systemTotal"] else "not_started"
+
+    if counts["userFilled"] == 0:
+        return "not_started"
+    if counts["userFilled"] == counts["userTotal"] and counts["systemFilled"] == counts["systemTotal"]:
+        return "completed"
+    return "in_progress"
+
+def calculate_ipqc_completion(data: Dict[str, Any]) -> Dict[str, int]:
+    stages = data.get("stages") if isinstance(data.get("stages"), list) else []
+    total_stages = len(stages) or IPQC_TOTAL_STAGE_COUNT
+    completed_stages = sum(1 for stage in stages if isinstance(stage, dict) and get_stage_completion_status(stage) == "completed")
+    completion_percentage = round((completed_stages / total_stages) * 100) if total_stages else 0
+
+    return {
+        "completedStages": completed_stages,
+        "totalStages": total_stages,
+        "completionPercentage": completion_percentage,
     }
 
 def get_default_sample_group_line_mapping(line_number: str) -> Dict[str, str]:
@@ -459,6 +737,57 @@ def normalize_safety_module_ids(value: Dict[str, Any]) -> None:
         legacy_key = LEGACY_SAFETY_MODULE_FIELDS["4hr" if "_4hr_" in field else "8hr"]
         value[field] = value.get(legacy_key, "") or ""
 
+def prune_empty_keys(value: Dict[str, Any], keys: Iterable[str]) -> None:
+    for key in keys:
+        if is_empty_value(value.get(key)):
+            value.pop(key, None)
+
+def normalize_line_ii_machine_temp_value(value: Any, line_number: str) -> Any:
+    if line_number == "I" or not isinstance(value, dict):
+        return value
+
+    normalized_value = dict(value)
+    for stringer_key, stringer_value in list(normalized_value.items()):
+        if not isinstance(stringer_value, dict):
+            continue
+        normalized_stringer = dict(stringer_value)
+        for unit_key in STRINGER_UNIT_KEYS:
+            unit_value = normalized_stringer.get(unit_key)
+            if not isinstance(unit_value, dict):
+                continue
+            normalized_unit = dict(unit_value)
+            # Legacy Line-II payloads stored this hidden field; it is not a required UI input.
+            prune_empty_keys(normalized_unit, ("drying1",))
+            normalized_stringer[unit_key] = normalized_unit
+        normalized_value[stringer_key] = normalized_stringer
+    return normalized_value
+
+def normalize_auto_framing_dimension_value(value: Any, line_number: str) -> Any:
+    if not isinstance(value, dict):
+        return value
+
+    normalized_value = dict(value)
+    hidden_legacy_keys = (
+        f"{line}-{dimension}"
+        for line in get_line_options(17, line_number)
+        for dimension in ("Length", "Width")
+    )
+    prune_empty_keys(normalized_value, hidden_legacy_keys)
+    return normalized_value
+
+def normalize_sun_simulator_contact_block_value(value: Any, line_number: str) -> Any:
+    if not isinstance(value, dict):
+        return value
+
+    normalized_value = dict(value)
+    hidden_legacy_keys = (
+        f"{line}-{field}"
+        for line in get_line_options(24, line_number)
+        for field in ("contact-block", "positive", "negative")
+    )
+    prune_empty_keys(normalized_value, hidden_legacy_keys)
+    return normalized_value
+
 def normalize_line_i_stringer_setup_value(param_id: str, value: Any) -> Any:
     fields = LINE_I_STRINGER_SETUP_FIELDS_BY_PARAM.get(param_id)
     if not fields or not isinstance(value, dict):
@@ -585,8 +914,14 @@ def normalize_ipqc_audit_data(data: Dict[str, Any]) -> Dict[str, Any]:
                     observation["value"] = normalize_line_i_auto_bussing_soldering_time_value(observation.get("value"), line_number)
                 if param_id == "7-10":
                     observation["value"] = normalize_auto_bussing_patch_value(observation.get("value"), line_number)
+                if param_id == "5-9-machine-temp-setup":
+                    observation["value"] = normalize_line_ii_machine_temp_value(observation.get("value"), line_number)
                 if line_number == "I" and param_id in LINE_I_STRINGER_SETUP_FIELDS_BY_PARAM:
                     observation["value"] = normalize_line_i_stringer_setup_value(param_id, observation.get("value"))
+                if param_id == "17-7":
+                    observation["value"] = normalize_auto_framing_dimension_value(observation.get("value"), line_number)
+                if param_id == "24-10":
+                    observation["value"] = normalize_sun_simulator_contact_block_value(observation.get("value"), line_number)
                 value = observation.get("value")
                 if not isinstance(value, dict):
                     continue
@@ -598,6 +933,7 @@ def normalize_ipqc_audit_data(data: Dict[str, Any]) -> Dict[str, Any]:
                                 value.setdefault(f"{key[:-len(suffix)]}-{new_label}", old_value)
                 elif param_id == "26-1":
                     normalize_safety_module_ids(value)
+                    prune_empty_keys(value, LEGACY_SAFETY_MODULE_FIELDS.values())
     return data
 
 class IPQCAudit:

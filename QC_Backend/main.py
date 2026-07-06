@@ -153,12 +153,7 @@ async def generate_gel_report_endpoint(request: dict, x_employee_id: str | None 
                 "name": report["name"]
             }
         else:
-            # Current report export - use data from request
-            report_data = {
-                "form_data": request.get("form_data", {}),
-                "averages": request.get("averages", {}),
-                "name": request.get("report_name", "Gel_Test_Report")
-            }
+            raise HTTPException(status_code=403, detail="Gel Excel can be generated only from submitted or approved saved reports")
 
         output, filename = generate_gel_report(report_data)
         return StreamingResponse(
@@ -204,7 +199,7 @@ async def generate_adhesion_report_endpoint(request: dict, x_employee_id: str | 
                 "name": report["name"]
             }
         else:
-            raise HTTPException(status_code=403, detail="Adhesion Excel can be generated only from submitted saved reports")
+            raise HTTPException(status_code=403, detail="Adhesion Excel can be generated only from submitted or approved saved reports")
 
         output, filename = generate_adhesion_report(report_data)
         return StreamingResponse(
@@ -320,7 +315,7 @@ async def generate_peel_report_endpoint(request: dict, x_employee_id: str | None
                 "line": report.get("line")
             }
         else:
-            raise HTTPException(status_code=403, detail="Peel Excel can be generated only from submitted saved reports")
+            raise HTTPException(status_code=403, detail="Peel Excel can be generated only from submitted or approved saved reports")
 
         output, filename = generate_peel_report(report_data)
         return StreamingResponse(

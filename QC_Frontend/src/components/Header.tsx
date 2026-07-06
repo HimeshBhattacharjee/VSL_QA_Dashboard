@@ -578,7 +578,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
                     </div>
                 </div>
             )}
-            <nav className="flex justify-between items-center h-full px-4 sm:px-6">
+            <nav className="flex justify-between items-center h-full px-4 bg:transparent backdrop-blur-lg">
                 <div className="flex items-center">
                     <button
                         onClick={() => {

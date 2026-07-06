@@ -464,7 +464,11 @@ const AutoFramingObservations = {
         const lines = getLineConfiguration(props.lineNumber || 'II');
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
-                lines.flatMap(line => ['Length', 'Width'].map(dimension => [`${line}-${dimension}`, ""]))
+                lines.flatMap(line =>
+                    ['4hrs', '8hrs'].flatMap(timeSlot =>
+                        ['Length', 'Width'].map(dimension => [`${line}-${timeSlot}-${dimension}`, ""])
+                    )
+                )
             )
             : props.value as Record<string, string>;
 

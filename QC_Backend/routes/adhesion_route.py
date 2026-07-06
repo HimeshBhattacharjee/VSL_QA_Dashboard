@@ -1,16 +1,47 @@
+from datetime import datetime, timezone
+import re
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from models.adhesion_test_models import adhesion_test_collection, AdhesionTestReport
+from services.dashboard_analytics_service import (
+    build_dashboard_response,
+    resolve_dashboard_date_range as resolve_analytics_dashboard_date_range,
+)
+from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
 from users.user_db import users_collection
 from bson import ObjectId
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 adhesion_router = APIRouter(prefix="/api/adhesion-test-reports", tags=["Adhesion Test Reports"])
 
-WORKFLOW_STATES = {"draft", "submitted", "returned"}
+WORKFLOW_STATES = {"draft", "submitted", "approved", "returned"}
+EDITABLE_OPERATOR_STATES = {"draft", "returned"}
+FINALIZED_EXPORT_STATES = {"submitted", "approved"}
+DELETABLE_WORKFLOW_STATES = WORKFLOW_STATES - {"approved"}
 REVIEWER_ROLES = {"Supervisor", "Manager"}
 SYSTEM_ADMIN_ROLES = {"Admin", "System Administrator"}
-DRAFT_TTL_DAYS = 7
+LOCK_FIELDS = ("lockedBy", "lockedByUserId", "lockedByEmployeeId", "lockTimestamp", "lockSessionId")
+WORKFLOW_STATE_LABELS = {
+    "draft": "Draft",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "returned": "Returned",
+}
+
+SORT_OPTIONS = {
+    "newest-created": ("timestamp", -1),
+    "oldest-created": ("timestamp", 1),
+    "newest-updated": ("updatedAt", -1),
+    "oldest-updated": ("updatedAt", 1),
+    "recently-updated": ("updatedAt", -1),
+    "least-recently-updated": ("updatedAt", 1),
+    "name-asc": ("name", 1),
+    "name-desc": ("name", -1),
+    "status": ("workflowState", 1),
+    "created-by": ("createdByEmployeeName", 1),
+    "shift": ("shift", 1),
+    "date-newest": ("date", -1),
+    "date-oldest": ("date", 1),
+}
 
 
 def utc_timestamp() -> str:
@@ -18,20 +49,8 @@ def utc_timestamp() -> str:
 
 
 def normalize_workflow_state(report: dict) -> str:
-    state = report.get("workflowState")
+    state = report.get("workflowState") or report.get("status")
     return state if state in WORKFLOW_STATES else "submitted"
-
-
-def parse_report_datetime(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
-    except ValueError:
-        return None
 
 
 def get_adhesion_current_user(employee_id: str | None) -> dict:
@@ -74,26 +93,33 @@ def is_report_owner(report: dict, user: dict) -> bool:
 
 
 def can_view_report(report: dict, user: dict) -> bool:
-    if is_system_admin(user):
-        return True
-    if is_operator(user):
-        return is_report_owner(report, user)
-    return is_reviewer(user) and normalize_workflow_state(report) == "submitted"
+    return is_system_admin(user) or is_reviewer(user) or is_operator(user)
 
 
 def can_edit_report(report: dict, user: dict) -> bool:
     state = normalize_workflow_state(report)
+    if is_operator(user):
+        return is_report_owner(report, user) and state in EDITABLE_OPERATOR_STATES
+    if is_reviewer(user) or is_system_admin(user):
+        return state == "submitted"
+    return False
+
+
+def can_delete_report(report: dict, user: dict) -> bool:
+    state = normalize_workflow_state(report)
+    if state == "approved":
+        return False
     if is_system_admin(user):
         return True
+    if is_reviewer(user):
+        return state == "submitted"
     if is_operator(user):
-        return is_report_owner(report, user) and state in {"draft", "returned"}
-    return is_reviewer(user) and state == "submitted"
+        return is_report_owner(report, user) and state in EDITABLE_OPERATOR_STATES
+    return False
 
 
 def require_adhesion_export_access(report: dict, user: dict) -> None:
-    if normalize_workflow_state(report) != "submitted":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Excel can be generated only for submitted reports")
-    if not can_view_report(report, user):
+    if normalize_workflow_state(report) not in FINALIZED_EXPORT_STATES or not can_view_report(report, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to export this report")
 
 
@@ -102,26 +128,169 @@ def extract_report_signature(form_data: dict) -> str:
     return signature.strip() if isinstance(signature, str) else ""
 
 
+def get_string_value(data: dict, key: str) -> str:
+    value = data.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def normalize_date_value(value: str) -> str:
+    trimmed_value = value.strip()
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", trimmed_value):
+        return trimmed_value
+
+    legacy_match = re.match(r"^(\d{2})[./-](\d{2})[./-](\d{4})$", trimmed_value)
+    if legacy_match:
+        day, month, year = legacy_match.groups()
+        return f"{year}-{month}-{day}"
+
+    return ""
+
+
+def derive_adhesion_line_number(form_data: dict) -> str:
+    explicit_line = get_string_value(form_data, "lineNumber") or get_string_value(form_data, "line")
+    laminator_details = get_string_value(form_data, "laminator")
+    combined_value = f"{explicit_line} {laminator_details}".upper()
+
+    if re.search(r"\bII\b|FAB[-\s]*II|LINE[-\s]*II", combined_value):
+        return "II"
+    if re.search(r"\bI\b|FAB[-\s]*I|LINE[-\s]*I", combined_value):
+        return "I"
+    return explicit_line
+
+
+def extract_adhesion_report_metadata(form_data: dict) -> dict:
+    shift = get_string_value(form_data, "shift")
+    if shift and shift not in {"A", "B", "C", "G"}:
+        shift = ""
+
+    return {
+        "date": normalize_date_value(get_string_value(form_data, "testDate")),
+        "shift": shift,
+        "lineNumber": derive_adhesion_line_number(form_data),
+        "productionOrderNo": get_string_value(form_data, "productionOrderNo") or get_string_value(form_data, "adhesion_editable_1"),
+    }
+
+
+def ensure_adhesion_report_metadata(report: dict, report_payload: dict | None = None) -> dict:
+    existing_metadata = {
+        "date": report.get("date") or "",
+        "shift": report.get("shift") or "",
+        "lineNumber": report.get("lineNumber") or "",
+        "productionOrderNo": report.get("productionOrderNo") or "",
+        "status": report.get("status") or normalize_workflow_state(report),
+    }
+    has_required_metadata = all(existing_metadata.get(key) for key in ("date", "shift", "productionOrderNo"))
+    if has_required_metadata and report.get("status"):
+        return existing_metadata
+
+    try:
+        payload = report_payload
+        if payload is None and report.get("s3_key"):
+            payload = AdhesionTestReport.from_dict(report).get_data()
+        form_data = payload.get("form_data", {}) if isinstance(payload, dict) else {}
+        extracted_metadata = extract_adhesion_report_metadata(form_data)
+        metadata = {
+            **existing_metadata,
+            **{key: value for key, value in extracted_metadata.items() if value},
+            "status": normalize_workflow_state(report),
+        }
+        update_data = {
+            key: value
+            for key, value in metadata.items()
+            if value and report.get(key) != value
+        }
+        if update_data and report.get("_id"):
+            adhesion_test_collection.update_one({"_id": report["_id"]}, {"$set": update_data})
+            report.update(update_data)
+        return metadata
+    except Exception as exc:
+        print(f"Warning: failed to extract adhesion report metadata for {report.get('_id')}: {exc}")
+        return existing_metadata
+
+
+def backfill_missing_adhesion_metadata(limit: int = 200) -> None:
+    missing_metadata_query = {
+        "$or": [
+            {"date": {"$exists": False}},
+            {"shift": {"$exists": False}},
+            {"lineNumber": {"$exists": False}},
+            {"productionOrderNo": {"$exists": False}},
+            {"status": {"$exists": False}},
+        ]
+    }
+    try:
+        reports = adhesion_test_collection.find(missing_metadata_query).sort("updatedAt", -1).limit(limit)
+        for report in reports:
+            ensure_adhesion_report_metadata(report)
+    except Exception as exc:
+        print(f"Warning: failed to backfill adhesion report metadata: {exc}")
+
+
+def get_display_status(report: dict) -> str:
+    return normalize_workflow_state(report)
+
+
+def create_bulk_result(requested: int) -> dict:
+    return {
+        "requested": requested,
+        "skipped": {},
+        "failed": [],
+    }
+
+
+def add_bulk_skip(result: dict, reason: str) -> None:
+    result["skipped"][reason] = result["skipped"].get(reason, 0) + 1
+
+
+def add_bulk_failure(result: dict, report_id: str, reason: str) -> None:
+    result["failed"].append({"reportId": report_id, "reason": reason})
+
+
+def get_bulk_status_label(report: dict) -> str:
+    state = normalize_workflow_state(report)
+    if state == "approved":
+        return "Already Approved"
+    return WORKFLOW_STATE_LABELS.get(state, "Unavailable")
+
+
 def serialize_adhesion_report(report: dict, include_data: bool = False) -> dict:
     adhesion_report = AdhesionTestReport.from_dict(report)
     report_data = adhesion_report.to_dict(include_data=include_data)
+    metadata = ensure_adhesion_report_metadata(report, report_data if include_data else None)
+    state = normalize_workflow_state(report)
     serialized = {
         "_id": str(report["_id"]),
+        "id": str(report["_id"]),
         "name": report["name"],
         "timestamp": report["timestamp"],
         "s3_key": report["s3_key"],
-        "workflowState": normalize_workflow_state(report),
+        "status": state,
+        "workflowState": state,
+        "displayStatus": get_display_status(report),
+        "date": metadata.get("date", ""),
+        "shift": metadata.get("shift", ""),
+        "lineNumber": metadata.get("lineNumber", ""),
+        "productionOrderNo": metadata.get("productionOrderNo", ""),
+        "createdBy": report.get("createdBy", report.get("createdByEmployeeName")),
         "createdByUserId": report.get("createdByUserId"),
         "createdByEmployeeName": report.get("createdByEmployeeName"),
         "createdByEmployeeId": report.get("createdByEmployeeId"),
         "submittedAt": report.get("submittedAt"),
         "submittedBy": report.get("submittedBy"),
+        "approvedAt": report.get("approvedAt"),
+        "approvedBy": report.get("approvedBy"),
         "returnedAt": report.get("returnedAt"),
         "returnedBy": report.get("returnedBy"),
         "returnComments": report.get("returnComments"),
-        "isSigned": report.get("isSigned", normalize_workflow_state(report) == "submitted"),
+        "isSigned": report.get("isSigned", state in FINALIZED_EXPORT_STATES),
         "signedAt": report.get("signedAt"),
         "updatedAt": report.get("updatedAt"),
+        "lockedBy": report.get("lockedBy"),
+        "lockedByUserId": report.get("lockedByUserId"),
+        "lockedByEmployeeId": report.get("lockedByEmployeeId"),
+        "lockTimestamp": report.get("lockTimestamp"),
+        "lockSessionId": report.get("lockSessionId"),
+        "isLocked": bool(report.get("lockTimestamp")),
     }
 
     if include_data:
@@ -131,22 +300,34 @@ def serialize_adhesion_report(report: dict, include_data: bool = False) -> dict:
     return serialized
 
 
-def build_metadata_update(report_data: dict, user: dict, existing_report: dict | None = None) -> dict:
+def build_metadata_update(
+    report_data: dict,
+    existing_report: dict | None = None,
+    user: dict | None = None,
+    workflow_state: str | None = None,
+) -> dict:
     now = utc_timestamp()
     form_data = report_data.get("formData", {})
-    prepared_signature = extract_report_signature(form_data)
     previous_signed_at = existing_report.get("signedAt") if existing_report else None
-    workflow_state = normalize_workflow_state(existing_report or {}) if existing_report else "draft"
-    is_signed = bool(prepared_signature)
-    if workflow_state == "submitted" and existing_report and not prepared_signature:
+    state = workflow_state or (normalize_workflow_state(existing_report or {}) if existing_report else "draft")
+    prepared_signature = extract_report_signature(form_data)
+    is_signed = bool(prepared_signature) if state in FINALIZED_EXPORT_STATES else False
+    if state in FINALIZED_EXPORT_STATES and existing_report and not prepared_signature:
         is_signed = existing_report.get("isSigned", True)
+    adhesion_metadata = extract_adhesion_report_metadata(form_data)
 
     return {
         "name": (report_data.get("name") or "").strip(),
         "timestamp": report_data.get("timestamp") or now,
-        "workflowState": workflow_state,
+        "status": state,
+        "workflowState": state,
+        **adhesion_metadata,
+        "createdBy": existing_report.get("createdBy") if existing_report else (user or {}).get("name"),
+        "createdByUserId": existing_report.get("createdByUserId") if existing_report else (user or {}).get("id"),
+        "createdByEmployeeName": existing_report.get("createdByEmployeeName") if existing_report else (user or {}).get("name"),
+        "createdByEmployeeId": existing_report.get("createdByEmployeeId") if existing_report else (user or {}).get("employeeId"),
         "isSigned": is_signed,
-        "signedAt": previous_signed_at or (now if prepared_signature else None),
+        "signedAt": previous_signed_at or (now if prepared_signature and state in FINALIZED_EXPORT_STATES else None),
         "updatedAt": now,
     }
 
@@ -170,43 +351,189 @@ def ensure_unique_report_name(name: str, exclude_id: ObjectId | None = None) -> 
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A report with this name already exists")
 
 
-def cleanup_expired_draft_reports() -> None:
-    cutoff = datetime.now(timezone.utc).timestamp() - (DRAFT_TTL_DAYS * 24 * 60 * 60)
-    expired_drafts = []
-    for report in adhesion_test_collection.find({"workflowState": "draft"}):
-        report_time = parse_report_datetime(report.get("updatedAt")) or parse_report_datetime(report.get("timestamp"))
-        if report_time and report_time.timestamp() < cutoff:
-            expired_drafts.append(report)
+def build_search_query(search: Optional[str]) -> dict:
+    if not search:
+        return {}
 
-    for report in expired_drafts:
-        try:
-            AdhesionTestReport.from_dict(report).delete_data()
-        finally:
-            adhesion_test_collection.delete_one({"_id": report["_id"]})
+    escaped_search = re.escape(search.strip())
+    if not escaped_search:
+        return {}
+
+    return {
+        "$or": [
+            {"name": {"$regex": escaped_search, "$options": "i"}},
+            {"lineNumber": {"$regex": escaped_search, "$options": "i"}},
+            {"date": {"$regex": escaped_search, "$options": "i"}},
+            {"shift": {"$regex": escaped_search, "$options": "i"}},
+            {"productionOrderNo": {"$regex": escaped_search, "$options": "i"}},
+            {"status": {"$regex": escaped_search, "$options": "i"}},
+            {"workflowState": {"$regex": escaped_search, "$options": "i"}},
+            {"createdBy": {"$regex": escaped_search, "$options": "i"}},
+            {"createdByEmployeeName": {"$regex": escaped_search, "$options": "i"}},
+            {"createdByEmployeeId": {"$regex": escaped_search, "$options": "i"}},
+        ]
+    }
 
 
-@adhesion_router.get("/", response_model=List[dict])
+def build_access_query(user: dict) -> dict:
+    if is_system_admin(user) or is_reviewer(user) or is_operator(user):
+        return {}
+    return {"_id": {"$exists": False}}
+
+
+def combine_queries(*queries: dict) -> dict:
+    active_queries = [query for query in queries if query]
+    if not active_queries:
+        return {}
+    if len(active_queries) == 1:
+        return active_queries[0]
+    return {"$and": active_queries}
+
+
+def build_field_filter_query(
+    date_value: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    shift: Optional[str] = None,
+    line_number: Optional[str] = None,
+    production_order: Optional[str] = None,
+    created_by: Optional[str] = None,
+    workflow_state: Optional[str] = None,
+    exclude_workflow_state: Optional[str] = None,
+    status_filter: Optional[str] = None,
+) -> dict:
+    filters: dict = {}
+    if date_value:
+        filters["date"] = date_value
+    elif date_from or date_to:
+        date_query: dict = {}
+        if date_from:
+            date_query["$gte"] = date_from
+        if date_to:
+            date_query["$lte"] = date_to
+        filters["date"] = date_query
+
+    if shift:
+        filters["shift"] = shift
+    if line_number:
+        filters["lineNumber"] = line_number
+    if production_order:
+        filters["productionOrderNo"] = {"$regex": re.escape(production_order.strip()), "$options": "i"}
+    if created_by:
+        escaped_created_by = re.escape(created_by.strip())
+        filters["$or"] = [
+            {"createdBy": {"$regex": escaped_created_by, "$options": "i"}},
+            {"createdByEmployeeName": {"$regex": escaped_created_by, "$options": "i"}},
+            {"createdByEmployeeId": {"$regex": escaped_created_by, "$options": "i"}},
+        ]
+    if workflow_state in WORKFLOW_STATES:
+        filters["workflowState"] = workflow_state
+    if exclude_workflow_state in WORKFLOW_STATES:
+        filters["workflowState"] = {"$ne": exclude_workflow_state}
+    if status_filter in WORKFLOW_STATES:
+        filters["workflowState"] = status_filter
+    return filters
+
+
+@adhesion_router.get("/")
 async def get_all_adhesion_test_reports(
     include_data: bool = Query(False, description="Include full report data from S3"),
+    summary: bool = Query(False, description="Return paginated summary data"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sort: str = Query("newest-created"),
+    workflow_state: Optional[str] = Query(None),
+    exclude_workflow_state: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    shift: Optional[str] = Query(None),
+    lineNumber: Optional[str] = Query(None),
+    productionOrderNo: Optional[str] = Query(None),
+    createdBy: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
     x_employee_id: str | None = Header(default=None),
 ):
     try:
         user = get_adhesion_current_user(x_employee_id)
-        cleanup_expired_draft_reports()
-        query = {} if (is_reviewer(user) or is_system_admin(user)) else {"createdByEmployeeId": user["employeeId"]}
-        reports = list(adhesion_test_collection.find(query).sort("updatedAt", -1))
-        converted_reports = []
+        backfill_missing_adhesion_metadata()
+        field_query = build_field_filter_query(
+            date_value=date_value,
+            date_from=date_from,
+            date_to=date_to,
+            shift=shift,
+            line_number=lineNumber,
+            production_order=productionOrderNo,
+            created_by=createdBy,
+            workflow_state=workflow_state,
+            exclude_workflow_state=exclude_workflow_state,
+            status_filter=status_filter,
+        )
+        query = combine_queries(build_access_query(user), build_search_query(search), field_query)
+        sort_field, sort_direction = SORT_OPTIONS.get(sort, SORT_OPTIONS["newest-created"])
 
-        for report in reports:
-            state = normalize_workflow_state(report)
-            can_include_data = include_data and (is_system_admin(user) or (is_operator(user) and is_report_owner(report, user)) or (is_reviewer(user) and state == "submitted"))
-            converted_reports.append(serialize_adhesion_report(report, include_data=can_include_data))
+        if summary:
+            total = adhesion_test_collection.count_documents(query)
+            reports = list(
+                adhesion_test_collection
+                .find(query)
+                .sort(sort_field, sort_direction)
+                .skip((page - 1) * page_size)
+                .limit(page_size)
+            )
+            return {
+                "items": [serialize_adhesion_report(report, include_data=False) for report in reports],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
 
-        return converted_reports
+        reports = list(adhesion_test_collection.find(query).sort(sort_field, sort_direction))
+        return [
+            serialize_adhesion_report(
+                report,
+                include_data=include_data and can_view_report(report, user),
+            )
+            for report in reports
+        ]
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch reports: {str(e)}")
+
+
+@adhesion_router.get("/dashboard")
+async def get_adhesion_test_dashboard(
+    view: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    x_employee_id: str | None = Header(default=None),
+):
+    try:
+        user = get_adhesion_current_user(x_employee_id)
+        backfill_missing_adhesion_metadata()
+        date_from, date_to = resolve_analytics_dashboard_date_range(view)
+        query = combine_queries(
+            build_access_query(user),
+            build_field_filter_query(date_from=date_from, date_to=date_to),
+        )
+
+        def serialize_dashboard_report(report: dict) -> dict:
+            ensure_adhesion_report_metadata(report)
+            return serialize_adhesion_report(report, include_data=False)
+
+        return build_dashboard_response(
+            collection=adhesion_test_collection,
+            query=query,
+            view=view,
+            total_key="totalReports",
+            state_fields=("workflowState", "status"),
+            serialize_item=serialize_dashboard_report,
+            item_sort=[("date", -1), ("timestamp", -1)],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch adhesion dashboard: {str(e)}")
 
 
 @adhesion_router.get("/name/{report_name}")
@@ -250,7 +577,7 @@ async def get_adhesion_test_report(report_id: str, x_employee_id: str | None = H
 async def create_adhesion_test_report(report_data: dict, x_employee_id: str | None = Header(default=None)):
     try:
         user = get_adhesion_current_user(x_employee_id)
-        if not (is_operator(user) or is_system_admin(user)):
+        if not is_operator(user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators can create adhesion reports")
 
         validate_report_payload(report_data)
@@ -259,13 +586,15 @@ async def create_adhesion_test_report(report_data: dict, x_employee_id: str | No
         report_name = (report_data.get("name") or f"Adhesion Draft - {user['name']} - {draft_suffix}").strip()
         ensure_unique_report_name(report_name)
 
-        metadata = build_metadata_update({**report_data, "name": report_name}, user)
+        metadata = build_metadata_update({**report_data, "name": report_name}, None, user, "draft")
         mongo_data = {
             **metadata,
-            "createdByUserId": user["id"],
-            "createdByEmployeeName": user["name"],
-            "createdByEmployeeId": user["employeeId"],
             "s3_key": "",
+            "lockedBy": user["name"],
+            "lockedByUserId": user["id"],
+            "lockedByEmployeeId": user["employeeId"],
+            "lockTimestamp": now,
+            "lockSessionId": None,
         }
 
         result = adhesion_test_collection.insert_one(mongo_data)
@@ -321,7 +650,7 @@ async def update_adhesion_test_report(report_id: str, report_data: dict, x_emplo
         if not success:
             raise HTTPException(status_code=500, detail="Failed to save report data to S3")
 
-        update_data = build_metadata_update({**report_data, "name": report_name}, user, existing_report)
+        update_data = build_metadata_update({**report_data, "name": report_name}, existing_report, user)
         adhesion_test_collection.update_one({"_id": report_object_id}, {"$set": update_data})
 
         updated_report = adhesion_test_collection.find_one({"_id": report_object_id})
@@ -343,15 +672,16 @@ async def submit_adhesion_test_report(report_id: str, report_data: dict | None =
         existing_report = adhesion_test_collection.find_one({"_id": report_object_id})
         if not existing_report:
             raise HTTPException(status_code=404, detail="Report not found")
-        if not (is_system_admin(user) or (is_operator(user) and is_report_owner(existing_report, user))):
+        if not (is_operator(user) and is_report_owner(existing_report, user)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the creating operator can submit this report")
-        if normalize_workflow_state(existing_report) not in {"draft", "returned"} and not is_system_admin(user):
+        if normalize_workflow_state(existing_report) not in EDITABLE_OPERATOR_STATES:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only draft or returned reports can be submitted")
 
         if report_data:
             validate_report_payload(report_data)
             report_name = (report_data.get("name") or existing_report["name"]).strip()
             ensure_unique_report_name(report_name, report_object_id)
+            form_data = report_data["formData"]
             adhesion_report = AdhesionTestReport(
                 _id=str(existing_report["_id"]),
                 name=report_name,
@@ -359,16 +689,26 @@ async def submit_adhesion_test_report(report_id: str, report_data: dict | None =
                 s3_key=existing_report["s3_key"],
             )
             success = adhesion_report.save_data(
-                form_data=report_data["formData"],
+                form_data=form_data,
                 averages=report_data["averages"],
             )
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to save report data to S3")
-            existing_report = {**existing_report, "name": report_name, "timestamp": report_data["timestamp"]}
-            form_data = report_data["formData"]
+            metadata = build_metadata_update({**report_data, "name": report_name}, existing_report, user, "submitted")
         else:
             adhesion_report = AdhesionTestReport.from_dict(existing_report)
-            form_data = adhesion_report.get_data().get("form_data", {})
+            loaded_data = adhesion_report.get_data()
+            form_data = loaded_data.get("form_data", {})
+            metadata = build_metadata_update(
+                {
+                    "name": existing_report["name"],
+                    "timestamp": existing_report["timestamp"],
+                    "formData": form_data,
+                },
+                existing_report,
+                user,
+                "submitted",
+            )
 
         prepared_signature = extract_report_signature(form_data)
         if not prepared_signature:
@@ -376,16 +716,24 @@ async def submit_adhesion_test_report(report_id: str, report_data: dict | None =
 
         now = utc_timestamp()
         update_data = {
-            "name": existing_report["name"],
-            "timestamp": existing_report["timestamp"],
+            **metadata,
+            "status": "submitted",
             "workflowState": "submitted",
             "isSigned": True,
             "signedAt": existing_report.get("signedAt") or now,
             "submittedAt": now,
             "submittedBy": user["name"],
+            "approvedAt": None,
+            "approvedBy": None,
+            "returnedAt": None,
+            "returnedBy": None,
+            "returnComments": None,
             "updatedAt": now,
         }
-        adhesion_test_collection.update_one({"_id": report_object_id}, {"$set": update_data})
+        adhesion_test_collection.update_one(
+            {"_id": report_object_id},
+            {"$set": update_data, "$unset": {field: "" for field in LOCK_FIELDS}},
+        )
 
         submitted_report = adhesion_test_collection.find_one({"_id": report_object_id})
         return serialize_adhesion_report(submitted_report, include_data=True)
@@ -408,7 +756,7 @@ async def return_adhesion_test_report(report_id: str, request_data: dict, x_empl
         existing_report = adhesion_test_collection.find_one({"_id": report_object_id})
         if not existing_report:
             raise HTTPException(status_code=404, detail="Report not found")
-        if normalize_workflow_state(existing_report) != "submitted" and not is_system_admin(user):
+        if normalize_workflow_state(existing_report) != "submitted":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only submitted reports can be returned")
 
         return_comments = (request_data.get("returnComments") or "").strip()
@@ -420,10 +768,16 @@ async def return_adhesion_test_report(report_id: str, request_data: dict, x_empl
             {"_id": report_object_id},
             {
                 "$set": {
+                    "status": "returned",
                     "workflowState": "returned",
                     "returnedAt": now,
                     "returnedBy": user["name"],
                     "returnComments": return_comments,
+                    "lockedBy": existing_report.get("createdByEmployeeName") or existing_report.get("createdBy") or "Operator",
+                    "lockedByUserId": existing_report.get("createdByUserId"),
+                    "lockedByEmployeeId": existing_report.get("createdByEmployeeId"),
+                    "lockTimestamp": now,
+                    "lockSessionId": None,
                     "updatedAt": now,
                 }
             },
@@ -437,6 +791,176 @@ async def return_adhesion_test_report(report_id: str, request_data: dict, x_empl
         raise HTTPException(status_code=500, detail=f"Failed to return report: {str(e)}")
 
 
+@adhesion_router.post("/bulk/approve")
+async def bulk_approve_adhesion_test_reports(request_data: dict, x_employee_id: str | None = Header(default=None)):
+    try:
+        user = get_adhesion_current_user(x_employee_id)
+        if not (is_reviewer(user) or is_system_admin(user)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisors or managers can approve reports")
+
+        report_ids = request_data.get("reportIds") or request_data.get("report_ids")
+        if not isinstance(report_ids, list) or not report_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reportIds must be a non-empty list")
+
+        result = create_bulk_result(len(report_ids))
+        approved_count = 0
+        now = utc_timestamp()
+
+        for raw_report_id in report_ids:
+            report_id = str(raw_report_id or "").strip()
+            if not ObjectId.is_valid(report_id):
+                add_bulk_failure(result, report_id, "Invalid ID")
+                continue
+
+            try:
+                report_object_id = ObjectId(report_id)
+                existing_report = adhesion_test_collection.find_one({"_id": report_object_id})
+                if not existing_report:
+                    add_bulk_failure(result, report_id, "Not Found")
+                    continue
+
+                if normalize_workflow_state(existing_report) != "submitted":
+                    add_bulk_skip(result, get_bulk_status_label(existing_report))
+                    continue
+
+                update_result = adhesion_test_collection.update_one(
+                    {"_id": report_object_id},
+                    {
+                        "$set": {
+                            "status": "approved",
+                            "workflowState": "approved",
+                            "approvedAt": now,
+                            "approvedBy": user["name"],
+                            "updatedAt": now,
+                        },
+                        "$unset": {field: "" for field in LOCK_FIELDS},
+                    },
+                )
+                if update_result.matched_count != 1:
+                    add_bulk_failure(result, report_id, "Update Failed")
+                    continue
+                approved_count += 1
+            except Exception as item_error:
+                add_bulk_failure(result, report_id, str(item_error))
+
+        result["approved"] = approved_count
+        result["processed"] = approved_count
+        result["skippedCount"] = sum(result["skipped"].values())
+        result["failedCount"] = len(result["failed"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to bulk approve adhesion reports: {str(e)}")
+
+
+@adhesion_router.post("/bulk/delete")
+async def bulk_delete_adhesion_test_reports(request_data: dict, x_employee_id: str | None = Header(default=None)):
+    try:
+        user = get_adhesion_current_user(x_employee_id)
+        if not (is_operator(user) or is_reviewer(user) or is_system_admin(user)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to delete reports")
+
+        report_ids = request_data.get("reportIds") or request_data.get("report_ids")
+        if not isinstance(report_ids, list) or not report_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reportIds must be a non-empty list")
+
+        result = create_bulk_result(len(report_ids))
+        deleted_count = 0
+
+        for raw_report_id in report_ids:
+            report_id = str(raw_report_id or "").strip()
+            if not ObjectId.is_valid(report_id):
+                continue
+            existing_report = adhesion_test_collection.find_one({"_id": ObjectId(report_id)})
+            if existing_report and normalize_workflow_state(existing_report) == "approved":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
+                )
+
+        for raw_report_id in report_ids:
+            report_id = str(raw_report_id or "").strip()
+            if not ObjectId.is_valid(report_id):
+                add_bulk_failure(result, report_id, "Invalid ID")
+                continue
+
+            try:
+                report_object_id = ObjectId(report_id)
+                existing_report = adhesion_test_collection.find_one({"_id": report_object_id})
+                if not existing_report:
+                    add_bulk_failure(result, report_id, "Not Found")
+                    continue
+
+                workflow_state = normalize_workflow_state(existing_report)
+                if workflow_state == "approved":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
+                    )
+                if workflow_state not in DELETABLE_WORKFLOW_STATES or not can_delete_report(existing_report, user):
+                    add_bulk_skip(result, get_bulk_status_label(existing_report))
+                    continue
+
+                adhesion_report = AdhesionTestReport.from_dict(existing_report)
+                adhesion_report.delete_data()
+                delete_result = adhesion_test_collection.delete_one({"_id": report_object_id})
+                if delete_result.deleted_count != 1:
+                    add_bulk_failure(result, report_id, "Delete Failed")
+                    continue
+                deleted_count += 1
+            except Exception as item_error:
+                add_bulk_failure(result, report_id, str(item_error))
+
+        result["deleted"] = deleted_count
+        result["processed"] = deleted_count
+        result["skippedCount"] = sum(result["skipped"].values())
+        result["failedCount"] = len(result["failed"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to bulk delete adhesion reports: {str(e)}")
+
+
+@adhesion_router.post("/{report_id}/approve")
+async def approve_adhesion_test_report(report_id: str, x_employee_id: str | None = Header(default=None)):
+    try:
+        user = get_adhesion_current_user(x_employee_id)
+        if not (is_reviewer(user) or is_system_admin(user)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisors or managers can approve reports")
+        if not ObjectId.is_valid(report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID")
+
+        report_object_id = ObjectId(report_id)
+        existing_report = adhesion_test_collection.find_one({"_id": report_object_id})
+        if not existing_report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        if normalize_workflow_state(existing_report) != "submitted":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only submitted reports can be approved")
+
+        now = utc_timestamp()
+        adhesion_test_collection.update_one(
+            {"_id": report_object_id},
+            {
+                "$set": {
+                    "status": "approved",
+                    "workflowState": "approved",
+                    "approvedAt": now,
+                    "approvedBy": user["name"],
+                    "updatedAt": now,
+                },
+                "$unset": {field: "" for field in LOCK_FIELDS},
+            },
+        )
+        approved_report = adhesion_test_collection.find_one({"_id": report_object_id})
+        return serialize_adhesion_report(approved_report, include_data=False)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve report: {str(e)}")
+
+
 @adhesion_router.delete("/{report_id}")
 async def delete_adhesion_test_report(report_id: str, x_employee_id: str | None = Header(default=None)):
     try:
@@ -447,10 +971,14 @@ async def delete_adhesion_test_report(report_id: str, x_employee_id: str | None 
         existing_report = adhesion_test_collection.find_one({"_id": ObjectId(report_id)})
         if not existing_report:
             raise HTTPException(status_code=404, detail="Report not found")
-        report_state = normalize_workflow_state(existing_report)
-        can_delete_submitted = report_state == "submitted" and (is_reviewer(user) or is_system_admin(user))
-        can_delete_own_draft = report_state == "draft" and is_operator(user) and is_report_owner(existing_report, user)
-        if not (can_delete_submitted or can_delete_own_draft or is_system_admin(user)):
+        workflow_state = normalize_workflow_state(existing_report)
+        if workflow_state == "approved":
+            # Approved reports are permanent records and must never reach the delete path.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
+            )
+        if workflow_state not in DELETABLE_WORKFLOW_STATES or not can_delete_report(existing_report, user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to delete this report")
 
         adhesion_report = AdhesionTestReport.from_dict(existing_report)

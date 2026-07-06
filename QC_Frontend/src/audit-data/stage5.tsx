@@ -1512,11 +1512,9 @@ const createMachineTempParameters = (lineNumber: string = 'I') => {
 
     if (lineConfig && 'stringers' in lineConfig) {
         lineConfig.stringers.forEach(stringerNumber => {
-            const lineISelected = isLineI(lineNumber);
-            const fieldDefaults = lineISelected ? unitDefaults : { ...unitDefaults, drying1: "" };
             tempData[`Stringer-${stringerNumber}`] = {
-                unitA: { ...fieldDefaults },
-                unitB: { ...fieldDefaults }
+                unitA: { ...unitDefaults },
+                unitB: { ...unitDefaults }
             };
         });
     }

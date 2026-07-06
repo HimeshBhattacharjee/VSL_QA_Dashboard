@@ -13,6 +13,11 @@ def ensure_adhesion_test_indexes() -> None:
         adhesion_test_collection.create_index([("timestamp", DESCENDING)], name="adhesion_timestamp_desc_idx")
         adhesion_test_collection.create_index([("name", ASCENDING)], name="adhesion_name_idx")
         adhesion_test_collection.create_index([("workflowState", ASCENDING)], name="adhesion_workflow_state_idx")
+        adhesion_test_collection.create_index([("status", ASCENDING)], name="adhesion_status_idx")
+        adhesion_test_collection.create_index([("date", DESCENDING)], name="adhesion_date_desc_idx")
+        adhesion_test_collection.create_index([("shift", ASCENDING)], name="adhesion_shift_idx")
+        adhesion_test_collection.create_index([("lineNumber", ASCENDING)], name="adhesion_line_number_idx")
+        adhesion_test_collection.create_index([("productionOrderNo", ASCENDING)], name="adhesion_production_order_idx")
         adhesion_test_collection.create_index([("createdByEmployeeId", ASCENDING)], name="adhesion_created_by_employee_id_idx")
     except Exception as exc:
         print(f"Warning: failed to ensure adhesion test indexes: {exc}")
@@ -32,6 +37,8 @@ class AdhesionTestReport:
         created_by_employee_id: Optional[str] = None,
         submitted_at: Optional[str] = None,
         submitted_by: Optional[str] = None,
+        approved_at: Optional[str] = None,
+        approved_by: Optional[str] = None,
         returned_at: Optional[str] = None,
         returned_by: Optional[str] = None,
         return_comments: Optional[str] = None,
@@ -49,6 +56,8 @@ class AdhesionTestReport:
         self.created_by_employee_id = created_by_employee_id
         self.submitted_at = submitted_at
         self.submitted_by = submitted_by
+        self.approved_at = approved_at
+        self.approved_by = approved_by
         self.returned_at = returned_at
         self.returned_by = returned_by
         self.return_comments = return_comments
@@ -98,12 +107,15 @@ class AdhesionTestReport:
             "name": self.name,
             "timestamp": self.timestamp,
             "s3_key": self.s3_key,
+            "status": self.workflow_state,
             "workflowState": self.workflow_state,
             "createdByUserId": self.created_by_user_id,
             "createdByEmployeeName": self.created_by_employee_name,
             "createdByEmployeeId": self.created_by_employee_id,
             "submittedAt": self.submitted_at,
             "submittedBy": self.submitted_by,
+            "approvedAt": self.approved_at,
+            "approvedBy": self.approved_by,
             "returnedAt": self.returned_at,
             "returnedBy": self.returned_by,
             "returnComments": self.return_comments,
@@ -142,6 +154,8 @@ class AdhesionTestReport:
             created_by_employee_id=data.get("createdByEmployeeId"),
             submitted_at=data.get("submittedAt"),
             submitted_by=data.get("submittedBy"),
+            approved_at=data.get("approvedAt"),
+            approved_by=data.get("approvedBy"),
             returned_at=data.get("returnedAt"),
             returned_by=data.get("returnedBy"),
             return_comments=data.get("returnComments"),

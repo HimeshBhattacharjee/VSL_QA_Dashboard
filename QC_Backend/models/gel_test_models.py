@@ -12,8 +12,13 @@ def ensure_gel_test_indexes() -> None:
         gel_test_collection.create_index([("updatedAt", DESCENDING)], name="gel_updated_at_desc_idx")
         gel_test_collection.create_index([("timestamp", DESCENDING)], name="gel_timestamp_desc_idx")
         gel_test_collection.create_index([("name", ASCENDING)], name="gel_name_idx")
+        gel_test_collection.create_index([("status", ASCENDING)], name="gel_status_idx")
         gel_test_collection.create_index([("workflowState", ASCENDING)], name="gel_workflow_state_idx")
         gel_test_collection.create_index([("createdByEmployeeId", ASCENDING)], name="gel_created_by_employee_id_idx")
+        gel_test_collection.create_index([("date", DESCENDING)], name="gel_date_desc_idx")
+        gel_test_collection.create_index([("shift", ASCENDING)], name="gel_shift_idx")
+        gel_test_collection.create_index([("lineNumber", ASCENDING)], name="gel_line_number_idx")
+        gel_test_collection.create_index([("productionOrderNo", ASCENDING)], name="gel_production_order_idx")
     except Exception as exc:
         print(f"Warning: failed to ensure gel test indexes: {exc}")
 
@@ -32,6 +37,8 @@ class GelTestReport:
         created_by_employee_id: Optional[str] = None,
         submitted_at: Optional[str] = None,
         submitted_by: Optional[str] = None,
+        approved_at: Optional[str] = None,
+        approved_by: Optional[str] = None,
         returned_at: Optional[str] = None,
         returned_by: Optional[str] = None,
         return_comments: Optional[str] = None,
@@ -49,6 +56,8 @@ class GelTestReport:
         self.created_by_employee_id = created_by_employee_id
         self.submitted_at = submitted_at
         self.submitted_by = submitted_by
+        self.approved_at = approved_at
+        self.approved_by = approved_by
         self.returned_at = returned_at
         self.returned_by = returned_by
         self.return_comments = return_comments
@@ -104,6 +113,8 @@ class GelTestReport:
             "createdByEmployeeId": self.created_by_employee_id,
             "submittedAt": self.submitted_at,
             "submittedBy": self.submitted_by,
+            "approvedAt": self.approved_at,
+            "approvedBy": self.approved_by,
             "returnedAt": self.returned_at,
             "returnedBy": self.returned_by,
             "returnComments": self.return_comments,
@@ -143,6 +154,8 @@ class GelTestReport:
             created_by_employee_id=data.get("createdByEmployeeId"),
             submitted_at=data.get("submittedAt"),
             submitted_by=data.get("submittedBy"),
+            approved_at=data.get("approvedAt"),
+            approved_by=data.get("approvedBy"),
             returned_at=data.get("returnedAt"),
             returned_by=data.get("returnedBy"),
             return_comments=data.get("returnComments"),

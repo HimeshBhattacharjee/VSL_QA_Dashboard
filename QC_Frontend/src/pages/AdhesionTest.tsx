@@ -1,24 +1,39 @@
-import { useEffect, useRef, useState, Fragment } from 'react';
+import { useCallback, useEffect, useRef, useState, Fragment } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import TestHeading from '../components/TestHeading';
 import ReportPagination from '../components/ReportPagination';
-import ReportListControls, { filterSortReports, ReportSortOption } from '../components/ReportListControls';
+import { ReportSortOption } from '../components/ReportListControls';
+import { Check, Download, Edit3, Eye, FileSpreadsheet, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 
-type AdhesionWorkflowState = 'draft' | 'submitted' | 'returned';
+type AdhesionWorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
+type AdhesionDisplayStatus = AdhesionWorkflowState;
+type AdhesionMainView = 'dashboard' | 'edit-report' | 'saved-reports';
+type AdhesionAccessMode = 'edit' | 'view';
+type DashboardPeriod = 'daily' | 'weekly' | 'monthly';
+type AdhesionSortOption = ReportSortOption | 'status' | 'created-by' | 'shift' | 'date-newest' | 'date-oldest';
 
 interface AdhesionTestReport {
     _id?: string;
+    id?: string;
     name: string;
     timestamp: string;
-    formData: { [key: string]: string | boolean; };
-    averages: { [key: string]: string; };
+    formData?: { [key: string]: string | boolean; };
+    averages?: { [key: string]: string; };
+    status?: AdhesionWorkflowState;
     workflowState?: AdhesionWorkflowState;
+    displayStatus?: AdhesionDisplayStatus;
+    date?: string;
+    shift?: string;
+    lineNumber?: string;
+    productionOrderNo?: string;
+    createdBy?: string | null;
     createdByUserId?: string | null;
     createdByEmployeeName?: string | null;
     createdByEmployeeId?: string | null;
     submittedAt?: string | null;
     submittedBy?: string | null;
+    approvedAt?: string | null;
+    approvedBy?: string | null;
     returnedAt?: string | null;
     returnedBy?: string | null;
     returnComments?: string | null;
@@ -26,6 +41,61 @@ interface AdhesionTestReport {
     signedAt?: string | null;
     updatedAt?: string | null;
     s3_key?: string;
+}
+
+interface AdhesionListFilters {
+    dateFrom: string;
+    dateTo: string;
+    shift: string;
+    lineNumber: string;
+    status: '' | AdhesionWorkflowState;
+}
+
+interface DashboardGroupSummary {
+    key: string;
+    date?: string;
+    dayName?: string;
+    displayDate?: string;
+    totalReports: number;
+    draft: number;
+    submitted: number;
+    returned: number;
+    approved: number;
+}
+
+interface DashboardResponse {
+    view: DashboardPeriod;
+    dateFrom: string;
+    dateTo: string;
+    summary: {
+        totalReports: number;
+        draft: number;
+        submitted: number;
+        returned: number;
+        approved: number;
+    };
+    groups: DashboardGroupSummary[];
+    items: AdhesionTestReport[];
+    total: number;
+    truncated: boolean;
+}
+
+interface BulkOperationStatus {
+    action: string;
+    completed: number;
+    total: number;
+}
+
+interface BulkOperationResult {
+    requested?: number;
+    approved?: number;
+    deleted?: number;
+    downloaded?: number;
+    processed?: number;
+    skipped?: Record<string, number>;
+    skippedCount?: number;
+    failed?: Array<{ reportId?: string; reason?: string }>;
+    failedCount?: number;
 }
 
 interface AdhesionAverages {
@@ -116,8 +186,8 @@ const isBelowAdhesionThreshold = (value: string, threshold: number): boolean => 
     return !isNaN(numericValue) && numericValue < threshold;
 };
 
-const getWorkflowState = (report?: Pick<AdhesionTestReport, 'workflowState'> | null): AdhesionWorkflowState =>
-    report?.workflowState || 'submitted';
+const getWorkflowState = (report?: Pick<AdhesionTestReport, 'workflowState' | 'status'> | null): AdhesionWorkflowState =>
+    report?.workflowState || report?.status || 'submitted';
 
 const formatWorkflowState = (state: AdhesionWorkflowState) =>
     state.charAt(0).toUpperCase() + state.slice(1);
@@ -125,12 +195,26 @@ const formatWorkflowState = (state: AdhesionWorkflowState) =>
 const formatTimestamp = (value?: string | null) =>
     value ? new Date(value).toLocaleString() : '-';
 
+const sumObjectValues = (values: Record<string, number>) =>
+    Object.values(values).reduce((total, count) => total + count, 0);
+
+const FINALIZED_WORKFLOW_STATES = new Set<AdhesionWorkflowState>(['submitted', 'approved']);
+const EDITABLE_OPERATOR_WORKFLOW_STATES = new Set<AdhesionWorkflowState>(['draft', 'returned']);
+const APPROVED_DELETE_TOOLTIP = 'Approved reports are permanently retained and cannot be deleted.';
+
 export default function AdhesionTest() {
-    const [activeTab, setActiveTab] = useState<'edit-report' | 'saved-reports' | 'returned-reports'>('edit-report');
+    const [activeTab, setActiveTab] = useState<AdhesionMainView>('dashboard');
+    const [dashboardView, setDashboardView] = useState<DashboardPeriod>('daily');
+    const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+    const [isDashboardLoading, setIsDashboardLoading] = useState(false);
     const [savedReports, setSavedReports] = useState<AdhesionTestReport[]>([]);
+    const [savedReportsTotal, setSavedReportsTotal] = useState(0);
+    const [isSavedReportsLoading, setIsSavedReportsLoading] = useState(false);
     const [adhesionReportName, setAdhesionReportName] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [currentAccessMode, setCurrentAccessMode] = useState<AdhesionAccessMode>('edit');
+    const [readOnlyReason, setReadOnlyReason] = useState('');
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
     const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -140,14 +224,22 @@ export default function AdhesionTest() {
     const [returnModalReportIndex, setReturnModalReportIndex] = useState<number | null>(null);
     const [returnComment, setReturnComment] = useState('');
     const [returnCommentError, setReturnCommentError] = useState('');
-    const [mainReportPage, setMainReportPage] = useState(1);
-    const [mainReportPageSize, setMainReportPageSize] = useState(10);
-    const [returnedReportPage, setReturnedReportPage] = useState(1);
-    const [returnedReportPageSize, setReturnedReportPageSize] = useState(10);
-    const [mainReportSearch, setMainReportSearch] = useState('');
-    const [mainReportSort, setMainReportSort] = useState<ReportSortOption>('newest-updated');
-    const [returnedReportSearch, setReturnedReportSearch] = useState('');
-    const [returnedReportSort, setReturnedReportSort] = useState<ReportSortOption>('newest-updated');
+    const [savedReportsPage, setSavedReportsPage] = useState(1);
+    const [savedReportsPageSize, setSavedReportsPageSize] = useState(20);
+    const [savedReportsSearchInput, setSavedReportsSearchInput] = useState('');
+    const [savedReportsSearch, setSavedReportsSearch] = useState('');
+    const [savedReportsSort, setSavedReportsSort] = useState<AdhesionSortOption>('newest-created');
+    const [savedReportsFilters, setSavedReportsFilters] = useState<AdhesionListFilters>({
+        dateFrom: '',
+        dateTo: '',
+        shift: '',
+        lineNumber: '',
+        status: '',
+    });
+    const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
+    const [selectedReportRecords, setSelectedReportRecords] = useState<Record<string, AdhesionTestReport>>({});
+    const [bulkOperationStatus, setBulkOperationStatus] = useState<BulkOperationStatus | null>(null);
+    const lastSelectedReportIdRef = useRef<string | null>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -184,19 +276,31 @@ export default function AdhesionTest() {
     const isOperatorRole = userRole === 'Operator';
     const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
     const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
-    const canCreateReport = isOperatorRole || isSystemAdminRole;
-    const canEditCurrentReport = isSystemAdminRole
-        || (isOperatorRole && (!currentReportId || ['draft', 'returned'].includes(currentWorkflowState)))
-        || (isReviewerRole && currentReportId !== null && currentWorkflowState === 'submitted');
-    const canSaveDraftCurrentReport = (isOperatorRole || isSystemAdminRole) && currentWorkflowState !== 'submitted';
-    const canSubmitCurrentReport = (isOperatorRole || isSystemAdminRole)
-        && currentWorkflowState !== 'submitted'
+    const isReviewerLikeRole = isReviewerRole || isSystemAdminRole;
+    const isCurrentReportOwner = Boolean(currentReportMeta) && (
+        currentReportMeta?.createdByEmployeeId === employeeId
+        || (!currentReportMeta?.createdByEmployeeId && currentReportMeta?.createdByEmployeeName === username)
+        || currentReportMeta?.createdBy === username
+    );
+    const canCreateReport = isOperatorRole;
+    const canEditCurrentReport = currentAccessMode === 'edit' && (
+        (isOperatorRole && (!currentReportId || (isCurrentReportOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))))
+        || (isReviewerLikeRole && currentReportId !== null && currentWorkflowState === 'submitted')
+    );
+    const canSaveDraftCurrentReport = currentAccessMode === 'edit'
+        && isOperatorRole
+        && (!currentReportId || isCurrentReportOwner)
+        && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState);
+    const canSubmitCurrentReport = isOperatorRole
+        && currentAccessMode === 'edit'
+        && (!currentReportId || isCurrentReportOwner)
+        && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState)
         && preparedBySignature.trim().length > 0;
-    const canExportCurrentReport = currentReportId !== null && currentWorkflowState === 'submitted';
-    const returnedReports = savedReports.filter(report => getWorkflowState(report) === 'returned');
-    const reportsForMainList = isOperatorRole
-        ? savedReports.filter(report => getWorkflowState(report) !== 'returned')
-        : savedReports;
+    const canExportCurrentReport = currentReportId !== null
+        && FINALIZED_WORKFLOW_STATES.has(currentWorkflowState)
+        && (isOperatorRole || isReviewerLikeRole);
+    const canApproveCurrentReport = currentReportId !== null && isReviewerLikeRole && currentWorkflowState === 'submitted';
+    const canReturnCurrentReport = currentReportId !== null && isReviewerLikeRole && currentWorkflowState === 'submitted';
 
     const authHeaders = (includeJson = false): HeadersInit => ({
         ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
@@ -221,6 +325,45 @@ export default function AdhesionTest() {
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        getReportSummaries: async (params: {
+            page: number;
+            pageSize: number;
+            search?: string;
+            sort?: AdhesionSortOption;
+            filters?: AdhesionListFilters;
+        }): Promise<{ items: AdhesionTestReport[]; total: number; page: number; page_size: number }> => {
+            const query = new URLSearchParams({
+                summary: 'true',
+                page: String(params.page),
+                page_size: String(params.pageSize),
+                sort: params.sort || 'newest-created',
+            });
+            if (params.search?.trim()) query.append('search', params.search.trim());
+            if (params.filters?.dateFrom) query.append('date_from', params.filters.dateFrom);
+            if (params.filters?.dateTo) query.append('date_to', params.filters.dateTo);
+            if (params.filters?.shift) query.append('shift', params.filters.shift);
+            if (params.filters?.lineNumber) query.append('lineNumber', params.filters.lineNumber);
+            if (params.filters?.status) query.append('status', params.filters.status);
+
+            const response = await fetch(`${ADHESION_API_BASE_URL}/?${query}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch report summaries: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        getDashboard: async (view: DashboardPeriod): Promise<DashboardResponse> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/dashboard?view=${view}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch dashboard: ${response.status} ${errorText}`);
             }
             return response.json();
         },
@@ -270,7 +413,9 @@ export default function AdhesionTest() {
         },
         checkReportNameExists: async (name: string, excludeId?: string): Promise<boolean> => {
             const url = `${ADHESION_API_BASE_URL}/name/${encodeURIComponent(name)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: authHeaders(),
+            });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to check report name: ${response.status} ${errorText}`);
@@ -302,21 +447,50 @@ export default function AdhesionTest() {
             }
             return response.json();
         },
+        approveReport: async (id: string): Promise<AdhesionTestReport> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/${id}/approve`, {
+                method: 'POST',
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to approve report: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        bulkApproveReports: async (reportIds: string[]): Promise<BulkOperationResult> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/bulk/approve`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ reportIds }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to bulk approve reports: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        bulkDeleteReports: async (reportIds: string[]): Promise<BulkOperationResult> => {
+            const response = await fetch(`${ADHESION_API_BASE_URL}/bulk/delete`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ reportIds }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to bulk delete reports: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
     };
 
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
         const storedEmployeeId = sessionStorage.getItem('employeeId');
-        clearAdhesionDraftStorage();
-        clearAdhesionPersistentDraft();
-
         setUserRole(storedUserRole);
         setUsername(storedUsername);
         setEmployeeId(storedEmployeeId);
-        if (!['Operator', 'Admin', 'System Administrator'].includes(storedUserRole || '')) {
-            setActiveTab('saved-reports');
-        }
     }, []);
 
     useEffect(() => {
@@ -328,27 +502,21 @@ export default function AdhesionTest() {
     }, [currentWorkflowState]);
 
     useEffect(() => {
-        if (activeTab === 'returned-reports' && returnedReports.length === 0) {
-            setActiveTab('saved-reports');
-        }
-    }, [activeTab, returnedReports.length]);
-
-    useEffect(() => {
-        const totalPages = Math.max(1, Math.ceil(reportsForMainList.length / mainReportPageSize));
-        setMainReportPage(page => Math.min(page, totalPages));
-    }, [reportsForMainList.length, mainReportPageSize]);
-
-    useEffect(() => {
-        const totalPages = Math.max(1, Math.ceil(returnedReports.length / returnedReportPageSize));
-        setReturnedReportPage(page => Math.min(page, totalPages));
-    }, [returnedReports.length, returnedReportPageSize]);
-
-    useEffect(() => {
         isRouteActiveRef.current = true;
+        clearAdhesionDraftStorage();
+        clearAdhesionPersistentDraft();
         initializeForm();
-        loadSavedReports();
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
         return () => {
             isRouteActiveRef.current = false;
+            window.removeEventListener('beforeunload', handleBeforeUnload);
             clearAdhesionDraftStorage();
             clearAdhesionPersistentDraft();
         };
@@ -387,6 +555,7 @@ export default function AdhesionTest() {
 
     // Handle lamination parameter changes
     const handleLamParamChange = (lam: 'lam1' | 'lam2' | 'lam3', field: 'pumpingTime' | 'pressingTime' | 'ventingTime', value: string) => {
+        if (!canEditCurrentReport) return;
         setLamParams(prev => {
             const updated = { ...prev };
             updated[lam][field] = value;
@@ -402,12 +571,14 @@ export default function AdhesionTest() {
 
     // Handle editable input changes
     const handleEditableChange = (key: string, value: string) => {
+        if (!canEditCurrentReport) return;
         setEditableValues(prev => ({ ...prev, [key]: value }));
         setHasUnsavedChanges(true);
     };
 
     // Handle data input changes - immediate update with ref for real-time calculation
     const handleDataChange = (key: string, value: string) => {
+        if (!canEditCurrentReport) return;
         // Allow empty string, hyphen, or numbers
         if (value === '' || value === '-' || !isNaN(parseFloat(value))) {
             const newValues = { ...dataValuesRef.current, [key]: value };
@@ -567,38 +738,98 @@ export default function AdhesionTest() {
         }
     };
 
-    const editSavedReport = async (index: number) => {
+    const getReportId = (report?: AdhesionTestReport | null) => report?._id || report?.id || '';
+
+    const getListedReportPermissions = (report: AdhesionTestReport) => {
+        const state = getWorkflowState(report);
+        const isOwner = (
+            report.createdByEmployeeId === employeeId
+            || (!report.createdByEmployeeId && report.createdByEmployeeName === username)
+            || report.createdBy === username
+        );
+
+        return {
+            canView: isOperatorRole || isReviewerRole || isSystemAdminRole,
+            canEdit: (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state))
+                || (isReviewerLikeRole && state === 'submitted'),
+            canSubmit: isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state),
+            canExport: FINALIZED_WORKFLOW_STATES.has(state) && (isOperatorRole || isReviewerLikeRole),
+            canApprove: isReviewerLikeRole && state === 'submitted',
+            canReturn: isReviewerLikeRole && state === 'submitted',
+            canDelete: state !== 'approved' && (
+                isSystemAdminRole
+                || (isReviewerRole && state === 'submitted')
+                || (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state))
+            ),
+        };
+    };
+
+    const canOpenListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canView;
+
+    const canEditListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canEdit;
+
+    const canExportListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canExport;
+
+    const canDeleteListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canDelete;
+
+    const canReturnListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canReturn;
+
+    const canApproveListedReport = (report: AdhesionTestReport) =>
+        getListedReportPermissions(report).canApprove;
+
+    const getReadOnlyReason = (report: AdhesionTestReport) => {
+        const state = getWorkflowState(report);
+        if (state === 'draft') return 'Draft reports are locked to the creating operator until submission.';
+        if (state === 'returned') return 'Returned reports are locked to the creating operator until resubmission.';
+        if (state === 'approved') return 'Approved reports are read-only.';
+        return 'This report is read-only for your role.';
+    };
+
+    const openReportFromList = async (reportMetadata: AdhesionTestReport | undefined, requestedMode: AdhesionAccessMode = 'edit') => {
         try {
             setIsLoading(true);
-            if (index < 0 || index >= savedReports.length) {
+            if (!reportMetadata) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const reportMetadata = savedReports[index];
-            const state = getWorkflowState(reportMetadata);
-
-            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
-                showAlert('error', 'Draft and returned reports are locked until the operator submits them');
+            if (!canOpenListedReport(reportMetadata)) {
+                showAlert('error', 'You are not authorized to open this report');
+                return;
+            }
+            if (!reportMetadata._id) {
+                showAlert('error', 'Report ID not found');
                 return;
             }
             const fullReport = await apiService.getReportById(reportMetadata._id!);
             const selectedReport = cloneAdhesionReport(fullReport);
+            const canEditSelectedReport = canEditListedReport(selectedReport);
+            const accessMode: AdhesionAccessMode = requestedMode === 'edit' && canEditSelectedReport ? 'edit' : 'view';
             const editSessionId = editSessionRef.current + 1;
             editSessionRef.current = editSessionId;
 
             // Start every edit from a clean in-memory session before loading the selected report clone.
             clearFormData();
+            sessionStorage.setItem(ADHESION_EDITING_REPORT_DATA_KEY, JSON.stringify(selectedReport));
+            sessionStorage.setItem(ADHESION_EDITING_REPORT_ID_KEY, selectedReport._id!);
+            setCurrentReportId(selectedReport._id || null);
+            currentReportIdRef.current = selectedReport._id || null;
+            setCurrentWorkflowState(getWorkflowState(selectedReport));
+            currentWorkflowStateRef.current = getWorkflowState(selectedReport);
+            setCurrentReportMeta(selectedReport);
+            setCurrentAccessMode(accessMode);
+            setReadOnlyReason(accessMode === 'view' ? getReadOnlyReason(selectedReport) : '');
             setActiveTab('edit-report');
             setTimeout(() => {
                 if (!isRouteActiveRef.current || editSessionRef.current !== editSessionId) return;
                 loadReportData(cloneAdhesionReport(selectedReport));
-                setHasUnsavedChanges(getWorkflowState(selectedReport) !== 'submitted');
+                setHasUnsavedChanges(accessMode === 'edit' && EDITABLE_OPERATOR_WORKFLOW_STATES.has(getWorkflowState(selectedReport)));
             }, 150);
-            const selectedState = getWorkflowState(selectedReport);
-            const willBeEditable = isSystemAdminRole
-                || (isOperatorRole && ['draft', 'returned'].includes(selectedState))
-                || (isReviewerRole && selectedState === 'submitted');
-            showAlert('info', `${willBeEditable ? 'Opened' : 'Viewing'}: ${selectedReport.name}`);
+            showAlert('info', `${accessMode === 'view' ? 'Viewing' : 'Opened'}: ${selectedReport.name}`);
         } catch (error) {
             console.error('Error loading report:', error);
             showAlert('error', 'Failed to load report');
@@ -609,6 +840,7 @@ export default function AdhesionTest() {
 
     const loadReportData = (report: AdhesionTestReport) => {
         isHydratingRef.current = true;
+        const formData = report.formData || {};
         setCurrentReportId(report._id || null);
         currentReportIdRef.current = report._id || null;
         setCurrentWorkflowState(getWorkflowState(report));
@@ -617,28 +849,28 @@ export default function AdhesionTest() {
         setAdhesionReportName(report.name);
 
         // Load date
-        if (report.formData.testDate !== undefined) {
-            setTestDate(report.formData.testDate as string);
+        if (formData.testDate !== undefined) {
+            setTestDate(formData.testDate as string);
         }
 
         // Load shift
-        if (report.formData.shift !== undefined) {
-            setShift(report.formData.shift as string);
+        if (formData.shift !== undefined) {
+            setShift(formData.shift as string);
         }
 
         // Load laminator
-        if (report.formData.laminator !== undefined) {
-            setLaminator(report.formData.laminator as string);
+        if (formData.laminator !== undefined) {
+            setLaminator(formData.laminator as string);
         }
 
         // Load lamination position
-        if (report.formData.laminationPosition !== undefined) {
-            setLaminationPosition(report.formData.laminationPosition as string);
+        if (formData.laminationPosition !== undefined) {
+            setLaminationPosition(formData.laminationPosition as string);
         }
 
         // Load lamination parameters
-        if (report.formData.lamParams !== undefined) {
-            const params = JSON.parse(report.formData.lamParams as string);
+        if (formData.lamParams !== undefined) {
+            const params = JSON.parse(formData.lamParams as string);
             setLamParams(params);
         }
 
@@ -646,8 +878,8 @@ export default function AdhesionTest() {
         const editableInputs: { [key: string]: string } = {};
         for (let i = 0; i <= 33; i++) {
             const key = `adhesion_editable_${i}`;
-            if (report.formData[key] !== undefined) {
-                editableInputs[key] = report.formData[key] as string;
+            if (formData[key] !== undefined) {
+                editableInputs[key] = formData[key] as string;
             }
         }
         setEditableValues(editableInputs);
@@ -656,8 +888,8 @@ export default function AdhesionTest() {
         const dataInputs: { [key: string]: string } = {};
         for (let i = 0; i <= 19; i++) {
             const key = `adhesion_data_${i}`;
-            if (report.formData[key] !== undefined) {
-                const value = report.formData[key] as string;
+            if (formData[key] !== undefined) {
+                const value = formData[key] as string;
                 dataInputs[key] = value || '-';
             } else {
                 dataInputs[key] = '-';
@@ -665,14 +897,14 @@ export default function AdhesionTest() {
         }
         syncDataValues(dataInputs);
 
-        if (report.formData.preparedBySignature !== undefined) {
-            setPreparedBySignature(report.formData.preparedBySignature as string);
+        if (formData.preparedBySignature !== undefined) {
+            setPreparedBySignature(formData.preparedBySignature as string);
         } else {
             setPreparedBySignature('');
         }
 
-        if (report.formData.verifiedBySignature !== undefined) {
-            setVerifiedBySignature(report.formData.verifiedBySignature as string);
+        if (formData.verifiedBySignature !== undefined) {
+            setVerifiedBySignature(formData.verifiedBySignature as string);
         } else {
             setVerifiedBySignature('');
         }
@@ -724,6 +956,8 @@ export default function AdhesionTest() {
         clearFormData(true, true);
         clearAdhesionDraftStorage();
         setCurrentWorkflowState('draft');
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
         setActiveTab('edit-report');
     };
 
@@ -756,6 +990,8 @@ export default function AdhesionTest() {
             setCurrentWorkflowState('draft');
             currentWorkflowStateRef.current = 'draft';
             setCurrentReportMeta(null);
+            setCurrentAccessMode('edit');
+            setReadOnlyReason('');
             sessionStorage.removeItem(ADHESION_EDITING_REPORT_ID_KEY);
             sessionStorage.removeItem(ADHESION_EDITING_REPORT_DATA_KEY);
         }
@@ -810,7 +1046,7 @@ export default function AdhesionTest() {
             setHasUnsavedChanges(false);
             clearAdhesionDraftStorage();
             clearAdhesionPersistentDraft();
-            await loadSavedReports(false);
+            await refreshAdhesionWorkflow();
         } catch (error) {
             console.error('Error saving draft:', error);
             showAlert('error', getFriendlyReportError(error));
@@ -819,17 +1055,61 @@ export default function AdhesionTest() {
         }
     };
 
-    const loadSavedReports = async (showSpinner = true) => {
+    const loadSavedReports = useCallback(async (_showSpinner = true) => {
         try {
-            if (showSpinner) setIsLoading(true);
-            const reports = await apiService.getAllReports();
-            setSavedReports(reports);
+            setIsSavedReportsLoading(true);
+            const response = await apiService.getReportSummaries({
+                page: savedReportsPage,
+                pageSize: savedReportsPageSize,
+                search: savedReportsSearch,
+                sort: savedReportsSort,
+                filters: savedReportsFilters,
+            });
+            setSavedReports(response.items || []);
+            setSavedReportsTotal(response.total || 0);
         } catch (error) {
             console.error('Error loading reports:', error);
             showAlert('error', 'Failed to load saved reports');
         } finally {
-            if (showSpinner) setIsLoading(false);
+            setIsSavedReportsLoading(false);
         }
+    }, [savedReportsPage, savedReportsPageSize, savedReportsSearch, savedReportsSort, savedReportsFilters]);
+
+    const loadDashboard = useCallback(async () => {
+        try {
+            setIsDashboardLoading(true);
+            const response = await apiService.getDashboard(dashboardView);
+            setDashboardData(response);
+        } catch (error) {
+            console.error('Error loading adhesion dashboard:', error);
+            showAlert('error', 'Failed to load dashboard');
+        } finally {
+            setIsDashboardLoading(false);
+        }
+    }, [dashboardView]);
+
+    useEffect(() => {
+        if (activeTab !== 'saved-reports') return;
+        loadSavedReports();
+    }, [activeTab, loadSavedReports]);
+
+    useEffect(() => {
+        if (activeTab !== 'dashboard') return;
+        loadDashboard();
+    }, [activeTab, loadDashboard]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSavedReportsSearch(savedReportsSearchInput);
+            setSavedReportsPage(1);
+        }, 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [savedReportsSearchInput]);
+
+    const refreshAdhesionWorkflow = async () => {
+        await loadSavedReports();
+        await loadDashboard();
     };
 
     useEffect(() => {
@@ -849,7 +1129,7 @@ export default function AdhesionTest() {
             setEmployeeId(nextEmployeeId);
             setUsername(nextUsername);
             setUserRole(nextUserRole);
-            setActiveTab(['Operator', 'Admin', 'System Administrator'].includes(nextUserRole || '') ? 'edit-report' : 'saved-reports');
+            setActiveTab('dashboard');
             if (nextEmployeeId) {
                 loadSavedReports(false);
             }
@@ -870,7 +1150,7 @@ export default function AdhesionTest() {
             showAlert('error', 'You are not authorized to modify this report');
             return;
         }
-        if (currentWorkflowState === 'submitted' && !adhesionReportName.trim()) {
+        if (!adhesionReportName.trim()) {
             showAlert('error', 'Please enter a report name');
             return;
         }
@@ -886,8 +1166,9 @@ export default function AdhesionTest() {
                 }
                 const updatedReport = await apiService.updateReport(currentReportId, reportData);
                 setCurrentReportMeta(updatedReport);
+                setHasUnsavedChanges(false);
                 showAlert('success', 'Report changes saved successfully');
-                await loadSavedReports(false);
+                await refreshAdhesionWorkflow();
                 return;
             }
 
@@ -918,7 +1199,7 @@ export default function AdhesionTest() {
             clearAdhesionDraftStorage();
             clearAdhesionPersistentDraft();
             setHasUnsavedChanges(false);
-            await loadSavedReports(false);
+            await refreshAdhesionWorkflow();
             clearFormData(true, true);
             setActiveTab('saved-reports');
             showAlert('success', currentWorkflowState === 'returned' ? 'Report resubmitted successfully' : 'Report submitted successfully');
@@ -930,25 +1211,22 @@ export default function AdhesionTest() {
         }
     };
 
-    const deleteSavedReport = async (index: number) => {
+    const deleteSavedReport = async (report: AdhesionTestReport | undefined) => {
         try {
-            if (index < 0 || index >= savedReports.length) {
+            if (!report) {
                 showAlert('error', 'Report not found');
                 return;
             }
-            const report = savedReports[index];
-            const reportState = getWorkflowState(report);
-            const canDeleteDraft = isOperatorRole && reportState === 'draft';
-            const canDeleteSubmitted = (isReviewerRole || isSystemAdminRole) && reportState === 'submitted';
-            if (!canDeleteDraft && !canDeleteSubmitted) {
+            if (!canDeleteListedReport(report)) {
                 showAlert('error', 'You are not authorized to delete this report');
                 return;
             }
-            await apiService.deleteReport(report._id!);
+            await apiService.deleteReport(getReportId(report));
             if (report._id === currentReportId) {
                 clearFormData(true, true);
             }
-            await loadSavedReports();
+            await refreshAdhesionWorkflow();
+            clearReportSelection();
             showAlert('info', 'Report deleted successfully');
         } catch (error) {
             console.error('Error deleting report:', error);
@@ -958,11 +1236,11 @@ export default function AdhesionTest() {
 
     const exportToExcel = async () => {
         try {
-            if (!currentReportId || currentWorkflowState !== 'submitted') {
-                showAlert('error', 'Excel can be generated only for submitted reports');
+            if (!currentReportId || !canExportCurrentReport) {
+                showAlert('error', 'Report can be generated only for submitted or approved reports');
                 return;
             }
-            showAlert('info', 'Please wait! Exporting Excel will take some time...');
+            showAlert('info', 'Please wait! Exporting report will take some time...');
 
             const response = await fetch(`${ADHESION_API_BASE_URL}/generate-adhesion-report`, {
                 method: 'POST',
@@ -982,31 +1260,28 @@ export default function AdhesionTest() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showAlert('success', 'Excel file exported successfully');
+            showAlert('success', 'Report exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
-            showAlert('error', 'Failed to export Excel file');
+            showAlert('error', 'Failed to export report');
         }
     };
 
-    const exportSavedReportToExcel = async (index: number) => {
+    const exportSavedReportToExcel = async (report: AdhesionTestReport | undefined) => {
         try {
-            if (index < 0 || index >= savedReports.length) {
+            if (!report) {
                 showAlert('error', 'Report not found');
                 return;
             }
-
-            showAlert('info', 'Please wait! Exporting Excel will take some time...');
-
-            const report = savedReports[index];
-            if (getWorkflowState(report) !== 'submitted') {
-                showAlert('error', 'Excel can be generated only for submitted reports');
+            if (!canExportListedReport(report)) {
+                showAlert('error', 'Excel can be generated only for submitted or approved reports');
                 return;
             }
+            showAlert('info', 'Please wait! Exporting Excel will take some time...');
             const response = await fetch(`${ADHESION_API_BASE_URL}/generate-adhesion-report`, {
                 method: 'POST',
                 headers: authHeaders(true),
-                body: JSON.stringify({ report_id: report._id }),
+                body: JSON.stringify({ report_id: getReportId(report) }),
             });
 
             if (!response.ok) throw new Error('Failed to generate report');
@@ -1020,10 +1295,10 @@ export default function AdhesionTest() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showAlert('success', 'Excel file exported successfully');
+            showAlert('success', 'Report exported successfully');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
-            showAlert('error', 'Failed to export Excel file');
+            showAlert('error', 'Failed to export report');
         }
     };
 
@@ -1034,7 +1309,7 @@ export default function AdhesionTest() {
         }
 
         const report = savedReports[index];
-        if (getWorkflowState(report) !== 'submitted') {
+        if (!canReturnListedReport(report)) {
             showAlert('error', 'Only submitted reports can be returned');
             return;
         }
@@ -1073,7 +1348,8 @@ export default function AdhesionTest() {
                     returnedBy: username,
                 } : prev);
             }
-            await loadSavedReports(false);
+            await refreshAdhesionWorkflow();
+            clearReportSelection();
             closeReturnModal();
             showAlert('success', 'Report returned for correction');
             setActiveTab('saved-reports');
@@ -1118,160 +1394,857 @@ export default function AdhesionTest() {
         'adhesion_editable_25', // Glass Size
     ];
 
-    const canOpenListedReport = (report: AdhesionTestReport) =>
-        isSystemAdminRole || isOperatorRole || (isReviewerRole && getWorkflowState(report) === 'submitted');
-
-    const canDeleteListedReport = (report: AdhesionTestReport) =>
-        ((isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted')
-        || (isOperatorRole && getWorkflowState(report) === 'draft');
-
-    const canReturnListedReport = (report: AdhesionTestReport) =>
-        (isReviewerRole || isSystemAdminRole) && getWorkflowState(report) === 'submitted';
-
     const getOpenActionLabel = (report: AdhesionTestReport) => {
         const state = getWorkflowState(report);
-        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
-        if (isOperatorRole && state === 'submitted') return 'View';
-        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+        const isOwner = (
+            report.createdByEmployeeId === employeeId
+            || (!report.createdByEmployeeId && report.createdByEmployeeName === username)
+            || report.createdBy === username
+        );
+        if (isOperatorRole && (!isOwner || FINALIZED_WORKFLOW_STATES.has(state))) return 'View';
+        return canEditListedReport(report) ? (isOperatorRole ? 'Continue' : 'Edit') : 'View';
     };
 
-    const renderAdhesionReportsList = (reports: AdhesionTestReport[], title: string, listType: 'main' | 'returned' = 'main') => {
-        const page = listType === 'returned' ? returnedReportPage : mainReportPage;
-        const pageSize = listType === 'returned' ? returnedReportPageSize : mainReportPageSize;
-        const setPage = listType === 'returned' ? setReturnedReportPage : setMainReportPage;
-        const setPageSize = listType === 'returned' ? setReturnedReportPageSize : setMainReportPageSize;
-        const searchTerm = listType === 'returned' ? returnedReportSearch : mainReportSearch;
-        const sortOption = listType === 'returned' ? returnedReportSort : mainReportSort;
-        const setSearchTerm = listType === 'returned' ? setReturnedReportSearch : setMainReportSearch;
-        const setSortOption = listType === 'returned' ? setReturnedReportSort : setMainReportSort;
-        const filteredReports = filterSortReports(reports, searchTerm, sortOption);
-        const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
-        const safePage = Math.min(Math.max(1, page), totalPages);
-        const paginatedReports = filteredReports.slice((safePage - 1) * pageSize, safePage * pageSize);
+    const getDisplayStatus = (report: AdhesionTestReport): AdhesionDisplayStatus =>
+        report.displayStatus || getWorkflowState(report);
+
+    const getStateBadgeClass = (state: AdhesionDisplayStatus) => {
+        if (state === 'approved') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200';
+        if (state === 'submitted') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
+        if (state === 'returned') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+    };
+
+    const getCreatedByLabel = (report: AdhesionTestReport) =>
+        report.createdByEmployeeName || report.createdBy || report.createdByEmployeeId || 'Legacy report';
+
+    const getLineLabel = (lineNumber?: string | null) => {
+        if (!lineNumber) return '-';
+        if (lineNumber === 'I' || lineNumber === 'II') return `Line ${lineNumber}`;
+        return lineNumber;
+    };
+
+    const clearReportSelection = useCallback(() => {
+        setSelectedReportIds(new Set());
+        setSelectedReportRecords({});
+        lastSelectedReportIdRef.current = null;
+    }, []);
+
+    const setReportSelection = (report: AdhesionTestReport, selected: boolean) => {
+        const reportId = getReportId(report);
+        if (!reportId) return;
+
+        setSelectedReportIds(prev => {
+            const next = new Set(prev);
+            if (selected) {
+                next.add(reportId);
+            } else {
+                next.delete(reportId);
+            }
+            return next;
+        });
+
+        setSelectedReportRecords(prev => {
+            const next = { ...prev };
+            if (selected) {
+                next[reportId] = report;
+            } else {
+                delete next[reportId];
+            }
+            return next;
+        });
+    };
+
+    const setVisibleReportSelection = (visibleReports: AdhesionTestReport[], selected: boolean) => {
+        setSelectedReportIds(prev => {
+            const next = new Set(prev);
+            visibleReports.forEach(report => {
+                const reportId = getReportId(report);
+                if (!reportId) return;
+                if (selected) {
+                    next.add(reportId);
+                } else {
+                    next.delete(reportId);
+                }
+            });
+            return next;
+        });
+
+        setSelectedReportRecords(prev => {
+            const next = { ...prev };
+            visibleReports.forEach(report => {
+                const reportId = getReportId(report);
+                if (!reportId) return;
+                if (selected) {
+                    next[reportId] = report;
+                } else {
+                    delete next[reportId];
+                }
+            });
+            return next;
+        });
+    };
+
+    const toggleReportSelection = (
+        report: AdhesionTestReport,
+        visibleReports: AdhesionTestReport[],
+        selected: boolean,
+        shiftKey: boolean
+    ) => {
+        const reportId = getReportId(report);
+        if (!reportId) return;
+
+        if (shiftKey && lastSelectedReportIdRef.current) {
+            const visibleIds = visibleReports.map(getReportId);
+            const lastIndex = visibleIds.indexOf(lastSelectedReportIdRef.current);
+            const currentIndex = visibleIds.indexOf(reportId);
+            if (lastIndex >= 0 && currentIndex >= 0) {
+                const start = Math.min(lastIndex, currentIndex);
+                const end = Math.max(lastIndex, currentIndex);
+                setVisibleReportSelection(visibleReports.slice(start, end + 1), selected);
+                lastSelectedReportIdRef.current = reportId;
+                return;
+            }
+        }
+
+        setReportSelection(report, selected);
+        lastSelectedReportIdRef.current = reportId;
+    };
+
+    const getSelectedReports = () =>
+        Object.values(selectedReportRecords).filter(report => selectedReportIds.has(getReportId(report)));
+
+    const getBulkFailureCount = (result: BulkOperationResult) =>
+        result.failedCount ?? result.failed?.length ?? 0;
+
+    const getBulkStatusLabel = (report: AdhesionTestReport) =>
+        formatWorkflowState(getWorkflowState(report));
+
+    const formatBulkOperationSummary = (
+        title: string,
+        successLabel: string,
+        successCount: number,
+        result: BulkOperationResult,
+        eligibilityNote?: string
+    ) => {
+        const lines = [title, `${successCount} ${successLabel}`];
+        const skippedCount = result.skippedCount ?? sumObjectValues(result.skipped || {});
+        if (eligibilityNote && skippedCount > 0) {
+            lines.push(`${eligibilityNote} ${skippedCount} selected ${skippedCount === 1 ? 'report was' : 'reports were'} skipped.`);
+        }
+        Object.entries(result.skipped || {}).forEach(([reason, count]) => {
+            lines.push(reason === 'Already Approved' ? `${count} ${reason}` : `${count} ${reason} Skipped`);
+        });
+        const failedCount = getBulkFailureCount(result);
+        if (failedCount > 0) {
+            lines.push(`${failedCount} Failed. See console for details.`);
+        }
+        return lines.join(' | ');
+    };
+
+    const approveReport = async (report: AdhesionTestReport | undefined) => {
+        if (!report) {
+            showAlert('error', 'Report not found');
+            return;
+        }
+        if (!canApproveListedReport(report)) {
+            showAlert('error', 'You are not authorized to approve this report');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const approved = await apiService.approveReport(getReportId(report));
+            if (currentReportId === getReportId(report)) {
+                setCurrentWorkflowState('approved');
+                currentWorkflowStateRef.current = 'approved';
+                setCurrentReportMeta(prev => prev ? { ...prev, ...approved, workflowState: 'approved', status: 'approved' } : prev);
+                setCurrentAccessMode('view');
+                setReadOnlyReason('Approved reports are read-only.');
+            }
+            await refreshAdhesionWorkflow();
+            showAlert('success', 'Report approved');
+        } catch (error) {
+            console.error('Error approving report:', error);
+            showAlert('error', 'Failed to approve report');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const runBulkApproveReports = async () => {
+        const selectedReports = getSelectedReports();
+        const reportIds = selectedReports.map(getReportId).filter(Boolean);
+        if (reportIds.length === 0) return;
+
+        try {
+            setBulkOperationStatus({ action: 'Approving...', completed: 0, total: reportIds.length });
+            const result = await apiService.bulkApproveReports(reportIds);
+            setBulkOperationStatus({ action: 'Approving...', completed: reportIds.length, total: reportIds.length });
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk approval failures', result.failed);
+            }
+            await refreshAdhesionWorkflow();
+            clearReportSelection();
+            const approved = result.approved ?? result.processed ?? 0;
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary(
+                    'Bulk Approval Completed',
+                    'Approved',
+                    approved,
+                    result,
+                    'Only Submitted reports can be approved.'
+                )
+            );
+        } catch (error) {
+            console.error('Error bulk approving reports:', error);
+            showAlert('error', 'Bulk approval failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    };
+
+    const runBulkDeleteReports = async () => {
+        const selectedReports = getSelectedReports();
+        const deletableReports = selectedReports.filter(canDeleteListedReport);
+        const reportIds = deletableReports.map(getReportId).filter(Boolean);
+        if (reportIds.length === 0) return;
+
+        try {
+            setBulkOperationStatus({ action: 'Deleting...', completed: 0, total: reportIds.length });
+            const result = await apiService.bulkDeleteReports(reportIds);
+            setBulkOperationStatus({ action: 'Deleting...', completed: reportIds.length, total: reportIds.length });
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk delete failures', result.failed);
+            }
+            await refreshAdhesionWorkflow();
+            clearReportSelection();
+            const deleted = result.deleted ?? result.processed ?? 0;
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Delete Completed', 'Deleted', deleted, result)
+            );
+        } catch (error) {
+            console.error('Error bulk deleting reports:', error);
+            showAlert('error', 'Bulk delete failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    };
+
+    const runBulkDownloadReports = async () => {
+        const selectedReports = getSelectedReports();
+        if (selectedReports.length === 0) return;
+
+        const result: BulkOperationResult = { requested: selectedReports.length, downloaded: 0, skipped: {}, failed: [] };
+        try {
+            setBulkOperationStatus({ action: 'Generating report...', completed: 0, total: selectedReports.length });
+            for (let index = 0; index < selectedReports.length; index += 1) {
+                const report = selectedReports[index];
+                const reportId = getReportId(report);
+                if (!canExportListedReport(report)) {
+                    const reason = getBulkStatusLabel(report);
+                    result.skipped![reason] = (result.skipped![reason] || 0) + 1;
+                } else {
+                    try {
+                        await exportSavedReportToExcel(report);
+                        result.downloaded = (result.downloaded || 0) + 1;
+                    } catch (error) {
+                        result.failed!.push({
+                            reportId,
+                            reason: error instanceof Error ? error.message : 'Download failed',
+                        });
+                    }
+                }
+                setBulkOperationStatus({ action: 'Generating report...', completed: index + 1, total: selectedReports.length });
+                await new Promise(resolve => window.setTimeout(resolve, 0));
+            }
+            result.skippedCount = sumObjectValues(result.skipped || {});
+            result.failedCount = getBulkFailureCount(result);
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk download failures', result.failed);
+            }
+            clearReportSelection();
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Download Completed', 'Downloaded', result.downloaded || 0, result)
+            );
+        } catch (error) {
+            console.error('Error bulk downloading reports:', error);
+            showAlert('error', 'Bulk download failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    };
+
+    const confirmBulkApproveReports = () => {
+        const selectedCount = selectedReportIds.size;
+        showConfirm({
+            title: 'Bulk Approve',
+            message: `Approve ${selectedCount} selected reports?`,
+            type: 'warning',
+            confirmText: 'Approve',
+            onConfirm: runBulkApproveReports,
+        });
+    };
+
+    const confirmBulkDeleteReports = () => {
+        const selectedCount = getSelectedReports().filter(canDeleteListedReport).length;
+        if (selectedCount === 0) return;
+        showConfirm({
+            title: 'Bulk Delete',
+            message: `Delete ${selectedCount} selected reports?\n\nThis action cannot be undone.`,
+            type: 'warning',
+            confirmText: 'Delete',
+            onConfirm: runBulkDeleteReports,
+        });
+    };
+
+    const confirmBulkDownloadReports = () => {
+        const selectedCount = selectedReportIds.size;
+        showConfirm({
+            title: 'Bulk Download',
+            message: `Download ${selectedCount} selected reports?`,
+            type: 'info',
+            confirmText: 'Download',
+            onConfirm: runBulkDownloadReports,
+        });
+    };
+
+    useEffect(() => {
+        clearReportSelection();
+    }, [activeTab, savedReportsFilters, savedReportsSearchInput, clearReportSelection]);
+
+    useEffect(() => {
+        if (selectedReportIds.size === 0) return;
+        setSelectedReportRecords(prev => {
+            let hasChanges = false;
+            const next = { ...prev };
+            savedReports.forEach(report => {
+                const reportId = getReportId(report);
+                if (reportId && selectedReportIds.has(reportId)) {
+                    next[reportId] = report;
+                    hasChanges = true;
+                }
+            });
+            return hasChanges ? next : prev;
+        });
+    }, [savedReports, selectedReportIds]);
+
+    const renderAdhesionReportsList = () => {
+        const updateFilters = (patch: Partial<AdhesionListFilters>) => {
+            setSavedReportsFilters(prev => ({ ...prev, ...patch }));
+            setSavedReportsPage(1);
+            clearReportSelection();
+        };
+
+        const resetFilters = () => {
+            setSavedReportsFilters({
+                dateFrom: '',
+                dateTo: '',
+                shift: '',
+                lineNumber: '',
+                status: '',
+            });
+            setSavedReportsSearchInput('');
+            setSavedReportsPage(1);
+            clearReportSelection();
+        };
+
+        const visibleSelectableReports = savedReports.filter(report => Boolean(getReportId(report)));
+        const visibleSelectedCount = visibleSelectableReports.filter(report =>
+            selectedReportIds.has(getReportId(report))
+        ).length;
+        const allVisibleSelected = visibleSelectableReports.length > 0
+            && visibleSelectedCount === visibleSelectableReports.length;
+        const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleSelectableReports.length;
+        const selectedReportsForBulk = getSelectedReports();
+        const selectedCount = selectedReportIds.size;
+        const selectedCountLabel = `${selectedCount} ${selectedCount === 1 ? 'report' : 'reports'} selected`;
+        const canBulkApprove = selectedReportsForBulk.some(canApproveListedReport);
+        const canBulkDelete = selectedReportsForBulk.some(canDeleteListedReport);
+        const canBulkDownload = selectedReportsForBulk.some(canExportListedReport);
 
         return (
-        <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
-            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
-                {title}
-            </h2>
-            <ReportListControls
-                searchTerm={searchTerm}
-                sortOption={sortOption}
-                totalCount={reports.length}
-                filteredCount={filteredReports.length}
-                onSearchTermChange={(value) => {
-                    setSearchTerm(value);
-                    setPage(1);
-                }}
-                onSortOptionChange={(value) => {
-                    setSortOption(value);
-                    setPage(1);
-                }}
-                searchPlaceholder="Search by report, creator, employee ID, or status..."
-            />
-            {filteredReports.length === 0 ? (
-                <div className="text-center py-6 md:py-8">
-                    <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
-                        {reports.length === 0 ? 'No adhesion reports found.' : 'No matching adhesion reports found.'}
-                    </p>
+            <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:p-4">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Adhesion Reports</h2>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{savedReportsTotal} reports</span>
                 </div>
-            ) : (
-                <>
-                <div className="reports-list">
-                    {paginatedReports.map((report, index) => {
-                        const originalIndex = report._id
-                            ? savedReports.findIndex(savedReport => savedReport._id === report._id)
-                            : savedReports.indexOf(report);
-                        const state = getWorkflowState(report);
-                        const canExport = state === 'submitted' && canOpenListedReport(report);
-                        const canOpen = canOpenListedReport(report);
 
-                        return (
-                            <div
-                                key={report._id || `${report.name}-${index}`}
-                                className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
-                            >
-                                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">{report.name}</h3>
-                                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state === 'submitted' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200' : state === 'returned' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}>
-                                                {formatWorkflowState(state)}
-                                            </span>
-                                        </div>
-                                        <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
-                                            <p>Created: {formatTimestamp(report.timestamp)}</p>
-                                            <p>Created by: {report.createdByEmployeeName || report.createdByEmployeeId || 'Legacy report'}</p>
-                                            <p>Updated: {formatTimestamp(report.updatedAt || report.timestamp)}</p>
-                                            {report.submittedAt && <p>Submitted: {formatTimestamp(report.submittedAt)} by {report.submittedBy || '-'}</p>}
-                                            {state === 'returned' && report.returnComments && (
-                                                <p className="text-amber-700 dark:text-amber-300">Return comments: {report.returnComments}</p>
-                                            )}
-                                            {state === 'returned' && (
-                                                <p>Returned: {formatTimestamp(report.returnedAt)} by {report.returnedBy || '-'}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
-                                        <button
-                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-brand-primary dark:bg-brand-primary text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => canExport && originalIndex >= 0 && exportSavedReportToExcel(originalIndex)}
-                                            disabled={!canExport}
-                                            title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
-                                        >
-                                            Excel
-                                        </button>
-                                        <button
-                                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
-                                            onClick={() => canOpen && originalIndex >= 0 && editSavedReport(originalIndex)}
-                                            disabled={!canOpen}
-                                        >
-                                            {getOpenActionLabel(report)}
-                                        </button>
-                                        {canReturnListedReport(report) && (
-                                            <button
-                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
-                                                onClick={() => originalIndex >= 0 && openReturnModal(originalIndex)}
-                                            >
-                                                Return
-                                            </button>
-                                        )}
-                                        {canDeleteListedReport(report) && (
-                                            <button
-                                                className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
-                                                onClick={() => {
-                                                    showConfirm({
-                                                        title: 'Delete Report',
-                                                        message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
-                                                        type: 'warning',
-                                                        confirmText: 'Delete',
-                                                        onConfirm: () => originalIndex >= 0 && deleteSavedReport(originalIndex),
-                                                    });
-                                                }}
-                                            >
-                                                Delete
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                <div className="mb-2 grid gap-2 md:grid-cols-5 xl:grid-cols-8">
+                    <label className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                        <input
+                            value={savedReportsSearchInput}
+                            onChange={(event) => {
+                                setSavedReportsSearchInput(event.target.value);
+                                setSavedReportsPage(1);
+                                clearReportSelection();
+                            }}
+                            placeholder="Search report name, production order, creator, shift, date, line, status"
+                            className="h-9 w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        />
+                    </label>
+                    <input
+                        type="date"
+                        value={savedReportsFilters.dateFrom}
+                        onChange={(event) => updateFilters({ dateFrom: event.target.value, dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date from"
+                    />
+                    <input
+                        type="date"
+                        value={savedReportsFilters.dateTo}
+                        onChange={(event) => updateFilters({ dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date to"
+                    />
+                    <select
+                        value={savedReportsFilters.shift}
+                        onChange={(event) => updateFilters({ shift: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Shift filter"
+                    >
+                        <option value="">Shift</option>
+                        <option value="A">Shift A</option>
+                        <option value="B">Shift B</option>
+                        <option value="C">Shift C</option>
+                        <option value="G">Shift G</option>
+                    </select>
+                    <select
+                        value={savedReportsFilters.lineNumber}
+                        onChange={(event) => updateFilters({ lineNumber: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Line filter"
+                    >
+                        <option value="">Line</option>
+                        <option value="I">Line I</option>
+                        <option value="II">Line II</option>
+                    </select>
+                    <select
+                        value={savedReportsFilters.status}
+                        onChange={(event) => updateFilters({ status: event.target.value as AdhesionListFilters['status'] })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Status filter"
+                    >
+                        <option value="">Status</option>
+                        <option value="draft">Draft</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="returned">Returned</option>
+                        <option value="approved">Approved</option>
+                    </select>
+                    <select
+                        value={savedReportsSort}
+                        onChange={(event) => {
+                            setSavedReportsSort(event.target.value as AdhesionSortOption);
+                            setSavedReportsPage(1);
+                        }}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Sort reports"
+                    >
+                        <option value="newest-created">Newest</option>
+                        <option value="oldest-created">Oldest</option>
+                        <option value="newest-updated">Updated</option>
+                        <option value="status">Status</option>
+                        <option value="created-by">Created By</option>
+                        <option value="shift">Shift</option>
+                        <option value="date-newest">Date</option>
+                    </select>
+                    <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="h-9 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        Clear Filters
+                    </button>
                 </div>
-                <ReportPagination
-                    totalItems={filteredReports.length}
-                    page={safePage}
-                    pageSize={pageSize}
-                    onPageChange={setPage}
-                    onPageSizeChange={(nextPageSize) => {
-                        setPageSize(nextPageSize);
-                        setPage(1);
-                    }}
-                    itemLabel="reports"
-                />
-                </>
-            )}
-        </div>
+
+                {selectedCount > 0 && (
+                    <div className="mb-3 rounded-md border border-brand-primary/30 bg-brand-primary/5 p-3 dark:border-brand-primary/40 dark:bg-brand-primary/10">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedCountLabel}</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {canBulkApprove && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkApproveReports}
+                                        disabled={Boolean(bulkOperationStatus)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                    >
+                                        <Check className="h-3.5 w-3.5" />
+                                        Approve
+                                    </button>
+                                )}
+                                {canBulkDownload && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkDownloadReports}
+                                        disabled={Boolean(bulkOperationStatus)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-3 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20"
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download
+                                    </button>
+                                )}
+                                {canBulkDelete && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkDeleteReports}
+                                        disabled={Boolean(bulkOperationStatus)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-900/20"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={clearReportSelection}
+                                    disabled={Boolean(bulkOperationStatus)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                    Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                        {bulkOperationStatus && (
+                            <div className="mt-3 flex items-center justify-between text-xs font-medium text-gray-700 dark:text-gray-200">
+                                <span>{bulkOperationStatus.action}</span>
+                                <span>{bulkOperationStatus.completed} / {bulkOperationStatus.total} completed</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {isSavedReportsLoading ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Loading reports...</div>
+                ) : savedReports.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {savedReportsTotal === 0 ? 'No adhesion reports found.' : 'No matching adhesion reports found.'}
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full border-separate border-spacing-0 text-center text-xs">
+                                <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    <tr>
+                                        <th className="w-10 border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all visible adhesion reports"
+                                                checked={allVisibleSelected}
+                                                disabled={visibleSelectableReports.length === 0}
+                                                ref={(element) => {
+                                                    if (element) element.indeterminate = someVisibleSelected;
+                                                }}
+                                                onChange={(event) => setVisibleReportSelection(visibleSelectableReports, event.currentTarget.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                            />
+                                        </th>
+                                        {['Shift', 'Line', 'Production Order', 'Report Name', 'Date', 'Created By', 'Status', 'Actions'].map(column => (
+                                            <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                                {column}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                    {savedReports.map((report, index) => {
+                                        const displayStatus = getDisplayStatus(report);
+                                        const canOpen = canOpenListedReport(report);
+                                        const canEdit = canEditListedReport(report);
+                                        const canExport = canExportListedReport(report);
+                                        const canApprove = canApproveListedReport(report);
+                                        const canReturn = canReturnListedReport(report);
+                                        const canDelete = canDeleteListedReport(report);
+                                        const isApproved = getWorkflowState(report) === 'approved';
+                                        const reportId = getReportId(report);
+                                        const isSelected = reportId ? selectedReportIds.has(reportId) : false;
+
+                                        return (
+                                            <tr
+                                                key={reportId || `${report.name}-${index}`}
+                                                className={`${isSelected ? 'bg-brand-primary/5 dark:bg-brand-primary/10' : 'bg-white dark:bg-gray-900'} text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800/70`}
+                                            >
+                                                <td className="whitespace-nowrap px-3 py-2 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select adhesion report ${report.productionOrderNo || report.name || reportId}`}
+                                                        checked={isSelected}
+                                                        disabled={!reportId}
+                                                        onChange={(event) => toggleReportSelection(
+                                                            report,
+                                                            visibleSelectableReports,
+                                                            event.currentTarget.checked,
+                                                            event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false
+                                                        )}
+                                                        className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                                    />
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{report.shift || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{getLineLabel(report.lineNumber)}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{report.productionOrderNo || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{report.name || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{report.date || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{getCreatedByLabel(report)}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">
+                                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(displayStatus)}`}>
+                                                        {formatWorkflowState(displayStatus)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => canOpen && openReportFromList(report, 'view')}
+                                                            disabled={!canOpen}
+                                                            className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                                            title="View"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openReportFromList(report, 'edit')}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md bg-brand-primary px-2 text-xs font-medium text-white hover:bg-brand-primary-hover"
+                                                                title={getOpenActionLabel(report)}
+                                                            >
+                                                                <Edit3 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canExport && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => exportSavedReportToExcel(report)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20"
+                                                                title="Download"
+                                                            >
+                                                                <Download className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canApprove && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => approveReport(report)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                                                title="Approve"
+                                                            >
+                                                                <Check className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canReturn && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openReturnModal(index)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20"
+                                                                title="Return"
+                                                            >
+                                                                <RotateCcw className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    showConfirm({
+                                                                        title: 'Delete Report',
+                                                                        message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
+                                                                        type: 'warning',
+                                                                        confirmText: 'Delete',
+                                                                        onConfirm: () => deleteSavedReport(report),
+                                                                    });
+                                                                }}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {!canDelete && isApproved && (
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-400 opacity-60 dark:border-gray-700 dark:text-gray-500"
+                                                                title={APPROVED_DELETE_TOOLTIP}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <ReportPagination
+                            totalItems={savedReportsTotal}
+                            page={savedReportsPage}
+                            pageSize={savedReportsPageSize}
+                            onPageChange={setSavedReportsPage}
+                            onPageSizeChange={(nextPageSize) => {
+                                setSavedReportsPageSize(nextPageSize);
+                                setSavedReportsPage(1);
+                            }}
+                            itemLabel="reports"
+                        />
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    const renderDashboardReportCard = (report: AdhesionTestReport) => {
+        const status = getDisplayStatus(report);
+
+        return (
+            <div key={getReportId(report) || report.name} className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shift {report.shift || '-'}</div>
+                        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            {report.date || '-'} | {getLineLabel(report.lineNumber)}
+                        </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(status)}`}>
+                        {formatWorkflowState(status)}
+                    </span>
+                </div>
+                <div className="grid gap-1 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="truncate">Report: {report.name || '-'}</div>
+                    <div className="truncate">PO: {report.productionOrderNo || '-'}</div>
+                    <div className="truncate">Created by: {getCreatedByLabel(report)}</div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderDashboard = () => {
+        const summary = dashboardData?.summary || {
+            totalReports: 0,
+            draft: 0,
+            submitted: 0,
+            returned: 0,
+            approved: 0,
+        };
+        const reportsByShift = (dashboardData?.items || []).reduce<Record<string, AdhesionTestReport[]>>((groups, report) => {
+            const key = report.shift || 'Unassigned';
+            groups[key] = groups[key] || [];
+            groups[key].push(report);
+            return groups;
+        }, {});
+        const shiftKeys = ['A', 'B', 'C', 'G', ...Object.keys(reportsByShift).filter(shift => !['A', 'B', 'C', 'G'].includes(shift))];
+
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+                        {(['daily', 'weekly', 'monthly'] as DashboardPeriod[]).map(period => (
+                            <button
+                                key={period}
+                                type="button"
+                                onClick={() => setDashboardView(period)}
+                                className={`h-9 rounded px-4 text-sm font-semibold capitalize transition-colors ${
+                                    dashboardView === period
+                                        ? 'bg-brand-primary text-white'
+                                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                {period}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={loadDashboard}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                        Refresh
+                    </button>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    {[
+                        [dashboardView === 'daily' ? "Today's Reports" : dashboardView === 'weekly' ? 'Last 7 Days Reports' : 'Monthly Reports', summary.totalReports],
+                        ['Draft', summary.draft],
+                        ['Submitted', summary.submitted],
+                        ['Returned', summary.returned],
+                        ['Approved', summary.approved],
+                    ].map(([label, value]) => (
+                        <div key={label} className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
+                            <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {isDashboardLoading ? (
+                    <div className="rounded-md border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                        Loading dashboard...
+                    </div>
+                ) : dashboardView === 'daily' ? (
+                    <div className="space-y-3">
+                        {shiftKeys.map(shift => {
+                            const items = reportsByShift[shift] || [];
+                            return (
+                                <section key={shift} className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shift {shift}</h3>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{items.length} reports</span>
+                                    </div>
+                                    {items.length === 0 ? (
+                                        <div className="py-4 text-sm text-gray-500 dark:text-gray-400">No reports for this shift.</div>
+                                    ) : (
+                                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                            {items.map(renderDashboardReportCard)}
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+                        <table className="min-w-full text-left text-xs">
+                            <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-semibold">Day</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Total Reports</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Draft</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Submitted</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Approved</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Returned</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                {(dashboardData?.groups || []).map(group => (
+                                    <tr key={group.key} className="text-gray-800 dark:text-gray-100">
+                                        <td className="px-3 py-2 text-left font-medium">
+                                            {group.dayName ? (
+                                                <div>
+                                                    <div>{group.dayName}</div>
+                                                    <div className="text-[11px] font-normal text-gray-500 dark:text-gray-400">{group.displayDate || group.date}</div>
+                                                </div>
+                                            ) : group.key}
+                                        </td>
+                                        <td className="px-3 py-2 text-left">{group.totalReports}</td>
+                                        <td className="px-3 py-2 text-left">{group.draft}</td>
+                                        <td className="px-3 py-2 text-left">{group.submitted}</td>
+                                        <td className="px-3 py-2 text-left">{group.approved}</td>
+                                        <td className="px-3 py-2 text-left">{group.returned}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         );
     };
 
@@ -1323,37 +2296,57 @@ export default function AdhesionTest() {
                         </div>
                     </div>
                 )}
-                <TestHeading
-                    heading="Adhesion Test"
-                    criteria="Glass to Encapsulant ≥ 60N/cm & Backsheet to Encapsulant ≥ 40N/cm"
-                />
-                <div className="flex justify-center mb-2">
-                    {canCreateReport && (
-                        <div
-                            className={`tab ${activeTab === 'edit-report' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                            onClick={startFreshReport}
-                        >
-                            Create Report
-                        </div>
-                    )}
-                    <div
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                        onClick={() => setActiveTab('saved-reports')}
-                    >
-                        {isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports'}
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Adhesion Test</h1>
                     </div>
-                    {isOperatorRole && returnedReports.length > 0 && (
-                        <div
-                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                            onClick={() => setActiveTab('returned-reports')}
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                activeTab === 'dashboard'
+                                    ? 'bg-brand-primary text-white'
+                                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                            }`}
                         >
-                            Returned Reports
-                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
-                                {returnedReports.length}
-                            </span>
-                        </div>
-                    )}
+                            <FileSpreadsheet className="h-4 w-4" />
+                            Dashboard
+                        </button>
+                        {canCreateReport && (
+                            <button
+                                type="button"
+                                onClick={startFreshReport}
+                                className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                    activeTab === 'edit-report'
+                                        ? 'bg-brand-primary text-white'
+                                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                <Plus className="h-4 w-4" />
+                                Create
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('saved-reports')}
+                            className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                activeTab === 'saved-reports'
+                                    ? 'bg-brand-primary text-white'
+                                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                            }`}
+                        >
+                            <Search className="h-4 w-4" />
+                            Report List
+                        </button>
+                    </div>
                 </div>
+
+                {activeTab === 'dashboard' && (
+                    <div className="tab-content active">
+                        {renderDashboard()}
+                    </div>
+                )}
 
                 {activeTab === 'edit-report' && (
                     <div className="tab-content active">
@@ -1396,10 +2389,18 @@ export default function AdhesionTest() {
                                     className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={exportToExcel}
                                 >
-                                    Export as Excel
+                                    Download
                                 </button>
                             )}
-                            {currentReportId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                            {canApproveCurrentReport && (
+                                <button
+                                    className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-emerald-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
+                                    onClick={() => approveReport(currentReportMeta || undefined)}
+                                >
+                                    Approve Report
+                                </button>
+                            )}
+                            {canReturnCurrentReport && (
                                 <button
                                     className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-amber-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
                                     onClick={() => {
@@ -1412,6 +2413,11 @@ export default function AdhesionTest() {
                             )}
                         </div>
                         <div className="test-report-container overflow-hidden bg-white dark:bg-gray-900 p-1 mt-2 rounded-md shadow-lg custom-scrollbar">
+                            {currentAccessMode === 'view' && readOnlyReason && (
+                                <div className="mb-3 rounded-md border border-gray-300 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                                    {readOnlyReason}
+                                </div>
+                            )}
                             <fieldset disabled={!canEditCurrentReport} className={!canEditCurrentReport ? 'w-full min-w-0 opacity-90' : 'w-full min-w-0'}>
                                 <div className="w-full overflow-x-auto rounded-md border border-gray-300 custom-scrollbar dark:border-gray-700">
                                 <table ref={tableRef} className="w-full border-collapse min-w-[1000px]">
@@ -1997,13 +3003,7 @@ export default function AdhesionTest() {
 
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        {renderAdhesionReportsList(reportsForMainList, isOperatorRole ? 'Submitted/Draft Reports' : 'Submitted Reports', 'main')}
-                    </div>
-                )}
-
-                {activeTab === 'returned-reports' && isOperatorRole && returnedReports.length > 0 && (
-                    <div className="tab-content active">
-                        {renderAdhesionReportsList(returnedReports, 'Returned Reports', 'returned')}
+                        {renderAdhesionReportsList()}
                     </div>
                 )}
             </div>

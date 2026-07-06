@@ -913,9 +913,8 @@ OBSERVATION_CELL_MAPPING = {
         'Line-4-4hrs': 'G287', 'Line-4-8hrs': 'S287'
     },
     '18-1': {
-        'Line-3-supplier': 'I288', 'Line-3-type': 'L288', 'Line-3-diode': 'R288', 'Line-3-maxVoltage': 'U288',
-        'Line-3-maxCurrent': 'Y288', 'Line-3-diodeType': 'AB288', 'Line-4-supplier': 'I295', 'Line-4-type': 'L295',
-        'Line-4-diode': 'R295', 'Line-4-maxVoltage': 'U295', 'Line-4-maxCurrent': 'Y295', 'Line-4-diodeType': 'AB295'
+        'Line-3-supplier': 'I288', 'Line-3-type': 'N288', 'Line-3-maxCurrent': 'AB288',
+        'Line-4-supplier': 'I295', 'Line-4-type': 'N295', 'Line-4-maxCurrent': 'AB295'
     },
     '18-2': {
         'Line-3-cableSupplier': 'J289', 'Line-3-connectorType': 'Z289',

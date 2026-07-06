@@ -547,8 +547,10 @@ const SunSimulatorObservations = {
         const sampleValue = typeof props.value === 'string'
             ? Object.fromEntries(
                 lines.flatMap(line =>
-                    ['contact-block', 'positive', 'negative'].map(type =>
-                        [`${line}-${type}`, ""]
+                    [1, 2].flatMap(index =>
+                        ['contact-block', 'positive', 'negative'].map(type =>
+                            [`${line}-${index}-${type}`, ""]
+                        )
                     )
                 )
             )

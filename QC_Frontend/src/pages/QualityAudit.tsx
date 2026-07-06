@@ -5,7 +5,7 @@ import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import { useLine } from '../context/LineContext';
 import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
-import ReportListControls, { ReportSortOption } from '../components/ReportListControls';
+import { ReportSortOption } from '../components/ReportListControls';
 import ReportPagination from '../components/ReportPagination';
 import BusRibbonAuditPeelStrengthInput from '../components/BusRibbonAuditPeelStrengthInput';
 import { createTabbingStringingStage } from '../audit-data/stage5';
@@ -21,7 +21,7 @@ import { createCuringStage } from '../audit-data/stage21';
 import { createAutoFilingStage } from '../audit-data/stage22';
 import { createSunSimulatorStage } from '../audit-data/stage24';
 import { createSafetyTestStage } from '../audit-data/stage26';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDot, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDot, Download, Edit3, Eye, FileSpreadsheet, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import {
     createTwentySampleValue,
     normalizeSampleGroupedValue,
@@ -46,6 +46,84 @@ const COMPLETION_METADATA_KEYS = new Set([
 ]);
 
 type StageCompletionStatus = 'not_started' | 'in_progress' | 'completed';
+type AuditWorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
+type AuditDisplayStatus = AuditWorkflowState;
+type AuditMainView = 'dashboard' | 'create-edit' | 'saved-reports' | 'returned-reports';
+type AuditAccessMode = 'edit' | 'view';
+type DashboardPeriod = 'daily' | 'weekly' | 'monthly';
+type CompletionRangeFilter = '' | '0-25' | '26-50' | '51-75' | '76-99' | '100';
+type AuditSortOption = ReportSortOption | 'completion-desc' | 'completion-asc' | 'status' | 'created-by' | 'shift' | 'date-newest' | 'date-oldest';
+
+const TOTAL_AUDIT_STAGES = initialStages.length;
+const FINALIZED_WORKFLOW_STATES = new Set<AuditWorkflowState>(['submitted', 'approved']);
+const EDITABLE_OPERATOR_WORKFLOW_STATES = new Set<AuditWorkflowState>(['draft', 'returned']);
+const APPROVED_DELETE_TOOLTIP = 'Approved reports are permanently retained and cannot be deleted.';
+
+interface AuditCompletionMetrics {
+    completedStages: number;
+    totalStages: number;
+    completionPercentage: number;
+}
+
+interface AuditListFilters {
+    dateFrom: string;
+    dateTo: string;
+    shift: string;
+    lineNumber: string;
+    status: '' | AuditDisplayStatus;
+    completionRange: CompletionRangeFilter;
+}
+
+interface DashboardGroupSummary {
+    key: string;
+    date?: string;
+    dayName?: string;
+    displayDate?: string;
+    totalAudits: number;
+    completed: number;
+    draft: number;
+    submitted: number;
+    returned: number;
+    approved: number;
+    averageCompletion: number;
+}
+
+interface DashboardResponse {
+    view: DashboardPeriod;
+    dateFrom: string;
+    dateTo: string;
+    summary: {
+        totalAudits: number;
+        completed: number;
+        draft: number;
+        submitted: number;
+        returned: number;
+        approved: number;
+        averageCompletion: number;
+    };
+    groups: DashboardGroupSummary[];
+    items: SavedChecksheet[];
+    total: number;
+    truncated: boolean;
+}
+
+interface BulkOperationProgress {
+    action: string;
+    completed: number;
+    total: number;
+}
+
+interface BulkOperationResult {
+    requested?: number;
+    approved?: number;
+    deleted?: number;
+    downloaded?: number;
+    processed?: number;
+    skipped?: Record<string, number>;
+    skippedCount?: number;
+    failed?: Array<{ auditId?: string; reason?: string }>;
+    failedCount?: number;
+}
 
 type CompletionCounts = {
     userFilled: number;
@@ -142,7 +220,11 @@ const isRecordValue = (value: unknown): value is Record<string, unknown> =>
     Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const isEmptyCompletionValue = (value: unknown) =>
-    value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+    value === undefined
+    || value === null
+    || (typeof value === 'string' && value.trim() === '')
+    || (Array.isArray(value) && value.length === 0)
+    || (isRecordValue(value) && Object.keys(value).length === 0);
 
 const hasFilledCompletionValue = (value: unknown) => !isEmptyCompletionValue(value);
 
@@ -301,7 +383,20 @@ const getStageCompletionStatus = (stage: StageData, baselineStage?: StageData): 
     return 'in_progress';
 };
 
-type AuditWorkflowState = 'draft' | 'submitted' | 'returned';
+const getAuditCompletionMetrics = (auditData: AuditData): AuditCompletionMetrics => {
+    const baselineStages = buildLineDependentStages(initialStages, auditData.lineNumber);
+    const baselineStagesById = new Map(baselineStages.map(stage => [stage.id, stage]));
+    const totalStages = auditData.stages.length || TOTAL_AUDIT_STAGES;
+    const completedStages = auditData.stages.filter(stage =>
+        getStageCompletionStatus(stage, baselineStagesById.get(stage.id)) === 'completed'
+    ).length;
+
+    return {
+        completedStages,
+        totalStages,
+        completionPercentage: totalStages ? Math.round((completedStages / totalStages) * 100) : 0,
+    };
+};
 
 const getWorkflowState = (checksheet?: Pick<SavedChecksheet, 'workflowState'> | null): AuditWorkflowState =>
     checksheet?.workflowState || 'submitted';
@@ -311,6 +406,9 @@ const formatWorkflowState = (state: AuditWorkflowState) =>
 
 const formatTimestamp = (value?: string | number | null) =>
     value ? new Date(value).toLocaleString() : '-';
+
+const sumObjectValues = (values: Record<string, number>) =>
+    Object.values(values).reduce((total, count) => total + count, 0);
 
 const getDynamicLineOptions = (lineNumber: string) => lineNumber === 'II' ? ['3', '4'] : ['1', '2'];
 
@@ -400,17 +498,29 @@ interface SavedChecksheet {
     moduleType?: string;
     status?: string;
     workflowState?: AuditWorkflowState;
+    displayStatus?: AuditDisplayStatus;
+    completedStages?: number;
+    totalStages?: number;
+    completionPercentage?: number;
     createdBy?: string;
     createdByUserId?: string | null;
     createdByEmployeeName?: string | null;
     createdByEmployeeId?: string | null;
     submittedAt?: string | null;
     submittedBy?: string | null;
+    approvedAt?: string | null;
+    approvedBy?: string | null;
     returnedAt?: string | null;
     returnedBy?: string | null;
     returnComments?: string | null;
     isSigned?: boolean;
     signedAt?: string | null;
+    isLocked?: boolean;
+    lockedBy?: string | null;
+    lockedByUserId?: string | null;
+    lockedByEmployeeId?: string | null;
+    lockTimestamp?: string | null;
+    lockSessionId?: string | null;
 }
 
 const buildLineDependentStages = (baseStages: StageData[], lineNumber: string) => {
@@ -473,8 +583,13 @@ export default function QualityAudit() {
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
     const { lineNumber, setLineNumber } = useLine();
-    const [activeTab, setActiveTab] = useState<'create-edit' | 'saved-reports' | 'returned-reports'>('create-edit');
+    const [activeTab, setActiveTab] = useState<AuditMainView>('dashboard');
+    const [dashboardView, setDashboardView] = useState<DashboardPeriod>('daily');
+    const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+    const [isDashboardLoading, setIsDashboardLoading] = useState(false);
     const [currentView, setCurrentView] = useState<'basicInfo' | 'stageSelection' | 'stageDetail'>('basicInfo');
+    const [currentAccessMode, setCurrentAccessMode] = useState<AuditAccessMode>('edit');
+    const [readOnlyReason, setReadOnlyReason] = useState('');
     const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
     const [_, setHasUnsavedChanges] = useState<boolean>(false);
     const [stageChanges, setStageChanges] = useState<Set<number>>(new Set());
@@ -484,7 +599,18 @@ export default function QualityAudit() {
     const [savedChecksheetsPageSize, setSavedChecksheetsPageSize] = useState(20);
     const [savedChecksheetsSearch, setSavedChecksheetsSearch] = useState('');
     const [savedChecksheetsSearchInput, setSavedChecksheetsSearchInput] = useState('');
-    const [savedChecksheetsSort, setSavedChecksheetsSort] = useState<ReportSortOption>('newest-created');
+    const [savedChecksheetsSort, setSavedChecksheetsSort] = useState<AuditSortOption>('newest-created');
+    const [savedChecksheetsFilters, setSavedChecksheetsFilters] = useState<AuditListFilters>({
+        dateFrom: '',
+        dateTo: '',
+        shift: '',
+        lineNumber: '',
+        status: '',
+        completionRange: '',
+    });
+    const [selectedAuditIds, setSelectedAuditIds] = useState<Set<string>>(new Set());
+    const [selectedAuditRecords, setSelectedAuditRecords] = useState<Record<string, SavedChecksheet>>({});
+    const [bulkProgress, setBulkProgress] = useState<BulkOperationProgress | null>(null);
     const [isSavedChecksheetsLoading, setIsSavedChecksheetsLoading] = useState(false);
     const [currentChecksheetId, setCurrentChecksheetId] = useState<string | null>(null);
     const [currentWorkflowState, setCurrentWorkflowState] = useState<AuditWorkflowState>('draft');
@@ -495,7 +621,15 @@ export default function QualityAudit() {
     const [returnedChecksheetsPageSize, setReturnedChecksheetsPageSize] = useState(20);
     const [returnedChecksheetsSearchInput, setReturnedChecksheetsSearchInput] = useState('');
     const [returnedChecksheetsSearch, setReturnedChecksheetsSearch] = useState('');
-    const [returnedChecksheetsSort, setReturnedChecksheetsSort] = useState<ReportSortOption>('newest-updated');
+    const [returnedChecksheetsSort, setReturnedChecksheetsSort] = useState<AuditSortOption>('newest-updated');
+    const [returnedChecksheetsFilters, setReturnedChecksheetsFilters] = useState<AuditListFilters>({
+        dateFrom: '',
+        dateTo: '',
+        shift: '',
+        lineNumber: '',
+        status: 'returned',
+        completionRange: '',
+    });
     const [isReturnedChecksheetsLoading, setIsReturnedChecksheetsLoading] = useState(false);
     const [returnModalChecksheetIndex, setReturnModalChecksheetIndex] = useState<number | null>(null);
     const [returnComment, setReturnComment] = useState('');
@@ -513,9 +647,16 @@ export default function QualityAudit() {
     const lastSavedDataRef = useRef<string>('');
     const currentChecksheetIdRef = useRef<string | null>(null);
     const savedChecksheetsRef = useRef<SavedChecksheet[]>([]);
+    const lastSelectedAuditIdRef = useRef<string | null>(null);
     const autoLoadDraftKeyRef = useRef<string>('');
     const autosaveTimeoutRef = useRef<number | null>(null);
     const isAutosavingRef = useRef(false);
+    const lockSessionIdRef = useRef(
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    const currentLockHeldRef = useRef<string | null>(null);
     
     const IPQC_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/ipqc-audits';
     const USER_API_BASE_URL = (import.meta.env.VITE_API_URL) + '/user';
@@ -523,21 +664,30 @@ export default function QualityAudit() {
     const isOperatorRole = userRole === 'Operator';
     const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
     const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const isCurrentChecksheetOwner = Boolean(currentChecksheetMeta) && (
+        currentChecksheetMeta?.createdByEmployeeId === employeeId
+        || (!currentChecksheetMeta?.createdByEmployeeId && currentChecksheetMeta?.createdBy === username)
+        || currentChecksheetMeta?.createdByEmployeeName === username
+    );
     const canCreateChecksheet = isOperatorRole;
-    const canEditCurrentChecksheet = (isSystemAdminRole && currentChecksheetId !== null)
-        || (isOperatorRole && (!currentChecksheetId || ['draft', 'returned'].includes(currentWorkflowState)))
-        || (isReviewerRole && currentChecksheetId !== null && currentWorkflowState === 'submitted');
-    const canSaveDraftCurrentChecksheet = isOperatorRole && currentWorkflowState !== 'submitted';
+    const canEditCurrentChecksheet = currentAccessMode === 'edit' && (
+        (isOperatorRole && (!currentChecksheetId || (isCurrentChecksheetOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))))
+        || ((isReviewerRole || isSystemAdminRole) && currentChecksheetId !== null && currentWorkflowState === 'submitted')
+    );
+    const canSaveDraftCurrentChecksheet = isOperatorRole && isCurrentChecksheetOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState);
     const canSubmitCurrentChecksheet = isOperatorRole
-        && currentWorkflowState !== 'submitted'
-        && auditBySignature.trim().length > 0;
-    const canExportCurrentChecksheet = currentChecksheetId !== null && currentWorkflowState === 'submitted';
+        && currentAccessMode === 'edit'
+        && (!currentChecksheetId || (isCurrentChecksheetOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState)));
+    const canExportCurrentChecksheet = currentChecksheetId !== null
+        && FINALIZED_WORKFLOW_STATES.has(currentWorkflowState)
+        && (isReviewerRole || isSystemAdminRole || isOperatorRole);
 
-    const authHeaders = (includeJson = false): HeadersInit => ({
+    const authHeaders = (includeJson = false, includeLockSession = false): HeadersInit => ({
         ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
         'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
         'X-User-Name': sessionStorage.getItem('username') || username || '',
         'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+        ...(includeLockSession ? { 'X-Lock-Session-Id': lockSessionIdRef.current } : {}),
     });
 
     const getSignatureImageSrc = useCallback((imageSource: string) => {
@@ -566,9 +716,10 @@ export default function QualityAudit() {
             page: number;
             pageSize: number;
             search?: string;
-            sort?: ReportSortOption;
+            sort?: AuditSortOption;
             workflowState?: AuditWorkflowState;
             excludeWorkflowState?: AuditWorkflowState;
+            filters?: AuditListFilters;
         }): Promise<{ items: any[]; total: number; page: number; page_size: number }> => {
             const query = new URLSearchParams({
                 summary: 'true',
@@ -579,6 +730,12 @@ export default function QualityAudit() {
             if (params.search?.trim()) query.append('search', params.search.trim());
             if (params.workflowState) query.append('workflow_state', params.workflowState);
             if (params.excludeWorkflowState) query.append('exclude_workflow_state', params.excludeWorkflowState);
+            if (params.filters?.dateFrom) query.append('date_from', params.filters.dateFrom);
+            if (params.filters?.dateTo) query.append('date_to', params.filters.dateTo);
+            if (params.filters?.shift) query.append('shift', params.filters.shift);
+            if (params.filters?.lineNumber) query.append('lineNumber', params.filters.lineNumber);
+            if (params.filters?.status) query.append('status', params.filters.status);
+            if (params.filters?.completionRange) query.append('completion_range', params.filters.completionRange);
 
             const response = await fetch(`${IPQC_API_BASE_URL}/?${query}`, {
                 headers: authHeaders(),
@@ -590,12 +747,24 @@ export default function QualityAudit() {
             return response.json();
         },
 
+        getDashboard: async (view: DashboardPeriod): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/dashboard?view=${view}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch audit dashboard: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+
         getDraftByLineDateShift: async (line: string, date: string, shift: string): Promise<any | null> => {
             const query = new URLSearchParams({
                 lineNumber: line,
                 date,
                 shift,
-                workflow_state: 'draft'
+                workflow_state: 'draft',
+                owner_only: 'true'
             });
             const response = await fetch(`${IPQC_API_BASE_URL}/search/by-filters?${query}`, {
                 headers: authHeaders(),
@@ -622,7 +791,7 @@ export default function QualityAudit() {
         createAudit: async (audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/`, {
                 method: 'POST',
-                headers: authHeaders(true),
+                headers: authHeaders(true, true),
                 body: JSON.stringify(audit),
             });
             if (!response.ok) {
@@ -635,7 +804,7 @@ export default function QualityAudit() {
         updateAudit: async (id: string, audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}`, {
                 method: 'PUT',
-                headers: authHeaders(true),
+                headers: authHeaders(true, true),
                 body: JSON.stringify(audit),
             });
             if (!response.ok) {
@@ -671,12 +840,71 @@ export default function QualityAudit() {
         submitAudit: async (id: string, audit: any): Promise<any> => {
             const response = await fetch(`${IPQC_API_BASE_URL}/${id}/submit`, {
                 method: 'POST',
-                headers: authHeaders(true),
+                headers: authHeaders(true, true),
                 body: JSON.stringify(audit),
             });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Failed to submit audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        approveAudit: async (id: string): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}/approve`, {
+                method: 'POST',
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to approve audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        bulkApproveAudits: async (auditIds: string[]): Promise<BulkOperationResult> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/bulk/approve`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ auditIds }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to bulk approve audits: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        bulkDeleteAudits: async (auditIds: string[]): Promise<BulkOperationResult> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/bulk/delete`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ auditIds }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to bulk delete audits: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        lockAudit: async (id: string): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}/lock`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ lockSessionId: lockSessionIdRef.current }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to lock audit: ${response.status} ${errorText}`);
+            }
+            return response.json();
+        },
+        unlockAudit: async (id: string): Promise<any> => {
+            const response = await fetch(`${IPQC_API_BASE_URL}/${id}/unlock`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ lockSessionId: lockSessionIdRef.current }),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to unlock audit: ${response.status} ${errorText}`);
             }
             return response.json();
         },
@@ -701,9 +929,6 @@ export default function QualityAudit() {
         setUserRole(storedUserRole);
         setUsername(storedUsername);
         setEmployeeId(storedEmployeeId);
-        if (storedUserRole !== 'Operator') {
-            setActiveTab('saved-reports');
-        }
     }, []);
 
     useEffect(() => {
@@ -775,6 +1000,9 @@ export default function QualityAudit() {
     const mapAuditToChecksheet = useCallback((audit: any, fallbackData?: AuditData): SavedChecksheet | null => {
         const auditDataForSummary = audit.data || fallbackData;
         const id = audit._id || audit.id || '';
+        const fallbackCompletion = auditDataForSummary
+            ? getAuditCompletionMetrics(auditDataForSummary as AuditData)
+            : { completedStages: 0, totalStages: TOTAL_AUDIT_STAGES, completionPercentage: 0 };
 
         if (!id) return null;
 
@@ -792,17 +1020,29 @@ export default function QualityAudit() {
             moduleType: audit.moduleType || auditDataForSummary?.moduleType,
             status: audit.status || audit.workflowState || (auditDataForSummary as any)?.status,
             workflowState: audit.workflowState || audit.status || (auditDataForSummary as any)?.workflowState,
+            displayStatus: audit.displayStatus,
+            completedStages: audit.completedStages ?? fallbackCompletion.completedStages,
+            totalStages: audit.totalStages ?? fallbackCompletion.totalStages,
+            completionPercentage: audit.completionPercentage ?? fallbackCompletion.completionPercentage,
             createdBy: audit.createdBy,
             createdByUserId: audit.createdByUserId,
             createdByEmployeeName: audit.createdByEmployeeName,
             createdByEmployeeId: audit.createdByEmployeeId,
             submittedAt: audit.submittedAt,
             submittedBy: audit.submittedBy,
+            approvedAt: audit.approvedAt,
+            approvedBy: audit.approvedBy,
             returnedAt: audit.returnedAt,
             returnedBy: audit.returnedBy,
             returnComments: audit.returnComments,
             isSigned: audit.isSigned,
-            signedAt: audit.signedAt
+            signedAt: audit.signedAt,
+            isLocked: audit.isLocked,
+            lockedBy: audit.lockedBy,
+            lockedByUserId: audit.lockedByUserId,
+            lockedByEmployeeId: audit.lockedByEmployeeId,
+            lockTimestamp: audit.lockTimestamp,
+            lockSessionId: audit.lockSessionId,
         };
     }, []);
 
@@ -825,6 +1065,68 @@ export default function QualityAudit() {
             return exists ? prev : prev + 1;
         });
     }, [mapAuditToChecksheet]);
+
+    const releaseAuditLock = useCallback(async (auditId?: string | null) => {
+        const idToRelease = auditId || currentLockHeldRef.current;
+        if (!idToRelease) return;
+        try {
+            await apiService.unlockAudit(idToRelease);
+        } catch (error) {
+            console.error('Error releasing audit lock:', error);
+        } finally {
+            if (currentLockHeldRef.current === idToRelease) {
+                currentLockHeldRef.current = null;
+            }
+        }
+    }, []);
+
+    const acquireAuditLock = useCallback(async (checksheet: SavedChecksheet) => {
+        if (!checksheet._id) return false;
+        try {
+            const lockedAudit = await apiService.lockAudit(checksheet._id);
+            currentLockHeldRef.current = checksheet._id;
+            upsertSavedChecksheetSummary(lockedAudit);
+            return true;
+        } catch (error: any) {
+            console.error('Error acquiring audit lock:', error);
+            const message = error?.message?.includes('currently')
+                ? error.message
+                : `This audit is currently being completed by ${checksheet.lockedBy || checksheet.createdByEmployeeName || 'another operator'}. Editing is locked until submission.`;
+            showAlert('warning', message);
+            return false;
+        }
+    }, [showAlert, upsertSavedChecksheetSummary]);
+
+    useEffect(() => {
+        if (!currentLockHeldRef.current) return;
+        const interval = window.setInterval(() => {
+            const lockedAuditId = currentLockHeldRef.current;
+            if (!lockedAuditId) return;
+            apiService.lockAudit(lockedAuditId).catch(error => {
+                console.error('Error refreshing audit lock:', error);
+            });
+        }, 60000);
+        return () => window.clearInterval(interval);
+    }, [currentChecksheetId]);
+
+    useEffect(() => {
+        const releaseOnUnload = () => {
+            const lockedAuditId = currentLockHeldRef.current;
+            if (!lockedAuditId) return;
+            fetch(`${IPQC_API_BASE_URL}/${lockedAuditId}/unlock`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ lockSessionId: lockSessionIdRef.current }),
+                keepalive: true,
+            }).catch(() => undefined);
+        };
+
+        window.addEventListener('beforeunload', releaseOnUnload);
+        return () => {
+            releaseOnUnload();
+            window.removeEventListener('beforeunload', releaseOnUnload);
+        };
+    }, [IPQC_API_BASE_URL]);
 
     const mergeStageObservations = useCallback((stage: StageData, savedStage?: StageData, mergeLineNumber = lineNumber) => ({
         ...stage,
@@ -880,7 +1182,7 @@ export default function QualityAudit() {
                 pageSize: savedChecksheetsPageSize,
                 search: savedChecksheetsSearch,
                 sort: savedChecksheetsSort,
-                excludeWorkflowState: isOperatorRole ? 'returned' : undefined
+                filters: savedChecksheetsFilters,
             });
             const checksheets = response.items
                 .map(audit => mapAuditToChecksheet(audit))
@@ -892,7 +1194,7 @@ export default function QualityAudit() {
         } finally {
             setIsSavedChecksheetsLoading(false);
         }
-    }, [mapAuditToChecksheet, savedChecksheetsPage, savedChecksheetsPageSize, savedChecksheetsSearch, savedChecksheetsSort, isOperatorRole]);
+    }, [mapAuditToChecksheet, savedChecksheetsPage, savedChecksheetsPageSize, savedChecksheetsSearch, savedChecksheetsSort, savedChecksheetsFilters]);
 
     const loadReturnedChecksheets = useCallback(async () => {
         if (!isOperatorRole) return;
@@ -903,7 +1205,8 @@ export default function QualityAudit() {
                 pageSize: returnedChecksheetsPageSize,
                 search: returnedChecksheetsSearch,
                 sort: returnedChecksheetsSort,
-                workflowState: 'returned'
+                workflowState: 'returned',
+                filters: { ...returnedChecksheetsFilters, status: 'returned' },
             });
             const checksheets = response.items
                 .map(audit => mapAuditToChecksheet(audit))
@@ -915,12 +1218,34 @@ export default function QualityAudit() {
         } finally {
             setIsReturnedChecksheetsLoading(false);
         }
-    }, [mapAuditToChecksheet, returnedChecksheetsPage, returnedChecksheetsPageSize, returnedChecksheetsSearch, returnedChecksheetsSort, isOperatorRole]);
+    }, [mapAuditToChecksheet, returnedChecksheetsPage, returnedChecksheetsPageSize, returnedChecksheetsSearch, returnedChecksheetsSort, returnedChecksheetsFilters, isOperatorRole]);
+
+    const loadDashboard = useCallback(async () => {
+        setIsDashboardLoading(true);
+        try {
+            const response = await apiService.getDashboard(dashboardView);
+            setDashboardData({
+                ...response,
+                items: Array.isArray(response.items)
+                    ? response.items.map((audit: any) => mapAuditToChecksheet(audit)).filter(Boolean) as SavedChecksheet[]
+                    : [],
+            });
+        } catch (error) {
+            console.error('Error loading audit dashboard:', error);
+        } finally {
+            setIsDashboardLoading(false);
+        }
+    }, [dashboardView, mapAuditToChecksheet]);
 
     useEffect(() => {
         if (activeTab !== 'saved-reports') return;
         loadSavedChecksheets();
     }, [activeTab, loadSavedChecksheets]);
+
+    useEffect(() => {
+        if (activeTab !== 'dashboard') return;
+        loadDashboard();
+    }, [activeTab, loadDashboard]);
 
     useEffect(() => {
         if (activeTab !== 'returned-reports') return;
@@ -965,31 +1290,64 @@ export default function QualityAudit() {
         latestReviewedBySignatureImageRef.current
     ), []);
 
-    const buildChecksheetPayload = useCallback(() => {
-        const dataToSave = latestAuditDataRef.current;
-        const auditBy = latestAuditBySignatureRef.current;
-        const reviewedBy = latestReviewedBySignatureRef.current;
-        const auditByImage = latestAuditBySignatureImageRef.current;
-        const reviewedByImage = latestReviewedBySignatureImageRef.current;
+    const buildChecksheetPayloadForData = useCallback((
+        dataToSave: AuditData,
+        workflowState: AuditWorkflowState,
+        existingSummary?: SavedChecksheet,
+        signatures?: {
+            auditBy?: string;
+            reviewedBy?: string;
+            auditByImage?: string;
+            reviewedByImage?: string;
+        }
+    ) => {
+        const completion = getAuditCompletionMetrics(dataToSave);
         const checksheetName = generateChecksheetName(dataToSave.lineNumber, dataToSave.date, dataToSave.shift);
+
+        return {
+            name: checksheetName,
+            timestamp: existingSummary
+                ? new Date(existingSummary?.timestamp || Date.now()).toISOString()
+                : new Date().toISOString(),
+            updated_timestamp: new Date().toISOString(),
+            ...completion,
+            data: {
+                ...dataToSave,
+                signatures: {
+                    auditBy: signatures?.auditBy ?? dataToSave.signatures?.auditBy ?? '',
+                    reviewedBy: signatures?.reviewedBy ?? dataToSave.signatures?.reviewedBy ?? '',
+                    auditByImage: signatures?.auditByImage ?? dataToSave.signatures?.auditByImage ?? '',
+                    reviewedByImage: signatures?.reviewedByImage ?? dataToSave.signatures?.reviewedByImage ?? '',
+                },
+                workflowState,
+                status: workflowState,
+            }
+        };
+    }, [generateChecksheetName]);
+
+    const buildChecksheetPayload = useCallback((signatureOverrides?: {
+        auditBy?: string;
+        reviewedBy?: string;
+        auditByImage?: string;
+        reviewedByImage?: string;
+    }) => {
+        const dataToSave = latestAuditDataRef.current;
         const existingSummary = currentChecksheetIdRef.current
             ? savedChecksheetsRef.current.find(sheet => sheet.id === currentChecksheetIdRef.current)
             : undefined;
 
-        return {
-            name: checksheetName,
-            timestamp: currentChecksheetIdRef.current
-                ? new Date(existingSummary?.timestamp || Date.now()).toISOString()
-                : new Date().toISOString(),
-            updated_timestamp: new Date().toISOString(),
-            data: {
-                ...dataToSave,
-                signatures: { auditBy, reviewedBy, auditByImage, reviewedByImage },
-                workflowState: currentWorkflowState,
-                status: currentWorkflowState,
+        return buildChecksheetPayloadForData(
+            dataToSave,
+            currentWorkflowState,
+            existingSummary,
+            {
+                auditBy: signatureOverrides?.auditBy ?? latestAuditBySignatureRef.current,
+                reviewedBy: signatureOverrides?.reviewedBy ?? latestReviewedBySignatureRef.current,
+                auditByImage: signatureOverrides?.auditByImage ?? latestAuditBySignatureImageRef.current,
+                reviewedByImage: signatureOverrides?.reviewedByImage ?? latestReviewedBySignatureImageRef.current,
             }
-        };
-    }, [currentWorkflowState, generateChecksheetName]);
+        );
+    }, [buildChecksheetPayloadForData, currentWorkflowState]);
 
     const isBasicInfoComplete = useCallback(() => (
         auditData.lineNumber.trim() !== ''
@@ -1029,6 +1387,10 @@ export default function QualityAudit() {
 
         const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
         if (matchingDraft?._id) {
+            const mappedDraft = mapAuditToChecksheet(matchingDraft);
+            if (mappedDraft) {
+                await acquireAuditLock(mappedDraft);
+            }
             await loadChecksheetById(matchingDraft._id, { showLoading: false, showOpenedAlert: false });
             showAlert('info', 'Existing draft loaded for the selected line, date, and shift');
             return matchingDraft;
@@ -1039,6 +1401,10 @@ export default function QualityAudit() {
         markChecksheetSaved(created, payload.data as AuditData, getLatestSnapshot());
         const createdId = created._id || created.id;
         if (createdId) {
+            const mappedCreated = mapAuditToChecksheet(created, payload.data as AuditData);
+            if (mappedCreated) {
+                await acquireAuditLock(mappedCreated);
+            }
             await loadChecksheetById(createdId, { showLoading: false, showOpenedAlert: false });
         }
         await loadSavedChecksheets();
@@ -1046,8 +1412,10 @@ export default function QualityAudit() {
     };
 
     const submitChecksheet = async () => {
-        if (!auditBySignature.trim()) {
-            showAlert('error', 'Prepared By signature is required before submission');
+        const effectiveAuditBySignature = auditBySignature.trim() || username || '';
+        const effectiveAuditBySignatureImage = auditBySignatureImage || currentUserSignatureImage || '';
+        if (!effectiveAuditBySignature.trim()) {
+            showAlert('error', 'Operator signature could not be identified for submission');
             return;
         }
         if (!isBasicInfoComplete()) {
@@ -1057,7 +1425,14 @@ export default function QualityAudit() {
 
         try {
             setIsLoading(true);
-            const payload = buildChecksheetPayload();
+            if (!auditBySignature.trim()) {
+                setAuditBySignature(effectiveAuditBySignature);
+                setAuditBySignatureImage(effectiveAuditBySignatureImage);
+            }
+            const payload = buildChecksheetPayload({
+                auditBy: effectiveAuditBySignature,
+                auditByImage: effectiveAuditBySignatureImage,
+            });
             let checksheetId = currentChecksheetId;
             if (!checksheetId) {
                 const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
@@ -1084,6 +1459,7 @@ export default function QualityAudit() {
             markChecksheetSaved(submitted, payload.data as AuditData, getLatestSnapshot());
             setCurrentWorkflowState('submitted');
             await loadSavedChecksheets();
+            await loadDashboard();
             if (isOperatorRole) await loadReturnedChecksheets();
             clearCurrentChecksheet();
             setActiveTab('saved-reports');
@@ -1097,7 +1473,7 @@ export default function QualityAudit() {
     };
 
     const saveSubmittedChanges = async () => {
-        if (!currentChecksheetId || !canEditCurrentChecksheet || currentWorkflowState !== 'submitted') {
+        if (!currentChecksheetId || !canEditCurrentChecksheet) {
             showAlert('error', 'You are not authorized to modify this checksheet');
             return;
         }
@@ -1117,7 +1493,7 @@ export default function QualityAudit() {
     };
 
     const saveChecksheet = async () => {
-        if (currentWorkflowState === 'submitted') {
+        if (!isOperatorRole || !EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState)) {
             await saveSubmittedChanges();
             return;
         }
@@ -1431,10 +1807,13 @@ export default function QualityAudit() {
     };
 
     const clearCurrentChecksheet = () => {
+        releaseAuditLock(currentChecksheetIdRef.current);
         setCurrentChecksheetId(null);
         currentChecksheetIdRef.current = null;
         setCurrentWorkflowState('draft');
         setCurrentChecksheetMeta(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
         setAuditData({
             lineNumber: '',
             date: new Date().toISOString().split('T')[0],
@@ -1465,11 +1844,11 @@ export default function QualityAudit() {
 
     const generateExcelReport = async () => {
         try {
-            if (!currentChecksheetId || currentWorkflowState !== 'submitted') {
-                showAlert('error', 'Excel can be generated only for submitted checksheets');
+            if (!currentChecksheetId || !canExportCurrentChecksheet) {
+                showAlert('error', 'You are not authorized to export this checksheet');
                 return;
             }
-            showAlert('info', 'Please wait! Exporting Excel will take some time...');
+            showAlert('info', 'Please wait! Exporting report will take some time...');
             const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
                 method: 'POST',
                 headers: authHeaders(true),
@@ -1502,52 +1881,59 @@ export default function QualityAudit() {
         }
     };
 
-    const exportSavedReportToExcel = async (index: number) => {
+    const downloadChecksheetExcel = async (checksheet: SavedChecksheet) => {
+        const auditId = checksheet._id || checksheet.id;
+        if (!auditId) {
+            throw new Error('Checksheet not found');
+        }
+
+        const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({ audit_id: auditId })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Failed to generate report');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+
+        const filenameLine = checksheet.data?.lineNumber || checksheet.lineNumber || '';
+        const filenameDate = checksheet.data?.date || checksheet.date || '';
+        const filenameShift = checksheet.data?.shift || checksheet.shift || '';
+        const filename = `Quality_Audit_Line${filenameLine}_${String(filenameDate).replace(/-/g, '')}_Shift${filenameShift}.xlsx`;
+        a.download = filename;
+
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    };
+
+    const exportChecksheetToExcel = async (checksheet: SavedChecksheet | undefined) => {
         try {
-            const checksheet = savedChecksheets[index];
             if (!checksheet) {
                 showAlert('error', 'Checksheet not found');
                 return;
             }
-            if (getWorkflowState(checksheet) !== 'submitted') {
-                showAlert('error', 'Excel can be generated only for submitted checksheets');
+            if (!canExportListedChecksheet(checksheet)) {
+                showAlert('error', 'You are not authorized to export this checksheet');
                 return;
             }
 
-            showAlert('info', 'Please wait! Exporting Excel will take some time...');
-
-            const response = await fetch(`${IPQC_API_BASE_URL}/generate-audit-report`, {
-                method: 'POST',
-                headers: authHeaders(true),
-                body: JSON.stringify({ audit_id: checksheet._id })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate report');
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-
-            const filenameLine = checksheet.data?.lineNumber || checksheet.lineNumber || '';
-            const filenameDate = checksheet.data?.date || checksheet.date || '';
-            const filenameShift = checksheet.data?.shift || checksheet.shift || '';
-            const filename = `Quality_Audit_Line${filenameLine}_${filenameDate.replace(/-/g, '')}_Shift${filenameShift}.xlsx`;
-            a.download = filename;
-
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            showAlert('success', 'Excel report generated successfully!');
+            showAlert('info', 'Please wait! Exporting report will take some time...');
+            await downloadChecksheetExcel(checksheet);
+            showAlert('success', 'Report generated successfully!');
 
         } catch (error) {
-            console.error('Error generating Excel report:', error);
-            showAlert('error', 'Failed to generate Excel report. Please try again.');
+            console.error('Error generating report:', error);
+            showAlert('error', 'Failed to generate report. Please try again.');
         }
     };
 
@@ -1641,11 +2027,20 @@ export default function QualityAudit() {
 
     const loadChecksheetById = async (
         checksheetId: string,
-        options: { showLoading?: boolean; showOpenedAlert?: boolean; nextView?: 'basicInfo' | 'stageSelection' | 'stageDetail' } = {}
+        options: {
+            showLoading?: boolean;
+            showOpenedAlert?: boolean;
+            nextView?: 'basicInfo' | 'stageSelection' | 'stageDetail';
+            accessMode?: AuditAccessMode;
+            readOnlyReason?: string;
+        } = {}
     ) => {
-        const { showLoading = true, showOpenedAlert = true, nextView = 'basicInfo' } = options;
+        const { showLoading = true, showOpenedAlert = true, nextView = 'basicInfo', accessMode = 'edit', readOnlyReason = '' } = options;
         try {
             if (showLoading) setIsLoading(true);
+            if (currentLockHeldRef.current && currentLockHeldRef.current !== checksheetId) {
+                await releaseAuditLock(currentLockHeldRef.current);
+            }
             const fullAudit = await apiService.getAuditById(checksheetId);
             const loadedState = getWorkflowState(fullAudit);
             const fullAuditData = fullAudit.data || {};
@@ -1666,6 +2061,8 @@ export default function QualityAudit() {
             setCurrentWorkflowState(loadedState);
             setCurrentChecksheetMeta(mapAuditToChecksheet(fullAudit, mergedData));
             setActiveTab('create-edit');
+            setCurrentAccessMode(accessMode);
+            setReadOnlyReason(readOnlyReason);
             setCurrentView(nextView);
             if (nextView !== 'stageDetail') {
                 setSelectedStageId(null);
@@ -1697,10 +2094,10 @@ export default function QualityAudit() {
             autoLoadDraftKeyRef.current = getDraftLookupKey(mergedData.lineNumber, mergedData.date, mergedData.shift);
 
             const willBeEditable = isSystemAdminRole
-                || (isOperatorRole && ['draft', 'returned'].includes(loadedState))
-                || (isReviewerRole && loadedState === 'submitted');
+                || (isOperatorRole && EDITABLE_OPERATOR_WORKFLOW_STATES.has(loadedState))
+                || isReviewerRole;
             if (showOpenedAlert) {
-                showAlert('info', `${willBeEditable ? 'Opened' : 'Viewing'} ${fullAudit.name}`);
+                showAlert('info', `${accessMode === 'edit' && willBeEditable ? 'Opened' : 'Viewing'} ${fullAudit.name}`);
             }
             return fullAudit;
         } finally {
@@ -1708,31 +2105,55 @@ export default function QualityAudit() {
         }
     };
 
-    const editChecksheetFromList = async (checksheet: SavedChecksheet | undefined) => {
+    const isChecksheetOwner = (checksheet?: SavedChecksheet | null) => Boolean(checksheet) && (
+        checksheet?.createdByEmployeeId === employeeId
+        || (!checksheet?.createdByEmployeeId && checksheet?.createdBy === username)
+        || checksheet?.createdByEmployeeName === username
+    );
+
+    const openChecksheetFromList = async (checksheet: SavedChecksheet | undefined, requestedMode: AuditAccessMode = 'edit') => {
         try {
             if (!checksheet || !checksheet._id) {
                 showAlert('error', 'Checksheet not found');
                 return;
             }
             const state = getWorkflowState(checksheet);
-            if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) {
-                showAlert('error', 'Draft and returned checksheets are locked until the operator submits them');
-                return;
+            let accessMode = requestedMode;
+            let reason = '';
+            const ownerName = checksheet.createdByEmployeeName || checksheet.createdBy || checksheet.lockedBy || 'the creating operator';
+            const draftLockMessage = `This audit is currently being completed by ${ownerName}. Editing is locked until submission.`;
+            const returnedLockMessage = `This audit has been returned to ${ownerName} for correction. Editing is locked until resubmission.`;
+            const workflowLockMessage = state === 'returned' ? returnedLockMessage : draftLockMessage;
+
+            if (requestedMode === 'view' && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state) && !isChecksheetOwner(checksheet)) {
+                reason = workflowLockMessage;
             }
 
-            await loadChecksheetById(checksheet.id);
+            if (requestedMode === 'edit') {
+                if (isOperatorRole) {
+                    if (!isChecksheetOwner(checksheet) || !EDITABLE_OPERATOR_WORKFLOW_STATES.has(state)) {
+                        accessMode = 'view';
+                        reason = state === 'submitted' || state === 'approved'
+                            ? 'Submitted and approved audits are read-only for operators.'
+                            : workflowLockMessage;
+                    } else {
+                        const lockAcquired = await acquireAuditLock(checksheet);
+                        if (!lockAcquired) {
+                            accessMode = 'view';
+                            reason = workflowLockMessage;
+                        }
+                    }
+                } else if ((isReviewerRole || isSystemAdminRole) && state !== 'submitted') {
+                    accessMode = 'view';
+                    reason = state === 'approved' ? 'Approved audits are read-only.' : workflowLockMessage;
+                }
+            }
+
+            await loadChecksheetById(checksheet.id, { accessMode, readOnlyReason: reason });
         } catch (error) {
             console.error('Error loading checksheet:', error);
             showAlert('error', 'Failed to load checksheet');
         }
-    };
-
-    const editSavedChecksheet = async (index: number) => {
-        await editChecksheetFromList(savedChecksheets[index]);
-    };
-
-    const editReturnedChecksheet = async (index: number) => {
-        await editChecksheetFromList(returnedChecksheets[index]);
     };
 
     useEffect(() => {
@@ -1748,6 +2169,10 @@ export default function QualityAudit() {
             try {
                 const matchingDraft = await apiService.getDraftByLineDateShift(auditData.lineNumber, auditData.date, auditData.shift);
                 if (cancelled || !matchingDraft?._id || currentChecksheetIdRef.current) return;
+                const mappedDraft = mapAuditToChecksheet(matchingDraft);
+                if (mappedDraft) {
+                    await acquireAuditLock(mappedDraft);
+                }
                 await loadChecksheetById(matchingDraft._id, { showLoading: false, showOpenedAlert: false });
                 showAlert('info', 'Existing draft loaded for the selected line, date, and shift');
             } catch (error) {
@@ -1759,25 +2184,21 @@ export default function QualityAudit() {
             cancelled = true;
             window.clearTimeout(timeout);
         };
-    }, [auditData.lineNumber, auditData.date, auditData.shift, activeTab, currentChecksheetId, currentWorkflowState, getDraftLookupKey, isOperatorRole]);
+    }, [auditData.lineNumber, auditData.date, auditData.shift, activeTab, currentChecksheetId, currentWorkflowState, getDraftLookupKey, isOperatorRole, mapAuditToChecksheet, acquireAuditLock]);
 
-    const deleteSavedChecksheet = async (index: number) => {
+    const deleteChecksheet = async (checksheet: SavedChecksheet | undefined) => {
         try {
-            const checksheet = savedChecksheets[index];
             if (!checksheet?._id) {
                 showAlert('error', 'Checksheet not found');
                 return;
             }
-            const state = getWorkflowState(checksheet);
-            const canDelete = isSystemAdminRole
-                || (isOperatorRole && state === 'draft')
-                || (isReviewerRole && state === 'submitted');
-            if (!canDelete) {
+            if (!canDeleteListedChecksheet(checksheet)) {
                 showAlert('error', 'You are not authorized to delete this checksheet');
                 return;
             }
             await apiService.deleteAudit(checksheet._id!);
             await loadSavedChecksheets();
+            await loadDashboard();
             if (currentChecksheetId === checksheet._id) {
                 clearCurrentChecksheet();
             }
@@ -1785,6 +2206,83 @@ export default function QualityAudit() {
         } catch (error) {
             console.error('Error deleting checksheet:', error);
             showAlert('error', 'Failed to delete checksheet');
+        }
+    };
+
+    const approveChecksheet = async (checksheet: SavedChecksheet | undefined) => {
+        if (!checksheet?._id) {
+            showAlert('error', 'Checksheet not found');
+            return;
+        }
+        if (!canApproveListedChecksheet(checksheet)) {
+            showAlert('error', 'You are not authorized to approve this checksheet');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            const approved = await apiService.approveAudit(checksheet._id);
+            upsertSavedChecksheetSummary(approved);
+            if (currentChecksheetId === checksheet._id) {
+                setCurrentWorkflowState('approved');
+                setCurrentChecksheetMeta(prev => prev ? { ...prev, workflowState: 'approved', status: 'approved' } : prev);
+            }
+            await loadSavedChecksheets();
+            await loadDashboard();
+            showAlert('success', 'Checksheet approved');
+        } catch (error) {
+            console.error('Error approving checksheet:', error);
+            showAlert('error', 'Failed to approve checksheet');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const submitListedChecksheet = async (checksheet: SavedChecksheet | undefined) => {
+        if (!checksheet?._id) {
+            showAlert('error', 'Checksheet not found');
+            return;
+        }
+        if (!canSubmitListedChecksheet(checksheet)) {
+            showAlert('error', 'Only the creating operator can submit this checksheet');
+            return;
+        }
+        const lockAcquired = await acquireAuditLock(checksheet);
+        if (!lockAcquired) return;
+        try {
+            setIsLoading(true);
+            const fullAudit = await apiService.getAuditById(checksheet._id);
+            const fullAuditData = fullAudit.data as AuditData;
+            const loadedSignatures = fullAuditData.signatures || {};
+            const effectiveAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy') || username || '';
+            const effectiveAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy') || currentUserSignatureImage || '';
+            if (!effectiveAuditBy) {
+                showAlert('error', 'Operator signature could not be identified for submission');
+                return;
+            }
+            const payload = buildChecksheetPayloadForData(
+                fullAuditData,
+                getWorkflowState(checksheet),
+                checksheet,
+                {
+                    auditBy: effectiveAuditBy,
+                    auditByImage: effectiveAuditByImage,
+                    reviewedBy: getLoadedSignatureText(loadedSignatures, 'reviewedBy'),
+                    reviewedByImage: getLoadedSignatureImage(loadedSignatures, 'reviewedBy'),
+                }
+            );
+            await apiService.updateAudit(checksheet._id, payload);
+            const submitted = await apiService.submitAudit(checksheet._id, payload);
+            upsertSavedChecksheetSummary(submitted, payload.data as AuditData);
+            await loadSavedChecksheets();
+            await loadDashboard();
+            if (isOperatorRole) await loadReturnedChecksheets();
+            showAlert('success', 'Checksheet submitted successfully');
+        } catch (error) {
+            console.error('Error submitting checksheet:', error);
+            showAlert('error', 'Failed to submit checksheet');
+        } finally {
+            await releaseAuditLock(checksheet._id);
+            setIsLoading(false);
         }
     };
 
@@ -1832,6 +2330,7 @@ export default function QualityAudit() {
             }
             closeReturnModal();
             await loadSavedChecksheets();
+            await loadDashboard();
             if (isOperatorRole) await loadReturnedChecksheets();
             showAlert('success', 'Checksheet returned for correction');
         } catch (error) {
@@ -1842,27 +2341,340 @@ export default function QualityAudit() {
         }
     };
 
-    const canOpenListedChecksheet = (checksheet: SavedChecksheet) => {
+    const getListedAuditPermissions = (checksheet: SavedChecksheet) => {
         const state = getWorkflowState(checksheet);
-        return isSystemAdminRole || isOperatorRole || (isReviewerRole && state === 'submitted');
+        const isOwner = isChecksheetOwner(checksheet);
+        const isReviewerLike = isReviewerRole || isSystemAdminRole;
+
+        return {
+            canView: isSystemAdminRole || isReviewerRole || isOperatorRole,
+            canEdit: (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state))
+                || (isReviewerLike && state === 'submitted'),
+            canSubmit: isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state),
+            canExport: FINALIZED_WORKFLOW_STATES.has(state) && (isOperatorRole || isReviewerLike),
+            canApprove: isReviewerLike && state === 'submitted',
+            canReturn: isReviewerLike && state === 'submitted',
+            canDelete: state !== 'approved' && (
+                isSystemAdminRole
+                || (isReviewerRole && state === 'submitted')
+                || (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state))
+            ),
+        };
     };
+
+    const canOpenListedChecksheet = (checksheet: SavedChecksheet) =>
+        getListedAuditPermissions(checksheet).canView;
+
+    const canEditListedChecksheet = (checksheet: SavedChecksheet) =>
+        getListedAuditPermissions(checksheet).canEdit;
+
+    const canSubmitListedChecksheet = (checksheet: SavedChecksheet) =>
+        getListedAuditPermissions(checksheet).canSubmit;
 
     const canExportListedChecksheet = (checksheet: SavedChecksheet) =>
-        getWorkflowState(checksheet) === 'submitted' && canOpenListedChecksheet(checksheet);
+        getListedAuditPermissions(checksheet).canExport;
 
-    const canDeleteListedChecksheet = (checksheet: SavedChecksheet) => {
-        const state = getWorkflowState(checksheet);
-        return isSystemAdminRole || (isOperatorRole && state === 'draft') || (isReviewerRole && state === 'submitted');
-    };
+    const canDeleteListedChecksheet = (checksheet: SavedChecksheet) =>
+        getListedAuditPermissions(checksheet).canDelete;
 
     const canReturnListedChecksheet = (checksheet: SavedChecksheet) =>
-        (isReviewerRole || isSystemAdminRole) && getWorkflowState(checksheet) === 'submitted';
+        getListedAuditPermissions(checksheet).canReturn;
+
+    const canApproveListedChecksheet = (checksheet: SavedChecksheet) =>
+        getListedAuditPermissions(checksheet).canApprove;
+
+    const getAuditSelectionId = (checksheet?: SavedChecksheet | null) => checksheet?._id || checksheet?.id || '';
+
+    const clearAuditSelection = useCallback(() => {
+        setSelectedAuditIds(new Set());
+        setSelectedAuditRecords({});
+        lastSelectedAuditIdRef.current = null;
+    }, []);
+
+    const setAuditSelection = (checksheet: SavedChecksheet, selected: boolean) => {
+        const auditId = getAuditSelectionId(checksheet);
+        if (!auditId) return;
+
+        setSelectedAuditIds(prev => {
+            const next = new Set(prev);
+            if (selected) {
+                next.add(auditId);
+            } else {
+                next.delete(auditId);
+            }
+            return next;
+        });
+
+        setSelectedAuditRecords(prev => {
+            const next = { ...prev };
+            if (selected) {
+                next[auditId] = checksheet;
+            } else {
+                delete next[auditId];
+            }
+            return next;
+        });
+    };
+
+    const setVisibleAuditSelection = (visibleChecksheets: SavedChecksheet[], selected: boolean) => {
+        setSelectedAuditIds(prev => {
+            const next = new Set(prev);
+            visibleChecksheets.forEach(checksheet => {
+                const auditId = getAuditSelectionId(checksheet);
+                if (!auditId) return;
+                if (selected) {
+                    next.add(auditId);
+                } else {
+                    next.delete(auditId);
+                }
+            });
+            return next;
+        });
+
+        setSelectedAuditRecords(prev => {
+            const next = { ...prev };
+            visibleChecksheets.forEach(checksheet => {
+                const auditId = getAuditSelectionId(checksheet);
+                if (!auditId) return;
+                if (selected) {
+                    next[auditId] = checksheet;
+                } else {
+                    delete next[auditId];
+                }
+            });
+            return next;
+        });
+    };
+
+    const toggleAuditSelection = (
+        checksheet: SavedChecksheet,
+        visibleChecksheets: SavedChecksheet[],
+        selected: boolean,
+        shiftKey: boolean
+    ) => {
+        const auditId = getAuditSelectionId(checksheet);
+        if (!auditId) return;
+
+        if (shiftKey && lastSelectedAuditIdRef.current) {
+            const visibleIds = visibleChecksheets.map(getAuditSelectionId);
+            const lastIndex = visibleIds.indexOf(lastSelectedAuditIdRef.current);
+            const currentIndex = visibleIds.indexOf(auditId);
+            if (lastIndex >= 0 && currentIndex >= 0) {
+                const start = Math.min(lastIndex, currentIndex);
+                const end = Math.max(lastIndex, currentIndex);
+                setVisibleAuditSelection(visibleChecksheets.slice(start, end + 1), selected);
+                lastSelectedAuditIdRef.current = auditId;
+                return;
+            }
+        }
+
+        setAuditSelection(checksheet, selected);
+        lastSelectedAuditIdRef.current = auditId;
+    };
+
+    const getSelectedAudits = () =>
+        Object.values(selectedAuditRecords).filter(checksheet => selectedAuditIds.has(getAuditSelectionId(checksheet)));
+
+    const getBulkFailureCount = (result: BulkOperationResult) =>
+        result.failedCount ?? result.failed?.length ?? 0;
+
+    const getBulkStatusLabel = (checksheet: SavedChecksheet) =>
+        formatWorkflowState(getWorkflowState(checksheet));
+
+    const formatBulkOperationSummary = (
+        title: string,
+        successLabel: string,
+        successCount: number,
+        result: BulkOperationResult,
+        eligibilityNote?: string
+    ) => {
+        const lines = [title, `${successCount} ${successLabel}`];
+        const skippedCount = result.skippedCount ?? sumObjectValues(result.skipped || {});
+        if (eligibilityNote && skippedCount > 0) {
+            lines.push(`${eligibilityNote} ${skippedCount} selected ${skippedCount === 1 ? 'audit was' : 'audits were'} skipped.`);
+        }
+        Object.entries(result.skipped || {}).forEach(([reason, count]) => {
+            lines.push(reason === 'Already Approved' ? `${count} ${reason}` : `${count} ${reason} Skipped`);
+        });
+        const failedCount = getBulkFailureCount(result);
+        if (failedCount > 0) {
+            lines.push(`${failedCount} Failed. See console for details.`);
+        }
+        return lines.join(' | ');
+    };
+
+    const refreshAuditsAfterBulkOperation = async () => {
+        await loadSavedChecksheets();
+        await loadDashboard();
+        if (isOperatorRole) {
+            await loadReturnedChecksheets();
+        }
+    };
+
+    const runBulkApproveAudits = async () => {
+        const selectedAudits = getSelectedAudits();
+        const auditIds = selectedAudits.map(getAuditSelectionId).filter(Boolean);
+        if (auditIds.length === 0) return;
+
+        try {
+            setBulkProgress({ action: 'Approving...', completed: 0, total: auditIds.length });
+            const result = await apiService.bulkApproveAudits(auditIds);
+            setBulkProgress({ action: 'Approving...', completed: auditIds.length, total: auditIds.length });
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk approval failures', result.failed);
+            }
+            await refreshAuditsAfterBulkOperation();
+            clearAuditSelection();
+            const approved = result.approved ?? result.processed ?? 0;
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary(
+                    'Bulk Approval Completed',
+                    'Approved',
+                    approved,
+                    result,
+                    'Only Submitted audits can be approved.'
+                )
+            );
+        } catch (error) {
+            console.error('Error bulk approving checksheets:', error);
+            showAlert('error', 'Bulk approval failed. Please try again.');
+        } finally {
+            setBulkProgress(null);
+        }
+    };
+
+    const runBulkDeleteAudits = async () => {
+        const selectedAudits = getSelectedAudits();
+        const deletableAudits = selectedAudits.filter(canDeleteListedChecksheet);
+        const auditIds = deletableAudits.map(getAuditSelectionId).filter(Boolean);
+        if (auditIds.length === 0) return;
+
+        try {
+            setBulkProgress({ action: 'Deleting...', completed: 0, total: auditIds.length });
+            const result = await apiService.bulkDeleteAudits(auditIds);
+            setBulkProgress({ action: 'Deleting...', completed: auditIds.length, total: auditIds.length });
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk delete failures', result.failed);
+            }
+            await refreshAuditsAfterBulkOperation();
+            clearAuditSelection();
+            const deleted = result.deleted ?? result.processed ?? 0;
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Delete Completed', 'Deleted', deleted, result)
+            );
+        } catch (error) {
+            console.error('Error bulk deleting checksheets:', error);
+            showAlert('error', 'Bulk delete failed. Please try again.');
+        } finally {
+            setBulkProgress(null);
+        }
+    };
+
+    const runBulkDownloadAudits = async () => {
+        const selectedAudits = getSelectedAudits();
+        if (selectedAudits.length === 0) return;
+
+        const result: BulkOperationResult = { requested: selectedAudits.length, downloaded: 0, skipped: {}, failed: [] };
+        try {
+            setBulkProgress({ action: 'Generating report...', completed: 0, total: selectedAudits.length });
+            for (let index = 0; index < selectedAudits.length; index += 1) {
+                const checksheet = selectedAudits[index];
+                const auditId = getAuditSelectionId(checksheet);
+                if (!canExportListedChecksheet(checksheet)) {
+                    const reason = getBulkStatusLabel(checksheet);
+                    result.skipped![reason] = (result.skipped![reason] || 0) + 1;
+                } else {
+                    try {
+                        await downloadChecksheetExcel(checksheet);
+                        result.downloaded = (result.downloaded || 0) + 1;
+                    } catch (error) {
+                        result.failed!.push({
+                            auditId,
+                            reason: error instanceof Error ? error.message : 'Download failed',
+                        });
+                    }
+                }
+                setBulkProgress({ action: 'Generating report...', completed: index + 1, total: selectedAudits.length });
+                await new Promise(resolve => window.setTimeout(resolve, 0));
+            }
+            result.skippedCount = sumObjectValues(result.skipped || {});
+            result.failedCount = getBulkFailureCount(result);
+            if (getBulkFailureCount(result) > 0) {
+                console.warn('Bulk download failures', result.failed);
+            }
+            clearAuditSelection();
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Download Completed', 'Downloaded', result.downloaded || 0, result)
+            );
+        } catch (error) {
+            console.error('Error bulk downloading checksheets:', error);
+            showAlert('error', 'Bulk download failed. Please try again.');
+        } finally {
+            setBulkProgress(null);
+        }
+    };
+
+    const confirmBulkApproveAudits = () => {
+        const selectedCount = selectedAuditIds.size;
+        showConfirm({
+            title: 'Bulk Approve',
+            message: `Approve ${selectedCount} selected audits?`,
+            type: 'warning',
+            confirmText: 'Approve',
+            onConfirm: runBulkApproveAudits,
+        });
+    };
+
+    const confirmBulkDeleteAudits = () => {
+        const selectedCount = getSelectedAudits().filter(canDeleteListedChecksheet).length;
+        if (selectedCount === 0) return;
+        showConfirm({
+            title: 'Bulk Delete',
+            message: `Delete ${selectedCount} selected audits?\n\nThis action cannot be undone.`,
+            type: 'warning',
+            confirmText: 'Delete',
+            onConfirm: runBulkDeleteAudits,
+        });
+    };
+
+    const confirmBulkDownloadAudits = () => {
+        const selectedCount = selectedAuditIds.size;
+        showConfirm({
+            title: 'Bulk Download',
+            message: `Download ${selectedCount} selected audits?`,
+            type: 'info',
+            confirmText: 'Download',
+            onConfirm: runBulkDownloadAudits,
+        });
+    };
+
+    useEffect(() => {
+        clearAuditSelection();
+    }, [activeTab, savedChecksheetsFilters, savedChecksheetsSearchInput, clearAuditSelection]);
+
+    useEffect(() => {
+        if (selectedAuditIds.size === 0) return;
+        setSelectedAuditRecords(prev => {
+            let hasChanges = false;
+            const next = { ...prev };
+            savedChecksheets.forEach(checksheet => {
+                const auditId = getAuditSelectionId(checksheet);
+                if (auditId && selectedAuditIds.has(auditId)) {
+                    next[auditId] = checksheet;
+                    hasChanges = true;
+                }
+            });
+            return hasChanges ? next : prev;
+        });
+    }, [savedChecksheets, selectedAuditIds]);
 
     const getOpenActionLabel = (checksheet: SavedChecksheet) => {
         const state = getWorkflowState(checksheet);
-        if (isReviewerRole && state !== 'submitted' && !isSystemAdminRole) return 'Locked';
-        if (isOperatorRole && state === 'submitted') return 'View';
-        return state === 'submitted' && isReviewerRole ? 'Open' : 'Edit';
+        if (isOperatorRole && (!isChecksheetOwner(checksheet) || FINALIZED_WORKFLOW_STATES.has(state))) return 'View';
+        return canEditListedChecksheet(checksheet) ? (isOperatorRole ? 'Continue' : 'Edit') : 'View';
     };
 
     const canProceedFromBasicInfo = isBasicInfoComplete() && (currentChecksheetId !== null || canCreateChecksheet) && !isLoading;
@@ -1880,7 +2692,16 @@ export default function QualityAudit() {
         completionStatus: getStageCompletionStatus(stage, baselineStagesById.get(stage.id)),
     })), [auditData.stages, baselineStagesById, stageChanges]);
 
-    const getStateBadgeClass = (state: AuditWorkflowState) => {
+    const getDisplayStatus = (checksheet: SavedChecksheet): AuditDisplayStatus => {
+        return checksheet.displayStatus || getWorkflowState(checksheet);
+    };
+
+    const formatDisplayStatus = (state: AuditDisplayStatus) => {
+        return formatWorkflowState(state);
+    };
+
+    const getStateBadgeClass = (state: AuditDisplayStatus) => {
+        if (state === 'approved') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200';
         if (state === 'submitted') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
         if (state === 'returned') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
@@ -1893,137 +2714,426 @@ export default function QualityAudit() {
         const totalItems = isReturnedList ? returnedChecksheetsTotal : savedChecksheetsTotal;
         const searchTerm = isReturnedList ? returnedChecksheetsSearchInput : savedChecksheetsSearchInput;
         const sortOption = isReturnedList ? returnedChecksheetsSort : savedChecksheetsSort;
+        const filters = isReturnedList ? returnedChecksheetsFilters : savedChecksheetsFilters;
         const isListLoading = isReturnedList ? isReturnedChecksheetsLoading : isSavedChecksheetsLoading;
         const setPage = isReturnedList ? setReturnedChecksheetsPage : setSavedChecksheetsPage;
         const setPageSize = isReturnedList ? setReturnedChecksheetsPageSize : setSavedChecksheetsPageSize;
         const setSearchTerm = isReturnedList ? setReturnedChecksheetsSearchInput : setSavedChecksheetsSearchInput;
         const setSortOption = isReturnedList ? setReturnedChecksheetsSort : setSavedChecksheetsSort;
+        const setFilters = isReturnedList ? setReturnedChecksheetsFilters : setSavedChecksheetsFilters;
+
+        const updateFilters = (patch: Partial<AuditListFilters>) => {
+            setFilters(prev => ({ ...prev, ...patch }));
+            setPage(1);
+            if (!isReturnedList) clearAuditSelection();
+        };
+
+        const resetFilters = () => {
+            setFilters({
+                dateFrom: '',
+                dateTo: '',
+                shift: '',
+                lineNumber: '',
+                status: isReturnedList ? 'returned' : '',
+                completionRange: '',
+            });
+            setSearchTerm('');
+            setPage(1);
+            if (!isReturnedList) clearAuditSelection();
+        };
+
+        const enableBulkSelection = !isReturnedList;
+        const visibleSelectableChecksheets = enableBulkSelection
+            ? checksheets.filter(checksheet => Boolean(getAuditSelectionId(checksheet)))
+            : [];
+        const visibleSelectedCount = visibleSelectableChecksheets.filter(checksheet =>
+            selectedAuditIds.has(getAuditSelectionId(checksheet))
+        ).length;
+        const allVisibleSelected = visibleSelectableChecksheets.length > 0
+            && visibleSelectedCount === visibleSelectableChecksheets.length;
+        const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleSelectableChecksheets.length;
+        const selectedAuditsForBulk = getSelectedAudits();
+        const selectedCount = selectedAuditIds.size;
+        const selectedCountLabel = `${selectedCount} ${selectedCount === 1 ? 'audit' : 'audits'} selected`;
+        const canBulkApprove = selectedAuditsForBulk.some(canApproveListedChecksheet);
+        const canBulkDelete = selectedAuditsForBulk.some(canDeleteListedChecksheet);
+        const canBulkDownload = selectedAuditsForBulk.some(canExportListedChecksheet);
 
         return (
-            <div className="saved-reports-container bg-white dark:bg-gray-900 p-3 md:p-5 rounded-md shadow-lg dark:shadow-gray-900/30">
-                <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-center text-gray-800 dark:text-gray-100">
-                    {title}
-                </h2>
-                <ReportListControls
-                    searchTerm={searchTerm}
-                    sortOption={sortOption}
-                    totalCount={totalItems}
-                    filteredCount={totalItems}
-                    onSearchTermChange={(value) => {
-                        setSearchTerm(value);
-                        setPage(1);
-                    }}
-                    onSortOptionChange={(value) => {
-                        setSortOption(value);
-                        setPage(1);
-                    }}
-                    searchPlaceholder="Search by checksheet, production order, module type, or creator..."
-                />
-                {isListLoading ? (
-                    <div className="text-center py-6 md:py-8 text-gray-500 dark:text-gray-400">
-                        Loading checksheets...
+            <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:p-4">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{totalItems} checksheets</span>
+                </div>
+
+                <div className="mb-2 grid gap-2 md:grid-cols-5 xl:grid-cols-9">
+                    <label className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                        <input
+                            value={searchTerm}
+                            onChange={(event) => {
+                                setSearchTerm(event.target.value);
+                                setPage(1);
+                                if (!isReturnedList) clearAuditSelection();
+                            }}
+                            placeholder="Search production order, creator, shift, date, line, status"
+                            className="h-9 w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        />
+                    </label>
+                    <input
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(event) => updateFilters({ dateFrom: event.target.value, dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date from"
+                    />
+                    <input
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(event) => updateFilters({ dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date to"
+                    />
+                    <select
+                        value={filters.shift}
+                        onChange={(event) => updateFilters({ shift: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Shift filter"
+                    >
+                        <option value="">Shift</option>
+                        <option value="A">Shift A</option>
+                        <option value="B">Shift B</option>
+                        <option value="C">Shift C</option>
+                        <option value="G">Shift G</option>
+                    </select>
+                    <select
+                        value={filters.lineNumber}
+                        onChange={(event) => updateFilters({ lineNumber: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Line filter"
+                    >
+                        <option value="">Line</option>
+                        <option value="I">Line I</option>
+                        <option value="II">Line II</option>
+                    </select>
+                    <select
+                        value={filters.status}
+                        onChange={(event) => updateFilters({ status: event.target.value as AuditListFilters['status'] })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Status filter"
+                        disabled={isReturnedList}
+                    >
+                        <option value="">Status</option>
+                        <option value="draft">Draft</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="approved">Approved</option>
+                        <option value="returned">Returned</option>
+                    </select>
+                    <select
+                        value={filters.completionRange}
+                        onChange={(event) => updateFilters({ completionRange: event.target.value as CompletionRangeFilter })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Completion filter"
+                    >
+                        <option value="">Completion %</option>
+                        <option value="0-25">0-25</option>
+                        <option value="26-50">26-50</option>
+                        <option value="51-75">51-75</option>
+                        <option value="76-99">76-99</option>
+                        <option value="100">100</option>
+                    </select>
+                    <select
+                        value={sortOption}
+                        onChange={(event) => {
+                            setSortOption(event.target.value as AuditSortOption);
+                            setPage(1);
+                        }}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Sort audits"
+                    >
+                        <option value="newest-created">Newest</option>
+                        <option value="oldest-created">Oldest</option>
+                        <option value="completion-desc">Completion %</option>
+                        <option value="status">Status</option>
+                        <option value="created-by">Created By</option>
+                        <option value="shift">Shift</option>
+                        <option value="date-newest">Date</option>
+                    </select>
+                    <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="h-9 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        Clear Filters
+                    </button>
+                </div>
+
+                {enableBulkSelection && selectedCount > 0 && (
+                    <div className="mb-3 rounded-md border border-brand-primary/30 bg-brand-primary/5 p-3 dark:border-brand-primary/40 dark:bg-brand-primary/10">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedCountLabel}</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {canBulkApprove && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkApproveAudits}
+                                        disabled={Boolean(bulkProgress)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                    >
+                                        <Check className="h-3.5 w-3.5" />
+                                        Approve
+                                    </button>
+                                )}
+                                {canBulkDownload && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkDownloadAudits}
+                                        disabled={Boolean(bulkProgress)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-3 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20"
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download
+                                    </button>
+                                )}
+                                {canBulkDelete && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmBulkDeleteAudits}
+                                        disabled={Boolean(bulkProgress)}
+                                        className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-900/20"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={clearAuditSelection}
+                                    disabled={Boolean(bulkProgress)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                    Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                        {bulkProgress && (
+                            <div className="mt-3">
+                                <div className="mb-1 flex items-center justify-between text-xs font-medium text-gray-700 dark:text-gray-200">
+                                    <span>{bulkProgress.action}</span>
+                                    <span>{bulkProgress.completed} / {bulkProgress.total} completed</span>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                    <div
+                                        className="h-full rounded-full bg-brand-primary transition-all"
+                                        style={{
+                                            width: `${bulkProgress.total ? Math.round((bulkProgress.completed / bulkProgress.total) * 100) : 0}%`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
+                )}
+
+                {isListLoading ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Loading checksheets...</div>
                 ) : checksheets.length === 0 ? (
-                    <div className="text-center py-6 md:py-8">
-                        <p className="text-gray-500 dark:text-gray-400 text-base md:text-lg">
-                            {totalItems === 0 ? 'No checksheets found.' : 'No matching checksheets found.'}
-                        </p>
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {totalItems === 0 ? 'No checksheets found.' : 'No matching checksheets found.'}
                     </div>
                 ) : (
                     <>
-                        <div className="reports-list">
-                            {checksheets.map((checksheet, index) => {
-                                const state = getWorkflowState(checksheet);
-                                const canOpen = canOpenListedChecksheet(checksheet);
-                                const canExport = !isReturnedList && canExportListedChecksheet(checksheet);
-                                const canDelete = !isReturnedList && canDeleteListedChecksheet(checksheet);
-                                const canReturn = !isReturnedList && canReturnListedChecksheet(checksheet);
-                                const updatedTime = checksheet.updatedTimestamp || checksheet.timestamp;
-                                const createdBy = checksheet.createdByEmployeeName || checksheet.createdByEmployeeId || checksheet.createdBy || 'Legacy checksheet';
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full border-separate border-spacing-0 text-center text-xs">
+                                <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    <tr>
+                                        {enableBulkSelection && (
+                                            <th className="w-10 border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all visible audits"
+                                                    checked={allVisibleSelected}
+                                                    disabled={visibleSelectableChecksheets.length === 0}
+                                                    ref={(element) => {
+                                                        if (element) element.indeterminate = someVisibleSelected;
+                                                    }}
+                                                    onChange={(event) => setVisibleAuditSelection(visibleSelectableChecksheets, event.currentTarget.checked)}
+                                                    className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                                />
+                                            </th>
+                                        )}
+                                        {['Shift', 'Line', 'Production Order', 'Date', 'Created By', 'Completion %', 'Status', 'Actions'].map(column => (
+                                            <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                                {column}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                    {checksheets.map((checksheet, index) => {
+                                        const displayStatus = getDisplayStatus(checksheet);
+                                        const completion = checksheet.completionPercentage ?? 0;
+                                        const createdBy = checksheet.createdByEmployeeName || checksheet.createdByEmployeeId || checksheet.createdBy || '-';
+                                        const rowKey = checksheet._id || `${checksheet.name}-${index}`;
+                                        const canOpen = canOpenListedChecksheet(checksheet);
+                                        const canEdit = canEditListedChecksheet(checksheet);
+                                        const canSubmit = canSubmitListedChecksheet(checksheet);
+                                        const canExport = canExportListedChecksheet(checksheet);
+                                        const canApprove = canApproveListedChecksheet(checksheet);
+                                        const canReturn = !isReturnedList && canReturnListedChecksheet(checksheet);
+                                        const canDelete = canDeleteListedChecksheet(checksheet);
+                                        const isApproved = getWorkflowState(checksheet) === 'approved';
+                                        const selectionId = getAuditSelectionId(checksheet);
+                                        const isSelected = selectionId ? selectedAuditIds.has(selectionId) : false;
 
-                                return (
-                                    <div
-                                        key={checksheet._id || `${checksheet.name}-${index}`}
-                                        className="report-item overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg p-3 md:p-4 mb-3 md:mb-4 shadow-sm bg-white dark:bg-gray-800"
-                                    >
-                                        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="min-w-0 text-base md:text-lg font-bold text-gray-800 dark:text-gray-100 break-words">
-                                                        {checksheet.name}
-                                                    </h3>
-                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getStateBadgeClass(state)}`}>
-                                                        {formatWorkflowState(state)}
-                                                    </span>
-                                                    {checksheet.lineNumber && (
-                                                        <span className="rounded-full bg-brand-primary-soft px-2 py-0.5 text-xs font-semibold text-brand-primary dark:bg-brand-primary/15 dark:text-brand-primary-light">
-                                                            Line {checksheet.lineNumber}
+                                        return (
+                                            <tr
+                                                key={rowKey}
+                                                className={`${isSelected ? 'bg-brand-primary/5 dark:bg-brand-primary/10' : 'bg-white dark:bg-gray-900'} text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800/70`}
+                                            >
+                                                {enableBulkSelection && (
+                                                    <td className="whitespace-nowrap px-3 py-2 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select audit ${checksheet.productionOrderNo || checksheet.name || rowKey}`}
+                                                            checked={isSelected}
+                                                            disabled={!selectionId}
+                                                            onChange={(event) => {
+                                                                const nativeEvent = event.nativeEvent as MouseEvent;
+                                                                toggleAuditSelection(
+                                                                    checksheet,
+                                                                    visibleSelectableChecksheets,
+                                                                    event.currentTarget.checked,
+                                                                    Boolean(nativeEvent.shiftKey)
+                                                                );
+                                                            }}
+                                                            className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                                        />
+                                                    </td>
+                                                )}
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{checksheet.shift || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{checksheet.lineNumber || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{checksheet.productionOrderNo || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{checksheet.date || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{createdBy}</td>
+                                                <td className="min-w-40 px-3 py-2 text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                                            <div
+                                                                className="h-full rounded-full bg-brand-primary"
+                                                                style={{ width: `${Math.min(100, Math.max(0, completion))}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="whitespace-nowrap font-semibold">{completion}%</span>
+                                                        <span className="whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                                            {checksheet.completedStages ?? 0}/{checksheet.totalStages ?? TOTAL_AUDIT_STAGES}
                                                         </span>
-                                                    )}
-                                                </div>
-                                                <div className="mt-2 grid gap-1 text-xs md:text-sm text-gray-500 dark:text-gray-400">
-                                                    <p>Created: {formatTimestamp(checksheet.timestamp)}</p>
-                                                    <p>Created by: {createdBy}</p>
-                                                    <p>Updated: {formatTimestamp(updatedTime)}</p>
-                                                    <p>Date: {checksheet.date || '-'} | Shift: {checksheet.shift || '-'}</p>
-                                                    <p>Production Order: {checksheet.productionOrderNo || '-'} | Module: {checksheet.moduleType || '-'}</p>
-                                                    {checksheet.submittedAt && <p>Submitted: {formatTimestamp(checksheet.submittedAt)} by {checksheet.submittedBy || '-'}</p>}
-                                                    {state === 'returned' && checksheet.returnComments && (
-                                                        <p className="text-amber-700 dark:text-amber-300">Return comments: {checksheet.returnComments}</p>
-                                                    )}
-                                                    {state === 'returned' && (
-                                                        <p>Returned: {formatTimestamp(checksheet.returnedAt)} by {checksheet.returnedBy || '-'}</p>
-                                                    )}
-                                                    {isReviewerRole && state !== 'submitted' && !isSystemAdminRole && (
-                                                        <p className="text-gray-500 dark:text-gray-400">Metadata only until submitted.</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex w-full flex-wrap gap-2 justify-start lg:w-auto lg:shrink-0 lg:justify-end">
-                                                <button
-                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canExport ? 'bg-brand-primary dark:bg-brand-primary text-white hover:bg-green-500 dark:hover:bg-green-600 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
-                                                    onClick={() => canExport && exportSavedReportToExcel(index)}
-                                                    disabled={!canExport}
-                                                    title={canExport ? 'Export to Excel' : 'Excel is available only after submission'}
-                                                >
-                                                    Excel
-                                                </button>
-                                                <button
-                                                    className={`flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium transition-all ${canOpen ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700 cursor-pointer' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
-                                                    onClick={() => canOpen && (isReturnedList ? editReturnedChecksheet(index) : editSavedChecksheet(index))}
-                                                    disabled={!canOpen}
-                                                >
-                                                    {getOpenActionLabel(checksheet)}
-                                                </button>
-                                                {canReturn && (
-                                                    <button
-                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-amber-600 text-white transition-all hover:bg-amber-700 cursor-pointer"
-                                                        onClick={() => openReturnModal(index)}
+                                                    </div>
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(displayStatus)}`}
                                                     >
-                                                        Return
-                                                    </button>
-                                                )}
-                                                {canDelete && (
-                                                    <button
-                                                        className="flex-1 sm:flex-none whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-md font-medium bg-red-500 dark:bg-red-600 text-white transition-all hover:bg-red-600 dark:hover:bg-red-700 cursor-pointer"
-                                                        onClick={() => {
-                                                            showConfirm({
-                                                                title: 'Delete Checksheet',
-                                                                message: `Are you sure you want to delete "${checksheet.name}"? This action cannot be undone.`,
-                                                                type: 'warning',
-                                                                confirmText: 'Delete',
-                                                                onConfirm: () => deleteSavedChecksheet(index),
-                                                            });
-                                                        }}
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                                        {formatDisplayStatus(displayStatus)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => canOpen && openChecksheetFromList(checksheet, 'view')}
+                                                            disabled={!canOpen}
+                                                            className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                                            title="View"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openChecksheetFromList(checksheet, 'edit')}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md bg-brand-primary px-2 text-xs font-medium text-white hover:bg-brand-primary-hover"
+                                                                title={getOpenActionLabel(checksheet)}
+                                                            >
+                                                                <Edit3 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canSubmit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => submitListedChecksheet(checksheet)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md bg-green-600 px-2 text-xs font-medium text-white hover:bg-green-700"
+                                                                title="Submit"
+                                                            >
+                                                                <Check className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canExport && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => exportChecksheetToExcel(checksheet)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20"
+                                                                title="Download"
+                                                            >
+                                                                <Download className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canApprove && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => approveChecksheet(checksheet)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                                                title="Approve"
+                                                            >
+                                                                <Check className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canReturn && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openReturnModal(index)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20"
+                                                                title="Return"
+                                                            >
+                                                                <RotateCcw className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    showConfirm({
+                                                                        title: 'Delete Checksheet',
+                                                                        message: `Are you sure you want to delete "${checksheet.name}"? This action cannot be undone.`,
+                                                                        type: 'warning',
+                                                                        confirmText: 'Delete',
+                                                                        onConfirm: () => deleteChecksheet(checksheet),
+                                                                    });
+                                                                }}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {!canDelete && isApproved && (
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-400 opacity-60 dark:border-gray-700 dark:text-gray-500"
+                                                                title={APPROVED_DELETE_TOOLTIP}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                         <ReportPagination
                             totalItems={totalItems}
@@ -2037,6 +3147,172 @@ export default function QualityAudit() {
                             itemLabel="checksheets"
                         />
                     </>
+                )}
+            </div>
+        );
+    };
+
+    const renderAuditProgressCard = (checksheet: SavedChecksheet) => {
+        const completion = checksheet.completionPercentage ?? 0;
+        const status = getDisplayStatus(checksheet);
+        const createdBy = checksheet.createdByEmployeeName || checksheet.createdBy || '-';
+
+        return (
+            <div key={checksheet._id || checksheet.id} className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shift {checksheet.shift || '-'}</div>
+                        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            {checksheet.date || '-'} | Line {checksheet.lineNumber || '-'}
+                        </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(status)}`}>
+                        {formatDisplayStatus(status)}
+                    </span>
+                </div>
+                <div className="mb-2 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="truncate">PO: {checksheet.productionOrderNo || '-'}</div>
+                    <div className="truncate">Created by: {createdBy}</div>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                        className="h-full rounded-full bg-brand-primary"
+                        style={{ width: `${Math.min(100, Math.max(0, completion))}%` }}
+                    />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-gray-800 dark:text-gray-100">
+                        {checksheet.completedStages ?? 0} / {checksheet.totalStages ?? TOTAL_AUDIT_STAGES} Stages
+                    </span>
+                    <span className="font-bold text-brand-primary dark:text-brand-primary-light">{completion}%</span>
+                </div>
+            </div>
+        );
+    };
+
+    const renderDashboard = () => {
+        const summary = dashboardData?.summary || {
+            totalAudits: 0,
+            completed: 0,
+            draft: 0,
+            submitted: 0,
+            returned: 0,
+            approved: 0,
+            averageCompletion: 0,
+        };
+        const dailyGroups = (dashboardData?.items || []).reduce<Record<string, SavedChecksheet[]>>((groups, checksheet) => {
+            const key = checksheet.shift || 'Unassigned';
+            groups[key] = groups[key] || [];
+            groups[key].push(checksheet);
+            return groups;
+        }, {});
+
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+                        {(['daily', 'weekly', 'monthly'] as DashboardPeriod[]).map(period => (
+                            <button
+                                key={period}
+                                type="button"
+                                onClick={() => setDashboardView(period)}
+                                className={`h-9 rounded px-4 text-sm font-semibold capitalize transition-colors ${
+                                    dashboardView === period
+                                        ? 'bg-brand-primary text-white'
+                                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                {period}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={loadDashboard}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                        Refresh
+                    </button>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+                    {[
+                        [dashboardView === 'daily' ? 'Today\'s Audits' : dashboardView === 'weekly' ? 'Last 7 Days Audits' : 'Monthly Audits', summary.totalAudits],
+                        ['Completed', summary.completed],
+                        ['Draft', summary.draft],
+                        ['Returned', summary.returned],
+                        ['Approved', summary.approved],
+                        ['Average Completion %', `${summary.averageCompletion}%`],
+                    ].map(([label, value]) => (
+                        <div key={label} className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
+                            <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {isDashboardLoading ? (
+                    <div className="rounded-md border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                        Loading dashboard...
+                    </div>
+                ) : dashboardView === 'daily' ? (
+                    <div className="space-y-3">
+                        {['A', 'B', 'C', 'G', ...Object.keys(dailyGroups).filter(shift => !['A', 'B', 'C', 'G'].includes(shift))].map(shift => {
+                            const items = dailyGroups[shift] || [];
+                            return (
+                                <section key={shift} className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shift {shift}</h3>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{items.length} audits</span>
+                                    </div>
+                                    {items.length === 0 ? (
+                                        <div className="py-4 text-sm text-gray-500 dark:text-gray-400">No audits for this shift.</div>
+                                    ) : (
+                                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                            {items.map(renderAuditProgressCard)}
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+                        <table className="min-w-full text-left text-xs">
+                            <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-semibold">Day</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Total Audits</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Draft</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Submitted</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Approved</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Returned</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Average Completion %</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                {(dashboardData?.groups || []).map(group => (
+                                    <tr key={group.key} className="text-gray-800 dark:text-gray-100">
+                                        <td className="px-3 py-2 text-left font-medium">
+                                            {group.dayName ? (
+                                                <div>
+                                                    <div>{group.dayName}</div>
+                                                    <div className="text-[11px] font-normal text-gray-500 dark:text-gray-400">{group.displayDate || group.date}</div>
+                                                </div>
+                                            ) : group.key}
+                                        </td>
+                                        <td className="px-3 py-2 text-left">{group.totalAudits}</td>
+                                        <td className="px-3 py-2 text-left">{group.draft}</td>
+                                        <td className="px-3 py-2 text-left">{group.submitted}</td>
+                                        <td className="px-3 py-2 text-left">{group.approved}</td>
+                                        <td className="px-3 py-2 text-left">{group.returned}</td>
+                                        <td className="px-3 py-2 text-left">{group.averageCompletion}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
         );
@@ -2092,38 +3368,92 @@ export default function QualityAudit() {
                         </div>
                     </div>
                 )}
-                <div className="flex justify-center mb-2">
-                    {canCreateChecksheet && (
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">IPQC Audits</h1>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                         <button
+                            type="button"
                             onClick={() => {
-                                clearCurrentChecksheet();
-                                setActiveTab('create-edit');
+                                if (activeTab === 'create-edit') clearCurrentChecksheet();
+                                setActiveTab('dashboard');
                             }}
-                            className={`tab ${activeTab === 'create-edit' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                activeTab === 'dashboard'
+                                    ? 'bg-brand-primary text-white'
+                                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                            }`}
                         >
-                            Create Checksheet
+                            <FileSpreadsheet className="h-4 w-4" />
+                            Dashboard
                         </button>
-                    )}
-                    <button
-                        onClick={() => setActiveTab('saved-reports')}
-                        className={`tab ${activeTab === 'saved-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
-                    >
-                        Submitted/Draft Checksheets
-                    </button>
-                    {isOperatorRole && returnedChecksheetsTotal > 0 && (
+                        {canCreateChecksheet && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    clearCurrentChecksheet();
+                                    setActiveTab('create-edit');
+                                }}
+                                className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                    activeTab === 'create-edit'
+                                        ? 'bg-brand-primary text-white'
+                                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                <Plus className="h-4 w-4" />
+                                Create
+                            </button>
+                        )}
                         <button
-                            onClick={() => setActiveTab('returned-reports')}
-                            className={`tab relative ${activeTab === 'returned-reports' ? 'active bg-white dark:bg-gray-900 text-brand-primary border-b-2 border-b-brand-primary translate-y--0.5' : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-gray-300 border-none translate-none'} py-2 rounded-tr-xl rounded-tl-xl text-center text-sm cursor-pointer font-bold transition-all mx-0.5 w-full`}
+                            type="button"
+                            onClick={() => {
+                                if (activeTab === 'create-edit') clearCurrentChecksheet();
+                                setActiveTab('saved-reports');
+                            }}
+                            className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                activeTab === 'saved-reports'
+                                    ? 'bg-brand-primary text-white'
+                                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                            }`}
                         >
-                            Returned Checksheets
-                            <span className="absolute right-3 top-1.5 min-w-5 h-5 rounded-full bg-red-600 px-1.5 text-[11px] leading-5 text-white">
-                                {returnedChecksheetsTotal}
-                            </span>
+                            <Search className="h-4 w-4" />
+                            Audit List
                         </button>
-                    )}
+                        {isOperatorRole && returnedChecksheetsTotal > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (activeTab === 'create-edit') clearCurrentChecksheet();
+                                    setActiveTab('returned-reports');
+                                }}
+                                className={`relative inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                                    activeTab === 'returned-reports'
+                                        ? 'bg-brand-primary text-white'
+                                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                                Returned
+                                <span className="rounded-full bg-red-600 px-1.5 py-0.4 text-[10px] text-white">
+                                    {returnedChecksheetsTotal}
+                                </span>
+                            </button>
+                        )}
+                    </div>
                 </div>
+                {activeTab === 'dashboard' && (
+                    <div className="tab-content active">
+                        {renderDashboard()}
+                    </div>
+                )}
                 {activeTab === 'create-edit' && (
                     <div>
+                        {currentAccessMode === 'view' && currentChecksheetId && (
+                            <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
+                                <strong>Read-only view.</strong> {readOnlyReason || 'All fields are disabled.'}
+                            </div>
+                        )}
                         {currentWorkflowState === 'returned' && currentChecksheetMeta?.returnComments && (
                             <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
                                 <strong>Returned for correction:</strong> {currentChecksheetMeta.returnComments}
@@ -2148,12 +3478,13 @@ export default function QualityAudit() {
                             )}
                             {canEditCurrentChecksheet && (
                                 <button
-                                    className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-primary hover:bg-brand-primary-hover'}`}
+                                    className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${isOperatorRole && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState) && !canSubmitCurrentChecksheet ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-primary hover:bg-brand-primary-hover'}`}
                                     onClick={saveChecksheet}
-                                    disabled={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet}
-                                    title={currentWorkflowState !== 'submitted' && !canSubmitCurrentChecksheet ? 'Prepared By signature is required before submission' : undefined}
+                                    disabled={isOperatorRole && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState) && !canSubmitCurrentChecksheet}
                                 >
-                                    {currentWorkflowState === 'submitted' ? 'Save Changes' : currentWorkflowState === 'returned' ? 'Resubmit Checksheet' : 'Submit Checksheet'}
+                                    {isOperatorRole && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState)
+                                        ? currentWorkflowState === 'returned' ? 'Resubmit Checksheet' : 'Submit Checksheet'
+                                        : 'Save Changes'}
                                 </button>
                             )}
                             {canExportCurrentChecksheet && (
@@ -2161,7 +3492,15 @@ export default function QualityAudit() {
                                     className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                                     onClick={generateExcelReport}
                                 >
-                                    Generate Audit Excel
+                                    Download
+                                </button>
+                            )}
+                            {currentChecksheetId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
+                                <button
+                                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                    onClick={() => approveChecksheet(currentChecksheetMeta || undefined)}
+                                >
+                                    Approve
                                 </button>
                             )}
                             {currentChecksheetId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
@@ -2169,7 +3508,11 @@ export default function QualityAudit() {
                                     className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
                                     onClick={() => {
                                         const index = savedChecksheets.findIndex(sheet => sheet._id === currentChecksheetId);
-                                        if (index >= 0) openReturnModal(index);
+                                        if (index >= 0) {
+                                            openReturnModal(index);
+                                        } else {
+                                            showAlert('error', 'Open the audit from the current list page before returning it');
+                                        }
                                     }}
                                 >
                                     Return for Correction
@@ -2192,6 +3535,7 @@ export default function QualityAudit() {
                                                 <select
                                                     value={auditData.lineNumber}
                                                     onChange={(e) => handleLineChange(e.target.value)}
+                                                    disabled={!canEditCurrentChecksheet}
                                                     className="text-sm p-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                                 >
                                                     <option value="">Select</option>
@@ -2206,6 +3550,7 @@ export default function QualityAudit() {
                                                 type="date"
                                                 value={auditData.date}
                                                 onChange={(e) => updateBasicInfo('date', e.target.value)}
+                                                disabled={!canEditCurrentChecksheet}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
@@ -2214,6 +3559,7 @@ export default function QualityAudit() {
                                             <select
                                                 value={auditData.shift}
                                                 onChange={(e) => updateBasicInfo('shift', e.target.value)}
+                                                disabled={!canEditCurrentChecksheet}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             >
                                                 <option value="">Select Shift</option>
@@ -2231,6 +3577,7 @@ export default function QualityAudit() {
                                                 type="text"
                                                 value={auditData.productionOrderNo}
                                                 onChange={(e) => updateBasicInfo('productionOrderNo', e.target.value)}
+                                                disabled={!canEditCurrentChecksheet}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
@@ -2240,6 +3587,7 @@ export default function QualityAudit() {
                                                 type="text"
                                                 value={auditData.moduleType}
                                                 onChange={(e) => updateBasicInfo('moduleType', e.target.value)}
+                                                disabled={!canEditCurrentChecksheet}
                                                 className="p-2 text-sm block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm focus:border-brand-primary dark:focus:border-brand-primary-light border focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                             />
                                         </div>
@@ -2249,6 +3597,7 @@ export default function QualityAudit() {
                                                     type="checkbox"
                                                     checked={auditData.customerSpecAvailable}
                                                     onChange={(e) => updateBasicInfo('customerSpecAvailable', e.target.checked)}
+                                                    disabled={!canEditCurrentChecksheet}
                                                     className="rounded border-gray-300 dark:border-gray-600 text-brand-primary dark:text-brand-primary-light hover:border-brand-primary-light w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Customer Specification Available</span>
@@ -2258,6 +3607,7 @@ export default function QualityAudit() {
                                                     type="checkbox"
                                                     checked={auditData.specificationSignedOff}
                                                     onChange={(e) => updateBasicInfo('specificationSignedOff', e.target.checked)}
+                                                    disabled={!canEditCurrentChecksheet}
                                                     className="rounded border-gray-300 dark:border-gray-600 text-brand-primary dark:text-brand-primary-light hover:border-brand-primary-light w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                                 <span className="ml-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">Specification Signed Off With Customer</span>
@@ -2545,6 +3895,7 @@ export default function QualityAudit() {
                                                                                                 <select
                                                                                                     value={savedObservation?.selectedLine || obs.selectedLine || getSelectedLineFromSlot(obs.timeSlot)}
                                                                                                     onChange={(e) => updateObservationLineSelection(selectedStageId, param.id, obs.timeSlot, e.target.value)}
+                                                                                                    disabled={!canEditCurrentChecksheet}
                                                                                                     className="px-1 py-0.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-primary"
                                                                                                 >
                                                                                                     {getDynamicLineOptions(auditData.lineNumber).map(line => (
@@ -2555,6 +3906,7 @@ export default function QualityAudit() {
                                                                                         ) : (
                                                                                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">{obs.timeSlot}</label>
                                                                                         )}
+                                                                                        <fieldset disabled={!canEditCurrentChecksheet} className="w-full">
                                                                                         {selectedStageId === 7 && param.id === '7-9' ? (
                                                                                             <BusRibbonAuditPeelStrengthInput
                                                                                                 stageId={selectedStageId}
@@ -2589,6 +3941,7 @@ export default function QualityAudit() {
                                                                                                         value={(savedObservation?.value ?? obs.value) as string}
                                                                                                         onChange={(e) => updateObservation(selectedStageId, param.id, obs.timeSlot, e.target.value)}
                                                                                                         placeholder="Enter value"
+                                                                                                        disabled={!canEditCurrentChecksheet}
                                                                                                         className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand-primary dark:focus:ring-brand-primary-light"
                                                                                                     />
                                                                                                 ) : (
@@ -2598,6 +3951,7 @@ export default function QualityAudit() {
                                                                                                 )}
                                                                                             </div>
                                                                                         )}
+                                                                                        </fieldset>
                                                                                     </div>
                                                                                 );
                                                                             })}
@@ -2618,7 +3972,7 @@ export default function QualityAudit() {
                 )}
                 {activeTab === 'saved-reports' && (
                     <div className="tab-content active">
-                        {renderChecksheetsList(savedChecksheets, isOperatorRole ? 'Submitted/Draft Checksheets' : 'Checksheets')}
+                        {renderChecksheetsList(savedChecksheets, 'Audit Checksheets')}
                     </div>
                 )}
                 {activeTab === 'returned-reports' && isOperatorRole && (
