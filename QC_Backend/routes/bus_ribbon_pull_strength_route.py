@@ -17,6 +17,11 @@ from services.dashboard_analytics_service import (
     build_dashboard_response,
     resolve_dashboard_date_range as resolve_analytics_dashboard_date_range,
 )
+from services.creator_resolution_service import (
+    build_lock_owner_metadata,
+    get_created_by_label as resolve_created_by_label,
+    require_operator_signature,
+)
 from services.pull_strength_lookup_service import PullStrengthLookupService
 from services.shift_entry_workflow_service import (
     APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
@@ -135,7 +140,9 @@ def serialize_doc(doc):
     doc_copy["displayStatus"] = state
     doc_copy["createdAt"] = doc_copy.get("createdAt") or doc_copy.get("created_at")
     doc_copy["updatedAt"] = doc_copy.get("updatedAt") or doc_copy.get("updated_at")
-    doc_copy["createdBy"] = doc_copy.get("createdBy", doc_copy.get("createdByEmployeeName"))
+    created_by_label = resolve_created_by_label(doc_copy)
+    doc_copy["createdBy"] = doc_copy.get("createdBy") or created_by_label
+    doc_copy["createdByEmployeeName"] = doc_copy.get("createdByEmployeeName") or created_by_label
     doc_copy["isLocked"] = bool(doc_copy.get("lockTimestamp"))
     return doc_copy
 
@@ -352,12 +359,7 @@ def build_entry_filter_query(
 
 
 def get_created_by_label(entry: dict) -> str:
-    return (
-        entry.get("createdByEmployeeName")
-        or entry.get("createdBy")
-        or entry.get("createdByEmployeeId")
-        or "Legacy entry"
-    )
+    return resolve_created_by_label(entry)
 
 
 def serialize_entry_summary(entry: dict, user: dict | None = None) -> dict:
@@ -635,8 +637,7 @@ async def submit_entry(entry_id: str, entry: dict | None = None, x_employee_id: 
 
         normalized_entry = normalize_entry_payload(entry or existing_entry)
         signatures = normalized_entry.get("signatures") or existing_entry.get("signatures") or {"preparedBy": "", "reviewedBy": ""}
-        if not signatures.get("preparedBy"):
-            signatures["preparedBy"] = user["name"]
+        require_operator_signature({"signatures": signatures})
         normalized_entry["signatures"] = signatures
 
         now = utc_timestamp()
@@ -689,8 +690,7 @@ async def approve_entry(entry_id: str, x_employee_id: str | None = Header(defaul
 
         now = utc_timestamp()
         signatures = existing_entry.get("signatures") or {"preparedBy": "", "reviewedBy": ""}
-        if not signatures.get("reviewedBy"):
-            signatures["reviewedBy"] = user["name"]
+        signatures["reviewedBy"] = user["name"]
         updated = BusRibbonPullStrengthDailyEntry.update_by_id(
             entry_id,
             {
@@ -733,6 +733,7 @@ async def return_entry(entry_id: str, request_data: dict, x_employee_id: str | N
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return comments are required")
 
         now = utc_timestamp()
+        lock_owner = build_lock_owner_metadata(existing_entry)
         updated = BusRibbonPullStrengthDailyEntry.update_by_id(
             entry_id,
             {
@@ -741,9 +742,9 @@ async def return_entry(entry_id: str, request_data: dict, x_employee_id: str | N
                 "returnedAt": now,
                 "returnedBy": user["name"],
                 "returnComments": return_comments,
-                "lockedBy": existing_entry.get("createdByEmployeeName") or existing_entry.get("createdBy") or "Operator",
-                "lockedByUserId": existing_entry.get("createdByUserId"),
-                "lockedByEmployeeId": existing_entry.get("createdByEmployeeId"),
+                "lockedBy": lock_owner.get("lockedBy") or "Operator",
+                "lockedByUserId": lock_owner.get("lockedByUserId"),
+                "lockedByEmployeeId": lock_owner.get("lockedByEmployeeId"),
                 "lockTimestamp": now,
                 "lockSessionId": None,
                 "updatedAt": now,
@@ -789,8 +790,7 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
                     add_bulk_skip(result, get_bulk_status_label(existing_entry))
                     continue
                 signatures = existing_entry.get("signatures") or {"preparedBy": "", "reviewedBy": ""}
-                if not signatures.get("reviewedBy"):
-                    signatures["reviewedBy"] = user["name"]
+                signatures["reviewedBy"] = user["name"]
                 updated = BusRibbonPullStrengthDailyEntry.update_by_id(
                     entry_id,
                     {

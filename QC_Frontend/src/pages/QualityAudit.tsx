@@ -8,6 +8,7 @@ import { LINE_DEPENDENT_CONFIG } from '../audit-data/lineConfig';
 import { ReportSortOption } from '../components/ReportListControls';
 import ReportPagination from '../components/ReportPagination';
 import BusRibbonAuditPeelStrengthInput from '../components/BusRibbonAuditPeelStrengthInput';
+import { buildWorkflowConfirmOptions, isResolvedCreator, OPERATOR_SIGNATURE_REQUIRED_MESSAGE, resolveCreatorName } from '../utilities/workflowUtils';
 import { createTabbingStringingStage } from '../audit-data/stage5';
 import { createAutoBussingStage } from '../audit-data/stage7';
 import { createAutoTapingNLayupStage } from '../audit-data/stage8';
@@ -664,11 +665,7 @@ export default function QualityAudit() {
     const isOperatorRole = userRole === 'Operator';
     const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
     const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
-    const isCurrentChecksheetOwner = Boolean(currentChecksheetMeta) && (
-        currentChecksheetMeta?.createdByEmployeeId === employeeId
-        || (!currentChecksheetMeta?.createdByEmployeeId && currentChecksheetMeta?.createdBy === username)
-        || currentChecksheetMeta?.createdByEmployeeName === username
-    );
+    const isCurrentChecksheetOwner = isResolvedCreator(currentChecksheetMeta, { employeeId, username });
     const canCreateChecksheet = isOperatorRole;
     const canEditCurrentChecksheet = currentAccessMode === 'edit' && (
         (isOperatorRole && (!currentChecksheetId || (isCurrentChecksheetOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))))
@@ -1412,10 +1409,10 @@ export default function QualityAudit() {
     };
 
     const submitChecksheet = async () => {
-        const effectiveAuditBySignature = auditBySignature.trim() || username || '';
-        const effectiveAuditBySignatureImage = auditBySignatureImage || currentUserSignatureImage || '';
+        const effectiveAuditBySignature = auditBySignature.trim();
+        const effectiveAuditBySignatureImage = auditBySignatureImage || '';
         if (!effectiveAuditBySignature.trim()) {
-            showAlert('error', 'Operator signature could not be identified for submission');
+            showAlert('error', OPERATOR_SIGNATURE_REQUIRED_MESSAGE);
             return;
         }
         if (!isBasicInfoComplete()) {
@@ -1425,10 +1422,6 @@ export default function QualityAudit() {
 
         try {
             setIsLoading(true);
-            if (!auditBySignature.trim()) {
-                setAuditBySignature(effectiveAuditBySignature);
-                setAuditBySignatureImage(effectiveAuditBySignatureImage);
-            }
             const payload = buildChecksheetPayload({
                 auditBy: effectiveAuditBySignature,
                 auditByImage: effectiveAuditBySignatureImage,
@@ -1466,7 +1459,7 @@ export default function QualityAudit() {
             showAlert('success', currentWorkflowState === 'returned' ? 'Checksheet resubmitted successfully' : 'Checksheet submitted successfully');
         } catch (error) {
             console.error('Error submitting checksheet:', error);
-            showAlert('error', 'Failed to submit checksheet');
+            showAlert('error', error instanceof Error ? error.message : 'Failed to submit checksheet');
         } finally {
             setIsLoading(false);
         }
@@ -1937,6 +1930,22 @@ export default function QualityAudit() {
         }
     };
 
+    const confirmGenerateExcelReport = () => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'report',
+            onConfirm: generateExcelReport,
+        }));
+    };
+
+    const confirmExportChecksheetToExcel = (checksheet: SavedChecksheet) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'report',
+            onConfirm: () => exportChecksheetToExcel(checksheet),
+        }));
+    };
+
     const handleNextFromBasicInfo = async () => {
         if (!isBasicInfoComplete()) {
             if (auditData.lineNumber === '') {
@@ -2105,11 +2114,8 @@ export default function QualityAudit() {
         }
     };
 
-    const isChecksheetOwner = (checksheet?: SavedChecksheet | null) => Boolean(checksheet) && (
-        checksheet?.createdByEmployeeId === employeeId
-        || (!checksheet?.createdByEmployeeId && checksheet?.createdBy === username)
-        || checksheet?.createdByEmployeeName === username
-    );
+    const isChecksheetOwner = (checksheet?: SavedChecksheet | null) =>
+        isResolvedCreator(checksheet, { employeeId, username });
 
     const openChecksheetFromList = async (checksheet: SavedChecksheet | undefined, requestedMode: AuditAccessMode = 'edit') => {
         try {
@@ -2120,7 +2126,7 @@ export default function QualityAudit() {
             const state = getWorkflowState(checksheet);
             let accessMode = requestedMode;
             let reason = '';
-            const ownerName = checksheet.createdByEmployeeName || checksheet.createdBy || checksheet.lockedBy || 'the creating operator';
+            const ownerName = resolveCreatorName(checksheet) || checksheet.lockedBy || 'the creating operator';
             const draftLockMessage = `This audit is currently being completed by ${ownerName}. Editing is locked until submission.`;
             const returnedLockMessage = `This audit has been returned to ${ownerName} for correction. Editing is locked until resubmission.`;
             const workflowLockMessage = state === 'returned' ? returnedLockMessage : draftLockMessage;
@@ -2237,6 +2243,22 @@ export default function QualityAudit() {
         }
     };
 
+    const confirmApproveChecksheet = (checksheet: SavedChecksheet | undefined) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            noun: 'report',
+            onConfirm: () => approveChecksheet(checksheet),
+        }));
+    };
+
+    const confirmDeleteChecksheet = (checksheet: SavedChecksheet) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'report',
+            onConfirm: () => deleteChecksheet(checksheet),
+        }));
+    };
+
     const submitListedChecksheet = async (checksheet: SavedChecksheet | undefined) => {
         if (!checksheet?._id) {
             showAlert('error', 'Checksheet not found');
@@ -2253,10 +2275,10 @@ export default function QualityAudit() {
             const fullAudit = await apiService.getAuditById(checksheet._id);
             const fullAuditData = fullAudit.data as AuditData;
             const loadedSignatures = fullAuditData.signatures || {};
-            const effectiveAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy') || username || '';
-            const effectiveAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy') || currentUserSignatureImage || '';
+            const effectiveAuditBy = getLoadedSignatureText(loadedSignatures, 'auditBy');
+            const effectiveAuditByImage = getLoadedSignatureImage(loadedSignatures, 'auditBy') || '';
             if (!effectiveAuditBy) {
-                showAlert('error', 'Operator signature could not be identified for submission');
+                showAlert('error', OPERATOR_SIGNATURE_REQUIRED_MESSAGE);
                 return;
             }
             const payload = buildChecksheetPayloadForData(
@@ -2279,7 +2301,7 @@ export default function QualityAudit() {
             showAlert('success', 'Checksheet submitted successfully');
         } catch (error) {
             console.error('Error submitting checksheet:', error);
-            showAlert('error', 'Failed to submit checksheet');
+            showAlert('error', error instanceof Error ? error.message : 'Failed to submit checksheet');
         } finally {
             await releaseAuditLock(checksheet._id);
             setIsLoading(false);
@@ -2619,36 +2641,33 @@ export default function QualityAudit() {
 
     const confirmBulkApproveAudits = () => {
         const selectedCount = selectedAuditIds.size;
-        showConfirm({
-            title: 'Bulk Approve',
-            message: `Approve ${selectedCount} selected audits?`,
-            type: 'warning',
-            confirmText: 'Approve',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkApproveAudits,
-        });
+        }));
     };
 
     const confirmBulkDeleteAudits = () => {
         const selectedCount = getSelectedAudits().filter(canDeleteListedChecksheet).length;
         if (selectedCount === 0) return;
-        showConfirm({
-            title: 'Bulk Delete',
-            message: `Delete ${selectedCount} selected audits?\n\nThis action cannot be undone.`,
-            type: 'warning',
-            confirmText: 'Delete',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkDeleteAudits,
-        });
+        }));
     };
 
     const confirmBulkDownloadAudits = () => {
         const selectedCount = selectedAuditIds.size;
-        showConfirm({
-            title: 'Bulk Download',
-            message: `Download ${selectedCount} selected audits?`,
-            type: 'info',
-            confirmText: 'Download',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkDownloadAudits,
-        });
+        }));
     };
 
     useEffect(() => {
@@ -2974,7 +2993,7 @@ export default function QualityAudit() {
                                     {checksheets.map((checksheet, index) => {
                                         const displayStatus = getDisplayStatus(checksheet);
                                         const completion = checksheet.completionPercentage ?? 0;
-                                        const createdBy = checksheet.createdByEmployeeName || checksheet.createdByEmployeeId || checksheet.createdBy || '-';
+                                        const createdBy = resolveCreatorName(checksheet);
                                         const rowKey = checksheet._id || `${checksheet.name}-${index}`;
                                         const canOpen = canOpenListedChecksheet(checksheet);
                                         const canEdit = canEditListedChecksheet(checksheet);
@@ -3072,7 +3091,7 @@ export default function QualityAudit() {
                                                         {canExport && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => exportChecksheetToExcel(checksheet)}
+                                                                onClick={() => confirmExportChecksheetToExcel(checksheet)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20"
                                                                 title="Download"
                                                             >
@@ -3082,7 +3101,7 @@ export default function QualityAudit() {
                                                         {canApprove && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => approveChecksheet(checksheet)}
+                                                                onClick={() => confirmApproveChecksheet(checksheet)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
                                                                 title="Approve"
                                                             >
@@ -3102,15 +3121,7 @@ export default function QualityAudit() {
                                                         {canDelete && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    showConfirm({
-                                                                        title: 'Delete Checksheet',
-                                                                        message: `Are you sure you want to delete "${checksheet.name}"? This action cannot be undone.`,
-                                                                        type: 'warning',
-                                                                        confirmText: 'Delete',
-                                                                        onConfirm: () => deleteChecksheet(checksheet),
-                                                                    });
-                                                                }}
+                                                                onClick={() => confirmDeleteChecksheet(checksheet)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
                                                                 title="Delete"
                                                             >
@@ -3155,7 +3166,7 @@ export default function QualityAudit() {
     const renderAuditProgressCard = (checksheet: SavedChecksheet) => {
         const completion = checksheet.completionPercentage ?? 0;
         const status = getDisplayStatus(checksheet);
-        const createdBy = checksheet.createdByEmployeeName || checksheet.createdBy || '-';
+        const createdBy = resolveCreatorName(checksheet);
 
         return (
             <div key={checksheet._id || checksheet.id} className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -3490,7 +3501,7 @@ export default function QualityAudit() {
                             {canExportCurrentChecksheet && (
                                 <button
                                     className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-                                    onClick={generateExcelReport}
+                                    onClick={confirmGenerateExcelReport}
                                 >
                                     Download
                                 </button>
@@ -3498,7 +3509,7 @@ export default function QualityAudit() {
                             {currentChecksheetId && currentWorkflowState === 'submitted' && (isReviewerRole || isSystemAdminRole) && (
                                 <button
                                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                                    onClick={() => approveChecksheet(currentChecksheetMeta || undefined)}
+                                    onClick={() => confirmApproveChecksheet(currentChecksheetMeta || undefined)}
                                 >
                                     Approve
                                 </button>

@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from services.creator_resolution_service import is_creator_match
 from users.user_db import users_collection
 
 
@@ -41,6 +42,7 @@ def get_current_user(employee_id: str | None) -> dict:
         "employeeId": user["employeeId"],
         "name": user["name"],
         "role": user["role"],
+        "signature": user.get("signature"),
     }
 
 
@@ -68,19 +70,7 @@ def normalize_workflow_state(entry: dict | None) -> str:
 
 
 def is_entry_owner(entry: dict, user: dict) -> bool:
-    return (
-        entry.get("createdByEmployeeId") == user.get("employeeId")
-        or entry.get("createdByUserId") == user.get("id")
-        or (
-            not entry.get("createdByEmployeeId")
-            and entry.get("createdByEmployeeName") == user.get("name")
-        )
-        or (
-            not entry.get("createdByEmployeeId")
-            and not entry.get("createdByEmployeeName")
-            and entry.get("createdBy") == user.get("name")
-        )
-    )
+    return is_creator_match(entry, user)
 
 
 def can_view_entry(entry: dict, user: dict) -> bool:

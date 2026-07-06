@@ -19,6 +19,13 @@ from services.dashboard_analytics_service import (
     ensure_missing_completion_metadata,
     resolve_dashboard_date_range as resolve_analytics_dashboard_date_range,
 )
+from services.creator_resolution_service import (
+    apply_approval_signature_to_signatures,
+    build_lock_owner_metadata,
+    get_created_by_label,
+    is_creator_match,
+    require_operator_signature,
+)
 from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
 from users.user_db import users_collection
 
@@ -84,6 +91,7 @@ def get_ipqc_current_user(employee_id: str | None) -> dict:
         "employeeId": user["employeeId"],
         "name": user["name"],
         "role": user["role"],
+        "signature": user.get("signature"),
     }
 
 
@@ -100,14 +108,7 @@ def is_operator(user: dict) -> bool:
 
 
 def is_audit_owner(audit: dict, user: dict) -> bool:
-    return (
-        audit.get("createdByEmployeeId") == user.get("employeeId")
-        or audit.get("createdByUserId") == user.get("id")
-        or (
-            not audit.get("createdByEmployeeId")
-            and audit.get("createdBy") == user.get("name")
-        )
-    )
+    return is_creator_match(audit, user, (load_ipqc_audit_data(audit),))
 
 
 def can_view_audit(audit: dict, user: dict) -> bool:
@@ -242,6 +243,34 @@ def extract_audit_signature(data: dict) -> str:
     return signature.strip() if isinstance(signature, str) else ""
 
 
+def load_ipqc_audit_data(audit: dict, audit_payload: dict | None = None) -> dict:
+    if isinstance(audit_payload, dict) and isinstance(audit_payload.get("data"), dict):
+        return audit_payload["data"]
+    if not audit or not audit.get("s3_key"):
+        return {}
+    try:
+        return IPQCAudit.from_dict(audit).get_data()
+    except Exception as exc:
+        print(f"Warning: failed to load IPQC signature data for {audit.get('_id')}: {exc}")
+        return {}
+
+
+def apply_ipqc_approval_signature(audit: dict, user: dict) -> None:
+    ipqc_audit = IPQCAudit.from_dict(audit)
+    audit_data = ipqc_audit.get_data()
+    if not isinstance(audit_data, dict):
+        audit_data = {}
+    apply_approval_signature_to_signatures(
+        audit_data,
+        user["name"],
+        text_field="reviewedBy",
+        image_field="reviewedByImage",
+        signature_image=user.get("signature"),
+    )
+    if not ipqc_audit.save_data(audit_data):
+        raise HTTPException(status_code=500, detail="Failed to save approval signature")
+
+
 def ensure_completion_metadata(audit: dict, audit_data: dict | None = None) -> dict:
     if audit_data is not None:
         try:
@@ -293,9 +322,10 @@ def get_display_status(audit: dict, completion: dict | None = None) -> str:
 def serialize_ipqc_audit(audit: dict, include_data: bool = False) -> dict:
     data = {}
     metadata = {}
+    audit_payload = None
     if include_data:
-        audit_data = IPQCAudit.from_dict(audit).to_dict(include_data=True)
-        data = audit_data.get("data", {})
+        audit_payload = IPQCAudit.from_dict(audit).to_dict(include_data=True)
+        data = audit_payload.get("data", {})
         data = apply_calibration_autofill_to_audit_data(data)
         metadata = build_ipqc_audit_metadata(data)
         completion = ensure_completion_metadata(audit, data)
@@ -304,6 +334,8 @@ def serialize_ipqc_audit(audit: dict, include_data: bool = False) -> dict:
 
     state = normalize_workflow_state(audit)
     active_lock = get_active_lock_info(audit)
+    creator_payload = load_ipqc_audit_data(audit, audit_payload)
+    created_by_label = get_created_by_label(audit, (creator_payload,))
     return {
         "_id": str(audit["_id"]),
         "id": str(audit["_id"]),
@@ -320,9 +352,9 @@ def serialize_ipqc_audit(audit: dict, include_data: bool = False) -> dict:
         "workflowState": state,
         "displayStatus": get_display_status(audit, completion),
         **completion,
-        "createdBy": audit.get("createdBy", metadata.get("createdBy", "")),
+        "createdBy": audit.get("createdBy") or created_by_label,
         "createdByUserId": audit.get("createdByUserId"),
-        "createdByEmployeeName": audit.get("createdByEmployeeName", audit.get("createdBy")),
+        "createdByEmployeeName": audit.get("createdByEmployeeName") or created_by_label,
         "createdByEmployeeId": audit.get("createdByEmployeeId"),
         "submittedAt": audit.get("submittedAt"),
         "submittedBy": audit.get("submittedBy"),
@@ -920,8 +952,7 @@ async def submit_ipqc_audit(
                 "submitted",
             )
 
-        if not extract_audit_signature(normalized_data):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Prepared By signature is required before submission")
+        require_operator_signature(normalized_data)
 
         now = utc_timestamp()
         update_data = {
@@ -971,6 +1002,8 @@ async def return_ipqc_audit(audit_id: str, request_data: dict, x_employee_id: st
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return comments are required")
 
         now = utc_timestamp()
+        creator_payload = load_ipqc_audit_data(existing_audit)
+        lock_owner = build_lock_owner_metadata(existing_audit, (creator_payload,))
         ipqc_audit_collection.update_one(
             {"_id": audit_object_id},
             {
@@ -980,9 +1013,9 @@ async def return_ipqc_audit(audit_id: str, request_data: dict, x_employee_id: st
                     "returnedAt": now,
                     "returnedBy": user["name"],
                     "returnComments": return_comments,
-                    "lockedBy": existing_audit.get("createdByEmployeeName") or existing_audit.get("createdBy") or "Operator",
-                    "lockedByUserId": existing_audit.get("createdByUserId"),
-                    "lockedByEmployeeId": existing_audit.get("createdByEmployeeId"),
+                    "lockedBy": lock_owner.get("lockedBy") or "Operator",
+                    "lockedByUserId": lock_owner.get("lockedByUserId"),
+                    "lockedByEmployeeId": lock_owner.get("lockedByEmployeeId"),
                     "lockTimestamp": now,
                     "lockSessionId": None,
                     "updated_timestamp": now,
@@ -1030,6 +1063,7 @@ async def bulk_approve_ipqc_audits(request_data: dict, x_employee_id: str | None
                     add_bulk_skip(result, get_bulk_status_label(existing_audit))
                     continue
 
+                apply_ipqc_approval_signature(existing_audit, user)
                 update_result = ipqc_audit_collection.update_one(
                     {"_id": audit_object_id},
                     {
@@ -1153,6 +1187,7 @@ async def approve_ipqc_audit(audit_id: str, x_employee_id: str | None = Header(d
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only submitted checksheets can be approved")
 
         now = utc_timestamp()
+        apply_ipqc_approval_signature(existing_audit, user)
         ipqc_audit_collection.update_one(
             {"_id": audit_object_id},
             {

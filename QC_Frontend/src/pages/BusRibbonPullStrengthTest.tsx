@@ -21,6 +21,12 @@ import {
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import {
+    buildWorkflowConfirmOptions,
+    isResolvedCreator,
+    OPERATOR_SIGNATURE_REQUIRED_MESSAGE,
+    resolveCreatorName,
+} from '../utilities/workflowUtils';
 
 type Shift = 'A' | 'B' | 'C';
 type LineOption = 'FAB-II Line-I' | 'FAB-II Line-II';
@@ -399,10 +405,8 @@ export default function BusRibbonPullStrengthTest() {
     const isReviewerLikeRole = isReviewerRole || isSystemAdminRole;
     const currentWorkflowState = getWorkflowState(currentEntry);
     const isCurrentEntryOwner = Boolean(currentEntry) && (
-        currentEntry?.createdByEmployeeId === employeeId
-        || (!currentEntry?.createdByEmployeeId && currentEntry?.createdByEmployeeName === username)
-        || currentEntry?.createdBy === username
-        || (!currentEntry?._id && isOperatorRole)
+        (!currentEntry?._id && isOperatorRole)
+        || isResolvedCreator(currentEntry, { employeeId, username })
     );
     const canCreateEntry = isOperatorRole;
     const canEditCurrentEntry = currentAccessMode === 'edit' && Boolean(currentEntry) && (
@@ -438,11 +442,8 @@ export default function BusRibbonPullStrengthTest() {
 
     const getEntryId = (entry?: DailyEntry | null) => entry?._id || entry?.id || '';
 
-    const isEntryOwner = (entry: DailyEntry) => (
-        entry.createdByEmployeeId === employeeId
-        || (!entry.createdByEmployeeId && entry.createdByEmployeeName === username)
-        || entry.createdBy === username
-    );
+    const isEntryOwner = (entry: DailyEntry) =>
+        isResolvedCreator(entry, { employeeId, username });
 
     const getEntryPermissions = (entry: DailyEntry) => {
         const state = getWorkflowState(entry);
@@ -467,8 +468,7 @@ export default function BusRibbonPullStrengthTest() {
         return 'This entry is read-only for your role.';
     };
 
-    const getCreatedByLabel = (entry: DailyEntry) =>
-        entry.createdByLabel || entry.createdByEmployeeName || entry.createdBy || entry.createdByEmployeeId || 'Legacy entry';
+    const getCreatedByLabel = (entry: DailyEntry) => resolveCreatorName(entry);
 
     const getStateBadgeClass = (state: WorkflowState) => {
         if (state === 'approved') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200';
@@ -888,12 +888,9 @@ export default function BusRibbonPullStrengthTest() {
             showAlert('error', 'Entry ID not found');
             return;
         }
-        showConfirm({
-            title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (${currentEntry.line}, Shift ${currentEntry.shift})?`,
-            type: 'warning',
-            confirmText: 'Delete',
-            cancelText: 'Cancel',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'report',
             onConfirm: async () => {
                 setIsLoading(true);
                 try {
@@ -925,7 +922,7 @@ export default function BusRibbonPullStrengthTest() {
                     setIsLoading(false);
                 }
             },
-        });
+        }));
     };
 
     const handleSignatureUpdate = async (type: 'prepared' | 'reviewed') => {
@@ -1023,8 +1020,16 @@ export default function BusRibbonPullStrengthTest() {
         }
     };
 
-    const handleExportMonthlyExcel = async (line: LineOption = selectedExportLine) => {
-        await exportMonthlyExcelFor(currentDate.getFullYear(), currentDate.getMonth() + 1, line);
+    const confirmExportMonthlyExcel = (year: number, month: number, line: LineOption) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'report',
+            onConfirm: () => exportMonthlyExcelFor(year, month, line),
+        }));
+    };
+
+    const handleExportMonthlyExcel = (line: LineOption = selectedExportLine) => {
+        confirmExportMonthlyExcel(currentDate.getFullYear(), currentDate.getMonth() + 1, line);
     };
 
     const handleSubmitEntry = async () => {
@@ -1032,11 +1037,17 @@ export default function BusRibbonPullStrengthTest() {
             showAlert('error', 'You are not authorized to submit this entry');
             return;
         }
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.line, currentEntry.shift);
+        const signatures = dateSignatures[signatureKey] || currentEntry.signatures || { preparedBy: '', reviewedBy: '' };
+        if (!signatures.preparedBy?.trim()) {
+            showAlert('error', OPERATOR_SIGNATURE_REQUIRED_MESSAGE);
+            return;
+        }
         if (!validateEntry()) return;
 
         try {
             setIsLoading(true);
-            let entryToSubmit = currentEntry;
+            let entryToSubmit: DailyEntry = { ...currentEntry, signatures };
             let entryId = getEntryId(entryToSubmit);
             const payload = { ...entryToSubmit, averages: currentAverages };
 
@@ -1081,6 +1092,18 @@ export default function BusRibbonPullStrengthTest() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const confirmApproveEntry = (entry: DailyEntry | null) => {
+        if (!entry || !getEntryPermissions(entry).canApprove) {
+            showAlert('error', 'You are not authorized to approve this entry');
+            return;
+        }
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            noun: 'report',
+            onConfirm: () => approveEntry(entry),
+        }));
     };
 
     const approveEntry = async (entry: DailyEntry | null) => {
@@ -1240,6 +1263,18 @@ export default function BusRibbonPullStrengthTest() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const confirmDeleteRegisterEntry = (entry: DailyEntry) => {
+        if (!getEntryPermissions(entry).canDelete) {
+            showAlert('error', 'You are not authorized to delete this entry');
+            return;
+        }
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'report',
+            onConfirm: () => deleteRegisterEntry(entry),
+        }));
     };
 
     const clearEntrySelection = useCallback(() => {
@@ -1452,35 +1487,32 @@ export default function BusRibbonPullStrengthTest() {
     };
 
     const confirmBulkApproveEntries = () => {
-        showConfirm({
-            title: 'Bulk Approve',
-            message: `Approve ${selectedEntryIds.size} selected entries?`,
-            type: 'warning',
-            confirmText: 'Approve',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            count: selectedEntryIds.size,
+            noun: 'report',
             onConfirm: runBulkApproveEntries,
-        });
+        }));
     };
 
     const confirmBulkDeleteEntries = () => {
         const selectedCount = getSelectedEntries().filter(entry => getEntryPermissions(entry).canDelete).length;
         if (selectedCount === 0) return;
-        showConfirm({
-            title: 'Bulk Delete',
-            message: `Delete ${selectedCount} selected entries?\n\nThis action cannot be undone.`,
-            type: 'warning',
-            confirmText: 'Delete',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkDeleteEntries,
-        });
+        }));
     };
 
     const confirmBulkDownloadEntries = () => {
-        showConfirm({
-            title: 'Bulk Download',
-            message: `Download monthly Excel for ${selectedEntryIds.size} selected entries?`,
-            type: 'info',
-            confirmText: 'Download',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            count: selectedEntryIds.size,
+            noun: 'report',
             onConfirm: runBulkDownloadEntries,
-        });
+        }));
     };
 
     useEffect(() => {
@@ -2075,7 +2107,7 @@ export default function BusRibbonPullStrengthTest() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     const entryDate = new Date(entry.date);
-                                                                    exportMonthlyExcelFor(entryDate.getFullYear(), entryDate.getMonth() + 1, normalizeLine(entry.line));
+                                                                    confirmExportMonthlyExcel(entryDate.getFullYear(), entryDate.getMonth() + 1, normalizeLine(entry.line));
                                                                 }}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20"
                                                                 title="Download Monthly Excel"
@@ -2086,7 +2118,7 @@ export default function BusRibbonPullStrengthTest() {
                                                         {permissions.canApprove && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => approveEntry(entry)}
+                                                                onClick={() => confirmApproveEntry(entry)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
                                                                 title="Approve"
                                                             >
@@ -2106,15 +2138,7 @@ export default function BusRibbonPullStrengthTest() {
                                                         {permissions.canDelete && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    showConfirm({
-                                                                        title: 'Delete Entry',
-                                                                        message: `Delete entry for ${entry.date} (${entry.line}, Shift ${entry.shift})? This action cannot be undone.`,
-                                                                        type: 'warning',
-                                                                        confirmText: 'Delete',
-                                                                        onConfirm: () => deleteRegisterEntry(entry),
-                                                                    });
-                                                                }}
+                                                                onClick={() => confirmDeleteRegisterEntry(entry)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
                                                                 title="Delete"
                                                             >
@@ -2440,7 +2464,7 @@ export default function BusRibbonPullStrengthTest() {
                                         </button>
                                     )}
                                     {canApproveCurrentEntry && (
-                                        <button onClick={() => approveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve">
+                                        <button onClick={() => confirmApproveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve">
                                             <Check className="h-4 w-4" />
                                         </button>
                                     )}

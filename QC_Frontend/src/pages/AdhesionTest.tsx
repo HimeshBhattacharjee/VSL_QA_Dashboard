@@ -4,6 +4,7 @@ import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
 import { ReportSortOption } from '../components/ReportListControls';
 import { Check, Download, Edit3, Eye, FileSpreadsheet, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { buildWorkflowConfirmOptions, isResolvedCreator, OPERATOR_SIGNATURE_REQUIRED_MESSAGE, resolveCreatorName } from '../utilities/workflowUtils';
 
 type AdhesionWorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
 type AdhesionDisplayStatus = AdhesionWorkflowState;
@@ -277,11 +278,7 @@ export default function AdhesionTest() {
     const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
     const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
     const isReviewerLikeRole = isReviewerRole || isSystemAdminRole;
-    const isCurrentReportOwner = Boolean(currentReportMeta) && (
-        currentReportMeta?.createdByEmployeeId === employeeId
-        || (!currentReportMeta?.createdByEmployeeId && currentReportMeta?.createdByEmployeeName === username)
-        || currentReportMeta?.createdBy === username
-    );
+    const isCurrentReportOwner = isResolvedCreator(currentReportMeta, { employeeId, username });
     const canCreateReport = isOperatorRole;
     const canEditCurrentReport = currentAccessMode === 'edit' && (
         (isOperatorRole && (!currentReportId || (isCurrentReportOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))))
@@ -742,11 +739,7 @@ export default function AdhesionTest() {
 
     const getListedReportPermissions = (report: AdhesionTestReport) => {
         const state = getWorkflowState(report);
-        const isOwner = (
-            report.createdByEmployeeId === employeeId
-            || (!report.createdByEmployeeId && report.createdByEmployeeName === username)
-            || report.createdBy === username
-        );
+        const isOwner = isResolvedCreator(report, { employeeId, username });
 
         return {
             canView: isOperatorRole || isReviewerRole || isSystemAdminRole,
@@ -1173,7 +1166,7 @@ export default function AdhesionTest() {
             }
 
             if (!preparedBySignature.trim()) {
-                showAlert('error', 'Prepared By signature is required before submission');
+                showAlert('error', OPERATOR_SIGNATURE_REQUIRED_MESSAGE);
                 return;
             }
 
@@ -1302,6 +1295,22 @@ export default function AdhesionTest() {
         }
     };
 
+    const confirmExportToExcel = () => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'report',
+            onConfirm: exportToExcel,
+        }));
+    };
+
+    const confirmExportSavedReportToExcel = (report: AdhesionTestReport) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'report',
+            onConfirm: () => exportSavedReportToExcel(report),
+        }));
+    };
+
     const openReturnModal = (index: number) => {
         if (index < 0 || index >= savedReports.length) {
             showAlert('error', 'Report not found');
@@ -1396,11 +1405,7 @@ export default function AdhesionTest() {
 
     const getOpenActionLabel = (report: AdhesionTestReport) => {
         const state = getWorkflowState(report);
-        const isOwner = (
-            report.createdByEmployeeId === employeeId
-            || (!report.createdByEmployeeId && report.createdByEmployeeName === username)
-            || report.createdBy === username
-        );
+        const isOwner = isResolvedCreator(report, { employeeId, username });
         if (isOperatorRole && (!isOwner || FINALIZED_WORKFLOW_STATES.has(state))) return 'View';
         return canEditListedReport(report) ? (isOperatorRole ? 'Continue' : 'Edit') : 'View';
     };
@@ -1415,8 +1420,7 @@ export default function AdhesionTest() {
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
     };
 
-    const getCreatedByLabel = (report: AdhesionTestReport) =>
-        report.createdByEmployeeName || report.createdBy || report.createdByEmployeeId || 'Legacy report';
+    const getCreatedByLabel = (report: AdhesionTestReport) => resolveCreatorName(report);
 
     const getLineLabel = (lineNumber?: string | null) => {
         if (!lineNumber) return '-';
@@ -1572,6 +1576,22 @@ export default function AdhesionTest() {
         }
     };
 
+    const confirmApproveReport = (report: AdhesionTestReport | undefined) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            noun: 'report',
+            onConfirm: () => approveReport(report),
+        }));
+    };
+
+    const confirmDeleteSavedReport = (report: AdhesionTestReport) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'report',
+            onConfirm: () => deleteSavedReport(report),
+        }));
+    };
+
     const runBulkApproveReports = async () => {
         const selectedReports = getSelectedReports();
         const reportIds = selectedReports.map(getReportId).filter(Boolean);
@@ -1680,36 +1700,33 @@ export default function AdhesionTest() {
 
     const confirmBulkApproveReports = () => {
         const selectedCount = selectedReportIds.size;
-        showConfirm({
-            title: 'Bulk Approve',
-            message: `Approve ${selectedCount} selected reports?`,
-            type: 'warning',
-            confirmText: 'Approve',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkApproveReports,
-        });
+        }));
     };
 
     const confirmBulkDeleteReports = () => {
         const selectedCount = getSelectedReports().filter(canDeleteListedReport).length;
         if (selectedCount === 0) return;
-        showConfirm({
-            title: 'Bulk Delete',
-            message: `Delete ${selectedCount} selected reports?\n\nThis action cannot be undone.`,
-            type: 'warning',
-            confirmText: 'Delete',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkDeleteReports,
-        });
+        }));
     };
 
     const confirmBulkDownloadReports = () => {
         const selectedCount = selectedReportIds.size;
-        showConfirm({
-            title: 'Bulk Download',
-            message: `Download ${selectedCount} selected reports?`,
-            type: 'info',
-            confirmText: 'Download',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            count: selectedCount,
+            noun: 'report',
             onConfirm: runBulkDownloadReports,
-        });
+        }));
     };
 
     useEffect(() => {
@@ -2019,7 +2036,7 @@ export default function AdhesionTest() {
                                                         {canExport && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => exportSavedReportToExcel(report)}
+                                                                onClick={() => confirmExportSavedReportToExcel(report)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20"
                                                                 title="Download"
                                                             >
@@ -2029,7 +2046,7 @@ export default function AdhesionTest() {
                                                         {canApprove && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => approveReport(report)}
+                                                                onClick={() => confirmApproveReport(report)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
                                                                 title="Approve"
                                                             >
@@ -2049,15 +2066,7 @@ export default function AdhesionTest() {
                                                         {canDelete && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    showConfirm({
-                                                                        title: 'Delete Report',
-                                                                        message: `Are you sure you want to delete "${report.name}"? This action cannot be undone.`,
-                                                                        type: 'warning',
-                                                                        confirmText: 'Delete',
-                                                                        onConfirm: () => deleteSavedReport(report),
-                                                                    });
-                                                                }}
+                                                                onClick={() => confirmDeleteSavedReport(report)}
                                                                 className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
                                                                 title="Delete"
                                                             >
@@ -2387,7 +2396,7 @@ export default function AdhesionTest() {
                             {canExportCurrentReport && (
                                 <button
                                     className="save-btn export-excel w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-green-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                    onClick={exportToExcel}
+                                    onClick={confirmExportToExcel}
                                 >
                                     Download
                                 </button>
@@ -2395,7 +2404,7 @@ export default function AdhesionTest() {
                             {canApproveCurrentReport && (
                                 <button
                                     className="save-btn w-full sm:w-[23%] p-2.5 rounded-md border-2 border-white dark:border-gray-600 cursor-pointer font-semibold transition-all duration-300 ease-in-out bg-emerald-600 text-white text-sm hover:bg-white hover:text-black dark:hover:bg-gray-700 dark:hover:text-white hover:-translate-y-1 hover:shadow-lg"
-                                    onClick={() => approveReport(currentReportMeta || undefined)}
+                                    onClick={() => confirmApproveReport(currentReportMeta || undefined)}
                                 >
                                     Approve Report
                                 </button>

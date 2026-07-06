@@ -6,6 +6,13 @@ from services.dashboard_analytics_service import (
     build_dashboard_response,
     resolve_dashboard_date_range as resolve_analytics_dashboard_date_range,
 )
+from services.creator_resolution_service import (
+    apply_approval_signature_to_form_data,
+    build_lock_owner_metadata,
+    get_created_by_label,
+    is_creator_match,
+    require_operator_signature,
+)
 from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
 from users.user_db import users_collection
 from bson import ObjectId
@@ -66,6 +73,7 @@ def get_adhesion_current_user(employee_id: str | None) -> dict:
         "employeeId": user["employeeId"],
         "name": user["name"],
         "role": user["role"],
+        "signature": user.get("signature"),
     }
 
 
@@ -82,14 +90,7 @@ def is_operator(user: dict) -> bool:
 
 
 def is_report_owner(report: dict, user: dict) -> bool:
-    return (
-        report.get("createdByEmployeeId") == user.get("employeeId")
-        or report.get("createdByUserId") == user.get("id")
-        or (
-            not report.get("createdByEmployeeId")
-            and report.get("createdByEmployeeName") == user.get("name")
-        )
-    )
+    return is_creator_match(report, user, (load_adhesion_report_form_data(report),))
 
 
 def can_view_report(report: dict, user: dict) -> bool:
@@ -126,6 +127,29 @@ def require_adhesion_export_access(report: dict, user: dict) -> None:
 def extract_report_signature(form_data: dict) -> str:
     signature = form_data.get("preparedBySignature")
     return signature.strip() if isinstance(signature, str) else ""
+
+
+def load_adhesion_report_form_data(report: dict, report_payload: dict | None = None) -> dict:
+    if isinstance(report_payload, dict) and isinstance(report_payload.get("form_data"), dict):
+        return report_payload["form_data"]
+    if not report or not report.get("s3_key"):
+        return {}
+    try:
+        return AdhesionTestReport.from_dict(report).get_data().get("form_data", {})
+    except Exception as exc:
+        print(f"Warning: failed to load adhesion signature data for {report.get('_id')}: {exc}")
+        return {}
+
+
+def apply_adhesion_approval_signature(report: dict, user: dict) -> None:
+    adhesion_report = AdhesionTestReport.from_dict(report)
+    report_data = adhesion_report.get_data()
+    form_data = report_data.get("form_data", {})
+    if not isinstance(form_data, dict):
+        form_data = {}
+    apply_approval_signature_to_form_data(form_data, user["name"])
+    if not adhesion_report.save_data(form_data=form_data, averages=report_data.get("averages", {})):
+        raise HTTPException(status_code=500, detail="Failed to save approval signature")
 
 
 def get_string_value(data: dict, key: str) -> str:
@@ -258,6 +282,8 @@ def serialize_adhesion_report(report: dict, include_data: bool = False) -> dict:
     report_data = adhesion_report.to_dict(include_data=include_data)
     metadata = ensure_adhesion_report_metadata(report, report_data if include_data else None)
     state = normalize_workflow_state(report)
+    creator_payload = load_adhesion_report_form_data(report, report_data)
+    created_by_label = get_created_by_label(report, (creator_payload,))
     serialized = {
         "_id": str(report["_id"]),
         "id": str(report["_id"]),
@@ -271,9 +297,9 @@ def serialize_adhesion_report(report: dict, include_data: bool = False) -> dict:
         "shift": metadata.get("shift", ""),
         "lineNumber": metadata.get("lineNumber", ""),
         "productionOrderNo": metadata.get("productionOrderNo", ""),
-        "createdBy": report.get("createdBy", report.get("createdByEmployeeName")),
+        "createdBy": report.get("createdBy") or created_by_label,
         "createdByUserId": report.get("createdByUserId"),
-        "createdByEmployeeName": report.get("createdByEmployeeName"),
+        "createdByEmployeeName": report.get("createdByEmployeeName") or created_by_label,
         "createdByEmployeeId": report.get("createdByEmployeeId"),
         "submittedAt": report.get("submittedAt"),
         "submittedBy": report.get("submittedBy"),
@@ -710,9 +736,7 @@ async def submit_adhesion_test_report(report_id: str, report_data: dict | None =
                 "submitted",
             )
 
-        prepared_signature = extract_report_signature(form_data)
-        if not prepared_signature:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Prepared By signature is required before submission")
+        require_operator_signature(form_data)
 
         now = utc_timestamp()
         update_data = {
@@ -764,6 +788,8 @@ async def return_adhesion_test_report(report_id: str, request_data: dict, x_empl
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return comments are required")
 
         now = utc_timestamp()
+        creator_payload = load_adhesion_report_form_data(existing_report)
+        lock_owner = build_lock_owner_metadata(existing_report, (creator_payload,))
         adhesion_test_collection.update_one(
             {"_id": report_object_id},
             {
@@ -773,9 +799,9 @@ async def return_adhesion_test_report(report_id: str, request_data: dict, x_empl
                     "returnedAt": now,
                     "returnedBy": user["name"],
                     "returnComments": return_comments,
-                    "lockedBy": existing_report.get("createdByEmployeeName") or existing_report.get("createdBy") or "Operator",
-                    "lockedByUserId": existing_report.get("createdByUserId"),
-                    "lockedByEmployeeId": existing_report.get("createdByEmployeeId"),
+                    "lockedBy": lock_owner.get("lockedBy") or "Operator",
+                    "lockedByUserId": lock_owner.get("lockedByUserId"),
+                    "lockedByEmployeeId": lock_owner.get("lockedByEmployeeId"),
                     "lockTimestamp": now,
                     "lockSessionId": None,
                     "updatedAt": now,
@@ -823,6 +849,7 @@ async def bulk_approve_adhesion_test_reports(request_data: dict, x_employee_id: 
                     add_bulk_skip(result, get_bulk_status_label(existing_report))
                     continue
 
+                apply_adhesion_approval_signature(existing_report, user)
                 update_result = adhesion_test_collection.update_one(
                     {"_id": report_object_id},
                     {
@@ -940,6 +967,7 @@ async def approve_adhesion_test_report(report_id: str, x_employee_id: str | None
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only submitted reports can be approved")
 
         now = utc_timestamp()
+        apply_adhesion_approval_signature(existing_report, user)
         adhesion_test_collection.update_one(
             {"_id": report_object_id},
             {
