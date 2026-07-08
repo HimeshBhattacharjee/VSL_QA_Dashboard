@@ -9,6 +9,7 @@ export type GoalStatus =
     | 'Done'
     | 'Not Done'
     | 'Dropped';
+export type GoalDecisionType = 'Carry Forwarded' | 'Dropped';
 export type MilestoneStatus = 'Done' | 'Done (Delayed)' | 'Not Started' | 'Overdue';
 export type GoalSortOption =
     | 'createdAtAsc'
@@ -38,13 +39,27 @@ export interface GoalData {
     financialYear: string;
     quarter: 1 | 2 | 3 | 4;
     isDropped: boolean;
+    dropped: boolean;
     droppedAt?: string;
     droppedBy?: string;
     completionPercentage: number;
     parentGoalId?: string;
     originGoalId?: string;
     carryForwardSourceId?: string;
+    carryForwardSourceGoalId?: string;
+    carryForwardTargetGoalId?: string;
+    carriedForwardFromQuarter?: string;
+    carriedForwardToQuarter?: string;
+    decisionType?: GoalDecisionType;
+    decisionByName?: string;
+    decisionByEmployeeCode?: string;
+    decisionTimestamp?: string;
+    versionNumber: number;
     carryForwardEligible: boolean;
+    carryForwardAvailable: boolean;
+    dropAvailable: boolean;
+    milestoneEditAvailable: boolean;
+    milestoneCompletionAvailable: boolean;
     quarterLifecycle: GoalQuarterLifecycle;
 }
 
@@ -66,7 +81,9 @@ export const DEFAULT_GOAL_FILTERS: GoalFilters = {
     goalStatus: 'All',
     assignedUser: ALL_GOAL_ASSIGNEES_FILTER_VALUE,
 };
-export const GOAL_PLANNING_WINDOW_DAYS = 7;
+export const GOAL_PLANNING_WINDOW_DAYS = 10;
+export const GOAL_DECISION_WINDOW_DAYS = 10;
+export const MILESTONE_COMPLETION_GRACE_DAYS = 10;
 export const GOAL_MEETING_START_FINANCIAL_YEAR = 2026;
 
 const GOAL_STATUS_WEIGHT: Record<Exclude<GoalStatus, ''>, number> = {
@@ -178,6 +195,20 @@ const addDays = (value: Date, days: number) => {
     return nextDate;
 };
 
+const addMonths = (value: Date, months: number) => {
+    const nextDate = new Date(value);
+    const originalDay = nextDate.getDate();
+    nextDate.setDate(1);
+    nextDate.setMonth(nextDate.getMonth() + months);
+    const lastDayOfTargetMonth = new Date(
+        nextDate.getFullYear(),
+        nextDate.getMonth() + 1,
+        0,
+    ).getDate();
+    nextDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
+    return nextDate;
+};
+
 export const getQuarterLifecycle = (
     financialYear: string,
     quarter: 1 | 2 | 3 | 4,
@@ -205,6 +236,62 @@ export const getQuarterLifecycle = (
 
 export const isQuarterOpenForPlanning = (quarter: Pick<FinancialYearQuarter, 'lifecycle'>) =>
     quarter.lifecycle === 'active' || quarter.lifecycle === 'upcoming';
+
+export const getMilestoneDetailEditFreezeDate = (
+    financialYear: string,
+    quarter: 1 | 2 | 3 | 4,
+) => addMonths(getQuarterStartDate(parseFinancialYearStart(financialYear), quarter), 1);
+
+export const getMilestoneCompletionFreezeDate = (
+    financialYear: string,
+    quarter: 1 | 2 | 3 | 4,
+) => addDays(getQuarterEndDate(parseFinancialYearStart(financialYear), quarter), MILESTONE_COMPLETION_GRACE_DAYS);
+
+export const getGoalDecisionWindowStartDate = (
+    financialYear: string,
+    quarter: 1 | 2 | 3 | 4,
+) => addDays(getQuarterEndDate(parseFinancialYearStart(financialYear), quarter), -GOAL_DECISION_WINDOW_DAYS);
+
+export const getGoalDecisionFreezeDate = (
+    financialYear: string,
+    quarter: 1 | 2 | 3 | 4,
+) => addMonths(getQuarterEndDate(parseFinancialYearStart(financialYear), quarter), 1);
+
+export const isMilestoneDetailEditWindowOpen = (
+    goal: Pick<GoalData, 'financialYear' | 'quarter' | 'quarterLifecycle'>,
+    today = new Date(),
+) => {
+    const todayStart = startOfLocalDay(today);
+    return (
+        (goal.quarterLifecycle === 'active' || goal.quarterLifecycle === 'upcoming') &&
+        todayStart < startOfLocalDay(getMilestoneDetailEditFreezeDate(goal.financialYear, goal.quarter))
+    );
+};
+
+export const isMilestoneCompletionWindowOpen = (
+    goal: Pick<GoalData, 'financialYear' | 'quarter' | 'quarterLifecycle'>,
+    today = new Date(),
+) => {
+    const todayStart = startOfLocalDay(today);
+    const completionFreezeDate = startOfLocalDay(
+        getMilestoneCompletionFreezeDate(goal.financialYear, goal.quarter),
+    );
+    return (
+        goal.quarterLifecycle === 'active' ||
+        goal.quarterLifecycle === 'upcoming' ||
+        (goal.quarterLifecycle === 'past' && todayStart <= completionFreezeDate)
+    );
+};
+
+export const isGoalDecisionWindowOpen = (
+    goal: Pick<GoalData, 'financialYear' | 'quarter'>,
+    today = new Date(),
+) => {
+    const todayStart = startOfLocalDay(today);
+    const windowStart = startOfLocalDay(getGoalDecisionWindowStartDate(goal.financialYear, goal.quarter));
+    const freezeDate = startOfLocalDay(getGoalDecisionFreezeDate(goal.financialYear, goal.quarter));
+    return todayStart >= windowStart && todayStart <= freezeDate;
+};
 
 export const getCurrentFinancialYearQuarter = (): FinancialYearQuarter => {
     const today = new Date();

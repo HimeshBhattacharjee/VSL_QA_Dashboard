@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Literal
 from bson import ObjectId
@@ -7,7 +8,9 @@ from constants import MONGODB_DB_NAME, MONGODB_URI
 from date_utils import IST_TIMEZONE, ensure_utc_datetime, serialize_datetime, to_ist_date_key, utc_now
 
 GOALS_COLLECTION_NAME = 'goals'
-GOAL_PLANNING_WINDOW_DAYS = 7
+GOAL_PLANNING_WINDOW_DAYS = 10
+GOAL_DECISION_WINDOW_DAYS = 10
+MILESTONE_COMPLETION_GRACE_DAYS = 10
 
 goal_client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 goal_db = goal_client[MONGODB_DB_NAME]
@@ -22,6 +25,7 @@ GoalStatus = Literal[
     'Not Done',
     'Dropped',
 ]
+GoalDecisionType = Literal['Carry Forwarded', 'Dropped']
 
 FY_QUARTER_MONTHS = {
     1: (4, 6),
@@ -96,13 +100,27 @@ class GoalResponse(GoalBase):
     createdAt: datetime
     goalStatus: GoalStatus
     isDropped: bool = False
+    dropped: bool = False
     droppedAt: datetime | None = None
     droppedBy: str | None = None
     completionPercentage: int
     parentGoalId: str | None = None
     originGoalId: str | None = None
     carryForwardSourceId: str | None = None
+    carryForwardSourceGoalId: str | None = None
+    carryForwardTargetGoalId: str | None = None
+    carriedForwardFromQuarter: str | None = None
+    carriedForwardToQuarter: str | None = None
+    decisionType: GoalDecisionType | None = None
+    decisionByName: str | None = None
+    decisionByEmployeeCode: str | None = None
+    decisionTimestamp: datetime | None = None
+    versionNumber: int = 1
     carryForwardEligible: bool = False
+    carryForwardAvailable: bool = False
+    dropAvailable: bool = False
+    milestoneEditAvailable: bool = False
+    milestoneCompletionAvailable: bool = False
     quarterLifecycle: Literal['past', 'active', 'upcoming', 'future']
 
 
@@ -174,6 +192,21 @@ def get_next_quarter(financial_year: str, quarter: int) -> tuple[str, int]:
     return format_financial_year(financial_year_start), quarter
 
 
+def format_quarter_label(financial_year: str | None, quarter: int | None) -> str:
+    default_financial_year, default_quarter = get_financial_quarter()
+    normalized_financial_year = financial_year or default_financial_year
+    normalized_quarter = normalize_quarter_value(quarter, default_quarter)
+    return f'{normalized_financial_year} Q{normalized_quarter}'
+
+
+def add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    target_year = value.year + month_index // 12
+    target_month = month_index % 12 + 1
+    target_day = min(value.day, monthrange(target_year, target_month)[1])
+    return date(target_year, target_month, target_day)
+
+
 def get_quarter_lifecycle(
     financial_year: str | None,
     quarter: int | None,
@@ -205,6 +238,71 @@ def get_goal_planning_quarter(value: datetime | None = None) -> tuple[str, int]:
         return next_financial_year, next_quarter
 
     return financial_year, quarter
+
+
+def get_milestone_detail_edit_freeze_date(
+    financial_year: str | None,
+    quarter: int | None,
+) -> date:
+    return add_months(get_quarter_start_date(financial_year, quarter), 1)
+
+
+def get_milestone_completion_freeze_date(
+    financial_year: str | None,
+    quarter: int | None,
+) -> date:
+    return get_quarter_end_date(financial_year, quarter) + timedelta(days=MILESTONE_COMPLETION_GRACE_DAYS)
+
+
+def get_goal_decision_window_start_date(
+    financial_year: str | None,
+    quarter: int | None,
+) -> date:
+    return get_quarter_end_date(financial_year, quarter) - timedelta(days=GOAL_DECISION_WINDOW_DAYS)
+
+
+def get_goal_decision_freeze_date(
+    financial_year: str | None,
+    quarter: int | None,
+) -> date:
+    return add_months(get_quarter_end_date(financial_year, quarter), 1)
+
+
+def get_today_ist(value: datetime | None = None) -> date:
+    return normalize_datetime_value(value).astimezone(IST_TIMEZONE).date()
+
+
+def is_milestone_detail_edit_window_open(
+    financial_year: str | None,
+    quarter: int | None,
+    today: date | None = None,
+) -> bool:
+    today = today or get_today_ist()
+    lifecycle = get_quarter_lifecycle(financial_year, quarter, today)
+    return lifecycle in {'active', 'upcoming'} and today < get_milestone_detail_edit_freeze_date(financial_year, quarter)
+
+
+def is_milestone_completion_window_open(
+    financial_year: str | None,
+    quarter: int | None,
+    today: date | None = None,
+) -> bool:
+    today = today or get_today_ist()
+    lifecycle = get_quarter_lifecycle(financial_year, quarter, today)
+    return lifecycle in {'active', 'upcoming'} or (
+        lifecycle == 'past' and today <= get_milestone_completion_freeze_date(financial_year, quarter)
+    )
+
+
+def is_goal_decision_window_open(
+    financial_year: str | None,
+    quarter: int | None,
+    today: date | None = None,
+) -> bool:
+    today = today or get_today_ist()
+    window_start = get_goal_decision_window_start_date(financial_year, quarter)
+    freeze_date = get_goal_decision_freeze_date(financial_year, quarter)
+    return window_start <= today <= freeze_date
 
 
 def get_completion_percentage(milestones: list[dict]) -> int:
@@ -332,6 +430,9 @@ def normalize_goal_payload(payload: GoalCreate | GoalUpdate, enforce_open_quarte
 
     goal['milestones'] = normalized_milestones
     goal['completionPercentage'] = get_completion_percentage(normalized_milestones)
+    if isinstance(payload, GoalCreate):
+        goal.setdefault('isDropped', False)
+        goal.setdefault('versionNumber', 1)
     return goal
 
 
@@ -370,6 +471,7 @@ def serialize_goal(document: dict) -> dict:
         'quarter': quarter,
         'goalStatus': goal_status,
         'isDropped': bool(document.get('isDropped', False)),
+        'dropped': bool(document.get('isDropped', False) or document.get('dropped', False)),
         'droppedAt': serialize_datetime(normalize_optional_datetime_value(document.get('droppedAt')))
         if normalize_optional_datetime_value(document.get('droppedAt'))
         else None,
@@ -378,15 +480,53 @@ def serialize_goal(document: dict) -> dict:
         'parentGoalId': document.get('parentGoalId'),
         'originGoalId': document.get('originGoalId'),
         'carryForwardSourceId': document.get('carryForwardSourceId'),
-        'carryForwardEligible': goal_status == 'Not Done',
+        'carryForwardSourceGoalId': document.get('carryForwardSourceGoalId') or document.get('carryForwardSourceId'),
+        'carryForwardTargetGoalId': document.get('carryForwardTargetGoalId'),
+        'carriedForwardFromQuarter': document.get('carriedForwardFromQuarter'),
+        'carriedForwardToQuarter': document.get('carriedForwardToQuarter'),
+        'decisionType': document.get('decisionType'),
+        'decisionByName': document.get('decisionByName'),
+        'decisionByEmployeeCode': document.get('decisionByEmployeeCode'),
+        'decisionTimestamp': serialize_datetime(normalize_optional_datetime_value(document.get('decisionTimestamp')))
+        if normalize_optional_datetime_value(document.get('decisionTimestamp'))
+        else None,
+        'versionNumber': int(document.get('versionNumber') or 1),
+        'carryForwardEligible': goal_status != 'Done'
+        and completion_percentage < 100
+        and not bool(document.get('isDropped', False))
+        and not bool(document.get('carryForwardTargetGoalId'))
+        and document.get('decisionType') != 'Carry Forwarded',
+        'carryForwardAvailable': is_goal_decision_window_open(financial_year, quarter)
+        and goal_status != 'Done'
+        and completion_percentage < 100
+        and not bool(document.get('isDropped', False))
+        and not bool(document.get('carryForwardTargetGoalId'))
+        and document.get('decisionType') != 'Carry Forwarded'
+        and not bool(document.get('carryForwardReservedAt')),
+        'dropAvailable': is_goal_decision_window_open(financial_year, quarter)
+        and not bool(document.get('isDropped', False))
+        and not bool(document.get('carryForwardTargetGoalId'))
+        and document.get('decisionType') != 'Carry Forwarded'
+        and not bool(document.get('carryForwardReservedAt')),
+        'milestoneEditAvailable': is_milestone_detail_edit_window_open(financial_year, quarter),
+        'milestoneCompletionAvailable': is_milestone_completion_window_open(financial_year, quarter),
         'quarterLifecycle': quarter_lifecycle,
     }
 
 
-def build_carry_forward_goal(source_goal: dict) -> dict:
+def build_carry_forward_goal(
+    source_goal: dict,
+    decision_by_name: str,
+    decision_by_employee_code: str,
+    decision_timestamp: datetime | None = None,
+) -> dict:
     source_id = str(source_goal['_id'])
     source_milestones = source_goal.get('milestones', [])
-    target_financial_year, target_quarter = get_goal_planning_quarter()
+    target_financial_year, target_quarter = get_next_quarter(
+        source_goal.get('financialYear') or get_financial_quarter()[0],
+        normalize_quarter_value(source_goal.get('quarter'), get_financial_quarter()[1]),
+    )
+    decision_timestamp = decision_timestamp or utc_now()
     copied_milestones = [
         {
             **milestone,
@@ -408,17 +548,29 @@ def build_carry_forward_goal(source_goal: dict) -> dict:
         'parentGoalId': source_goal.get('parentGoalId') or source_id,
         'originGoalId': source_goal.get('originGoalId') or source_id,
         'carryForwardSourceId': source_id,
+        'carryForwardSourceGoalId': source_id,
+        'carriedForwardFromQuarter': format_quarter_label(
+            source_goal.get('financialYear'),
+            source_goal.get('quarter'),
+        ),
+        'decisionType': 'Carry Forwarded',
+        'decisionByName': decision_by_name,
+        'decisionByEmployeeCode': decision_by_employee_code,
+        'decisionTimestamp': decision_timestamp,
+        'versionNumber': int(source_goal.get('versionNumber') or 1) + 1,
         'progressHistory': [
             *source_goal.get('progressHistory', []),
             {
                 'sourceGoalId': source_id,
                 'statusAtCarryForward': evaluate_goal_status(source_goal),
                 'completionPercentage': get_completion_percentage(source_milestones),
-                'carriedForwardAt': utc_now(),
+                'carriedForwardAt': decision_timestamp,
                 'sourceFinancialYear': source_goal.get('financialYear'),
                 'sourceQuarter': source_goal.get('quarter'),
                 'targetFinancialYear': target_financial_year,
                 'targetQuarter': target_quarter,
+                'decisionByName': decision_by_name,
+                'decisionByEmployeeCode': decision_by_employee_code,
             },
         ],
     }

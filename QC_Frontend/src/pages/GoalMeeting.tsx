@@ -27,6 +27,7 @@ import {
     getGoalProgressSummary,
     getGoalStatusClasses,
     getGoalStatusLabelWithProgress,
+    isGoalDecisionWindowOpen,
     getMilestoneStatus,
     getMilestoneStatusClasses,
     getNextMilestoneTargetDate,
@@ -41,7 +42,7 @@ import {
 } from '../utilities/goalUtils';
 import { normalizeAssignedTo } from '../utilities/taskAssignments';
 import {
-    getCurrentTaskManagementRole,
+    getCurrentTaskManagementUser,
     getGoalManagementPermissions,
 } from '../utilities/taskAccess';
 import { useResizableTable } from '../utilities/useResizableTable';
@@ -129,7 +130,33 @@ const getQuarterLifecycleClasses = (lifecycle: FinancialYearQuarter['lifecycle']
 };
 
 const isGoalOpenForDetailEditing = (goal: GoalData) =>
-    goal.quarterLifecycle === 'active' || goal.quarterLifecycle === 'upcoming';
+    goal.milestoneEditAvailable &&
+    !goal.isDropped &&
+    !goal.carryForwardTargetGoalId &&
+    goal.decisionType !== 'Carry Forwarded';
+
+const isGoalOpenForMilestoneCompletion = (goal: GoalData) =>
+    goal.milestoneCompletionAvailable &&
+    !goal.isDropped &&
+    !goal.carryForwardTargetGoalId &&
+    goal.decisionType !== 'Carry Forwarded';
+
+const isGoalOpenForDecision = (goal: GoalData) => isGoalDecisionWindowOpen(goal);
+
+const getGoalDecisionLabel = (goal: GoalData) => {
+    if (goal.decisionType === 'Carry Forwarded') {
+        return 'Carry Forwarded by';
+    }
+
+    if (goal.decisionType === 'Dropped') {
+        return 'Dropped by';
+    }
+
+    return '';
+};
+
+const getGoalActionErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback;
 
 function QuarterSelector({
     quarters,
@@ -432,8 +459,17 @@ function GoalMeetingTable({
                                         const nextTargetDate = getNextMilestoneTargetDate(goal);
                                         const breakdown = getMilestoneBreakdown(goal);
                                         const canEditThisGoal = canEditGoal && isGoalOpenForDetailEditing(goal);
-                                        const canDropThisGoal = canDropGoals && isGoalOpenForDetailEditing(goal);
-                                        const canReviveThisGoal = canReviveGoals && isGoalOpenForDetailEditing(goal);
+                                        const canCompleteMilestones =
+                                            canUpdateMilestones && isGoalOpenForMilestoneCompletion(goal);
+                                        const canDropThisGoal =
+                                            canDropGoals && goal.dropAvailable && isGoalOpenForDecision(goal);
+                                        const canReviveThisGoal =
+                                            canReviveGoals && goal.isDropped && isGoalOpenForDecision(goal);
+                                        const canCarryThisGoal =
+                                            canCarryForwardGoals &&
+                                            goal.carryForwardAvailable &&
+                                            isGoalOpenForDecision(goal);
+                                        const decisionLabel = getGoalDecisionLabel(goal);
                                         const milestoneSummary = [
                                             {
                                                 label: 'Done',
@@ -488,10 +524,46 @@ function GoalMeetingTable({
                                                     className={`${bodyCellClass} border-b border-slate-200 dark:border-slate-800`}
                                                     style={{ height: `${rowHeight}px` }}
                                                 >
-                                                    <div className="flex h-full justify-center items-center">
+                                                    <div className="flex h-full flex-col justify-center gap-2">
                                                         <p className="break-words text-sm font-semibold leading-6 text-slate-900 dark:text-white">
                                                             {goal.title}
                                                         </p>
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800">
+                                                                {goal.financialYear} Q{goal.quarter}
+                                                            </span>
+                                                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800">
+                                                                Version {goal.versionNumber}
+                                                            </span>
+                                                        </div>
+                                                        {decisionLabel && (
+                                                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                                                    {decisionLabel}
+                                                                </p>
+                                                                <p className="mt-0.5">
+                                                                    {goal.decisionByName || 'Unknown'}{' '}
+                                                                    {goal.decisionByEmployeeCode
+                                                                        ? `(${goal.decisionByEmployeeCode})`
+                                                                        : ''}
+                                                                </p>
+                                                                {goal.decisionTimestamp && (
+                                                                    <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                                                        {formatGoalDate(goal.decisionTimestamp)}
+                                                                    </p>
+                                                                )}
+                                                                {goal.carriedForwardFromQuarter && (
+                                                                    <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                                                        From {goal.carriedForwardFromQuarter}
+                                                                    </p>
+                                                                )}
+                                                                {goal.carriedForwardToQuarter && (
+                                                                    <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                                                        To {goal.carriedForwardToQuarter}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
 
@@ -554,10 +626,7 @@ function GoalMeetingTable({
                                                                                 type="checkbox"
                                                                                 checked={milestone.completed}
                                                                                 disabled={
-                                                                                    !canUpdateMilestones ||
-                                                                                    goal.isDropped ||
-                                                                                    goal.quarterLifecycle === 'future' ||
-                                                                                    (goal.quarterLifecycle === 'past' && milestone.completed)
+                                                                                    !canCompleteMilestones
                                                                                 }
                                                                                 onChange={(event) =>
                                                                                     onToggleMilestone(
@@ -632,7 +701,7 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
 
-                                                        {canCarryForwardGoals && goal.carryForwardEligible && (
+                                                        {canCarryThisGoal && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onCarryForwardGoal(goal)}
@@ -642,7 +711,7 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
 
-                                                        {canDropThisGoal && goal.goalStatus === 'Not Done' && !goal.isDropped && (
+                                                        {canDropThisGoal && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onDropGoal(goal)}
@@ -652,7 +721,7 @@ function GoalMeetingTable({
                                                             </button>
                                                         )}
 
-                                                        {canReviveThisGoal && goal.isDropped && (
+                                                        {canReviveThisGoal && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onReviveGoal(goal)}
@@ -729,9 +798,10 @@ export default function GoalMeeting() {
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
 
-    const currentUserRole = getCurrentTaskManagementRole();
-    const currentUsername = sessionStorage.getItem('username') ?? currentUserRole;
-    const permissions = getGoalManagementPermissions(currentUserRole);
+    const currentUser = getCurrentTaskManagementUser();
+    const currentUserRole = currentUser.role;
+    const currentUsername = currentUser.employeeName || currentUserRole;
+    const permissions = getGoalManagementPermissions(currentUserRole, currentUser);
 
     const quarterGoals = useMemo(
         () =>
@@ -862,7 +932,7 @@ export default function GoalMeeting() {
             setModalState(null);
         } catch (error) {
             console.error('Failed to create goal:', error);
-            showAlert('error', 'Failed to create goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to create goal.'));
         }
     };
 
@@ -890,7 +960,7 @@ export default function GoalMeeting() {
             setModalState(null);
         } catch (error) {
             console.error('Failed to update goal:', error);
-            showAlert('error', 'Failed to update goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to update goal.'));
         }
     };
 
@@ -911,7 +981,7 @@ export default function GoalMeeting() {
             setModalState(null);
         } catch (error) {
             console.error('Failed to delete goal:', error);
-            showAlert('error', 'Failed to delete goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to delete goal.'));
         }
     };
 
@@ -940,7 +1010,7 @@ export default function GoalMeeting() {
     };
 
     const handleDropGoalConfirmed = async (goal: GoalData) => {
-        if (!permissions.canDropGoals || !isGoalOpenForDetailEditing(goal)) {
+        if (!permissions.canDropGoals || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
             return;
         }
 
@@ -949,12 +1019,12 @@ export default function GoalMeeting() {
             replaceGoal(droppedGoal);
         } catch (error) {
             console.error('Failed to drop goal:', error);
-            showAlert('error', 'Failed to drop goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to drop goal.'));
         }
     };
 
     const handleDropGoal = (goal: GoalData) => {
-        if (!permissions.canDropGoals || !isGoalOpenForDetailEditing(goal)) {
+        if (!permissions.canDropGoals || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
             return;
         }
 
@@ -971,7 +1041,7 @@ export default function GoalMeeting() {
     };
 
     const handleReviveGoal = async (goal: GoalData) => {
-        if (!permissions.canReviveGoals || !isGoalOpenForDetailEditing(goal)) {
+        if (!permissions.canReviveGoals || !goal.isDropped || !isGoalOpenForDecision(goal)) {
             return;
         }
 
@@ -980,18 +1050,28 @@ export default function GoalMeeting() {
             replaceGoal(revivedGoal);
         } catch (error) {
             console.error('Failed to revive goal:', error);
-            showAlert('error', 'Failed to revive goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to revive goal.'));
         }
     };
 
     const handleCarryForwardGoal = async (goal: GoalData) => {
-        if (!permissions.canCarryForwardGoals) {
+        if (!permissions.canCarryForwardGoals || !goal.carryForwardAvailable || !isGoalOpenForDecision(goal)) {
             return;
         }
 
         try {
             const carriedForwardGoal = await carryForwardGoalRequest(goal.id, currentUserRole);
+            let latestGoals: GoalData[] | null = null;
+            try {
+                latestGoals = await fetchGoals();
+            } catch (refreshError) {
+                console.error('Failed to refresh goals after carry forward:', refreshError);
+            }
             setGoals((current) => {
+                if (latestGoals) {
+                    return latestGoals;
+                }
+
                 const existingGoal = current.find((item) => item.id === carriedForwardGoal.id);
 
                 if (existingGoal) {
@@ -1017,7 +1097,7 @@ export default function GoalMeeting() {
             });
         } catch (error) {
             console.error('Failed to carry forward goal:', error);
-            showAlert('error', 'Failed to carry forward goal.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to carry forward goal.'));
         }
     };
 
@@ -1028,8 +1108,7 @@ export default function GoalMeeting() {
     ) => {
         if (
             !permissions.canUpdateMilestones ||
-            goal.quarterLifecycle === 'future' ||
-            (goal.quarterLifecycle === 'past' && !nextCompleted)
+            !isGoalOpenForMilestoneCompletion(goal)
         ) {
             return;
         }
@@ -1059,7 +1138,7 @@ export default function GoalMeeting() {
             );
         } catch (error) {
             console.error('Failed to update milestone completion:', error);
-            showAlert('error', 'Failed to update milestone completion.');
+            showAlert('error', getGoalActionErrorMessage(error, 'Failed to update milestone completion.'));
         }
     };
 

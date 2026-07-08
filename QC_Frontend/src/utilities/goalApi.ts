@@ -5,9 +5,15 @@ import {
     type GoalData,
     type GoalMilestone,
 } from './goalUtils';
+import { getAuthHeaders } from './rbac';
 import { normalizeAssignedTo } from './taskAssignments';
 
 const GOAL_API_BASE_URL = `${import.meta.env.VITE_API_URL}/goals`;
+
+const getGoalAuthHeaders = (includeJson = false, actorRole?: string): HeadersInit => ({
+    ...(getAuthHeaders(includeJson) as Record<string, string>),
+    ...(actorRole ? { 'X-User-Role': actorRole } : {}),
+});
 
 interface GoalApiMilestoneRecord {
     id: string;
@@ -27,13 +33,27 @@ interface GoalApiRecord {
     financialYear?: string;
     quarter?: GoalData['quarter'];
     isDropped?: boolean;
+    dropped?: boolean;
     droppedAt?: string | null;
     droppedBy?: string | null;
     completionPercentage?: number;
     parentGoalId?: string | null;
     originGoalId?: string | null;
     carryForwardSourceId?: string | null;
+    carryForwardSourceGoalId?: string | null;
+    carryForwardTargetGoalId?: string | null;
+    carriedForwardFromQuarter?: string | null;
+    carriedForwardToQuarter?: string | null;
+    decisionType?: GoalData['decisionType'] | null;
+    decisionByName?: string | null;
+    decisionByEmployeeCode?: string | null;
+    decisionTimestamp?: string | null;
+    versionNumber?: number;
     carryForwardEligible?: boolean;
+    carryForwardAvailable?: boolean;
+    dropAvailable?: boolean;
+    milestoneEditAvailable?: boolean;
+    milestoneCompletionAvailable?: boolean;
     quarterLifecycle?: GoalData['quarterLifecycle'];
 }
 
@@ -75,13 +95,27 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         financialYear,
         quarter,
         isDropped: goal.isDropped ?? false,
+        dropped: goal.dropped ?? goal.isDropped ?? false,
         droppedAt: goal.droppedAt ?? undefined,
         droppedBy: goal.droppedBy ?? undefined,
         completionPercentage: goal.completionPercentage ?? 0,
         parentGoalId: goal.parentGoalId ?? undefined,
         originGoalId: goal.originGoalId ?? undefined,
         carryForwardSourceId: goal.carryForwardSourceId ?? undefined,
+        carryForwardSourceGoalId: goal.carryForwardSourceGoalId ?? goal.carryForwardSourceId ?? undefined,
+        carryForwardTargetGoalId: goal.carryForwardTargetGoalId ?? undefined,
+        carriedForwardFromQuarter: goal.carriedForwardFromQuarter ?? undefined,
+        carriedForwardToQuarter: goal.carriedForwardToQuarter ?? undefined,
+        decisionType: goal.decisionType ?? undefined,
+        decisionByName: goal.decisionByName ?? undefined,
+        decisionByEmployeeCode: goal.decisionByEmployeeCode ?? undefined,
+        decisionTimestamp: goal.decisionTimestamp ?? undefined,
+        versionNumber: goal.versionNumber ?? 1,
         carryForwardEligible: goal.carryForwardEligible ?? false,
+        carryForwardAvailable: goal.carryForwardAvailable ?? false,
+        dropAvailable: goal.dropAvailable ?? false,
+        milestoneEditAvailable: goal.milestoneEditAvailable ?? false,
+        milestoneCompletionAvailable: goal.milestoneCompletionAvailable ?? false,
         quarterLifecycle: goal.quarterLifecycle ?? getQuarterLifecycle(financialYear, quarter),
     };
 
@@ -164,9 +198,7 @@ export async function fetchGoals(): Promise<GoalData[]> {
 export async function createGoal(goal: GoalMutationPayload): Promise<GoalData> {
     const response = await fetch(GOAL_API_BASE_URL, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: getGoalAuthHeaders(true),
         body: JSON.stringify(buildGoalRequestBody(goal)),
     });
 
@@ -180,9 +212,7 @@ export async function updateGoal(
 ): Promise<GoalData> {
     const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}`, {
         method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: getGoalAuthHeaders(true),
         body: JSON.stringify(buildGoalRequestBody(goal)),
     });
 
@@ -200,39 +230,33 @@ export async function deleteGoal(goalId: string): Promise<void> {
 
 export async function dropGoal(
     goalId: string,
-    actorRole: string,
+    actorRole?: string,
     droppedBy?: string,
 ): Promise<GoalData> {
     const droppedByQuery = droppedBy ? `?dropped_by=${encodeURIComponent(droppedBy)}` : '';
     const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}/drop${droppedByQuery}`, {
         method: 'POST',
-        headers: {
-            'X-User-Role': actorRole,
-        },
+        headers: getGoalAuthHeaders(false, actorRole),
     });
 
     const droppedGoal = await readJsonResponse<GoalApiRecord>(response);
     return normalizeGoal(droppedGoal);
 }
 
-export async function reviveGoal(goalId: string, actorRole: string): Promise<GoalData> {
+export async function reviveGoal(goalId: string, actorRole?: string): Promise<GoalData> {
     const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}/revive`, {
         method: 'POST',
-        headers: {
-            'X-User-Role': actorRole,
-        },
+        headers: getGoalAuthHeaders(false, actorRole),
     });
 
     const revivedGoal = await readJsonResponse<GoalApiRecord>(response);
     return normalizeGoal(revivedGoal);
 }
 
-export async function carryForwardGoal(goalId: string, actorRole: string): Promise<GoalData> {
+export async function carryForwardGoal(goalId: string, actorRole?: string): Promise<GoalData> {
     const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}/carry-forward`, {
         method: 'POST',
-        headers: {
-            'X-User-Role': actorRole,
-        },
+        headers: getGoalAuthHeaders(false, actorRole),
     });
 
     const carriedForwardGoal = await readJsonResponse<GoalApiRecord>(response);

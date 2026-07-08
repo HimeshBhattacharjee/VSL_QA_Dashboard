@@ -22,6 +22,8 @@ export interface GoalManagementPermissions {
     canUpdateMilestones: boolean;
 }
 
+const AUTHORIZED_GOAL_DECISION_EMPLOYEE_IDS = new Set(['4000061', '4007553', '4006699']);
+
 // Temporary fallback until task management identity is wired to backend auth.
 export const MOCK_CURRENT_TASK_USER = {
     role: 'Manager' as TaskManagementRole,
@@ -48,6 +50,9 @@ export const getCurrentTaskManagementUser = () => ({
     role: getCurrentTaskManagementRole(),
 });
 
+export const isAuthorizedGoalDecisionUser = (employeeId?: string) =>
+    AUTHORIZED_GOAL_DECISION_EMPLOYEE_IDS.has(employeeId?.trim() || '');
+
 const isBlockedMeetingVisibilityUser = (employeeId?: string, employeeName?: string) =>
     employeeId?.trim() === '4000061' ||
     employeeName?.trim().toLowerCase() === 'sanjit basu';
@@ -70,13 +75,14 @@ export const getTaskManagementPermissions = (
 
 export const getGoalManagementPermissions = (
     role: TaskManagementRole,
+    user: { employeeId?: string } = {},
 ): GoalManagementPermissions => ({
     canAccessGoalManagement: role !== 'Operator',
-    canCreateGoals: role === 'Manager',
-    canDeleteGoals: role === 'Manager',
-    canDropGoals: role === 'Manager',
-    canEditGoalDetails: role === 'Manager',
-    canReviveGoals: role === 'Manager',
-    canCarryForwardGoals: role === 'Manager',
+    canCreateGoals: role === 'Manager' || role === 'Supervisor',
+    canDeleteGoals: false,
+    canDropGoals: isAuthorizedGoalDecisionUser(user.employeeId),
+    canEditGoalDetails: role === 'Manager' || role === 'Supervisor',
+    canReviveGoals: isAuthorizedGoalDecisionUser(user.employeeId),
+    canCarryForwardGoals: isAuthorizedGoalDecisionUser(user.employeeId),
     canUpdateMilestones: role === 'Manager' || role === 'Supervisor',
 });
