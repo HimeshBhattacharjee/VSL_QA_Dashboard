@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
@@ -9,6 +10,9 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError, OperationFailure, PyMongoError
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
+from mongo_indexes import ensure_index
+
+logger = logging.getLogger(__name__)
 
 
 PEEL_DATA_COLLECTION_NAME = "peel_data"
@@ -246,13 +250,15 @@ def normalize_peel_record(record: Dict[str, Any], *, now: Optional[datetime] = N
 
 def ensure_peel_indexes() -> None:
     try:
-        peel_data_collection.create_index(
+        ensure_index(
+            peel_data_collection,
             [("business_key", ASCENDING)],
             unique=True,
             sparse=True,
             name="unique_peel_business_key",
         )
-        peel_data_collection.create_index(
+        ensure_index(
+            peel_data_collection,
             [
                 ("year", ASCENDING),
                 ("month", ASCENDING),
@@ -262,23 +268,25 @@ def ensure_peel_indexes() -> None:
             ],
             name="peel_filter_idx",
         )
-        peel_data_collection.create_index([("date", ASCENDING), ("shift", ASCENDING)], name="peel_date_shift_idx")
-        peel_data_collection.create_index([("module_type", ASCENDING)], name="peel_module_type_idx")
-        peel_data_collection.create_index([("source_path", ASCENDING)], name="peel_source_path_idx")
-        peel_file_metadata_collection.create_index(
+        ensure_index(peel_data_collection, [("date", ASCENDING), ("shift", ASCENDING)], name="peel_date_shift_idx")
+        ensure_index(peel_data_collection, [("module_type", ASCENDING)], name="peel_module_type_idx")
+        ensure_index(peel_data_collection, [("source_path", ASCENDING)], name="peel_source_path_idx")
+        ensure_index(
+            peel_file_metadata_collection,
             [("file_path", ASCENDING)],
             unique=True,
             name="unique_peel_file_path",
         )
-        peel_file_metadata_collection.create_index([("last_modified", ASCENDING)], name="peel_file_last_modified_idx")
-        peel_processing_files_collection.create_index(
+        ensure_index(peel_file_metadata_collection, [("last_modified", ASCENDING)], name="peel_file_last_modified_idx")
+        ensure_index(
+            peel_processing_files_collection,
             [("file_path", ASCENDING)],
             unique=True,
             name="unique_processing_file_path",
         )
-        peel_processing_files_collection.create_index([("started_at", ASCENDING)], name="peel_processing_started_idx")
-    except OperationFailure as exc:
-        print(f"Warning: failed to ensure peel indexes: {exc}")
+        ensure_index(peel_processing_files_collection, [("started_at", ASCENDING)], name="peel_processing_started_idx")
+    except (OperationFailure, PyMongoError) as exc:
+        logger.warning("failed_to_ensure_peel_indexes error=%s", exc, exc_info=True)
 
 
 def serialize_peel_doc(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

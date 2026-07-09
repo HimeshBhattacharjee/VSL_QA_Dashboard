@@ -1,14 +1,22 @@
+﻿import logging
 import pandas as pd
 import pymongo
 from datetime import datetime
 from paths import get_reference_file_key, download_from_s3
 from constants import MONGODB_URI, MONGODB_DB_NAME
 
+logger = logging.getLogger(__name__)
+
+
+def log_progress(*values, sep=" ", **_kwargs):
+    logger.info(sep.join(str(value) for value in values))
+
+
 # ============================================
 # PART 1: DATA EXTRACTION FROM EXCEL FILES
 # ============================================
 
-print("Starting data extraction from Excel files...")
+log_progress("Starting data extraction from Excel files...")
 
 file_key_1 = get_reference_file_key("Rejection Report Fab-II,L-I September-2025.xlsx")
 file_key_2 = get_reference_file_key("Rejection Report Fab-II,L-II September-2025.xlsx")
@@ -72,23 +80,23 @@ for line_num in [1, 2, 3, 4]:
                 inspection_datasets[section_name] = section_df
         
         all_lines_data[f"Line_{line_num}"] = inspection_datasets
-        print(f"Successfully processed Line-{line_num}")
+        log_progress(f"Successfully processed Line-{line_num}")
     except Exception as e:
-        print(f"Error processing Line-{line_num}: {e}")
+        log_progress(f"Error processing Line-{line_num}: {e}")
         all_lines_data[f"Line_{line_num}"] = {}
 
 # Convert numeric columns to numeric type
 for line_num in [1, 2, 3, 4]:
     line_key = f"Line_{line_num}"
     if line_key in all_lines_data and all_lines_data[line_key]:
-        print(f"\n=== Line-{line_num} ===")
-        print(f"Available datasets: {list(all_lines_data[line_key].keys())}")
+        log_progress(f"\n=== Line-{line_num} ===")
+        log_progress(f"Available datasets: {list(all_lines_data[line_key].keys())}")
         for section_name, dataset in all_lines_data[line_key].items():
             for col in dataset.columns:
                 if col not in ['Date', 'Line']:
                     dataset[col] = pd.to_numeric(dataset[col], errors='coerce').fillna(0)
     else:
-        print(f"\n=== Line-{line_num} === No data available")
+        log_progress(f"\n=== Line-{line_num} === No data available")
 
 # Create combined datasets
 combined_datasets = {}
@@ -109,13 +117,13 @@ for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
             columns_to_keep = combined_datasets[inspection_type].columns[:line_col_index + 1]
             combined_datasets[inspection_type] = combined_datasets[inspection_type][columns_to_keep]
         
-        print(f"\nCombined {inspection_type} Dataset (All Lines):")
+        log_progress(f"\nCombined {inspection_type} Dataset (All Lines):")
         for col in combined_datasets[inspection_type].columns:
             if col not in ['Date', 'Line']:
                 combined_datasets[inspection_type][col] = pd.to_numeric(
                     combined_datasets[inspection_type][col], errors='coerce').fillna(0)
         
-        print(combined_datasets[inspection_type].head())
+        log_progress(combined_datasets[inspection_type].head())
 
 # ============================================
 # PART 2: DATA ACCESS FUNCTIONS
@@ -127,7 +135,7 @@ def get_line_data(line_number, inspection_type):
     if line_key in all_lines_data and inspection_type in all_lines_data[line_key]:
         return all_lines_data[line_key][inspection_type].copy()
     else:
-        print(f"Data not available for Line {line_number}, {inspection_type}")
+        log_progress(f"Data not available for Line {line_number}, {inspection_type}")
         return None
 
 def get_all_line_data(line_number):
@@ -136,21 +144,21 @@ def get_all_line_data(line_number):
     if line_key in all_lines_data:
         return all_lines_data[line_key].copy()
     else:
-        print(f"No data available for Line {line_number}")
+        log_progress(f"No data available for Line {line_number}")
         return None
 
 # Display separate line data availability
-print("=== SEPARATE LINE DATA AVAILABILITY ===")
+log_progress("=== SEPARATE LINE DATA AVAILABILITY ===")
 
 for line_num in [1, 2, 3, 4]:
     line_data = get_all_line_data(line_num)
     if line_data:
-        print(f"\nLine {line_num}:")
+        log_progress(f"\nLine {line_num}:")
         for inspection_type, dataset in line_data.items():
-            print(f"  {inspection_type}:")
-            print(dataset.head(3))
+            log_progress(f"  {inspection_type}:")
+            log_progress(dataset.head(3))
     else:
-        print(f"\nLine {line_num}: No data available")
+        log_progress(f"\nLine {line_num}: No data available")
 
 # ============================================
 # PART 3: DATABASE SETUP FUNCTIONS
@@ -160,7 +168,7 @@ def dataframe_to_documents(df, line, inspection_type):
     """Convert DataFrame to MongoDB documents."""
     documents = []
     if df is None or df.empty:
-        print(f"⚠ Warning: Empty DataFrame for line {line}, inspection {inspection_type}")
+        log_progress(f"âš  Warning: Empty DataFrame for line {line}, inspection {inspection_type}")
         return documents
     
     try:
@@ -185,9 +193,9 @@ def dataframe_to_documents(df, line, inspection_type):
             
             documents.append(doc)
         
-        print(f"  Created {len(documents)} documents from DataFrame with {len(df.columns)} columns")
+        log_progress(f"  Created {len(documents)} documents from DataFrame with {len(df.columns)} columns")
     except Exception as e:
-        print(f"✗ Error converting DataFrame to documents: {e}")
+        log_progress(f"âœ— Error converting DataFrame to documents: {e}")
     
     return documents
 
@@ -195,7 +203,7 @@ def create_summary_document(df, line, inspection_type, data_type):
     """Create summary document for a dataset."""
     try:
         if df is None or df.empty:
-            print(f"⚠ Cannot create summary for empty DataFrame: line {line}, {inspection_type}")
+            log_progress(f"âš  Cannot create summary for empty DataFrame: line {line}, {inspection_type}")
             return None
         
         # Date range calculation
@@ -258,16 +266,16 @@ def create_summary_document(df, line, inspection_type, data_type):
                 total_defects = df[defect].sum()
                 summary['defect_counts'][defect] = int(total_defects)
         
-        print(f"  Summary created: {len(df)} records, {len(defect_columns)} defect types")
+        log_progress(f"  Summary created: {len(df)} records, {len(defect_columns)} defect types")
         return summary
         
     except Exception as e:
-        print(f"✗ Error creating summary document: {e}")
+        log_progress(f"âœ— Error creating summary document: {e}")
         return None
 
 def create_collections(db):
     """Create all necessary collections in MongoDB."""
-    print("\n=== Creating Collections ===\n")
+    log_progress("\n=== Creating Collections ===\n")
     
     collections = [
         'line_1_pre_el_data', 'line_1_visual_data', 'line_1_lam_qc_data', 'line_1_fqc_data',
@@ -291,25 +299,25 @@ def create_collections(db):
     for collection in collections:
         if collection not in existing_collections:
             db.create_collection(collection)
-            print(f"✓ Created collection: {collection}")
+            log_progress(f"âœ“ Created collection: {collection}")
             created_count += 1
         else:
-            print(f"✓ Collection already exists: {collection}")
+            log_progress(f"âœ“ Collection already exists: {collection}")
     
-    print(f"\nTotal collections: {len(collections)}")
-    print(f"New collections created: {created_count}")
+    log_progress(f"\nTotal collections: {len(collections)}")
+    log_progress(f"New collections created: {created_count}")
     
     return True
 
 def import_individual_line_data(db, all_lines_data):
     """Import individual line data into MongoDB."""
-    print("\n=== Importing Individual Line Data ===\n")
+    log_progress("\n=== Importing Individual Line Data ===\n")
     
     for line_num in [1, 2, 3, 4]:
         line_key = f"Line_{line_num}"
         
         if line_key in all_lines_data and all_lines_data[line_key]:
-            print(f"--- Processing Line {line_num} ---")
+            log_progress(f"--- Processing Line {line_num} ---")
             
             for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
                 if inspection_type in all_lines_data[line_key]:
@@ -322,19 +330,19 @@ def import_individual_line_data(db, all_lines_data):
                         
                         if documents:
                             result = db[collection_name].insert_many(documents)
-                            print(f"  ✓ {inspection_type}: {len(result.inserted_ids)} records")
+                            log_progress(f"  âœ“ {inspection_type}: {len(result.inserted_ids)} records")
                         else:
-                            print(f"  ⚠ {inspection_type}: No documents created from DataFrame")
+                            log_progress(f"  âš  {inspection_type}: No documents created from DataFrame")
                     else:
-                        print(f"  ✗ {inspection_type}: DataFrame is empty or None")
+                        log_progress(f"  âœ— {inspection_type}: DataFrame is empty or None")
                 else:
-                    print(f"  ✗ {inspection_type}: Data not found in all_lines_data")
+                    log_progress(f"  âœ— {inspection_type}: Data not found in all_lines_data")
         else:
-            print(f"✗ No data available for Line {line_num}")
+            log_progress(f"âœ— No data available for Line {line_num}")
 
 def import_combined_data(db, combined_datasets):
     """Import combined data into MongoDB."""
-    print("\n=== Importing Combined Data ===\n")
+    log_progress("\n=== Importing Combined Data ===\n")
     
     for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
         if inspection_type in combined_datasets:
@@ -347,24 +355,24 @@ def import_combined_data(db, combined_datasets):
                 
                 if documents:
                     result = db[collection_name].insert_many(documents)
-                    print(f"✓ {inspection_type}: {len(result.inserted_ids)} records")
+                    log_progress(f"âœ“ {inspection_type}: {len(result.inserted_ids)} records")
                 else:
-                    print(f"⚠ {inspection_type}: No documents created from DataFrame")
+                    log_progress(f"âš  {inspection_type}: No documents created from DataFrame")
             else:
-                print(f"✗ {inspection_type}: Combined DataFrame is empty or None")
+                log_progress(f"âœ— {inspection_type}: Combined DataFrame is empty or None")
         else:
-            print(f"✗ {inspection_type}: Combined data not found")
+            log_progress(f"âœ— {inspection_type}: Combined data not found")
 
 def create_summaries(db, all_lines_data, combined_datasets):
     """Create summary collections in MongoDB."""
-    print("\n=== Creating Summary Collections ===\n")
+    log_progress("\n=== Creating Summary Collections ===\n")
     
     # Create individual line summaries
     for line_num in [1, 2, 3, 4]:
         line_key = f"Line_{line_num}"
         
         if line_key in all_lines_data and all_lines_data[line_key]:
-            print(f"--- Creating summaries for Line {line_num} ---")
+            log_progress(f"--- Creating summaries for Line {line_num} ---")
             
             for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
                 if inspection_type in all_lines_data[line_key]:
@@ -377,14 +385,14 @@ def create_summaries(db, all_lines_data, combined_datasets):
                         
                         if summary:
                             db[collection_name].insert_one(summary)
-                            print(f"  ✓ {inspection_type} summary created")
+                            log_progress(f"  âœ“ {inspection_type} summary created")
                         else:
-                            print(f"  ✗ {inspection_type}: Failed to create summary")
+                            log_progress(f"  âœ— {inspection_type}: Failed to create summary")
                     else:
-                        print(f"  ✗ {inspection_type}: Cannot create summary - DataFrame is empty")
+                        log_progress(f"  âœ— {inspection_type}: Cannot create summary - DataFrame is empty")
     
     # Create combined summaries
-    print("\n--- Creating combined summaries ---")
+    log_progress("\n--- Creating combined summaries ---")
     for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
         if inspection_type in combined_datasets:
             data_df = combined_datasets[inspection_type]
@@ -396,15 +404,15 @@ def create_summaries(db, all_lines_data, combined_datasets):
                 
                 if summary:
                     db[collection_name].insert_one(summary)
-                    print(f"✓ {inspection_type} summary created")
+                    log_progress(f"âœ“ {inspection_type} summary created")
                 else:
-                    print(f"✗ {inspection_type}: Failed to create summary")
+                    log_progress(f"âœ— {inspection_type}: Failed to create summary")
             else:
-                print(f"✗ {inspection_type}: Cannot create summary - DataFrame is empty")
+                log_progress(f"âœ— {inspection_type}: Cannot create summary - DataFrame is empty")
 
 def display_database_stats(db):
     """Display database statistics."""
-    print("\n=== Database Statistics ===\n")
+    log_progress("\n=== Database Statistics ===\n")
     
     total_documents = 0
     collection_stats = []
@@ -414,34 +422,34 @@ def display_database_stats(db):
         total_documents += count
         collection_stats.append((collection_name, count))
     
-    print("Collection Details:")
-    print("-" * 50)
+    log_progress("Collection Details:")
+    log_progress("-" * 50)
     
     for collection_name, count in collection_stats:
-        status = "✓ DATA" if count > 0 else "✗ EMPTY"
-        print(f"{collection_name:<35} : {count:>5} documents {status}")
+        status = "âœ“ DATA" if count > 0 else "âœ— EMPTY"
+        log_progress(f"{collection_name:<35} : {count:>5} documents {status}")
     
-    print("-" * 50)
-    print(f"{'TOTAL':<35} : {total_documents:>5} documents")
+    log_progress("-" * 50)
+    log_progress(f"{'TOTAL':<35} : {total_documents:>5} documents")
     
-    print("\nData Overview:")
-    print("-" * 30)
+    log_progress("\nData Overview:")
+    log_progress("-" * 30)
     
     individual_data = sum(count for name, count in collection_stats if 'line_' in name and '_data' in name)
     individual_summary = sum(count for name, count in collection_stats if 'line_' in name and '_summary' in name)
     combined_data = sum(count for name, count in collection_stats if 'combined_' in name and '_data' in name)
     combined_summary = sum(count for name, count in collection_stats if 'combined_' in name and '_summary' in name)
     
-    print(f"Individual Line Data Records : {individual_data}")
-    print(f"Individual Line Summary Records : {individual_summary}")
-    print(f"Combined Data Records : {combined_data}")
-    print(f"Combined Summary Records : {combined_summary}")
+    log_progress(f"Individual Line Data Records : {individual_data}")
+    log_progress(f"Individual Line Summary Records : {individual_summary}")
+    log_progress(f"Combined Data Records : {combined_data}")
+    log_progress(f"Combined Summary Records : {combined_summary}")
     
     empty_collections = [name for name, count in collection_stats if count == 0]
     if empty_collections:
-        print(f"\n⚠ Empty Collections ({len(empty_collections)}):")
+        log_progress(f"\nâš  Empty Collections ({len(empty_collections)}):")
         for empty_coll in empty_collections:
-            print(f"  - {empty_coll}")
+            log_progress(f"  - {empty_coll}")
     
     return total_documents
 
@@ -459,7 +467,7 @@ def get_line_data_from_db(db, line_num, inspection_type):
     if collection_name in db.list_collection_names():
         return list(db[collection_name].find({}))
     else:
-        print(f"Collection {collection_name} not found")
+        log_progress(f"Collection {collection_name} not found")
         return []
 
 def get_line_summary_from_db(db, line_num, inspection_type):
@@ -468,7 +476,7 @@ def get_line_summary_from_db(db, line_num, inspection_type):
     if collection_name in db.list_collection_names():
         return db[collection_name].find_one({})
     else:
-        print(f"Collection {collection_name} not found")
+        log_progress(f"Collection {collection_name} not found")
         return None
 
 def get_combined_data_from_db(db, inspection_type):
@@ -477,7 +485,7 @@ def get_combined_data_from_db(db, inspection_type):
     if collection_name in db.list_collection_names():
         return list(db[collection_name].find({}))
     else:
-        print(f"Collection {collection_name} not found")
+        log_progress(f"Collection {collection_name} not found")
         return []
 
 def get_combined_summary_from_db(db, inspection_type):
@@ -486,7 +494,7 @@ def get_combined_summary_from_db(db, inspection_type):
     if collection_name in db.list_collection_names():
         return db[collection_name].find_one({})
     else:
-        print(f"Collection {collection_name} not found")
+        log_progress(f"Collection {collection_name} not found")
         return None
 
 def get_all_data_by_inspection_type(db, inspection_type):
@@ -504,32 +512,32 @@ def get_all_data_by_inspection_type(db, inspection_type):
 
 def demonstrate_usage(db):
     """Demonstrate database usage."""
-    print("\n=== Usage Examples ===\n")
+    log_progress("\n=== Usage Examples ===\n")
     
     collections = get_collection_names(db)
-    print(f"1. Total collections in database: {len(collections)}")
+    log_progress(f"1. Total collections in database: {len(collections)}")
     
-    print(f"\n2. Data Availability Check:")
+    log_progress(f"\n2. Data Availability Check:")
     for line_num in [1, 2, 3, 4]:
         for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
             data = get_line_data_from_db(db, line_num, inspection_type)
             if data:
-                print(f"   Line {line_num} {inspection_type}: {len(data)} records")
+                log_progress(f"   Line {line_num} {inspection_type}: {len(data)} records")
     
-    print(f"\n3. Line 1 Detailed Information:")
+    log_progress(f"\n3. Line 1 Detailed Information:")
     for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
         summary = get_line_summary_from_db(db, 1, inspection_type)
         if summary:
-            print(f"   {inspection_type}:")
-            print(f"     - Records: {summary.get('total_records', 'N/A')}")
-            print(f"     - Production: {summary.get('production_stats', {}).get('total_production', 'N/A')}")
-            print(f"     - Rejection Rate: {summary.get('production_stats', {}).get('average_rejection_rate', 'N/A')}%")
+            log_progress(f"   {inspection_type}:")
+            log_progress(f"     - Records: {summary.get('total_records', 'N/A')}")
+            log_progress(f"     - Production: {summary.get('production_stats', {}).get('total_production', 'N/A')}")
+            log_progress(f"     - Rejection Rate: {summary.get('production_stats', {}).get('average_rejection_rate', 'N/A')}%")
     
-    print(f"\n4. Combined Data Overview:")
+    log_progress(f"\n4. Combined Data Overview:")
     for inspection_type in ["Pre-EL", "Visual", "Lam-QC", "FQC"]:
         summary = get_combined_summary_from_db(db, inspection_type)
         if summary:
-            print(f"   {inspection_type}: {summary.get('total_records', 'N/A')} total records")
+            log_progress(f"   {inspection_type}: {summary.get('total_records', 'N/A')} total records")
 
 # ============================================
 # PART 5: MAIN DATABASE SETUP FUNCTION
@@ -537,18 +545,18 @@ def demonstrate_usage(db):
 
 def create_quality_analysis_database(all_lines_data, combined_datasets):
     """Main function to create quality analysis database."""
-    print("=== Creating Quality Analysis Database ===\n")
+    log_progress("=== Creating Quality Analysis Database ===\n")
     
     try:
         # Connect to MongoDB
         client = pymongo.MongoClient(MONGODB_URI)
         client.admin.command('ping')
-        print("✓ Successfully connected to MongoDB")
+        log_progress("âœ“ Successfully connected to MongoDB")
         
         db = client[MONGODB_DB_NAME]
-        print(f"✓ Using database: {MONGODB_DB_NAME}")
+        log_progress(f"âœ“ Using database: {MONGODB_DB_NAME}")
     except Exception as e:
-        print(f"✗ Error connecting to MongoDB: {e}")
+        log_progress(f"âœ— Error connecting to MongoDB: {e}")
         return None
     
     # Create collections
@@ -568,30 +576,30 @@ def create_quality_analysis_database(all_lines_data, combined_datasets):
 
 def setup_quality_analysis_database(all_lines_data, combined_datasets):
     """Setup quality analysis database with verification."""
-    print("🚀 Starting Quality Analysis Database Setup")
-    print("=" * 50)
-    print("\n=== Verifying Input Data ===")
+    log_progress("ðŸš€ Starting Quality Analysis Database Setup")
+    log_progress("=" * 50)
+    log_progress("\n=== Verifying Input Data ===")
     
-    print(f"All Lines Data Keys: {list(all_lines_data.keys())}")
+    log_progress(f"All Lines Data Keys: {list(all_lines_data.keys())}")
     for line_key in all_lines_data:
         if all_lines_data[line_key]:
-            print(f"{line_key}: {list(all_lines_data[line_key].keys())}")
+            log_progress(f"{line_key}: {list(all_lines_data[line_key].keys())}")
         else:
-            print(f"{line_key}: EMPTY")
+            log_progress(f"{line_key}: EMPTY")
     
-    print(f"Combined Datasets Keys: {list(combined_datasets.keys())}")
+    log_progress(f"Combined Datasets Keys: {list(combined_datasets.keys())}")
     
     # Create database
     db = create_quality_analysis_database(all_lines_data, combined_datasets)
     
     if db is not None:
         demonstrate_usage(db)
-        print("\n" + "=" * 50)
-        print("✅ Quality Analysis Database Setup Complete!")
-        print("📊 Database ready for analysis and reporting")
+        log_progress("\n" + "=" * 50)
+        log_progress("âœ… Quality Analysis Database Setup Complete!")
+        log_progress("ðŸ“Š Database ready for analysis and reporting")
         return db
     else:
-        print("❌ Database setup failed")
+        log_progress("âŒ Database setup failed")
         return None
 
 # ============================================
@@ -603,10 +611,11 @@ def main():
     db = setup_quality_analysis_database(all_lines_data, combined_datasets)
     
     if db is not None:
-        print("\nDatabase setup completed successfully!")
-        print(f"Available collections: {len(get_collection_names(db))}")
+        log_progress("\nDatabase setup completed successfully!")
+        log_progress(f"Available collections: {len(get_collection_names(db))}")
     else:
-        print("\nDatabase setup failed!")
+        log_progress("\nDatabase setup failed!")
 
 if __name__ == "__main__":
     main()
+

@@ -1,11 +1,18 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
-import TestHeading from '../components/TestHeading';
+import ReportPagination from '../components/ReportPagination';
+import {
+    buildWorkflowConfirmOptions,
+    isResolvedCreator,
+    OPERATOR_SIGNATURE_REQUIRED_MESSAGE,
+    resolveCreatorName,
+} from '../utilities/workflowUtils';
 import {
     CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Trash2, Save, X,
     BarChart3, Percent, Target, TrendingUp, Clock, Sun, Sunset, Moon,
-    Circle, CircleDot, CircleOff, Check
+    Circle, CircleDot, CircleOff, Check, Download, Edit3, Eye,
+    FileSpreadsheet, RotateCcw, Search
 } from 'lucide-react';
 
 interface FrameDivisionData {
@@ -23,6 +30,21 @@ interface FrameDivisionData {
 
 type LineGroup = 'Line-I' | 'Line-II';
 type Shift = 'A' | 'B' | 'C';
+type WorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
+type MainView = 'dashboard' | 'entry-register';
+type DashboardPeriod = 'daily' | 'weekly' | 'monthly';
+type EntryAccessMode = 'edit' | 'view';
+type EntrySortOption =
+    | 'newest-created'
+    | 'oldest-created'
+    | 'newest-updated'
+    | 'oldest-updated'
+    | 'status'
+    | 'created-by'
+    | 'shift'
+    | 'line'
+    | 'date-newest'
+    | 'date-oldest';
 
 const LINE_GROUPS: LineGroup[] = ['Line-I', 'Line-II'];
 const SHIFTS: Shift[] = ['A', 'B', 'C'];
@@ -32,6 +54,13 @@ const getEntryKey = (date: string, lineGroup: LineGroup, shift: Shift) => `${dat
 const getDisplayLineNumbers = (lineGroup: LineGroup) => lineGroup === 'Line-I' ? ['1', '2'] : ['3', '4'];
 const getLineGroupLabel = (lineGroup: LineGroup) => `FAB-II ${lineGroup}`;
 const normalizeLineGroup = (lineGroup?: string): LineGroup => lineGroup === 'Line-II' ? 'Line-II' : 'Line-I';
+const getTodayDate = () => new Date().toISOString().split('T')[0];
+const getWorkflowState = (entry?: Pick<DailyEntry, 'workflowState' | 'status'> | null): WorkflowState =>
+    entry?.workflowState || entry?.status || 'submitted';
+const formatWorkflowState = (state: WorkflowState) =>
+    state.charAt(0).toUpperCase() + state.slice(1);
+const getEntryProductionOrder = (entry: DailyEntry) =>
+    entry.productionOrder || [entry.lines?.['1']?.po, entry.lines?.['2']?.po].filter(Boolean).join(' / ');
 interface LineEntry {
     line?: string;
     po: string;
@@ -49,6 +78,8 @@ interface Signatures {
 }
 
 interface DailyEntry {
+    _id?: string;
+    id?: string;
     date: string;
     testingDate: string;
     shift: Shift;
@@ -58,6 +89,31 @@ interface DailyEntry {
         '2': LineEntry;
     };
     signatures?: Signatures;
+    status?: WorkflowState;
+    workflowState?: WorkflowState;
+    displayStatus?: WorkflowState;
+    productionOrder?: string;
+    createdBy?: string | null;
+    createdByUserId?: string | null;
+    createdByEmployeeName?: string | null;
+    createdByEmployeeId?: string | null;
+    createdByLabel?: string;
+    createdAt?: string | null;
+    submittedAt?: string | null;
+    submittedBy?: string | null;
+    approvedAt?: string | null;
+    approvedBy?: string | null;
+    returnedAt?: string | null;
+    returnedBy?: string | null;
+    returnComments?: string | null;
+    isSigned?: boolean;
+    signedAt?: string | null;
+    updatedAt?: string | null;
+    lockedBy?: string | null;
+    lockedByUserId?: string | null;
+    lockedByEmployeeId?: string | null;
+    lockTimestamp?: string | null;
+    isLocked?: boolean;
     [key: string]: any;
 }
 
@@ -91,6 +147,61 @@ interface MonthlyStats {
     };
 }
 
+interface EntryListFilters {
+    dateFrom: string;
+    dateTo: string;
+    shift: string;
+    line: string;
+    status: '' | WorkflowState;
+}
+
+interface DashboardGroupSummary {
+    key: string;
+    date?: string;
+    dayName?: string;
+    displayDate?: string;
+    totalEntries: number;
+    draft: number;
+    submitted: number;
+    returned: number;
+    approved: number;
+}
+
+interface DashboardResponse {
+    view: DashboardPeriod;
+    dateFrom: string;
+    dateTo: string;
+    summary: {
+        totalEntries: number;
+        draft: number;
+        submitted: number;
+        returned: number;
+        approved: number;
+    };
+    groups: DashboardGroupSummary[];
+    items: DailyEntry[];
+    total: number;
+    truncated: boolean;
+}
+
+interface BulkOperationStatus {
+    action: string;
+    completed: number;
+    total: number;
+}
+
+interface BulkOperationResult {
+    requested?: number;
+    approved?: number;
+    deleted?: number;
+    downloaded?: number;
+    processed?: number;
+    skipped?: Record<string, number>;
+    skippedCount?: number;
+    failed?: Array<{ entryId?: string; reportId?: string; reason?: string }>;
+    failedCount?: number;
+}
+
 type LineNumber = '1' | '2';
 type FrameDivisionKey = 'length' | 'width';
 
@@ -107,6 +218,9 @@ const GLASS_GROOVE_TARGETS: Record<(typeof GLASS_GROOVE_OPTIONS)[number], number
 const FRAME_SEALANT_PASS_TOLERANCE = 7;
 const FRAME_SEALANT_LINES_PER_SHIFT = 2;
 const FRAME_SEALANT_SHIFTS_PER_DAY = 3;
+const FINALIZED_WORKFLOW_STATES = new Set<WorkflowState>(['submitted', 'approved']);
+const EDITABLE_OPERATOR_WORKFLOW_STATES = new Set<WorkflowState>(['draft', 'returned']);
+const APPROVED_DELETE_TOOLTIP = 'Approved reports are permanently retained and cannot be deleted.';
 
 const defaultShiftStats: ShiftStats = {
     filled: 0,
@@ -261,6 +375,11 @@ export default function FrameSealantWeightMeasurement() {
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    const [employeeId, setEmployeeId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<MainView>('dashboard');
+    const [dashboardView, setDashboardView] = useState<DashboardPeriod>('daily');
+    const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+    const [isDashboardLoading, setIsDashboardLoading] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [selectedLineGroup, setSelectedLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
@@ -271,10 +390,34 @@ export default function FrameSealantWeightMeasurement() {
     const [showExportLineSelector, setShowExportLineSelector] = useState(false);
     const [selectedExportLineGroup, setSelectedExportLineGroup] = useState<LineGroup>(DEFAULT_LINE_GROUP);
     const [currentEntry, setCurrentEntry] = useState<DailyEntry | null>(null);
+    const [currentAccessMode, setCurrentAccessMode] = useState<EntryAccessMode>('edit');
+    const [readOnlyReason, setReadOnlyReason] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
     const [monthlyEntries, setMonthlyEntries] = useState<Map<string, DailyEntry>>(new Map());
     const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>(defaultMonthlyStats);
+    const [entryRegister, setEntryRegister] = useState<DailyEntry[]>([]);
+    const [entryRegisterTotal, setEntryRegisterTotal] = useState(0);
+    const [isEntryRegisterLoading, setIsEntryRegisterLoading] = useState(false);
+    const [entryRegisterPage, setEntryRegisterPage] = useState(1);
+    const [entryRegisterPageSize, setEntryRegisterPageSize] = useState(20);
+    const [entryRegisterSearchInput, setEntryRegisterSearchInput] = useState('');
+    const [entryRegisterSearch, setEntryRegisterSearch] = useState('');
+    const [entryRegisterSort, setEntryRegisterSort] = useState<EntrySortOption>('date-newest');
+    const [entryRegisterFilters, setEntryRegisterFilters] = useState<EntryListFilters>({
+        dateFrom: '',
+        dateTo: '',
+        shift: '',
+        line: '',
+        status: '',
+    });
+    const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+    const [selectedEntryRecords, setSelectedEntryRecords] = useState<Record<string, DailyEntry>>({});
+    const [bulkOperationStatus, setBulkOperationStatus] = useState<BulkOperationStatus | null>(null);
+    const [returnModalEntry, setReturnModalEntry] = useState<DailyEntry | null>(null);
+    const [returnComment, setReturnComment] = useState('');
+    const [returnCommentError, setReturnCommentError] = useState('');
+    const lastSelectedEntryIdRef = useRef<string | null>(null);
 
     const { showAlert } = useAlert();
     const { showConfirm } = useConfirmModal();
@@ -291,13 +434,95 @@ export default function FrameSealantWeightMeasurement() {
     ], []);
 
     const years = useMemo(() => Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i), [currentDate]);
+    const isOperatorRole = userRole === 'Operator';
+    const isReviewerRole = ['Supervisor', 'Manager'].includes(userRole || '');
+    const isSystemAdminRole = ['Admin', 'System Administrator'].includes(userRole || '');
+    const isReviewerLikeRole = isReviewerRole || isSystemAdminRole;
+    const currentWorkflowState = getWorkflowState(currentEntry);
+    const isCurrentEntryOwner = Boolean(currentEntry) && (
+        (!currentEntry?._id && isOperatorRole)
+        || isResolvedCreator(currentEntry, { employeeId, username })
+    );
+    const canCreateEntry = isOperatorRole;
+    const canEditCurrentEntry = currentAccessMode === 'edit' && Boolean(currentEntry) && (
+        (isOperatorRole && (!currentEntry?._id || (isCurrentEntryOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))))
+        || (isReviewerLikeRole && Boolean(currentEntry?._id) && currentWorkflowState === 'submitted')
+    );
+    const canSaveCurrentEntry = canEditCurrentEntry && (
+        (isOperatorRole && (!currentEntry?._id || isCurrentEntryOwner) && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))
+        || (isReviewerLikeRole && Boolean(currentEntry?._id) && currentWorkflowState === 'submitted')
+    );
+    const canSubmitCurrentEntry = Boolean(currentEntry?._id) && isOperatorRole
+        && isCurrentEntryOwner
+        && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState);
+    const canApproveCurrentEntry = Boolean(currentEntry?._id) && isReviewerLikeRole && currentWorkflowState === 'submitted';
+    const canReturnCurrentEntry = Boolean(currentEntry?._id) && isReviewerLikeRole && currentWorkflowState === 'submitted';
+    const canDeleteCurrentEntry = Boolean(currentEntry?._id) && (
+        (isReviewerLikeRole && currentWorkflowState === 'submitted')
+        || (isOperatorRole && isCurrentEntryOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(currentWorkflowState))
+    );
+    const canExportCurrentEntry = Boolean(currentEntry?._id) && FINALIZED_WORKFLOW_STATES.has(currentWorkflowState) && (isOperatorRole || isReviewerLikeRole);
+    const authHeaders = useCallback((includeJson = false): HeadersInit => ({
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        'X-Employee-Id': sessionStorage.getItem('employeeId') || employeeId || '',
+        'X-User-Name': sessionStorage.getItem('username') || username || '',
+        'X-User-Role': sessionStorage.getItem('userRole') || userRole || '',
+    }), [employeeId, username, userRole]);
 
     useEffect(() => {
         const storedUserRole = sessionStorage.getItem('userRole');
         const storedUsername = sessionStorage.getItem('username');
+        const storedEmployeeId = sessionStorage.getItem('employeeId');
         setUserRole(storedUserRole);
         setUsername(storedUsername);
+        setEmployeeId(storedEmployeeId);
     }, []);
+
+    const getEntryId = (entry?: DailyEntry | null) => entry?._id || entry?.id || '';
+
+    const isEntryOwner = (entry: DailyEntry) =>
+        isResolvedCreator(entry, { employeeId, username });
+
+    const getEntryPermissions = (entry: DailyEntry) => {
+        const state = getWorkflowState(entry);
+        const isOwner = isEntryOwner(entry);
+        return {
+            canView: isOperatorRole || isReviewerLikeRole,
+            canEdit: (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state))
+                || (isReviewerLikeRole && state === 'submitted'),
+            canSubmit: isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state),
+            canExport: FINALIZED_WORKFLOW_STATES.has(state) && (isOperatorRole || isReviewerLikeRole),
+            canApprove: isReviewerLikeRole && state === 'submitted',
+            canReturn: isReviewerLikeRole && state === 'submitted',
+            canDelete: (isReviewerLikeRole && state === 'submitted')
+                || (isOperatorRole && isOwner && EDITABLE_OPERATOR_WORKFLOW_STATES.has(state)),
+        };
+    };
+
+    const getReadOnlyReason = (entry: DailyEntry) => {
+        const state = getWorkflowState(entry);
+        if (state === 'draft') return 'Draft entries are locked to the creating operator until submission.';
+        if (state === 'returned') return 'Returned entries are locked to the original operator until resubmission.';
+        if (state === 'approved') return 'Approved entries are read-only.';
+        return 'This entry is read-only for your role.';
+    };
+
+    const getCreatedByLabel = (entry: DailyEntry) => resolveCreatorName(entry);
+
+    const getStateBadgeClass = (state: WorkflowState) => {
+        if (state === 'approved') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200';
+        if (state === 'submitted') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
+        if (state === 'returned') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+    };
+
+    const getStatusDotClass = (state?: WorkflowState) => {
+        if (state === 'approved') return 'bg-emerald-500';
+        if (state === 'submitted') return 'bg-blue-500';
+        if (state === 'returned') return 'bg-amber-500';
+        if (state === 'draft') return 'bg-gray-500';
+        return 'bg-gray-300 dark:bg-gray-600';
+    };
 
     const calculateNetSealantWeight = useCallback((
         frameWithout: string,
@@ -360,8 +585,55 @@ export default function FrameSealantWeightMeasurement() {
         signatures: {
             preparedBy: '',
             verifiedBy: ''
-        }
+        },
+        status: 'draft',
+        workflowState: 'draft'
     }), [createEmptyLineEntry]);
+
+    const normalizeEntry = useCallback((entry: DailyEntry): DailyEntry => {
+        const normalizedDate = normalizeDate(entry.date);
+        const entryLineGroup = normalizeLineGroup(entry.lineGroup);
+        const lines = {
+            '1': {
+                ...createEmptyLineEntry('1'),
+                ...(entry.lines?.['1'] || {}),
+                line: '1',
+                length: {
+                    ...createEmptyFrameDivision(),
+                    ...(entry.lines?.['1']?.length || {})
+                },
+                width: {
+                    ...createEmptyFrameDivision(),
+                    ...(entry.lines?.['1']?.width || {})
+                }
+            },
+            '2': {
+                ...createEmptyLineEntry('2'),
+                ...(entry.lines?.['2'] || {}),
+                line: '2',
+                length: {
+                    ...createEmptyFrameDivision(),
+                    ...(entry.lines?.['2']?.length || {})
+                },
+                width: {
+                    ...createEmptyFrameDivision(),
+                    ...(entry.lines?.['2']?.width || {})
+                }
+            }
+        };
+
+        return {
+            ...entry,
+            date: normalizedDate,
+            testingDate: normalizeDate(entry.testingDate || normalizedDate),
+            lineGroup: entryLineGroup,
+            lines,
+            signatures: entry.signatures || { preparedBy: '', verifiedBy: '' },
+            status: getWorkflowState(entry),
+            workflowState: getWorkflowState(entry),
+            productionOrder: entry.productionOrder || [lines['1'].po, lines['2'].po].filter(Boolean).join(' / ')
+        };
+    }, [createEmptyLineEntry, normalizeDate]);
 
     const handleFrameDivisionChange = useCallback((
         line: '1' | '2',
@@ -370,6 +642,7 @@ export default function FrameSealantWeightMeasurement() {
         value: string
     ) => {
         if (!currentEntry) return;
+        if (!canEditCurrentEntry) return;
 
         const updatedLines = { ...currentEntry.lines };
         const updatedDivision = { ...updatedLines[line][division] };
@@ -401,7 +674,7 @@ export default function FrameSealantWeightMeasurement() {
             lines: updatedLines
         });
         setHasUnsavedChanges(true);
-    }, [currentEntry, calculateNetSealantWeight, calculateLineTotals]);
+    }, [currentEntry, canEditCurrentEntry, calculateNetSealantWeight, calculateLineTotals]);
 
     const handleLineInputChange = useCallback((
         line: '1' | '2',
@@ -409,6 +682,7 @@ export default function FrameSealantWeightMeasurement() {
         value: string
     ) => {
         if (!currentEntry) return;
+        if (!canEditCurrentEntry) return;
 
         const updatedLines = {
             ...currentEntry.lines,
@@ -423,35 +697,28 @@ export default function FrameSealantWeightMeasurement() {
             lines: updatedLines
         });
         setHasUnsavedChanges(true);
-    }, [currentEntry]);
+    }, [currentEntry, canEditCurrentEntry]);
 
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
         try {
-            console.log(`Loading data for ${year}-${month}`);
-
             const entriesUrl = `${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`;
             const statsUrl = `${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`;
 
             const [entriesResponse, statsResponse] = await Promise.all([
-                fetch(entriesUrl),
+                fetch(entriesUrl, { headers: authHeaders() }),
                 fetch(statsUrl)
             ]);
 
             const entriesJson = await entriesResponse.json();
             const statsJson = await statsResponse.json();
 
-            console.log('Entries response:', entriesJson);
-            console.log('Stats response:', statsJson);
-
             let entriesArr: DailyEntry[] = [];
             if (entriesJson.data && Array.isArray(entriesJson.data)) {
-                entriesArr = entriesJson.data;
+                entriesArr = entriesJson.data.map(normalizeEntry);
             } else if (Array.isArray(entriesJson)) {
-                entriesArr = entriesJson;
+                entriesArr = entriesJson.map(normalizeEntry);
             }
-
-            console.log(`Found ${entriesArr.length} entries for ${year}-${month}`);
 
             const entriesMap = new Map<string, DailyEntry>();
             const dateEntriesObj: DateEntries = {};
@@ -460,35 +727,17 @@ export default function FrameSealantWeightMeasurement() {
             entriesArr.forEach((entry: DailyEntry) => {
                 const normalizedDate = normalizeDate(entry.date);
                 const entryLineGroup = normalizeLineGroup(entry.lineGroup);
-
-                // Ensure all required fields exist for new structure
-                if (!entry.lines) {
-                    entry.lines = {
-                        '1': createEmptyLineEntry('1'),
-                        '2': createEmptyLineEntry('2')
-                    };
-                } else {
-                    ['1', '2'].forEach(lineNum => {
-                        const line = entry.lines[lineNum as '1' | '2'];
-                        if (!line.length) line.length = createEmptyFrameDivision();
-                        if (!line.width) line.width = createEmptyFrameDivision();
-                        if (!line.line) line.line = lineNum;
-                        if (line.glassGroove === undefined) line.glassGroove = '';
-                        if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
-                        if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
-                    });
-                }
-
-                // Use date-level signatures
-                entry.signatures = dateSigs[getEntryKey(normalizedDate, entryLineGroup, entry.shift)] || dateSigs[normalizedDate] || {
+                const entryWithSignature = {
+                    ...entry,
+                    signatures: dateSigs[getEntryKey(normalizedDate, entryLineGroup, entry.shift)] || entry.signatures || {
                     preparedBy: '',
                     verifiedBy: ''
+                    }
                 };
-
                 const entryWithNormalizedDate = {
-                    ...entry,
+                    ...entryWithSignature,
                     date: normalizedDate,
-                    testingDate: normalizedDate,
+                    testingDate: normalizeDate(entryWithSignature.testingDate || normalizedDate),
                     lineGroup: entryLineGroup
                 };
 
@@ -531,7 +780,6 @@ export default function FrameSealantWeightMeasurement() {
                     shiftStats: shiftStats
                 };
 
-                console.log('Setting stats:', newStats);
                 setMonthlyStats(newStats);
             } else {
                 // Default stats if no data
@@ -570,13 +818,92 @@ export default function FrameSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [API_BASE_URL, normalizeDate, createEmptyLineEntry]);
+    }, [API_BASE_URL, authHeaders, normalizeDate, normalizeEntry]);
 
     useEffect(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1;
         loadMonthlyData(year, month);
     }, [currentDate, loadMonthlyData]);
+
+    const loadDashboard = useCallback(async () => {
+        try {
+            setIsDashboardLoading(true);
+            const response = await fetch(`${API_BASE_URL}/dashboard?view=${dashboardView}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch dashboard: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+            setDashboardData(data);
+        } catch (error) {
+            console.error('Error loading frame sealant dashboard:', error);
+            showAlert('error', 'Failed to load dashboard');
+        } finally {
+            setIsDashboardLoading(false);
+        }
+    }, [API_BASE_URL, authHeaders, dashboardView, showAlert]);
+
+    const loadEntryRegister = useCallback(async () => {
+        try {
+            setIsEntryRegisterLoading(true);
+            const query = new URLSearchParams({
+                page: String(entryRegisterPage),
+                page_size: String(entryRegisterPageSize),
+                sort: entryRegisterSort,
+            });
+            if (entryRegisterSearch.trim()) query.append('search', entryRegisterSearch.trim());
+            if (entryRegisterFilters.dateFrom) query.append('date_from', entryRegisterFilters.dateFrom);
+            if (entryRegisterFilters.dateTo) query.append('date_to', entryRegisterFilters.dateTo);
+            if (entryRegisterFilters.shift) query.append('shift', entryRegisterFilters.shift);
+            if (entryRegisterFilters.line) query.append('line', entryRegisterFilters.line);
+            if (entryRegisterFilters.status) query.append('status', entryRegisterFilters.status);
+
+            const response = await fetch(`${API_BASE_URL}/entries/register?${query}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch entry register: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+            setEntryRegister(Array.isArray(data.items) ? data.items.map(normalizeEntry) : []);
+            setEntryRegisterTotal(data.total || 0);
+        } catch (error) {
+            console.error('Error loading entry register:', error);
+            showAlert('error', 'Failed to load entry register');
+        } finally {
+            setIsEntryRegisterLoading(false);
+        }
+    }, [API_BASE_URL, authHeaders, entryRegisterFilters, entryRegisterPage, entryRegisterPageSize, entryRegisterSearch, entryRegisterSort, normalizeEntry, showAlert]);
+
+    useEffect(() => {
+        if (activeTab !== 'dashboard') return;
+        loadDashboard();
+    }, [activeTab, loadDashboard]);
+
+    useEffect(() => {
+        if (activeTab !== 'entry-register') return;
+        loadEntryRegister();
+    }, [activeTab, loadEntryRegister]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setEntryRegisterSearch(entryRegisterSearchInput);
+            setEntryRegisterPage(1);
+        }, 350);
+        return () => window.clearTimeout(timeout);
+    }, [entryRegisterSearchInput]);
+
+    const refreshWorkflowViews = useCallback(async () => {
+        await loadMonthlyData(currentDate.getFullYear(), currentDate.getMonth() + 1);
+        await Promise.all([
+            loadDashboard(),
+            loadEntryRegister(),
+        ]);
+    }, [currentDate, loadDashboard, loadEntryRegister, loadMonthlyData]);
 
     const handlePrevMonth = useCallback(() => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -586,6 +913,8 @@ export default function FrameSealantWeightMeasurement() {
         setCurrentEntry(null);
         setShowShiftSelector(false);
         setShiftSelectorLineGroup(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, []);
 
     const handleNextMonth = useCallback(() => {
@@ -596,6 +925,8 @@ export default function FrameSealantWeightMeasurement() {
         setCurrentEntry(null);
         setShowShiftSelector(false);
         setShiftSelectorLineGroup(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, []);
 
     const handleMonthChange = useCallback((monthIndex: number) => {
@@ -606,6 +937,8 @@ export default function FrameSealantWeightMeasurement() {
         setCurrentEntry(null);
         setShowShiftSelector(false);
         setShiftSelectorLineGroup(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, []);
 
     const handleYearChange = useCallback((year: number) => {
@@ -616,6 +949,8 @@ export default function FrameSealantWeightMeasurement() {
         setCurrentEntry(null);
         setShowShiftSelector(false);
         setShiftSelectorLineGroup(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, []);
 
     const handleDateSelect = useCallback((date: string) => {
@@ -626,6 +961,8 @@ export default function FrameSealantWeightMeasurement() {
         setCurrentEntry(null);
         setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, [normalizeDate]);
 
     const handleShiftSelect = useCallback((lineGroup: LineGroup, shift: Shift) => {
@@ -638,37 +975,26 @@ export default function FrameSealantWeightMeasurement() {
         const entry = monthlyEntries.get(entryKey);
 
         if (entry) {
-            console.log('Loading existing entry:', entry);
-            if (!entry.lines) {
-                entry.lines = {
-                    '1': createEmptyLineEntry('1'),
-                    '2': createEmptyLineEntry('2')
-                };
-            } else {
-                ['1', '2'].forEach(lineNum => {
-                    const line = entry.lines[lineNum as '1' | '2'];
-                    if (!line.length) line.length = createEmptyFrameDivision();
-                    if (!line.width) line.width = createEmptyFrameDivision();
-                    if (!line.line) line.line = lineNum;
-                    if (line.glassGroove === undefined) line.glassGroove = '';
-                    if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
-                    if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
-                });
-            }
-            if (!entry.signatures) {
-                entry.signatures = {
-                    preparedBy: '',
-                    verifiedBy: ''
-                };
-            }
-            setCurrentEntry(entry);
+            const normalized = normalizeEntry(entry);
+            const permissions = getEntryPermissions(normalized);
+            const accessMode: EntryAccessMode = permissions.canEdit ? 'edit' : 'view';
+            setCurrentEntry(normalized);
+            setCurrentAccessMode(accessMode);
+            setReadOnlyReason(accessMode === 'view' ? getReadOnlyReason(normalized) : '');
             setIsEditing(true);
         } else {
-            console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
+            if (!canCreateEntry) {
+                showAlert('info', 'No entry exists for this line and shift.');
+                setCurrentEntry(null);
+                setSelectedShift(null);
+                return;
+            }
             setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, lineGroup));
+            setCurrentAccessMode('edit');
+            setReadOnlyReason('');
             setIsEditing(false);
         }
-    }, [selectedDate, monthlyEntries, createEmptyShiftEntry, createEmptyLineEntry]);
+    }, [selectedDate, monthlyEntries, normalizeEntry, getEntryPermissions, getReadOnlyReason, canCreateEntry, showAlert, createEmptyShiftEntry]);
 
     const handleCloseShiftSelector = useCallback(() => {
         setShowShiftSelector(false);
@@ -676,6 +1002,8 @@ export default function FrameSealantWeightMeasurement() {
         setSelectedDate('');
         setSelectedLineGroup(DEFAULT_LINE_GROUP);
         setSelectedShift(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
     }, []);
 
     const handleTodayEntry = useCallback(() => {
@@ -696,6 +1024,11 @@ export default function FrameSealantWeightMeasurement() {
             return;
         }
 
+        if (!canSaveCurrentEntry) {
+            showAlert('error', 'This entry is read-only');
+            return;
+        }
+
         for (const lineNumber of ['1', '2'] as const) {
             const validationMessage = getLineValidationMessage(currentEntry.lines[lineNumber], lineNumber);
             if (validationMessage) {
@@ -706,11 +1039,9 @@ export default function FrameSealantWeightMeasurement() {
 
         setIsLoading(true);
         try {
-            console.log('Saving entry:', currentEntry);
-
             const response = await fetch(`${API_BASE_URL}/entries`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(currentEntry),
             });
 
@@ -720,32 +1051,10 @@ export default function FrameSealantWeightMeasurement() {
             }
 
             const result = await response.json();
-            console.log('Save response:', result);
 
             if (result.data && result.data.entry) {
-                const saved = result.data.entry as DailyEntry;
+                const saved = normalizeEntry(result.data.entry as DailyEntry);
                 const normalized = normalizeDate(saved.date);
-
-                // Ensure all fields exist
-                if (saved.lines) {
-                    ['1', '2'].forEach(lineNum => {
-                        const line = saved.lines[lineNum as '1' | '2'];
-                        if (!line.length) line.length = createEmptyFrameDivision();
-                        if (!line.width) line.width = createEmptyFrameDivision();
-                        if (!line.line) line.line = lineNum;
-                        if (line.glassGroove === undefined) line.glassGroove = '';
-                        if (line.totalSealantWeightPerModule === undefined) line.totalSealantWeightPerModule = '';
-                        if (line.sealantWeightPerModulePerMeter === undefined) line.sealantWeightPerModulePerMeter = '';
-                    });
-                }
-
-                // Ensure signatures object exists
-                if (!saved.signatures) {
-                    saved.signatures = {
-                        preparedBy: '',
-                        verifiedBy: ''
-                    };
-                }
 
                 const savedLineGroup = normalizeLineGroup(saved.lineGroup);
                 saved.lineGroup = savedLineGroup;
@@ -769,18 +1078,12 @@ export default function FrameSealantWeightMeasurement() {
                 setDateEntries(updatedDateEntries);
 
                 setCurrentEntry({ ...saved, date: normalized });
+                const permissions = getEntryPermissions(saved);
+                setReadOnlyReason(permissions.canEdit ? '' : getReadOnlyReason(saved));
                 setIsEditing(true);
             }
 
-            // Reload stats to get updated counts
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
-            const statsResponse = await fetch(`${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`);
-            const statsJson = await statsResponse.json();
-
-            if (statsJson.data) {
-                setMonthlyStats(statsJson.data);
-            }
+            await refreshWorkflowViews();
 
             setHasUnsavedChanges(false);
             showAlert('success', result.message || 'Entry saved successfully');
@@ -791,30 +1094,34 @@ export default function FrameSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentEntry, monthlyEntries, dateEntries, API_BASE_URL, showAlert, normalizeDate, currentDate]);
+    }, [currentEntry, canSaveCurrentEntry, monthlyEntries, dateEntries, API_BASE_URL, authHeaders, showAlert, normalizeDate, normalizeEntry, getEntryPermissions, getReadOnlyReason, refreshWorkflowViews]);
 
     const handleDeleteEntry = useCallback(() => {
         if (!currentEntry || !currentEntry.shift) return;
+        if (!canDeleteCurrentEntry) {
+            showAlert('error', 'You are not authorized to delete this entry');
+            return;
+        }
 
-        showConfirm({
-            title: 'Delete Entry',
-            message: `Are you sure you want to delete the entry for ${currentEntry.testingDate} (Shift ${currentEntry.shift})? This will delete both lines for the selected shift.`,
-            type: 'warning',
-            confirmText: 'Delete',
-            cancelText: 'Cancel',
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'entry',
             onConfirm: async () => {
                 setIsLoading(true);
                 try {
                     const dateKey = normalizeDate(currentEntry.date);
                     const shift = currentEntry.shift;
                     const lineGroup = normalizeLineGroup(currentEntry.lineGroup);
+                    const entryId = getEntryId(currentEntry);
 
-                    const response = await fetch(`${API_BASE_URL}/entries/${dateKey}/${lineGroup}/${shift}`, {
+                    const response = await fetch(entryId ? `${API_BASE_URL}/entries/by-id/${entryId}` : `${API_BASE_URL}/entries/${dateKey}/${lineGroup}/${shift}`, {
                         method: 'DELETE',
+                        headers: authHeaders(),
                     });
 
                     if (!response.ok) {
-                        throw new Error('Failed to delete entry');
+                        const errorData = await response.json().catch(() => null);
+                        throw new Error(errorData?.detail || 'Failed to delete entry');
                     }
 
                     const entryKey = getEntryKey(dateKey, lineGroup, shift);
@@ -833,29 +1140,21 @@ export default function FrameSealantWeightMeasurement() {
                         return newDateEntries;
                     });
 
-                    // Reload stats
-                    const year = currentDate.getFullYear();
-                    const month = currentDate.getMonth() + 1;
-                    const statsResponse = await fetch(`${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`);
-                    const statsJson = await statsResponse.json();
-
-                    if (statsJson.data) {
-                        setMonthlyStats(statsJson.data);
-                    }
-
                     setCurrentEntry(null);
                     setSelectedDate('');
                     setSelectedShift(null);
+                    setReadOnlyReason('');
+                    await refreshWorkflowViews();
                     showAlert('info', 'Entry deleted successfully');
                 } catch (error) {
                     console.error('Error deleting entry:', error);
-                    showAlert('error', 'Failed to delete entry');
+                    showAlert('error', error instanceof Error ? error.message : 'Failed to delete entry');
                 } finally {
                     setIsLoading(false);
                 }
             }
-        });
-    }, [currentEntry, monthlyEntries, API_BASE_URL, showAlert, showConfirm, normalizeDate, currentDate]);
+        }));
+    }, [currentEntry, canDeleteCurrentEntry, monthlyEntries, API_BASE_URL, authHeaders, showAlert, showConfirm, normalizeDate, refreshWorkflowViews]);
 
     const handleSignatureUpdate = useCallback(async (type: 'prepared' | 'verified') => {
         if (!username) {
@@ -865,6 +1164,11 @@ export default function FrameSealantWeightMeasurement() {
 
         if (!currentEntry) {
             showAlert('error', 'Please select an entry first');
+            return;
+        }
+
+        if (!canEditCurrentEntry) {
+            showAlert('error', 'This entry is read-only');
             return;
         }
 
@@ -907,7 +1211,7 @@ export default function FrameSealantWeightMeasurement() {
             try {
                 const response = await fetch(`${API_BASE_URL}/signatures`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders(true),
                     body: JSON.stringify({
                         date: currentEntry.date,
                         lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
@@ -959,7 +1263,7 @@ export default function FrameSealantWeightMeasurement() {
             try {
                 const response = await fetch(`${API_BASE_URL}/signatures`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders(true),
                     body: JSON.stringify({
                         date: currentEntry.date,
                         lineGroup: currentEntry.lineGroup || DEFAULT_LINE_GROUP,
@@ -978,11 +1282,10 @@ export default function FrameSealantWeightMeasurement() {
                 showAlert('error', 'Failed to add signature');
             }
         }
-    }, [username, userRole, currentEntry, dateSignatures, showAlert, API_BASE_URL]);
+    }, [username, userRole, currentEntry, canEditCurrentEntry, dateSignatures, showAlert, API_BASE_URL, authHeaders]);
 
-    const handleExportMonthlyExcel = useCallback(async (exportLineGroup: LineGroup = selectedExportLineGroup) => {
-        const monthName = months[currentDate.getMonth()];
-        const year = currentDate.getFullYear();
+    const exportMonthlyExcelFor = useCallback(async (year: number, month: number, exportLineGroup: LineGroup = selectedExportLineGroup) => {
+        const monthName = months[month - 1];
         const firstThreeLetters = monthName.substring(0, 3);
         const reportName = `Frame_Sealant_Weight_${firstThreeLetters}_${year}`;
 
@@ -990,10 +1293,9 @@ export default function FrameSealantWeightMeasurement() {
         try {
             showAlert('info', 'Generating Excel report...');
 
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
-
-            const monthlyResp = await fetch(`${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`);
+            const monthlyResp = await fetch(`${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`, {
+                headers: authHeaders(),
+            });
             if (!monthlyResp.ok) throw new Error('Failed to fetch monthly entries');
             const monthlyJson = await monthlyResp.json();
 
@@ -1029,11 +1331,10 @@ export default function FrameSealantWeightMeasurement() {
                 month
             };
 
-            console.log('Sending to Excel generator:', frameReportData);
 
             const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(true),
                 body: JSON.stringify(frameReportData),
             });
 
@@ -1060,7 +1361,19 @@ export default function FrameSealantWeightMeasurement() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentDate, months, API_BASE_URL, showAlert, selectedExportLineGroup]);
+    }, [months, API_BASE_URL, authHeaders, showAlert, selectedExportLineGroup]);
+
+    const confirmExportMonthlyExcel = useCallback((year: number, month: number, lineGroup: LineGroup) => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            noun: 'entry',
+            onConfirm: () => exportMonthlyExcelFor(year, month, lineGroup),
+        }));
+    }, [exportMonthlyExcelFor, showConfirm]);
+
+    const handleExportMonthlyExcel = useCallback((exportLineGroup: LineGroup = selectedExportLineGroup) => {
+        confirmExportMonthlyExcel(currentDate.getFullYear(), currentDate.getMonth() + 1, exportLineGroup);
+    }, [confirmExportMonthlyExcel, currentDate, selectedExportLineGroup]);
 
     const handleReset = useCallback(() => {
         setCurrentEntry(null);
@@ -1069,8 +1382,429 @@ export default function FrameSealantWeightMeasurement() {
         setSelectedShift(null);
         setShowShiftSelector(false);
         setShiftSelectorLineGroup(null);
+        setCurrentAccessMode('edit');
+        setReadOnlyReason('');
         setHasUnsavedChanges(false);
     }, []);
+
+    const handleSubmitEntry = useCallback(async () => {
+        if (!currentEntry) return;
+        if (!canSubmitCurrentEntry) {
+            showAlert('error', 'Only the creating operator can submit draft or returned entries');
+            return;
+        }
+        const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, currentEntry.shift);
+        const signatures = dateSignatures[signatureKey] || currentEntry.signatures || { preparedBy: '', verifiedBy: '' };
+        if (!signatures.preparedBy?.trim()) {
+            showAlert('error', OPERATOR_SIGNATURE_REQUIRED_MESSAGE);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            let entryToSubmit: DailyEntry = { ...currentEntry, signatures };
+            let entryId = getEntryId(entryToSubmit);
+            if (!entryId) {
+                await handleSaveEntry();
+                const saved = monthlyEntries.get(getEntryKey(entryToSubmit.date, entryToSubmit.lineGroup, entryToSubmit.shift));
+                entryToSubmit = saved || entryToSubmit;
+                entryId = getEntryId(entryToSubmit);
+            }
+            if (!entryId) throw new Error('Please save the entry before submitting');
+
+            const response = await fetch(`${API_BASE_URL}/entries/${entryId}/submit`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify(entryToSubmit),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(errorData?.detail || 'Failed to submit entry');
+            }
+            const submitted = normalizeEntry(await response.json());
+            setCurrentEntry(submitted);
+            setCurrentAccessMode('view');
+            setReadOnlyReason(getReadOnlyReason(submitted));
+            await refreshWorkflowViews();
+            showAlert('success', 'Entry submitted successfully');
+        } catch (error) {
+            console.error('Error submitting entry:', error);
+            showAlert('error', error instanceof Error ? error.message : 'Failed to submit entry');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [currentEntry, canSubmitCurrentEntry, dateSignatures, handleSaveEntry, monthlyEntries, API_BASE_URL, authHeaders, normalizeEntry, getReadOnlyReason, refreshWorkflowViews, showAlert]);
+
+    const approveEntry = useCallback(async (entry: DailyEntry) => {
+        const entryId = getEntryId(entry);
+        if (!entryId) return;
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/entries/${entryId}/approve`, {
+                method: 'POST',
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(errorData?.detail || 'Failed to approve entry');
+            }
+            const approved = normalizeEntry(await response.json());
+            if (getEntryId(currentEntry) === entryId) {
+                setCurrentEntry(approved);
+                setCurrentAccessMode('view');
+                setReadOnlyReason(getReadOnlyReason(approved));
+            }
+            await refreshWorkflowViews();
+            showAlert('success', 'Entry approved successfully');
+        } catch (error) {
+            console.error('Error approving entry:', error);
+            showAlert('error', error instanceof Error ? error.message : 'Failed to approve entry');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [API_BASE_URL, authHeaders, currentEntry, normalizeEntry, getReadOnlyReason, refreshWorkflowViews, showAlert]);
+
+    const confirmApproveEntry = useCallback((entry: DailyEntry | null) => {
+        if (!entry) return;
+        if (!getEntryPermissions(entry).canApprove) {
+            showAlert('error', 'Only submitted entries can be approved');
+            return;
+        }
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            noun: 'entry',
+            onConfirm: () => approveEntry(entry),
+        }));
+    }, [approveEntry, getEntryPermissions, showAlert, showConfirm]);
+
+    const openReturnModal = useCallback((entry: DailyEntry) => {
+        if (!getEntryPermissions(entry).canReturn) {
+            showAlert('error', 'Only submitted entries can be returned');
+            return;
+        }
+        setReturnModalEntry(entry);
+        setReturnComment(entry.returnComments || '');
+        setReturnCommentError('');
+    }, [getEntryPermissions, showAlert]);
+
+    const closeReturnModal = useCallback(() => {
+        setReturnModalEntry(null);
+        setReturnComment('');
+        setReturnCommentError('');
+    }, []);
+
+    const submitReturnForCorrection = useCallback(async () => {
+        if (!returnModalEntry) return;
+        const entryId = getEntryId(returnModalEntry);
+        const comments = returnComment.trim();
+        if (!comments) {
+            setReturnCommentError('Return comments are required');
+            return;
+        }
+        if (!entryId) return;
+
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/entries/${entryId}/return`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ returnComments: comments }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(errorData?.detail || 'Failed to return entry');
+            }
+            const returned = normalizeEntry(await response.json());
+            if (getEntryId(currentEntry) === entryId) {
+                setCurrentEntry(returned);
+                setCurrentAccessMode('view');
+                setReadOnlyReason(getReadOnlyReason(returned));
+            }
+            closeReturnModal();
+            await refreshWorkflowViews();
+            showAlert('success', 'Entry returned for correction');
+        } catch (error) {
+            console.error('Error returning entry:', error);
+            showAlert('error', error instanceof Error ? error.message : 'Failed to return entry');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [returnModalEntry, returnComment, API_BASE_URL, authHeaders, currentEntry, normalizeEntry, getReadOnlyReason, closeReturnModal, refreshWorkflowViews, showAlert]);
+
+    const openEntryFromRegister = useCallback(async (entry: DailyEntry, accessMode: EntryAccessMode) => {
+        const entryId = getEntryId(entry);
+        if (!entryId) return;
+        try {
+            setIsLoading(true);
+            const response = await fetch(`${API_BASE_URL}/entries/by-id/${entryId}`, {
+                headers: authHeaders(),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(errorData?.detail || 'Failed to open entry');
+            }
+            const selectedEntry = normalizeEntry(await response.json());
+            const permissions = getEntryPermissions(selectedEntry);
+            const nextAccessMode: EntryAccessMode = accessMode === 'edit' && permissions.canEdit ? 'edit' : 'view';
+            setCurrentEntry(selectedEntry);
+            setCurrentAccessMode(nextAccessMode);
+            setReadOnlyReason(nextAccessMode === 'view' ? getReadOnlyReason(selectedEntry) : '');
+            setSelectedDate(selectedEntry.date);
+            setSelectedLineGroup(selectedEntry.lineGroup);
+            setSelectedShift(selectedEntry.shift);
+            setIsEditing(true);
+            setDashboardView('daily');
+            setActiveTab('dashboard');
+            const entryDate = new Date(`${selectedEntry.date}T00:00:00`);
+            setCurrentDate(new Date(entryDate.getFullYear(), entryDate.getMonth(), 1));
+            showAlert('info', `${nextAccessMode === 'view' ? 'Viewing' : 'Opened'} entry for ${selectedEntry.date}, ${getLineGroupLabel(selectedEntry.lineGroup)}, Shift ${selectedEntry.shift}`);
+        } catch (error) {
+            console.error('Error opening entry:', error);
+            showAlert('error', error instanceof Error ? error.message : 'Failed to open entry');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [API_BASE_URL, authHeaders, normalizeEntry, getEntryPermissions, getReadOnlyReason, showAlert]);
+
+    const clearEntrySelection = useCallback(() => {
+        setSelectedEntryIds(new Set());
+        setSelectedEntryRecords({});
+        lastSelectedEntryIdRef.current = null;
+    }, []);
+
+    const setVisibleEntrySelection = useCallback((entries: DailyEntry[], checked: boolean) => {
+        setSelectedEntryIds(prev => {
+            const next = new Set(prev);
+            entries.forEach(entry => {
+                const entryId = getEntryId(entry);
+                if (!entryId) return;
+                if (checked) next.add(entryId);
+                else next.delete(entryId);
+            });
+            return next;
+        });
+        setSelectedEntryRecords(prev => {
+            const next = { ...prev };
+            entries.forEach(entry => {
+                const entryId = getEntryId(entry);
+                if (!entryId) return;
+                if (checked) next[entryId] = entry;
+                else delete next[entryId];
+            });
+            return next;
+        });
+    }, []);
+
+    const toggleEntrySelection = useCallback((
+        entry: DailyEntry,
+        visibleEntries: DailyEntry[],
+        checked: boolean,
+        shiftKey: boolean
+    ) => {
+        const entryId = getEntryId(entry);
+        if (!entryId) return;
+        let targetEntries = [entry];
+        if (shiftKey && lastSelectedEntryIdRef.current) {
+            const currentIndex = visibleEntries.findIndex(item => getEntryId(item) === entryId);
+            const lastIndex = visibleEntries.findIndex(item => getEntryId(item) === lastSelectedEntryIdRef.current);
+            if (currentIndex >= 0 && lastIndex >= 0) {
+                const [start, end] = [Math.min(currentIndex, lastIndex), Math.max(currentIndex, lastIndex)];
+                targetEntries = visibleEntries.slice(start, end + 1);
+            }
+        }
+        setVisibleEntrySelection(targetEntries, checked);
+        lastSelectedEntryIdRef.current = entryId;
+    }, [setVisibleEntrySelection]);
+
+    const getSelectedEntries = useCallback(() =>
+        Array.from(selectedEntryIds)
+            .map(entryId => selectedEntryRecords[entryId] || entryRegister.find(entry => getEntryId(entry) === entryId))
+            .filter((entry): entry is DailyEntry => Boolean(entry)),
+    [entryRegister, selectedEntryIds, selectedEntryRecords]);
+
+    const getBulkFailureCount = (result: BulkOperationResult) =>
+        result.failedCount ?? result.failed?.length ?? 0;
+
+    const formatBulkOperationSummary = (
+        title: string,
+        actionLabel: string,
+        processedCount: number,
+        result: BulkOperationResult,
+        fallbackSkip = ''
+    ) => {
+        const lines = [`${title}: ${processedCount} ${actionLabel}`];
+        Object.entries(result.skipped || {}).forEach(([reason, count]) => {
+            lines.push(reason === 'Already Approved' ? `${count} ${reason}` : `${count} ${reason} Skipped`);
+        });
+        const failedCount = getBulkFailureCount(result);
+        if (failedCount) lines.push(`${failedCount} Failed`);
+        if (!processedCount && !failedCount && fallbackSkip) lines.push(fallbackSkip);
+        return lines.join('. ');
+    };
+
+    const runBulkApproveEntries = useCallback(async () => {
+        const entryIds = getSelectedEntries().map(getEntryId).filter(Boolean);
+        if (!entryIds.length) return;
+        try {
+            setBulkOperationStatus({ action: 'Approving...', completed: 0, total: entryIds.length });
+            const response = await fetch(`${API_BASE_URL}/bulk/approve`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ entryIds }),
+            });
+            if (!response.ok) throw new Error('Bulk approval failed');
+            const result: BulkOperationResult = await response.json();
+            setBulkOperationStatus({ action: 'Approving...', completed: entryIds.length, total: entryIds.length });
+            const approved = result.approved || result.processed || 0;
+            clearEntrySelection();
+            await refreshWorkflowViews();
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Approval Completed', 'Approved', approved, result, 'Only Submitted entries can be approved.')
+            );
+        } catch (error) {
+            console.error('Error bulk approving entries:', error);
+            showAlert('error', 'Bulk approval failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    }, [API_BASE_URL, authHeaders, clearEntrySelection, getSelectedEntries, refreshWorkflowViews, showAlert]);
+
+    const runBulkDeleteEntries = useCallback(async () => {
+        const entryIds = getSelectedEntries().map(getEntryId).filter(Boolean);
+        if (!entryIds.length) return;
+        try {
+            setBulkOperationStatus({ action: 'Deleting...', completed: 0, total: entryIds.length });
+            const response = await fetch(`${API_BASE_URL}/bulk/delete`, {
+                method: 'POST',
+                headers: authHeaders(true),
+                body: JSON.stringify({ entryIds }),
+            });
+            if (!response.ok) throw new Error('Bulk delete failed');
+            const result: BulkOperationResult = await response.json();
+            setBulkOperationStatus({ action: 'Deleting...', completed: entryIds.length, total: entryIds.length });
+            const deleted = result.deleted || result.processed || 0;
+            clearEntrySelection();
+            await refreshWorkflowViews();
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Delete Completed', 'Deleted', deleted, result)
+            );
+        } catch (error) {
+            console.error('Error bulk deleting entries:', error);
+            showAlert('error', 'Bulk delete failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    }, [API_BASE_URL, authHeaders, clearEntrySelection, getSelectedEntries, refreshWorkflowViews, showAlert]);
+
+    const runBulkDownloadEntries = useCallback(async () => {
+        const selectedEntries = getSelectedEntries();
+        const exportableEntries = selectedEntries.filter(entry => getEntryPermissions(entry).canExport);
+        const result: BulkOperationResult = { requested: selectedEntries.length, downloaded: 0, skipped: {}, failed: [] };
+        if (!exportableEntries.length) {
+            result.skipped = { 'No Export Access': selectedEntries.length };
+            showAlert('warning', formatBulkOperationSummary('Bulk Download Completed', 'Downloaded', 0, result));
+            return;
+        }
+
+        const exportGroups = new Map<string, { year: number; month: number; lineGroup: LineGroup }>();
+        exportableEntries.forEach(entry => {
+            const entryDate = new Date(`${entry.date}T00:00:00`);
+            const year = entryDate.getFullYear();
+            const month = entryDate.getMonth() + 1;
+            const lineGroup = normalizeLineGroup(entry.lineGroup);
+            exportGroups.set(`${year}-${month}-${lineGroup}`, { year, month, lineGroup });
+        });
+
+        try {
+            setBulkOperationStatus({ action: 'Generating Excel...', completed: 0, total: exportGroups.size });
+            let completed = 0;
+            for (const group of exportGroups.values()) {
+                try {
+                    await exportMonthlyExcelFor(group.year, group.month, group.lineGroup);
+                    result.downloaded = (result.downloaded || 0) + 1;
+                } catch (error) {
+                    result.failed?.push({ reason: error instanceof Error ? error.message : 'Download failed' });
+                } finally {
+                    completed += 1;
+                    setBulkOperationStatus({ action: 'Generating Excel...', completed, total: exportGroups.size });
+                }
+            }
+            result.failedCount = getBulkFailureCount(result);
+            clearEntrySelection();
+            showAlert(
+                getBulkFailureCount(result) > 0 ? 'warning' : 'success',
+                formatBulkOperationSummary('Bulk Download Completed', 'Downloaded', result.downloaded || 0, result)
+            );
+        } catch (error) {
+            console.error('Error bulk downloading entries:', error);
+            showAlert('error', 'Bulk download failed. Please try again.');
+        } finally {
+            setBulkOperationStatus(null);
+        }
+    }, [clearEntrySelection, exportMonthlyExcelFor, getEntryPermissions, getSelectedEntries, showAlert]);
+
+    const confirmBulkApproveEntries = useCallback(() => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'approve',
+            count: selectedEntryIds.size,
+            noun: 'entry',
+            onConfirm: runBulkApproveEntries,
+        }));
+    }, [runBulkApproveEntries, selectedEntryIds.size, showConfirm]);
+
+    const confirmBulkDeleteEntries = useCallback(() => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            count: selectedEntryIds.size,
+            noun: 'entry',
+            onConfirm: runBulkDeleteEntries,
+        }));
+    }, [runBulkDeleteEntries, selectedEntryIds.size, showConfirm]);
+
+    const confirmBulkDownloadEntries = useCallback(() => {
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'download',
+            count: selectedEntryIds.size,
+            noun: 'entry',
+            onConfirm: runBulkDownloadEntries,
+        }));
+    }, [runBulkDownloadEntries, selectedEntryIds.size, showConfirm]);
+
+    const confirmDeleteRegisterEntry = useCallback((entry: DailyEntry) => {
+        if (!getEntryPermissions(entry).canDelete) {
+            showAlert('error', 'You are not authorized to delete this entry');
+            return;
+        }
+        showConfirm(buildWorkflowConfirmOptions({
+            action: 'delete',
+            noun: 'entry',
+            onConfirm: async () => {
+                const entryId = getEntryId(entry);
+                if (!entryId) return;
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/entries/by-id/${entryId}`, {
+                        method: 'DELETE',
+                        headers: authHeaders(),
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => null);
+                        throw new Error(errorData?.detail || 'Failed to delete entry');
+                    }
+                    clearEntrySelection();
+                    await refreshWorkflowViews();
+                    showAlert('info', 'Entry deleted successfully');
+                } catch (error) {
+                    console.error('Error deleting register entry:', error);
+                    showAlert('error', error instanceof Error ? error.message : 'Failed to delete entry');
+                } finally {
+                    setIsLoading(false);
+                }
+            },
+        }));
+    }, [API_BASE_URL, authHeaders, clearEntrySelection, getEntryPermissions, refreshWorkflowViews, showAlert, showConfirm]);
 
     const getShiftIcon = useCallback((shift: 'A' | 'B' | 'C') => {
         switch (shift) {
@@ -1108,7 +1842,7 @@ export default function FrameSealantWeightMeasurement() {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
         const days = [];
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getTodayDate();
 
         for (let i = 0; i < firstDay; i++) {
             days.push(<div key={`empty-${i}`} className="p-2"></div>);
@@ -1170,11 +1904,20 @@ export default function FrameSealantWeightMeasurement() {
                     <div className="flex flex-col gap-1 mt-1">
                         {SHIFTS.map(shift => {
                             const entry = dateEntries[dateStr]?.[selectedLineGroup]?.[shift] as DailyEntry | undefined;
+                            const statusState = entry ? getWorkflowState(entry) : undefined;
                             return (
                                 <div key={shift} className="flex flex-col gap-0.5 text-xs">
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <span className="flex items-center gap-1">
                                         {getShiftIcon(shift)}
                                         {getShiftResultIndicator(entry)}
+                                            <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(statusState)}`}></span>
+                                        </span>
+                                        {statusState && (
+                                            <span className="text-[10px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+                                                {statusState.slice(0, 1)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -1184,7 +1927,7 @@ export default function FrameSealantWeightMeasurement() {
             );
         }
         return days;
-    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, checkLineValidity]);
+    }, [currentDate, dateEntries, selectedDate, handleDateSelect, getShiftIcon, getShiftResultIndicator, getStatusDotClass, checkLineValidity]);
 
     const renderSignatureSection = useCallback(() => {
         if (!currentEntry) return null;
@@ -1195,10 +1938,10 @@ export default function FrameSealantWeightMeasurement() {
             verifiedBy: ''
         };
 
-        const canSignPrepared = userRole === 'Operator' && !currentDateSigs.preparedBy;
-        const canSignVerified = ['Manager', 'Supervisor'].includes(userRole || '') && !currentDateSigs.verifiedBy;
-        const canRemovePrepared = currentDateSigs.preparedBy === username;
-        const canRemoveVerified = currentDateSigs.verifiedBy === username;
+        const canSignPrepared = canEditCurrentEntry && userRole === 'Operator' && !currentDateSigs.preparedBy;
+        const canSignVerified = false;
+        const canRemovePrepared = canEditCurrentEntry && currentDateSigs.preparedBy === username;
+        const canRemoveVerified = false;
 
         return (
             <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -1269,7 +2012,7 @@ export default function FrameSealantWeightMeasurement() {
                 </div>
             </div>
         );
-    }, [currentEntry, dateSignatures, userRole, username, handleSignatureUpdate]);
+    }, [currentEntry, dateSignatures, userRole, username, canEditCurrentEntry, handleSignatureUpdate]);
 
     const renderFrameDivisionFields = useCallback((
         line: '1' | '2',
@@ -1291,7 +2034,8 @@ export default function FrameSealantWeightMeasurement() {
                         <select
                             value={divisionData.frameSupplier}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameSupplier', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                         >
                             <option value="">Select</option>
                             <option value="Taihe new energy">Taihe new energy</option>
@@ -1314,7 +2058,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="text"
                             value={divisionData.frameSize}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameSize', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="Enter frame size"
                         />
                     </div>
@@ -1325,7 +2070,8 @@ export default function FrameSealantWeightMeasurement() {
                         <select
                             value={divisionData.sealantSupplier}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'sealantSupplier', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                         >
                             <option value="">Select</option>
                             <option value="Huitan">Huitan</option>
@@ -1343,7 +2089,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="date"
                             value={divisionData.sealantExpiry}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'sealantExpiry', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="DD.MM.YYYY"
                         />
                     </div>
@@ -1355,7 +2102,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="text"
                             value={divisionData.frameWithoutSealant1}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant1', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="Enter weight"
                         />
                     </div>
@@ -1367,7 +2115,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="text"
                             value={divisionData.frameWithoutSealant2}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithoutSealant2', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="Enter weight"
                         />
                     </div>
@@ -1379,7 +2128,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="text"
                             value={divisionData.frameWithSealant1}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant1', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="Enter weight"
                         />
                     </div>
@@ -1391,7 +2141,8 @@ export default function FrameSealantWeightMeasurement() {
                             type="text"
                             value={divisionData.frameWithSealant2}
                             onChange={(e) => handleFrameDivisionChange(line, division, 'frameWithSealant2', e.target.value)}
-                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            disabled={!canEditCurrentEntry}
+                            className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                             placeholder="Enter weight"
                         />
                     </div>
@@ -1422,7 +2173,395 @@ export default function FrameSealantWeightMeasurement() {
                 </div>
             </div>
         );
-    }, [currentEntry, handleFrameDivisionChange]);
+    }, [currentEntry, canEditCurrentEntry, handleFrameDivisionChange]);
+
+    const renderDashboardCards = () => {
+        const summary = dashboardData?.summary || {
+            totalEntries: 0,
+            draft: 0,
+            submitted: 0,
+            returned: 0,
+            approved: 0,
+        };
+        const totalLabel = dashboardView === 'daily'
+            ? "Today's Entries"
+            : dashboardView === 'weekly'
+                ? 'Last 7 Days Entries'
+                : 'Last 30 Days Entries';
+
+        return (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {[
+                    [totalLabel, summary.totalEntries],
+                    ['Draft', summary.draft],
+                    ['Submitted', summary.submitted],
+                    ['Returned', summary.returned],
+                    ['Approved', summary.approved],
+                ].map(([label, value]) => (
+                    <div key={label} className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
+                        <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const renderDashboardControls = () => (
+        <div className="space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+                    {(['daily', 'weekly', 'monthly'] as DashboardPeriod[]).map(period => (
+                        <button
+                            key={period}
+                            type="button"
+                            onClick={() => setDashboardView(period)}
+                            className={`h-9 rounded px-4 text-sm font-semibold capitalize transition-colors ${
+                                dashboardView === period
+                                    ? 'bg-brand-primary text-white'
+                                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                            }`}
+                        >
+                            {period}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    type="button"
+                    onClick={loadDashboard}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                    <RotateCcw className="h-4 w-4" />
+                    Refresh
+                </button>
+            </div>
+            {renderDashboardCards()}
+        </div>
+    );
+
+    const renderDashboardTable = () => (
+        <div className="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+            {isDashboardLoading ? (
+                <div className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">Loading dashboard...</div>
+            ) : (
+                <table className="min-w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        <tr>
+                            <th className="px-3 py-2 text-left font-semibold">Day</th>
+                            <th className="px-3 py-2 text-left font-semibold">Total Entries</th>
+                            <th className="px-3 py-2 text-left font-semibold">Draft</th>
+                            <th className="px-3 py-2 text-left font-semibold">Submitted</th>
+                            <th className="px-3 py-2 text-left font-semibold">Approved</th>
+                            <th className="px-3 py-2 text-left font-semibold">Returned</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        {(dashboardData?.groups || []).map(group => (
+                            <tr key={group.key} className="text-gray-800 dark:text-gray-100">
+                                <td className="px-3 py-2 text-left font-medium">
+                                    <div>{group.dayName || group.key}</div>
+                                    <div className="text-[11px] font-normal text-gray-500 dark:text-gray-400">{group.displayDate || group.date}</div>
+                                </td>
+                                <td className="px-3 py-2 text-left">{group.totalEntries} Entries</td>
+                                <td className="px-3 py-2 text-left">{group.draft} Draft</td>
+                                <td className="px-3 py-2 text-left">{group.submitted} Submitted</td>
+                                <td className="px-3 py-2 text-left">{group.approved} Approved</td>
+                                <td className="px-3 py-2 text-left">{group.returned} Returned</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+
+    const renderEntryRegister = () => {
+        const updateFilters = (patch: Partial<EntryListFilters>) => {
+            setEntryRegisterFilters(prev => ({ ...prev, ...patch }));
+            setEntryRegisterPage(1);
+            clearEntrySelection();
+        };
+
+        const resetFilters = () => {
+            setEntryRegisterFilters({
+                dateFrom: '',
+                dateTo: '',
+                shift: '',
+                line: '',
+                status: '',
+            });
+            setEntryRegisterSearchInput('');
+            setEntryRegisterPage(1);
+            clearEntrySelection();
+        };
+
+        const visibleSelectableEntries = entryRegister.filter(entry => Boolean(getEntryId(entry)));
+        const visibleSelectedCount = visibleSelectableEntries.filter(entry =>
+            selectedEntryIds.has(getEntryId(entry))
+        ).length;
+        const allVisibleSelected = visibleSelectableEntries.length > 0
+            && visibleSelectedCount === visibleSelectableEntries.length;
+        const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleSelectableEntries.length;
+        const selectedEntriesForBulk = getSelectedEntries();
+        const canBulkApprove = selectedEntriesForBulk.some(entry => getEntryPermissions(entry).canApprove);
+        const canBulkDelete = selectedEntriesForBulk.some(entry => getEntryPermissions(entry).canDelete);
+        const canBulkDownload = selectedEntriesForBulk.some(entry => getEntryPermissions(entry).canExport);
+
+        return (
+            <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:p-4">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Entry Register</h2>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{entryRegisterTotal} entries</span>
+                </div>
+
+                <div className="mb-2 grid gap-2 md:grid-cols-4 xl:grid-cols-8">
+                    <label className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                        <input
+                            value={entryRegisterSearchInput}
+                            onChange={(event) => {
+                                setEntryRegisterSearchInput(event.target.value);
+                                setEntryRegisterPage(1);
+                                clearEntrySelection();
+                            }}
+                            placeholder="Search production order, shift, line, date, creator, status"
+                            className="h-9 w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        />
+                    </label>
+                    <input
+                        type="date"
+                        value={entryRegisterFilters.dateFrom}
+                        onChange={(event) => updateFilters({ dateFrom: event.target.value, dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date from"
+                    />
+                    <input
+                        type="date"
+                        value={entryRegisterFilters.dateTo}
+                        onChange={(event) => updateFilters({ dateTo: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        title="Date to"
+                    />
+                    <select
+                        value={entryRegisterFilters.shift}
+                        onChange={(event) => updateFilters({ shift: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Shift filter"
+                    >
+                        <option value="">Shift</option>
+                        {SHIFTS.map(shift => <option key={shift} value={shift}>Shift {shift}</option>)}
+                    </select>
+                    <select
+                        value={entryRegisterFilters.line}
+                        onChange={(event) => updateFilters({ line: event.target.value })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Line filter"
+                    >
+                        <option value="">Line</option>
+                        {LINE_GROUPS.map(line => <option key={line} value={line}>{getLineGroupLabel(line)}</option>)}
+                    </select>
+                    <select
+                        value={entryRegisterFilters.status}
+                        onChange={(event) => updateFilters({ status: event.target.value as EntryListFilters['status'] })}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Status filter"
+                    >
+                        <option value="">Status</option>
+                        <option value="draft">Draft</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="returned">Returned</option>
+                        <option value="approved">Approved</option>
+                    </select>
+                    <select
+                        value={entryRegisterSort}
+                        onChange={(event) => {
+                            setEntryRegisterSort(event.target.value as EntrySortOption);
+                            setEntryRegisterPage(1);
+                        }}
+                        className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        aria-label="Sort entries"
+                    >
+                        <option value="date-newest">Newest Date</option>
+                        <option value="date-oldest">Oldest Date</option>
+                        <option value="newest-updated">Recently Updated</option>
+                        <option value="status">Status</option>
+                        <option value="created-by">Created By</option>
+                        <option value="shift">Shift</option>
+                        <option value="line">Line</option>
+                    </select>
+                    <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="h-9 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        Clear Filters
+                    </button>
+                </div>
+
+                {selectedEntryIds.size > 0 && (
+                    <div className="mb-3 rounded-md border border-brand-primary/30 bg-brand-primary/5 p-3 dark:border-brand-primary/40 dark:bg-brand-primary/10">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                {selectedEntryIds.size} {selectedEntryIds.size === 1 ? 'entry' : 'entries'} selected
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {canBulkApprove && (
+                                    <button type="button" onClick={confirmBulkApproveEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20">
+                                        <Check className="h-3.5 w-3.5" />
+                                        Approve
+                                    </button>
+                                )}
+                                {canBulkDownload && (
+                                    <button type="button" onClick={confirmBulkDownloadEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-3 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20">
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download
+                                    </button>
+                                )}
+                                {canBulkDelete && (
+                                    <button type="button" onClick={confirmBulkDeleteEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-900/20">
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                    </button>
+                                )}
+                                <button type="button" onClick={clearEntrySelection} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                                    <X className="h-3.5 w-3.5" />
+                                    Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                        {bulkOperationStatus && (
+                            <div className="mt-3 flex items-center justify-between text-xs font-medium text-gray-700 dark:text-gray-200">
+                                <span>{bulkOperationStatus.action}</span>
+                                <span>{bulkOperationStatus.completed} / {bulkOperationStatus.total} completed</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {isEntryRegisterLoading ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Loading entries...</div>
+                ) : entryRegister.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {entryRegisterTotal === 0 ? 'No entries found.' : 'No matching entries found.'}
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full border-separate border-spacing-0 text-center text-xs">
+                                <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    <tr>
+                                        <th className="w-10 border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all visible entries"
+                                                checked={allVisibleSelected}
+                                                disabled={visibleSelectableEntries.length === 0}
+                                                ref={(element) => {
+                                                    if (element) element.indeterminate = someVisibleSelected;
+                                                }}
+                                                onChange={(event) => setVisibleEntrySelection(visibleSelectableEntries, event.currentTarget.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                            />
+                                        </th>
+                                        {['Date', 'Line', 'Shift', 'Production Order', 'Created By', 'Status', 'Actions'].map(column => (
+                                            <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
+                                                {column}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                    {entryRegister.map((entry, index) => {
+                                        const entryId = getEntryId(entry);
+                                        const state = getWorkflowState(entry);
+                                        const permissions = getEntryPermissions(entry);
+                                        const isApproved = state === 'approved';
+                                        const isSelected = entryId ? selectedEntryIds.has(entryId) : false;
+
+                                        return (
+                                            <tr key={entryId || `${entry.date}-${entry.lineGroup}-${entry.shift}-${index}`} className={`${isSelected ? 'bg-brand-primary/5 dark:bg-brand-primary/10' : 'bg-white dark:bg-gray-900'} text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800/70`}>
+                                                <td className="whitespace-nowrap px-3 py-2 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select entry ${entry.date} ${entry.lineGroup} Shift ${entry.shift}`}
+                                                        checked={isSelected}
+                                                        disabled={!entryId}
+                                                        onChange={(event) => toggleEntrySelection(entry, visibleSelectableEntries, event.currentTarget.checked, event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false)}
+                                                        className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                                                    />
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{entry.date || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{getLineGroupLabel(normalizeLineGroup(entry.lineGroup))}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">Shift {entry.shift || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{getEntryProductionOrder(entry) || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{getCreatedByLabel(entry)}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">
+                                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(state)}`}>
+                                                        {formatWorkflowState(state)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        <button type="button" onClick={() => openEntryFromRegister(entry, 'view')} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" title="View">
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        {permissions.canEdit && (
+                                                            <button type="button" onClick={() => openEntryFromRegister(entry, 'edit')} className="inline-flex h-8 items-center gap-1 rounded-md bg-brand-primary px-2 text-xs font-medium text-white hover:bg-brand-primary-hover" title="Edit">
+                                                                <Edit3 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {permissions.canExport && (
+                                                            <button type="button" onClick={() => {
+                                                                const entryDate = new Date(`${entry.date}T00:00:00`);
+                                                                confirmExportMonthlyExcel(entryDate.getFullYear(), entryDate.getMonth() + 1, normalizeLineGroup(entry.lineGroup));
+                                                            }} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Monthly Excel">
+                                                                <Download className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {permissions.canApprove && (
+                                                            <button type="button" onClick={() => confirmApproveEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve">
+                                                                <Check className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {permissions.canReturn && (
+                                                            <button type="button" onClick={() => openReturnModal(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return">
+                                                                <RotateCcw className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {permissions.canDelete && (
+                                                            <button type="button" onClick={() => confirmDeleteRegisterEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20" title="Delete">
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                        {!permissions.canDelete && isApproved && (
+                                                            <button type="button" disabled className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-400 opacity-60 dark:border-gray-700 dark:text-gray-500" title={APPROVED_DELETE_TOOLTIP}>
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <ReportPagination
+                            totalItems={entryRegisterTotal}
+                            page={entryRegisterPage}
+                            pageSize={entryRegisterPageSize}
+                            onPageChange={setEntryRegisterPage}
+                            onPageSizeChange={(nextPageSize) => {
+                                setEntryRegisterPageSize(nextPageSize);
+                                setEntryRegisterPage(1);
+                            }}
+                            itemLabel="entries"
+                        />
+                    </>
+                )}
+            </div>
+        );
+    };
 
     return (
         <>
@@ -1431,6 +2570,43 @@ export default function FrameSealantWeightMeasurement() {
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-primary mx-auto"></div>
                         <p className="mt-3 text-gray-700 dark:text-gray-300">Loading...</p>
+                    </div>
+                </div>
+            )}
+            {returnModalEntry && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4">
+                    <div className="w-full max-w-md rounded-md bg-white p-4 shadow-xl dark:bg-gray-900">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Return for Correction</h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {returnModalEntry.date} | {getLineGroupLabel(returnModalEntry.lineGroup)} | Shift {returnModalEntry.shift}
+                        </p>
+                        <textarea
+                            value={returnComment}
+                            onChange={(event) => {
+                                setReturnComment(event.target.value);
+                                if (returnCommentError) setReturnCommentError('');
+                            }}
+                            rows={4}
+                            className="mt-3 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                            placeholder="Enter correction comments"
+                        />
+                        {returnCommentError && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{returnCommentError}</p>
+                        )}
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                onClick={closeReturnModal}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                                onClick={submitReturnForCorrection}
+                            >
+                                Return
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1475,10 +2651,47 @@ export default function FrameSealantWeightMeasurement() {
                     </div>
                 </div>
             )}
-            <TestHeading
-                heading="Frame Sealant Weight Measurement"
-                criteria="Allowable Limit: Glass Groove (5.6 mm) = 40±7 gm/m and Glass Groove (6.1 mm) = 49±7 gm/m"
-            />
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Frame Sealant Weight Report</h1>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Allowable Limit: Glass Groove (5.6 mm) = 40+/-7 gm/m and Glass Groove (6.1 mm) = 49+/-7 gm/m</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                            activeTab === 'dashboard'
+                                ? 'bg-brand-primary text-white'
+                                : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                        }`}
+                    >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Dashboard
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('entry-register')}
+                        className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                            activeTab === 'entry-register'
+                                ? 'bg-brand-primary text-white'
+                                : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'
+                        }`}
+                    >
+                        <Search className="h-4 w-4" />
+                        Entry Register
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'dashboard' && (
+                <div className="mb-4 space-y-4">
+                    {renderDashboardControls()}
+                    {dashboardView !== 'daily' && renderDashboardTable()}
+                </div>
+            )}
+
+            {activeTab === 'entry-register' && renderEntryRegister()}
             {showShiftSelector && selectedDate && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
@@ -1531,6 +2744,7 @@ export default function FrameSealantWeightMeasurement() {
                             {SHIFTS.map(shift => {
                                 const entry = dateEntries[selectedDate]?.[shiftSelectorLineGroup]?.[shift];
                                 const isFilled = !!entry;
+                                const entryState = entry ? getWorkflowState(entry) : undefined;
 
                                 const line1Validity = entry?.lines['1'] ? checkLineValidity(entry.lines['1']) : { pass: false, fail: false, any: false };
                                 const line2Validity = entry?.lines['2'] ? checkLineValidity(entry.lines['2']) : { pass: false, fail: false, any: false };
@@ -1570,6 +2784,11 @@ export default function FrameSealantWeightMeasurement() {
                                                 </div>
                                             )}
                                         </div>
+                                        {entryState && (
+                                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(entryState)}`}>
+                                                {formatWorkflowState(entryState)}
+                                            </span>
+                                        )}
                                         {isFilled && (
                                             <div className="flex-shrink-0">
                                                 {line1Validity.pass && line2Validity.pass && !line1Validity.fail && !line2Validity.fail &&
@@ -1588,6 +2807,7 @@ export default function FrameSealantWeightMeasurement() {
                 </div>
             )}
 
+            {activeTab === 'dashboard' && dashboardView === 'daily' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div className="lg:col-span-7 space-y-6">
@@ -1643,17 +2863,19 @@ export default function FrameSealantWeightMeasurement() {
                                         Today
                                     </button>
 
-                                    <button
-                                        onClick={() => setShowExportLineSelector(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
-                                        title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
-                                    >
-                                        <img
-                                            src="/IMAGES/Excel.svg"
-                                            alt="Excel"
-                                            className="w-6 h-6 filter brightness-0 invert dark:brightness-0 dark:invert"
-                                        />
-                                    </button>
+                                    {(isOperatorRole || isReviewerLikeRole) && (
+                                        <button
+                                            onClick={() => setShowExportLineSelector(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
+                                            title={`Export ${months[currentDate.getMonth()]} ${currentDate.getFullYear()} as Excel`}
+                                        >
+                                            <img
+                                                src="/IMAGES/Excel.svg"
+                                                alt="Excel"
+                                                className="w-6 h-6 filter brightness-0 invert dark:brightness-0 dark:invert"
+                                            />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div className="grid grid-cols-7 gap-2 mb-2">
@@ -1691,28 +2913,57 @@ export default function FrameSealantWeightMeasurement() {
                         </div>
                         {currentEntry && selectedShift && (
                             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-semibold dark:text-white">
-                                        {isEditing ? 'Edit Entry' : 'New Entry'} - {new Date(currentEntry.testingDate).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })} (Shift {currentEntry.shift})
-                                    </h3>
-                                    <div className="flex gap-2">
-                                        {isEditing && (
-                                            <button
-                                                onClick={handleDeleteEntry}
-                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
+                                <div className="mb-4 flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="text-lg font-semibold dark:text-white">
+                                                {canEditCurrentEntry ? (isEditing ? 'Edit Entry' : 'New Entry') : 'View Entry'} - {new Date(currentEntry.testingDate).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })} ({getLineGroupLabel(currentEntry.lineGroup || DEFAULT_LINE_GROUP)}, Shift {currentEntry.shift})
+                                            </h3>
+                                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(currentWorkflowState)}`}>
+                                                {formatWorkflowState(currentWorkflowState)}
+                                            </span>
+                                        </div>
+                                        {readOnlyReason && (
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{readOnlyReason}</p>
+                                        )}
+                                        {currentEntry.returnComments && currentWorkflowState === 'returned' && (
+                                            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Return comments: {currentEntry.returnComments}</p>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        {canExportCurrentEntry && (
+                                            <button onClick={() => handleExportMonthlyExcel(currentEntry.lineGroup)} className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Monthly Excel">
+                                                <Download className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {canApproveCurrentEntry && (
+                                            <button onClick={() => confirmApproveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve">
+                                                <Check className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {canReturnCurrentEntry && (
+                                            <button onClick={() => openReturnModal(currentEntry)} className="rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return">
+                                                <RotateCcw className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {canDeleteCurrentEntry && (
+                                            <button onClick={handleDeleteEntry} className="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete">
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {!canDeleteCurrentEntry && currentWorkflowState === 'approved' && (
+                                            <button type="button" disabled className="rounded-lg p-2 text-gray-400 opacity-60 dark:text-gray-500" title={APPROVED_DELETE_TOOLTIP}>
+                                                <Trash2 className="h-4 w-4" />
                                             </button>
                                         )}
                                         <button
                                             onClick={handleReset}
                                             className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                                            title="Cancel"
+                                            title="Close"
                                         >
                                             <X className="w-4 h-4" />
                                         </button>
@@ -1744,7 +2995,8 @@ export default function FrameSealantWeightMeasurement() {
                                                     type="text"
                                                     value={currentEntry.lines['1'].po}
                                                     onChange={(e) => handleLineInputChange('1', 'po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                                                     placeholder="Enter PO number"
                                                 />
                                             </div>
@@ -1755,7 +3007,8 @@ export default function FrameSealantWeightMeasurement() {
                                                 <select
                                                     value={currentEntry.lines['1'].glassGroove}
                                                     onChange={(e) => handleLineInputChange('1', 'glassGroove', e.target.value)}
-                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-80"
                                                 >
                                                     <option value="">Select glass groove</option>
                                                     {GLASS_GROOVE_OPTIONS.map((option) => (
@@ -1816,7 +3069,8 @@ export default function FrameSealantWeightMeasurement() {
                                                     value={currentEntry.lines['1'].remarks || ''}
                                                     onChange={(e) => handleLineInputChange('1', 'remarks', e.target.value)}
                                                     rows={2}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                                                     placeholder="Add any remarks for Line 1"
                                                 />
                                             </div>
@@ -1838,7 +3092,8 @@ export default function FrameSealantWeightMeasurement() {
                                                     type="text"
                                                     value={currentEntry.lines['2'].po}
                                                     onChange={(e) => handleLineInputChange('2', 'po', e.target.value)}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                                                     placeholder="Enter PO number"
                                                 />
                                             </div>
@@ -1849,7 +3104,8 @@ export default function FrameSealantWeightMeasurement() {
                                                 <select
                                                     value={currentEntry.lines['2'].glassGroove}
                                                     onChange={(e) => handleLineInputChange('2', 'glassGroove', e.target.value)}
-                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 text-xs dark:text-white bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-80"
                                                 >
                                                     <option value="">Select glass groove</option>
                                                     {GLASS_GROOVE_OPTIONS.map((option) => (
@@ -1910,7 +3166,8 @@ export default function FrameSealantWeightMeasurement() {
                                                     value={currentEntry.lines['2'].remarks || ''}
                                                     onChange={(e) => handleLineInputChange('2', 'remarks', e.target.value)}
                                                     rows={2}
-                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                    disabled={!canEditCurrentEntry}
+                                                    className="w-full p-2.5 rounded-lg text-xs dark:text-gray-200 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80"
                                                     placeholder="Add any remarks for Line 2"
                                                 />
                                             </div>
@@ -1922,15 +3179,26 @@ export default function FrameSealantWeightMeasurement() {
                                             onClick={handleReset}
                                             className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                                         >
-                                            Cancel
+                                            Close
                                         </button>
-                                        <button
-                                            onClick={handleSaveEntry}
-                                            className="flex items-center gap-2 px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
-                                        >
-                                            <Save className="w-4 h-4" />
-                                            {isEditing ? 'Update Entry' : 'Save Entry'}
-                                        </button>
+                                        {canSaveCurrentEntry && (
+                                            <button
+                                                onClick={handleSaveEntry}
+                                                className="flex items-center gap-2 px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-colors"
+                                            >
+                                                <Save className="w-4 h-4" />
+                                                {currentWorkflowState === 'submitted' ? 'Save Changes' : 'Save Draft'}
+                                            </button>
+                                        )}
+                                        {canSubmitCurrentEntry && (
+                                            <button
+                                                onClick={handleSubmitEntry}
+                                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                            >
+                                                <Check className="w-4 h-4" />
+                                                Submit
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2081,6 +3349,7 @@ export default function FrameSealantWeightMeasurement() {
                     </div>
                 </div>
             </div>
+            )}
         </>
     );
 }

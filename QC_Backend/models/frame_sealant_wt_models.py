@@ -1,7 +1,12 @@
-from pymongo import MongoClient, ASCENDING
+from bson import ObjectId
+import logging
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import drop_index_if_exists, ensure_index
+
+logger = logging.getLogger(__name__)
 
 def _normalize_line_group(line_group):
     return 'Line-II' if line_group == 'Line-II' else 'Line-I'
@@ -10,11 +15,34 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 frame_sealant_entries_collection = db["frame_sealant_daily_entries"]
 try:
-    frame_sealant_entries_collection.drop_index("date_1_shift_1")
-except Exception:
-    pass
-frame_sealant_entries_collection.create_index([("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)], unique=True)
-frame_sealant_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+    drop_index_if_exists(frame_sealant_entries_collection, "date_1_shift_1")
+    ensure_index(
+        frame_sealant_entries_collection,
+        [("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)],
+        unique=True,
+        name="frame_sealant_date_line_group_shift_unique_idx",
+    )
+    ensure_index(frame_sealant_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="frame_sealant_year_month_idx")
+except Exception as exc:
+    logger.warning("failed_to_prepare_frame_sealant_base_indexes error=%s", exc, exc_info=True)
+
+def ensure_frame_sealant_indexes() -> None:
+    try:
+        ensure_index(frame_sealant_entries_collection, [("updatedAt", DESCENDING)], name="frame_sealant_updated_at_desc_idx")
+        ensure_index(frame_sealant_entries_collection, [("createdAt", DESCENDING)], name="frame_sealant_created_at_desc_idx")
+        ensure_index(frame_sealant_entries_collection, [("workflowState", ASCENDING)], name="frame_sealant_workflow_state_idx")
+        ensure_index(frame_sealant_entries_collection, [("status", ASCENDING)], name="frame_sealant_status_idx")
+        ensure_index(frame_sealant_entries_collection, [("date", DESCENDING)], name="frame_sealant_date_desc_idx")
+        ensure_index(frame_sealant_entries_collection, [("shift", ASCENDING)], name="frame_sealant_shift_idx")
+        ensure_index(frame_sealant_entries_collection, [("lineGroup", ASCENDING)], name="frame_sealant_line_group_idx")
+        ensure_index(frame_sealant_entries_collection, [("lines.1.po", ASCENDING)], name="frame_sealant_line_1_po_idx")
+        ensure_index(frame_sealant_entries_collection, [("lines.2.po", ASCENDING)], name="frame_sealant_line_2_po_idx")
+        ensure_index(frame_sealant_entries_collection, [("createdByEmployeeId", ASCENDING)], name="frame_sealant_created_by_employee_id_idx")
+    except Exception as exc:
+        logger.warning("failed_to_ensure_frame_sealant_indexes error=%s", exc, exc_info=True)
+
+
+ensure_frame_sealant_indexes()
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -38,6 +66,22 @@ class _InMemoryCollection:
         return None
 
     def update_one(self, filt, update, upsert=False):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    value.update(update.get("$set", {}))
+                    for unset_key in update.get("$unset", {}):
+                        value.pop(unset_key, None)
+                    self._store[key] = value
+                    class R:
+                        matched_count = 1
+                        upserted_id = None
+                    return R()
+            class R:
+                matched_count = 0
+                upserted_id = None
+            return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         line_group = _normalize_line_group(filt.get("lineGroup"))
@@ -47,7 +91,9 @@ class _InMemoryCollection:
             set_doc = update.get("$set", {})
             doc.update(set_doc)
             self._store[composite_key] = doc
-            class R: upserted_id = None
+            class R:
+                matched_count = 1
+                upserted_id = None
             return R()
         else:
             if upsert:
@@ -55,10 +101,15 @@ class _InMemoryCollection:
                 set_doc["date"] = date_key
                 set_doc["shift"] = shift
                 set_doc["lineGroup"] = line_group
+                set_doc["_id"] = set_doc.get("_id") or composite_key
                 self._store[composite_key] = set_doc
-                class R: upserted_id = composite_key
+                class R:
+                    matched_count = 0
+                    upserted_id = composite_key
                 return R()
-            class R: upserted_id = None
+            class R:
+                matched_count = 0
+                upserted_id = None
             return R()
 
     def find_one(self, filt):
@@ -109,6 +160,13 @@ class _InMemoryCollection:
         return _InMemoryCursor(results)
 
     def delete_one(self, filt):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    del self._store[key]
+                    class R: deleted_count = 1
+                    return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         if date_key and shift:
@@ -144,7 +202,7 @@ try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory frame_sealant_entries_collection for testing")
+    logger.warning("mongodb_not_configured_using_in_memory_frame_sealant_entries_collection")
     frame_sealant_entries_collection = _InMemoryCollection()
 
 class FrameSealantDailyEntry:
@@ -169,7 +227,8 @@ class FrameSealantDailyEntry:
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
-            entry_data["created_at"] = datetime.now().isoformat()
+            if "created_at" not in entry_data:
+                entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
             
             # Ensure frame division fields exist with proper structure
@@ -226,7 +285,7 @@ class FrameSealantDailyEntry:
             existing = frame_sealant_entries_collection.find_one({"date": entry_data["date"], "lineGroup": entry_data["lineGroup"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
-            print(f"Error in create: {str(e)}")
+            logger.exception("frame_sealant_create_failed")
             raise
     
     @staticmethod
@@ -235,8 +294,46 @@ class FrameSealantDailyEntry:
             date_key = str(date).split('T')[0]
             return frame_sealant_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group), "shift": shift})
         except Exception as e:
-            print(f"Error in get_by_date_and_shift: {str(e)}")
+            logger.exception("frame_sealant_get_by_date_and_shift_failed")
             return None
+
+    @staticmethod
+    def get_by_id(entry_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return None
+            return frame_sealant_entries_collection.find_one({"_id": ObjectId(entry_id)})
+        except Exception as e:
+            logger.exception("frame_sealant_get_by_id_failed")
+            return None
+
+    @staticmethod
+    def update_by_id(entry_id: str, update_data: Dict[str, Any], unset_data: Dict[str, str] | None = None) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            update_statement: Dict[str, Any] = {"$set": update_data}
+            if unset_data:
+                update_statement["$unset"] = unset_data
+            result = frame_sealant_entries_collection.update_one(
+                {"_id": ObjectId(entry_id)},
+                update_statement,
+            )
+            return result.matched_count == 1
+        except Exception as e:
+            logger.exception("frame_sealant_update_by_id_failed")
+            return False
+
+    @staticmethod
+    def delete_by_id(entry_id: str) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            result = frame_sealant_entries_collection.delete_one({"_id": ObjectId(entry_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.exception("frame_sealant_delete_by_id_failed")
+            return False
     
     @staticmethod
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
@@ -245,7 +342,7 @@ class FrameSealantDailyEntry:
             cursor = frame_sealant_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_all_for_date: {str(e)}")
+            logger.exception("frame_sealant_get_all_for_date_failed")
             return []
     
     @staticmethod
@@ -256,7 +353,7 @@ class FrameSealantDailyEntry:
             ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_month_entries: {str(e)}")
+            logger.exception("frame_sealant_get_month_entries_failed")
             return []
     
     @staticmethod
@@ -265,7 +362,7 @@ class FrameSealantDailyEntry:
             result = frame_sealant_entries_collection.delete_one({"date": date, "lineGroup": _normalize_line_group(line_group), "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
-            print(f"Error in delete_by_date_and_shift: {str(e)}")
+            logger.exception("frame_sealant_delete_by_date_and_shift_failed")
             return False
     
     @staticmethod
@@ -278,7 +375,7 @@ class FrameSealantDailyEntry:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"Error in update_date_signatures: {str(e)}")
+            logger.exception("frame_sealant_update_context_signatures_failed")
             return False
     
     @staticmethod
@@ -291,5 +388,5 @@ class FrameSealantDailyEntry:
                     return entry.get("signatures")
             return {"preparedBy": "", "verifiedBy": ""}
         except Exception as e:
-            print(f"Error in get_date_signatures: {str(e)}")
+            logger.exception("frame_sealant_get_context_signatures_failed")
             return {"preparedBy": "", "verifiedBy": ""}

@@ -1,9 +1,12 @@
+﻿import logging
 from fastapi import APIRouter, HTTPException, Query
 from pymongo import MongoClient
 from datetime import datetime, time
 import pandas as pd
 import numpy as np
 from constants import MONGODB_URI, MONGODB_DB_NAME
+
+logger = logging.getLogger(__name__)
 
 bgrade_router = APIRouter(prefix="/api/bgrade", tags=["B-Grade Trend"])
 
@@ -40,11 +43,11 @@ class BMongoDBManager:
                 date_obj = date_str.to_pydatetime()
             else:
                 date_obj = datetime.strptime(str(date_str), '%Y-%m-%d %H:%M:%S')
-        except:
+        except Exception:
             try:
                 date_obj = datetime.strptime(str(date_str), '%Y-%m-%d')
-            except:
-                print(f"Warning: Could not parse date: {date_str}")
+            except Exception:
+                logger.warning("b_grade_date_parse_failed date=%s", date_str)
                 return None
         month_abbr = date_obj.strftime('%b').lower()
         year = date_obj.year
@@ -368,3 +371,4 @@ async def get_daily_trend(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching daily trend: {str(e)}")
+

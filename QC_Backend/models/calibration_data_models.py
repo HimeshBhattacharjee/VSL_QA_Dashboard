@@ -10,6 +10,7 @@ from pymongo.collection import Collection
 from pymongo.errors import OperationFailure, PyMongoError
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
+from mongo_indexes import ensure_index
 
 
 logger = logging.getLogger("calibration_data")
@@ -49,26 +50,31 @@ def utc_now() -> datetime:
 
 def ensure_calibration_indexes() -> None:
     try:
-        calibration_data_collection.create_index(
+        ensure_index(
+            calibration_data_collection,
             [("date", ASCENDING), ("shift", ASCENDING), ("line_number", ASCENDING)],
             unique=True,
             name="unique_calibration_date_shift_line",
         )
-        calibration_data_collection.create_index(
+        ensure_index(
+            calibration_data_collection,
             [("line_number", ASCENDING), ("date", ASCENDING), ("shift", ASCENDING)],
             name="calibration_line_date_shift_idx",
         )
-        calibration_data_collection.create_index([("source_file", ASCENDING)], name="calibration_source_file_idx")
-        calibration_tracking_collection.create_index(
+        ensure_index(calibration_data_collection, [("source_file", ASCENDING)], name="calibration_source_file_idx")
+        ensure_index(
+            calibration_tracking_collection,
             [("file_path", ASCENDING)],
             unique=True,
             name="unique_calibration_file_path",
         )
-        calibration_tracking_collection.create_index(
+        ensure_index(
+            calibration_tracking_collection,
             [("last_modified", ASCENDING)],
             name="calibration_tracking_last_modified_idx",
         )
-        calibration_tracking_collection.create_index(
+        ensure_index(
+            calibration_tracking_collection,
             [("last_processed_at", ASCENDING)],
             name="calibration_tracking_processed_idx",
         )

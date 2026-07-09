@@ -1,9 +1,13 @@
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, Optional
 
 from pymongo import ASCENDING, MongoClient
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
+from mongo_indexes import ensure_index
+
+logger = logging.getLogger(__name__)
 
 
 client = MongoClient(MONGODB_URI)
@@ -13,17 +17,19 @@ stringer_parameter_reports_collection = db["stringer_parameter_reports"]
 
 def ensure_stringer_parameter_report_indexes() -> None:
     try:
-        stringer_parameter_reports_collection.create_index(
+        ensure_index(
+            stringer_parameter_reports_collection,
             [("year", ASCENDING), ("month", ASCENDING), ("line", ASCENDING)],
             unique=True,
             name="stringer_parameter_report_month_line_idx",
         )
-        stringer_parameter_reports_collection.create_index(
+        ensure_index(
+            stringer_parameter_reports_collection,
             [("updatedAt", ASCENDING)],
             name="stringer_parameter_report_updated_idx",
         )
     except Exception as exc:
-        print(f"Warning: failed to ensure Stringer Parameter Report indexes: {exc}")
+        logger.warning("failed_to_ensure_stringer_parameter_report_indexes error=%s", exc, exc_info=True)
 
 
 ensure_stringer_parameter_report_indexes()

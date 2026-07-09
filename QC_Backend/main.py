@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -36,10 +39,73 @@ from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
 from generators.WetLeakageReportGenerator import generate_wet_leakage_report
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+_extractors_started = False
+
+
+def run_extractors():
+    """Run all data extractors in background threads"""
+    global _extractors_started
+    if _extractors_started:
+        logger.debug("background_extractors_already_started")
+        return
+    _extractors_started = True
+
+    def run_qa():
+        try:
+            from extractors.qa_extractor import main as qa_main
+            qa_main()
+        except Exception:
+            logger.exception("qa_extractor_failed")
+
+    def run_b():
+        try:
+            from extractors.b_extractor import main as b_main
+            b_main()
+        except Exception:
+            logger.exception("b_grade_extractor_failed")
+
+    qa_thread = threading.Thread(target=run_qa, daemon=True)
+    b_thread = threading.Thread(target=run_b, daemon=True)
+
+    qa_thread.start()
+    b_thread.start()
+
+    try:
+        from services.peel_scheduler import start_peel_scheduler
+        start_peel_scheduler(run_immediately=True)
+    except Exception:
+        logger.exception("peel_scheduler_start_failed")
+
+    try:
+        from services.calibration_scheduler import start_calibration_scheduler
+        start_calibration_scheduler(run_immediately=True)
+    except Exception:
+        logger.exception("calibration_scheduler_start_failed")
+
+    logger.info("background_extractors_and_schedulers_started")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if os.getenv("DISABLE_BACKGROUND_EXTRACTORS", "false").lower() in {"1", "true", "yes"}:
+        logger.info("background_extractors_disabled")
+    else:
+        run_extractors()
+    yield
+
+
 app = FastAPI(
     title="Manufacturing Analytics API",
     description="Combined API for Quality Analysis, B-Grade Trend data, Peel Test results, User Management, Task Management, and Audit Reports",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 cors_env = os.getenv("CORS_ORIGINS", "")
@@ -76,8 +142,6 @@ app.include_router(task_router)
 app.include_router(goal_router)
 app.include_router(wet_leakage_router)
 app.include_router(ipqc_audit_router)
-
-_extractors_started = False
 
 @app.post("/api/ipqc-audits/generate-audit-report")
 async def generate_audit_report_endpoint(request: dict, x_employee_id: str | None = Header(default=None)):
@@ -120,7 +184,7 @@ async def generate_audit_report_endpoint(request: dict, x_employee_id: str | Non
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating audit report: {str(e)}")
+        logger.exception("audit_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/gel-test-reports/generate-gel-report")
@@ -166,7 +230,7 @@ async def generate_gel_report_endpoint(request: dict, x_employee_id: str | None 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating gel test report: {str(e)}")
+        logger.exception("gel_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/adhesion-test-reports/generate-adhesion-report")
@@ -212,7 +276,7 @@ async def generate_adhesion_report_endpoint(request: dict, x_employee_id: str | 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating adhesion test report: {str(e)}")
+        logger.exception("adhesion_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/ssh-test-reports/generate-ssh-report")
@@ -234,7 +298,7 @@ async def generate_ssh_report_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating SSH test report: {str(e)}")
+        logger.exception("ssh_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/potting-ratio-reports/generate-potting-report")
@@ -257,7 +321,7 @@ async def generate_potting_report_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating potting ratio report: {str(e)}")
+        logger.exception("potting_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/jb-sealant-weight-reports/generate-jb-sealant-report")
@@ -280,7 +344,7 @@ async def generate_jb_sealant_report_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating JB sealant weight report: {str(e)}")
+        logger.exception("jb_sealant_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/peel/generate-peel-report")
@@ -328,7 +392,7 @@ async def generate_peel_report_endpoint(request: dict, x_employee_id: str | None
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating peel test report: {str(e)}")
+        logger.exception("peel_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.post("/api/rot-test-reports/generate-rot-report")
@@ -350,7 +414,7 @@ async def generate_rot_report_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating RoT test report: {str(e)}")
+        logger.exception("rot_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
     
 @app.post("/api/wet-leakage-test-reports/generate-wet-leakage-report")
@@ -372,7 +436,7 @@ async def generate_wet_leakage_report_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating Wet Leakage test report: {str(e)}")
+        logger.exception("wet_leakage_report_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 @app.get("/")
@@ -475,54 +539,6 @@ async def root():
             "redoc": "/redoc"
         }
     }
-
-def run_extractors():
-    """Run all data extractors in background threads"""
-    global _extractors_started
-    if _extractors_started:
-        return
-    _extractors_started = True
-
-    def run_qa():
-        try:
-            from extractors.qa_extractor import main as qa_main
-            qa_main()
-        except Exception as e:
-            print(f"QA extractor failed: {e}")
-    
-    def run_b():
-        try:
-            from extractors.b_extractor import main as b_main
-            b_main()
-        except Exception as e:
-            print(f"B-grade extractor failed: {e}")
-
-    qa_thread = threading.Thread(target=run_qa, daemon=True)
-    b_thread = threading.Thread(target=run_b, daemon=True)
-
-    qa_thread.start()
-    b_thread.start()
-
-    try:
-        from services.peel_scheduler import start_peel_scheduler
-        start_peel_scheduler(run_immediately=True)
-    except Exception as e:
-        print(f"Peel scheduler failed to start: {e}")
-
-    try:
-        from services.calibration_scheduler import start_calibration_scheduler
-        start_calibration_scheduler(run_immediately=True)
-    except Exception as e:
-        print(f"Calibration scheduler failed to start: {e}")
-
-    print("Data extractors, peel scheduler, and calibration scheduler started in background threads")
-
-
-@app.on_event("startup")
-async def start_background_extractors():
-    if os.getenv("DISABLE_BACKGROUND_EXTRACTORS", "false").lower() in {"1", "true", "yes"}:
-        return
-    run_extractors()
 
 @app.get("/health")
 async def global_health_check():

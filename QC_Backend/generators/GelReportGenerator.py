@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, PatternFill
 from copy import copy
@@ -52,9 +53,9 @@ def apply_gel_conditional_formatting(worksheet, form_data, test_data_mapping):
                 alert_font.color = '7F1D1D'
                 cell.font = alert_font
 
-        print("Gel conditional formatting applied successfully")
+        log_progress("Gel conditional formatting applied successfully")
     except Exception as e:
-        print(f"Error applying gel conditional formatting: {str(e)}")
+        log_progress(f"Error applying gel conditional formatting: {str(e)}")
         raise
 
 def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
@@ -62,17 +63,17 @@ def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
         form_data = gel_data.get('form_data', {})
         checkbox_0 = form_data.get('checkbox_0', False)
         checkbox_1 = form_data.get('checkbox_1', False)
-        eva_epe_symbol = "✓" if checkbox_0 else "✕"
-        poe_symbol = "✓" if checkbox_1 else "✕"
+        eva_epe_symbol = "âœ“" if checkbox_0 else "âœ•"
+        poe_symbol = "âœ“" if checkbox_1 else "âœ•"
         allowable_limit_EVA = (f"1. Gel Content should be: 75 to 95% for EVA & EPE {eva_epe_symbol}")
         worksheet['B6'] = allowable_limit_EVA
         worksheet['B6'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        allowable_limit_POE = (f"2. Gel Content should be: ≥ 60% for POE {poe_symbol}")
+        allowable_limit_POE = (f"2. Gel Content should be: â‰¥ 60% for POE {poe_symbol}")
         worksheet['B7'] = allowable_limit_POE
         worksheet['B7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        print("Allowable limit with checkboxes filled successfully in cell B6 and B7")
+        log_progress("Allowable limit with checkboxes filled successfully in cell B6 and B7")
     except Exception as e:
-        print(f"Error filling allowable limit with checkboxes: {str(e)}")
+        log_progress(f"Error filling allowable limit with checkboxes: {str(e)}")
         raise
 
 def fill_encapsulant_types_with_checkboxes(worksheet, gel_data):
@@ -81,15 +82,15 @@ def fill_encapsulant_types_with_checkboxes(worksheet, gel_data):
         checkbox_2 = form_data.get('checkbox_2', False)
         checkbox_3 = form_data.get('checkbox_3', False)
         checkbox_4 = form_data.get('checkbox_4', False)
-        eva_symbol = "✓" if checkbox_2 else "✕"
-        epe_symbol = "✓" if checkbox_3 else "✕"
-        poe_symbol = "✓" if checkbox_4 else "✕"
+        eva_symbol = "âœ“" if checkbox_2 else "âœ•"
+        epe_symbol = "âœ“" if checkbox_3 else "âœ•"
+        poe_symbol = "âœ“" if checkbox_4 else "âœ•"
         encapsulant_text = f"EVA {eva_symbol}           EPE {epe_symbol}           POE {poe_symbol}"
         worksheet['I10'] = encapsulant_text
         worksheet['I10'].alignment = Alignment(horizontal='center', vertical='center')
-        print("Encapsulant types with checkboxes filled successfully in cell I10")
+        log_progress("Encapsulant types with checkboxes filled successfully in cell I10")
     except Exception as e:
-        print(f"Error filling encapsulant types with checkboxes: {str(e)}")
+        log_progress(f"Error filling encapsulant types with checkboxes: {str(e)}")
         raise
 
 def fill_gel_basic_info(worksheet, gel_data):
@@ -150,9 +151,9 @@ def fill_gel_basic_info(worksheet, gel_data):
                 worksheet[cell_ref] = form_data[field]
         fill_allowable_limit_with_checkboxes(worksheet, gel_data)
         fill_encapsulant_types_with_checkboxes(worksheet, gel_data)
-        print("Basic gel test information filled successfully")
+        log_progress("Basic gel test information filled successfully")
     except Exception as e:
-        print(f"Error filling basic gel test info: {str(e)}")
+        log_progress(f"Error filling basic gel test info: {str(e)}")
         raise
 
 def fill_gel_test_data(worksheet, gel_data):
@@ -187,9 +188,9 @@ def fill_gel_test_data(worksheet, gel_data):
         if 'mean' in averages and averages['mean']:
             worksheet.merge_cells('L19:L25')
             worksheet['L19'] = averages['mean']
-        print("Gel test data filled successfully")
+        log_progress("Gel test data filled successfully")
     except Exception as e:
-        print(f"Error filling gel test data: {str(e)}")
+        log_progress(f"Error filling gel test data: {str(e)}")
         raise
 
 def generate_gel_filename(gel_data):
@@ -206,10 +207,10 @@ def generate_gel_report(gel_data):
     try:
         if not gel_data:
             raise ValueError("No gel test data provided")
-        print("Received gel test data for report generation")
-        print(f"Report name: {gel_data.get('report_name', 'N/A')}")
-        print(f"Form data keys: {list(gel_data.get('form_data', {}).keys())}")
-        print(f"Averages keys: {list(gel_data.get('averages', {}).keys())}")
+        log_progress("Received gel test data for report generation")
+        log_progress(f"Report name: {gel_data.get('report_name', 'N/A')}")
+        log_progress(f"Form data keys: {list(gel_data.get('form_data', {}).keys())}")
+        log_progress(f"Averages keys: {list(gel_data.get('averages', {}).keys())}")
         template_key = get_template_key('Blank Gel Content Test Report.xlsx')
         template_path = download_from_s3(template_key)
         wb = load_workbook(template_path)
@@ -220,9 +221,10 @@ def generate_gel_report(gel_data):
         wb.save(output)
         output.seek(0)
         filename = generate_gel_filename(gel_data)
-        print(f"Gel test report generated successfully: {filename}")
-        print("Text with inline checkboxes have been added to single cells")
+        log_progress(f"Gel test report generated successfully: {filename}")
+        log_progress("Text with inline checkboxes have been added to single cells")
         return output, filename
     except Exception as e:
-        print(f"Error generating gel test report: {str(e)}")
+        log_progress(f"Error generating gel test report: {str(e)}")
         raise
+

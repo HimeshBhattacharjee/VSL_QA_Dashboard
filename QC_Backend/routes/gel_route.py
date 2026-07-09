@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 import re
 from typing import Optional
 
@@ -19,6 +20,8 @@ from services.creator_resolution_service import (
 )
 from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
 from users.user_db import users_collection
+
+logger = logging.getLogger(__name__)
 
 
 gel_router = APIRouter(prefix="/api/gel-test-reports", tags=["Gel Test Reports"])
@@ -140,7 +143,7 @@ def load_gel_report_form_data(report: dict, report_payload: dict | None = None) 
     try:
         return GelTestReport.from_dict(report).get_data().get("form_data", {})
     except Exception as exc:
-        print(f"Warning: failed to load gel signature data for {report.get('_id')}: {exc}")
+        logger.warning("gel_signature_data_load_failed report_id=%s error=%s", report.get("_id"), exc, exc_info=True)
         return {}
 
 
@@ -236,7 +239,7 @@ def ensure_gel_report_metadata(report: dict, report_payload: dict | None = None)
             report.update(update_data)
         return metadata
     except Exception as exc:
-        print(f"Warning: failed to extract gel report metadata for {report.get('_id')}: {exc}")
+        logger.warning("gel_report_metadata_extract_failed report_id=%s error=%s", report.get("_id"), exc, exc_info=True)
         return existing_metadata
 
 
@@ -255,7 +258,7 @@ def backfill_missing_gel_metadata(limit: int = 200) -> None:
         for report in reports:
             ensure_gel_report_metadata(report)
     except Exception as exc:
-        print(f"Warning: failed to backfill gel report metadata: {exc}")
+        logger.warning("gel_report_metadata_backfill_failed error=%s", exc, exc_info=True)
 
 
 def get_display_status(report: dict) -> str:

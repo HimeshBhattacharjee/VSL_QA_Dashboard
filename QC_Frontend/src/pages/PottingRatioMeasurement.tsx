@@ -1,3 +1,4 @@
+﻿import PottingRatioShiftEntryWorkflow from './PottingRatioShiftEntryWorkflow';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
@@ -108,7 +109,9 @@ const isRatioOutOfRange = (value: string): boolean => {
     return ratio < 4 || ratio > 6;
 };
 
-export default function PottingRatioMeasurement() {
+export default PottingRatioShiftEntryWorkflow;
+
+export function LegacyPottingRatioMeasurement() {
     const [_, setHasUnsavedChanges] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -195,7 +198,6 @@ export default function PottingRatioMeasurement() {
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
         try {
-            console.log(`Loading data for ${year}-${month}`);
 
             const entriesUrl = `${API_BASE_URL}/entries/monthly?year=${year}&month=${month}`;
             const statsUrl = `${API_BASE_URL}/stats/monthly?year=${year}&month=${month}`;
@@ -208,8 +210,6 @@ export default function PottingRatioMeasurement() {
             const entriesJson = await entriesResponse.json();
             const statsJson = await statsResponse.json();
 
-            console.log('Entries response:', entriesJson);
-            console.log('Stats response:', statsJson);
 
             let entriesArr: DailyEntry[] = [];
             if (entriesJson.data && Array.isArray(entriesJson.data)) {
@@ -218,7 +218,6 @@ export default function PottingRatioMeasurement() {
                 entriesArr = entriesJson;
             }
 
-            console.log(`Found ${entriesArr.length} entries for ${year}-${month}`);
 
             const entriesMap = new Map<string, DailyEntry>();
             const dateEntriesObj: DateEntries = {};
@@ -293,7 +292,6 @@ export default function PottingRatioMeasurement() {
                     shiftStats: shiftStats
                 };
 
-                console.log('Setting stats:', newStats);
                 setMonthlyStats(newStats);
             } else {
                 // Default stats if no data
@@ -400,7 +398,6 @@ export default function PottingRatioMeasurement() {
         const entry = monthlyEntries.get(entryKey);
 
         if (entry) {
-            console.log('Loading existing entry:', entry);
             if (!entry.lines) {
                 entry.lines = {
                     '1': createEmptyLineEntry('1'),
@@ -423,7 +420,6 @@ export default function PottingRatioMeasurement() {
             setCurrentEntry(entry);
             setIsEditing(true);
         } else {
-            console.log('Creating new entry for date:', selectedDate, 'shift:', shift);
             setCurrentEntry(createEmptyShiftEntry(selectedDate, shift, lineGroup));
             setIsEditing(false);
         }
@@ -498,7 +494,6 @@ export default function PottingRatioMeasurement() {
 
         setIsLoading(true);
         try {
-            console.log('Saving entry:', currentEntry);
 
             const response = await fetch(`${API_BASE_URL}/entries`, {
                 method: 'POST',
@@ -512,7 +507,6 @@ export default function PottingRatioMeasurement() {
             }
 
             const result = await response.json();
-            console.log('Save response:', result);
 
             if (result.data && result.data.entry) {
                 const saved = result.data.entry as DailyEntry;
@@ -814,7 +808,6 @@ export default function PottingRatioMeasurement() {
                 month
             };
 
-            console.log('Sending to Excel generator:', pottingReportData);
 
             const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
@@ -1109,7 +1102,7 @@ export default function PottingRatioMeasurement() {
                 )}
                 <TestHeading
                     heading="Potting Ratio Measurement"
-                    criteria="Part A & B ratio is 5:1 ±1 (Range: 4:1 to 6:1)"
+                    criteria="Part A & B ratio is 5:1 Â±1 (Range: 4:1 to 6:1)"
                 />
                 {showShiftSelector && selectedDate && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">

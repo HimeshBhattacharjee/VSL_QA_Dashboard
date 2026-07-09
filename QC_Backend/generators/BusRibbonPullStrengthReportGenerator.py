@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 import calendar
 from datetime import datetime
 from functools import lru_cache
@@ -188,5 +189,5 @@ def generate_bus_ribbon_pull_strength_report(report_data):
         filename = f"{safe_filename('Bus_Ribbon_INTC_Pull_Strength')}_{safe_filename(line)}_{month_name}_{year}.xlsx"
         return output, filename
     except Exception as e:
-        print(f"Error generating bus ribbon pull strength report: {str(e)}")
+        log_progress(f"Error generating bus ribbon pull strength report: {str(e)}")
         raise

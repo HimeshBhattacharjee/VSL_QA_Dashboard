@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import ZoomableChart from '../components/ZoomableChart';
 import { useAlert } from '../context/AlertContext';
 import { loadInspectionData } from '../utilities/InspectionAPIUtils';
@@ -160,7 +160,6 @@ export default function LamQC() {
                 );
                 defectData[defect] = defectSum;
                 totalRejection += defectSum;
-                console.log(`Defect: ${defect}  Count: ${defectSum}  Total Rejection: ${totalRejection}`)
             });
 
             const rejectionRate = totalProduction > 0 ?

@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import io
@@ -167,10 +168,10 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             if signatures.get('verifiedBy'):
                 worksheet['J23'] = signatures.get('verifiedBy', '')
         
-        print(f"Filled JB sealant data for date {date}")
+        log_progress(f"Filled JB sealant data for date {date}")
         
     except Exception as e:
-        print(f"Error filling JB sealant data in sheet: {str(e)}")
+        log_progress(f"Error filling JB sealant data in sheet: {str(e)}")
         raise
 
 
@@ -180,7 +181,7 @@ def generate_jb_sealant_report(jb_data):
         if not jb_data:
             raise ValueError("No JB sealant data provided")
         
-        print("Received JB sealant data for report generation")
+        log_progress("Received JB sealant data for report generation")
         
         # Handle different input formats
         if isinstance(jb_data, list):
@@ -192,8 +193,8 @@ def generate_jb_sealant_report(jb_data):
             year = jb_data.get('year', datetime.now().year)
             month = jb_data.get('month', datetime.now().month)
         
-        print(f"Entries count: {len(entries)}")
-        print(f"Year: {year}, Month: {month}")
+        log_progress(f"Entries count: {len(entries)}")
+        log_progress(f"Year: {year}, Month: {month}")
         
         # Group entries by date
         entries_by_date = {}
@@ -246,9 +247,10 @@ def generate_jb_sealant_report(jb_data):
         month_name = datetime(year, month, 1).strftime("%B")
         filename = f"JB_Sealant_Weight_{month_name}_{year}.xlsx"
         
-        print(f"JB sealant report generated successfully: {filename}")
+        log_progress(f"JB sealant report generated successfully: {filename}")
         return output, filename
         
     except Exception as e:
-        print(f"Error generating JB sealant report: {str(e)}")
+        log_progress(f"Error generating JB sealant report: {str(e)}")
         raise
+

@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 import calendar
 from datetime import datetime
 from functools import lru_cache
@@ -224,5 +225,6 @@ def generate_peel_strength_bus_ribbon_jb_soldering_report(report_data):
         )
         return output, filename
     except Exception as e:
-        print(f"Error generating peel strength bus ribbon JB soldering report: {str(e)}")
+        log_progress(f"Error generating peel strength bus ribbon JB soldering report: {str(e)}")
         raise
+

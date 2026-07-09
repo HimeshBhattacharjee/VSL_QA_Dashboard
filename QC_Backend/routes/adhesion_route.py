@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 import re
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from models.adhesion_test_models import adhesion_test_collection, AdhesionTestReport
@@ -17,6 +18,8 @@ from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDD
 from users.user_db import users_collection
 from bson import ObjectId
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 adhesion_router = APIRouter(prefix="/api/adhesion-test-reports", tags=["Adhesion Test Reports"])
 
@@ -137,7 +140,7 @@ def load_adhesion_report_form_data(report: dict, report_payload: dict | None = N
     try:
         return AdhesionTestReport.from_dict(report).get_data().get("form_data", {})
     except Exception as exc:
-        print(f"Warning: failed to load adhesion signature data for {report.get('_id')}: {exc}")
+        logger.warning("adhesion_signature_data_load_failed report_id=%s error=%s", report.get("_id"), exc, exc_info=True)
         return {}
 
 
@@ -228,7 +231,7 @@ def ensure_adhesion_report_metadata(report: dict, report_payload: dict | None = 
             report.update(update_data)
         return metadata
     except Exception as exc:
-        print(f"Warning: failed to extract adhesion report metadata for {report.get('_id')}: {exc}")
+        logger.warning("adhesion_report_metadata_extract_failed report_id=%s error=%s", report.get("_id"), exc, exc_info=True)
         return existing_metadata
 
 
@@ -247,7 +250,7 @@ def backfill_missing_adhesion_metadata(limit: int = 200) -> None:
         for report in reports:
             ensure_adhesion_report_metadata(report)
     except Exception as exc:
-        print(f"Warning: failed to backfill adhesion report metadata: {exc}")
+        logger.warning("adhesion_report_metadata_backfill_failed error=%s", exc, exc_info=True)
 
 
 def get_display_status(report: dict) -> str:

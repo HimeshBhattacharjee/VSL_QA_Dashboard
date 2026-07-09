@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL);
+﻿const API_BASE_URL = (import.meta.env.VITE_API_URL);
 
 export interface GradeCounts {
     [key: string]: number;
@@ -66,7 +66,6 @@ export async function loadInspectionData(inspectionType: string, line: string = 
             summaryUrl = `${API_BASE_URL}/qa/lines/${line}/${inspectionType}/summary`;
         }
 
-        console.log(`Fetching data from: ${dataUrl}`);
 
         const [dataResponse, summaryResponse] = await Promise.all([
             fetch(dataUrl),

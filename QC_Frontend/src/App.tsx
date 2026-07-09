@@ -15,7 +15,7 @@ import JBSealantWtMeasurement from './pages/JBSealantWtMeasurement';
 import FrameSealantWtMeasurement from './pages/FrameSealantWtMeasurement';
 import BusRibbonPullStrengthTest from './pages/BusRibbonPullStrengthTest';
 import PeelStrengthBusRibbonJBSolderingTest from './pages/PeelStrengthBusRibbonJBSolderingTest';
-import JBContactBlockMaintenanceReport from './pages/JBContactBlockMaintenanceReport';
+import JBContactBlockMaintenanceReport from './pages/JBContactBlockMaintenanceDailyWorkflow';
 import SSHTest from './pages/SSHTest';
 import PeelTest from './pages/PeelTest';
 import RoTTest from './pages/RoTTest';

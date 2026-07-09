@@ -1,7 +1,12 @@
-from pymongo import MongoClient, ASCENDING
+from bson import ObjectId
+import logging
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import drop_index_if_exists, ensure_index
+
+logger = logging.getLogger(__name__)
 
 def _normalize_line_group(line_group):
     return 'Line-II' if line_group == 'Line-II' else 'Line-I'
@@ -10,11 +15,34 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 potting_entries_collection = db["potting_daily_entries"]
 try:
-    potting_entries_collection.drop_index("date_1_shift_1")
-except Exception:
-    pass
-potting_entries_collection.create_index([("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)], unique=True)
-potting_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+    drop_index_if_exists(potting_entries_collection, "date_1_shift_1")
+    ensure_index(
+        potting_entries_collection,
+        [("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)],
+        unique=True,
+        name="potting_date_line_group_shift_unique_idx",
+    )
+    ensure_index(potting_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="potting_year_month_idx")
+except Exception as exc:
+    logger.warning("failed_to_prepare_potting_base_indexes error=%s", exc, exc_info=True)
+
+def ensure_potting_indexes() -> None:
+    try:
+        ensure_index(potting_entries_collection, [("updatedAt", DESCENDING)], name="potting_updated_at_desc_idx")
+        ensure_index(potting_entries_collection, [("createdAt", DESCENDING)], name="potting_created_at_desc_idx")
+        ensure_index(potting_entries_collection, [("workflowState", ASCENDING)], name="potting_workflow_state_idx")
+        ensure_index(potting_entries_collection, [("status", ASCENDING)], name="potting_status_idx")
+        ensure_index(potting_entries_collection, [("date", DESCENDING)], name="potting_date_desc_idx")
+        ensure_index(potting_entries_collection, [("shift", ASCENDING)], name="potting_shift_idx")
+        ensure_index(potting_entries_collection, [("lineGroup", ASCENDING)], name="potting_line_group_idx")
+        ensure_index(potting_entries_collection, [("lines.1.po", ASCENDING)], name="potting_line_1_po_idx")
+        ensure_index(potting_entries_collection, [("lines.2.po", ASCENDING)], name="potting_line_2_po_idx")
+        ensure_index(potting_entries_collection, [("createdByEmployeeId", ASCENDING)], name="potting_created_by_employee_id_idx")
+    except Exception as exc:
+        logger.warning("failed_to_ensure_potting_ratio_indexes error=%s", exc, exc_info=True)
+
+
+ensure_potting_indexes()
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -38,6 +66,22 @@ class _InMemoryCollection:
         return None
 
     def update_one(self, filt, update, upsert=False):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    value.update(update.get("$set", {}))
+                    for unset_key in update.get("$unset", {}):
+                        value.pop(unset_key, None)
+                    self._store[key] = value
+                    class R:
+                        matched_count = 1
+                        upserted_id = None
+                    return R()
+            class R:
+                matched_count = 0
+                upserted_id = None
+            return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         line_group = _normalize_line_group(filt.get("lineGroup"))
@@ -55,10 +99,15 @@ class _InMemoryCollection:
                 set_doc["date"] = date_key
                 set_doc["shift"] = shift
                 set_doc["lineGroup"] = line_group
+                set_doc["_id"] = set_doc.get("_id") or composite_key
                 self._store[composite_key] = set_doc
-                class R: upserted_id = composite_key
+                class R:
+                    matched_count = 0
+                    upserted_id = composite_key
                 return R()
-            class R: upserted_id = None
+            class R:
+                matched_count = 0
+                upserted_id = None
             return R()
 
     def find_one(self, filt):
@@ -110,6 +159,13 @@ class _InMemoryCollection:
         return _InMemoryCursor(results)
 
     def delete_one(self, filt):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    del self._store[key]
+                    class R: deleted_count = 1
+                    return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         if date_key and shift:
@@ -145,7 +201,7 @@ try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory potting_entries_collection for testing")
+    logger.warning("mongodb_not_configured_using_in_memory_potting_entries_collection")
     potting_entries_collection = _InMemoryCollection()
 
 class PottingDailyEntry:
@@ -170,7 +226,8 @@ class PottingDailyEntry:
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
-            entry_data["created_at"] = datetime.now().isoformat()
+            if "created_at" not in entry_data:
+                entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
             
             # Remove _id if present
@@ -188,7 +245,7 @@ class PottingDailyEntry:
             existing = potting_entries_collection.find_one({"date": entry_data["date"], "lineGroup": entry_data["lineGroup"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
-            print(f"Error in create: {str(e)}")
+            logger.exception("potting_create_failed")
             raise
     
     @staticmethod
@@ -197,8 +254,46 @@ class PottingDailyEntry:
             date_key = str(date).split('T')[0]
             return potting_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group), "shift": shift})
         except Exception as e:
-            print(f"Error in get_by_date_and_shift: {str(e)}")
+            logger.exception("potting_get_by_date_and_shift_failed")
             return None
+
+    @staticmethod
+    def get_by_id(entry_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return None
+            return potting_entries_collection.find_one({"_id": ObjectId(entry_id)})
+        except Exception as e:
+            logger.exception("potting_get_by_id_failed")
+            return None
+
+    @staticmethod
+    def update_by_id(entry_id: str, update_data: Dict[str, Any], unset_data: Dict[str, str] | None = None) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            update_statement: Dict[str, Any] = {"$set": update_data}
+            if unset_data:
+                update_statement["$unset"] = unset_data
+            result = potting_entries_collection.update_one(
+                {"_id": ObjectId(entry_id)},
+                update_statement,
+            )
+            return result.matched_count == 1
+        except Exception as e:
+            logger.exception("potting_update_by_id_failed")
+            return False
+
+    @staticmethod
+    def delete_by_id(entry_id: str) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            result = potting_entries_collection.delete_one({"_id": ObjectId(entry_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.exception("potting_delete_by_id_failed")
+            return False
     
     @staticmethod
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
@@ -207,7 +302,7 @@ class PottingDailyEntry:
             cursor = potting_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_all_for_date: {str(e)}")
+            logger.exception("potting_get_all_for_date_failed")
             return []
     
     @staticmethod
@@ -218,7 +313,7 @@ class PottingDailyEntry:
             ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_month_entries: {str(e)}")
+            logger.exception("potting_get_month_entries_failed")
             return []
     
     @staticmethod
@@ -227,7 +322,7 @@ class PottingDailyEntry:
             result = potting_entries_collection.delete_one({"date": date, "lineGroup": _normalize_line_group(line_group), "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
-            print(f"Error in delete_by_date_and_shift: {str(e)}")
+            logger.exception("potting_delete_by_date_and_shift_failed")
             return False
     
     @staticmethod
@@ -241,7 +336,7 @@ class PottingDailyEntry:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"Error in update_date_signatures: {str(e)}")
+            logger.exception("potting_update_context_signatures_failed")
             return False
     
     @staticmethod
@@ -254,5 +349,5 @@ class PottingDailyEntry:
                     return entry.get("signatures")
             return {"preparedBy": "", "verifiedBy": ""}
         except Exception as e:
-            print(f"Error in get_date_signatures: {str(e)}")
+            logger.exception("potting_get_context_signatures_failed")
             return {"preparedBy": "", "verifiedBy": ""}

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
 from fastapi.responses import StreamingResponse
 from datetime import datetime
 from bson import ObjectId
+import logging
 import os
 import io
 import base64
@@ -11,6 +12,8 @@ from models.user_models import (
     PasswordChangeRequest, SignatureUpdateRequest, UserUpdate
 )
 from users.user_db import users_collection, generate_password
+
+logger = logging.getLogger(__name__)
 
 user_router = APIRouter(prefix="/api/user", tags=["User Management"])
 
@@ -290,9 +293,7 @@ async def upload_signature(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error uploading signature: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("signature_upload_failed employee_id=%s", employeeId)
         raise HTTPException(status_code=500, detail=f"Error uploading signature: {str(e)}")
 
 @user_router.delete("/signature/remove/{employeeId}")
@@ -335,8 +336,8 @@ async def get_signature_image(source: str):
         image_bytes = response["Body"].read()
         content_type = response.get("ContentType") or "image/png"
         return StreamingResponse(io.BytesIO(image_bytes), media_type=content_type)
-    except Exception as e:
-        print(f"Unable to load signature image {signature_key}: {str(e)}")
+    except Exception:
+        logger.exception("signature_image_load_failed key=%s", signature_key)
         raise HTTPException(status_code=404, detail="Signature image not found")
 
 @user_router.get("/signature/{employeeId}")

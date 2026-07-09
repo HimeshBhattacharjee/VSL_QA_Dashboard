@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import io
@@ -28,7 +29,7 @@ def fill_ssh_test_data(worksheet, entries):
             entries_by_date[date][shift] = entry
             
         current_row = 6
-        print(f"Filling test data for {len(entries_by_date)} dates starting at row {current_row}")
+        log_progress(f"Filling test data for {len(entries_by_date)} dates starting at row {current_row}")
         
         # Process each date
         for date, shift_entries in entries_by_date.items():
@@ -36,7 +37,7 @@ def fill_ssh_test_data(worksheet, entries):
             try:
                 date_obj = datetime.strptime(date, '%Y-%m-%d')
                 formatted_date = date_obj.strftime("%d.%m.%Y")
-            except:
+            except Exception:
                 formatted_date = date
             
             # Set date in C column - will be merged from row to row+5 in template
@@ -80,13 +81,13 @@ def fill_ssh_test_data(worksheet, entries):
                     fill_line_row(worksheet, shift_start_row, {}, '')
                     fill_line_row(worksheet, shift_end_row, {}, '')
             
-            # Move to next date (6 rows down as per template: 3 shifts × 2 rows each)
+            # Move to next date (6 rows down as per template: 3 shifts Ã— 2 rows each)
             current_row += 6
         
-        print(f"Filled test data successfully up to row {current_row - 1}")
+        log_progress(f"Filled test data successfully up to row {current_row - 1}")
         
     except Exception as e:
-        print(f"Error filling SSH test data: {str(e)}")
+        log_progress(f"Error filling SSH test data: {str(e)}")
         raise
 
 def fill_line_row(worksheet, row, line_data, checked_by=''):
@@ -108,7 +109,7 @@ def fill_line_row(worksheet, row, line_data, checked_by=''):
                     worksheet[f'H{row}'] = date_obj.strftime("%d.%m.%Y")
                 else:
                     worksheet[f'H{row}'] = exp_date
-            except:
+            except Exception:
                 worksheet[f'H{row}'] = exp_date
         
         # Sample Taking Time (Column I)
@@ -147,7 +148,7 @@ def fill_line_row(worksheet, row, line_data, checked_by=''):
         worksheet[f'M{row}'] = line_data.get('remarks', '')
             
     except Exception as e:
-        print(f"Error filling line row at row {row}: {str(e)}")
+        log_progress(f"Error filling line row at row {row}: {str(e)}")
         raise
 
 def fill_ssh_signatures(worksheet, form_data):
@@ -167,10 +168,10 @@ def fill_ssh_signatures(worksheet, form_data):
             cell = worksheet['K193']
             cell.value = approved_by
         
-        print("SSH signatures filled successfully")
+        log_progress("SSH signatures filled successfully")
         
     except Exception as e:
-        print(f"Error filling SSH signatures: {str(e)}")
+        log_progress(f"Error filling SSH signatures: {str(e)}")
         raise
 
 def generate_ssh_report(ssh_data):
@@ -179,7 +180,7 @@ def generate_ssh_report(ssh_data):
         if not ssh_data:
             raise ValueError("No SSH test data provided")
         
-        print("Received SSH test data for report generation")
+        log_progress("Received SSH test data for report generation")
         
         # Handle different input formats
         if isinstance(ssh_data, list):
@@ -195,7 +196,7 @@ def generate_ssh_report(ssh_data):
         if not entries and isinstance(ssh_data, dict) and 'shift' in ssh_data and 'lines' in ssh_data:
             entries = [ssh_data]
         
-        print(f"Entries count: {len(entries)}")
+        log_progress(f"Entries count: {len(entries)}")
         
         # Load template
         template_key = get_template_key('Blank Sealant Shore Hardness Test Report.xlsx')
@@ -234,9 +235,10 @@ def generate_ssh_report(ssh_data):
         
         filename = f"{clean_name}_{timestamp}.xlsx"
         
-        print(f"SSH test report generated successfully: {filename}")
+        log_progress(f"SSH test report generated successfully: {filename}")
         return output, filename
         
     except Exception as e:
-        print(f"Error generating SSH test report: {str(e)}")
+        log_progress(f"Error generating SSH test report: {str(e)}")
         raise
+

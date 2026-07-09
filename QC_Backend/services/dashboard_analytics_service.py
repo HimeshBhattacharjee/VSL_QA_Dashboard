@@ -168,6 +168,7 @@ def build_dashboard_response(
     serialize_item: Callable[[dict], dict] | None = None,
     item_sort: Sequence[tuple[str, int]] | None = None,
     item_limit: int = 500,
+    daily_group_field: str = "shift",
 ) -> dict:
     date_from, date_to = resolve_dashboard_date_range(view)
     start_date = date.fromisoformat(date_from)
@@ -178,6 +179,8 @@ def build_dashboard_response(
         "_dashboardDate": {"$ifNull": ["$date", ""]},
         "_dashboardShift": {"$ifNull": ["$shift", "Unassigned"]},
     }
+    daily_group_expression = "$date" if daily_group_field == "date" else f"${daily_group_field}"
+    project_stage["_dashboardDailyGroup"] = {"$ifNull": [daily_group_expression, "Unassigned"]}
     if include_completion:
         project_stage["_completion"] = _completion_expression(completion_field)
 
@@ -193,7 +196,7 @@ def build_dashboard_response(
                     {"$group": _group_spec("$_dashboardDate", total_key, include_completion)},
                 ],
                 "shiftGroups": [
-                    {"$group": _group_spec("$_dashboardShift", total_key, include_completion)},
+                    {"$group": _group_spec("$_dashboardDailyGroup", total_key, include_completion)},
                 ],
             }
         },

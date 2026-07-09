@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 import argparse
 import logging
 import re
@@ -106,11 +107,11 @@ def main() -> Dict[str, int]:
     args = parser.parse_args()
 
     summary = migrate_peel_collections(dry_run=args.dry_run, preserve_ids=not args.no_preserve_ids)
-    print(f"Collections scanned: {summary['collections_scanned']}")
-    print(f"Records seen: {summary['records_seen']}")
-    print(f"Records migrated: {summary['records_migrated']}")
-    print(f"Duplicates skipped: {summary['duplicates_skipped']}")
-    print(f"Errors: {summary['errors']}")
+    log_progress(f"Collections scanned: {summary['collections_scanned']}")
+    log_progress(f"Records seen: {summary['records_seen']}")
+    log_progress(f"Records migrated: {summary['records_migrated']}")
+    log_progress(f"Duplicates skipped: {summary['duplicates_skipped']}")
+    log_progress(f"Errors: {summary['errors']}")
     return summary
 
 
@@ -120,3 +121,4 @@ if __name__ == "__main__":
     except PyMongoError as exc:
         logger.exception("migration_failed error=%s", exc)
         raise
+

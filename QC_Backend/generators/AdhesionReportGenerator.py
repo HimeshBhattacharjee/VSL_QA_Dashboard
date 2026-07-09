@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from copy import copy
@@ -88,22 +89,22 @@ def fill_adhesion_basic_info(worksheet, adhesion_data):
         # Handle date field separately
         if 'testDate' in form_data and form_data['testDate']:
             worksheet['C6'] = form_data['testDate']
-            print(f"Date filled: {form_data['testDate']}")
+            log_progress(f"Date filled: {form_data['testDate']}")
         
         # Handle shift field separately
         if 'shift' in form_data and form_data['shift']:
             worksheet['C7'] = form_data['shift']
-            print(f"Shift filled: {form_data['shift']}")
+            log_progress(f"Shift filled: {form_data['shift']}")
         
         # Handle laminator field separately
         if 'laminator' in form_data and form_data['laminator']:
             worksheet['C11'] = form_data['laminator']
-            print(f"Laminator filled: {form_data['laminator']}")
+            log_progress(f"Laminator filled: {form_data['laminator']}")
         
         # Handle lamination position field separately
         if 'laminationPosition' in form_data and form_data['laminationPosition']:
             worksheet['C12'] = form_data['laminationPosition']
-            print(f"Lamination Position filled: {form_data['laminationPosition']}")
+            log_progress(f"Lamination Position filled: {form_data['laminationPosition']}")
         
         # Handle lamination parameters from JSON
         if 'lamParams' in form_data and form_data['lamParams']:
@@ -164,11 +165,11 @@ def fill_adhesion_basic_info(worksheet, adhesion_data):
                     if 'processTime' in lam_data:
                         worksheet[lam_params_mapping['lam3_processTime']] = lam_data['processTime']
             
-            print(f"Lamination parameters filled successfully")
+            log_progress(f"Lamination parameters filled successfully")
             
-        print("Basic adhesion test information filled successfully")
+        log_progress("Basic adhesion test information filled successfully")
     except Exception as e:
-        print(f"Error filling basic adhesion test info: {str(e)}")
+        log_progress(f"Error filling basic adhesion test info: {str(e)}")
         raise
 
 def fill_adhesion_test_data(worksheet, adhesion_data):
@@ -228,9 +229,9 @@ def fill_adhesion_test_data(worksheet, adhesion_data):
                 value = averages[field]
                 worksheet[cell_ref] = value if value not in (None, '', '-') else '0.00'
 
-        print("Adhesion test data filled successfully")
+        log_progress("Adhesion test data filled successfully")
     except Exception as e:
-        print(f"Error filling adhesion test data: {str(e)}")
+        log_progress(f"Error filling adhesion test data: {str(e)}")
         raise
 
 def generate_adhesion_filename(adhesion_data):
@@ -247,10 +248,10 @@ def generate_adhesion_report(adhesion_data):
     try:
         if not adhesion_data:
             raise ValueError("No adhesion test data provided")
-        print("Received adhesion test data for report generation")
-        print(f"Report name: {adhesion_data.get('name', 'N/A')}")
-        print(f"Form data keys: {list(adhesion_data.get('form_data', {}).keys())}")
-        print(f"Averages keys: {list(adhesion_data.get('averages', {}).keys())}")
+        log_progress("Received adhesion test data for report generation")
+        log_progress(f"Report name: {adhesion_data.get('name', 'N/A')}")
+        log_progress(f"Form data keys: {list(adhesion_data.get('form_data', {}).keys())}")
+        log_progress(f"Averages keys: {list(adhesion_data.get('averages', {}).keys())}")
         
         template_key = get_template_key('Blank Adhesion Test Report.xlsx')
         template_path = download_from_s3(template_key)
@@ -265,8 +266,9 @@ def generate_adhesion_report(adhesion_data):
         output.seek(0)
         
         filename = generate_adhesion_filename(adhesion_data)
-        print(f"Adhesion test report generated successfully: {filename}")
+        log_progress(f"Adhesion test report generated successfully: {filename}")
         return output, filename
     except Exception as e:
-        print(f"Error generating adhesion test report: {str(e)}")
+        log_progress(f"Error generating adhesion test report: {str(e)}")
         raise
+

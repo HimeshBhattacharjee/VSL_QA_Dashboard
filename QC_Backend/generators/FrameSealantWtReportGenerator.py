@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 import io
@@ -83,10 +84,10 @@ def fill_frame_data_in_sheet(worksheet, entries, date):
             if signatures.get('verifiedBy'):
                 worksheet['M19'] = signatures.get('verifiedBy', '')
         
-        print(f"Filled frame sealant data for date {date}")
+        log_progress(f"Filled frame sealant data for date {date}")
         
     except Exception as e:
-        print(f"Error filling frame sealant data in sheet: {str(e)}")
+        log_progress(f"Error filling frame sealant data in sheet: {str(e)}")
         raise
 
 
@@ -140,7 +141,7 @@ def generate_frame_sealant_report(frame_data):
         if not frame_data:
             raise ValueError("No frame sealant data provided")
         
-        print("Received frame sealant data for report generation")
+        log_progress("Received frame sealant data for report generation")
         
         # Handle different input formats
         if isinstance(frame_data, list):
@@ -152,8 +153,8 @@ def generate_frame_sealant_report(frame_data):
             year = frame_data.get('year', datetime.now().year)
             month = frame_data.get('month', datetime.now().month)
         
-        print(f"Entries count: {len(entries)}")
-        print(f"Year: {year}, Month: {month}")
+        log_progress(f"Entries count: {len(entries)}")
+        log_progress(f"Year: {year}, Month: {month}")
         
         # Group entries by date
         entries_by_date = {}
@@ -206,9 +207,10 @@ def generate_frame_sealant_report(frame_data):
         month_name = datetime(year, month, 1).strftime("%B")
         filename = f"Frame_Sealant_Weight_{month_name}_{year}.xlsx"
         
-        print(f"Frame sealant report generated successfully: {filename}")
+        log_progress(f"Frame sealant report generated successfully: {filename}")
         return output, filename
         
     except Exception as e:
-        print(f"Error generating frame sealant report: {str(e)}")
+        log_progress(f"Error generating frame sealant report: {str(e)}")
         raise
+

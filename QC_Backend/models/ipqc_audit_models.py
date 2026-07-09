@@ -1,8 +1,12 @@
+import logging
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from typing import Optional, Dict, Any, Iterable
 from urllib.parse import unquote, urlparse
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import ensure_index
 from s3_service import S3Service
+
+logger = logging.getLogger(__name__)
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
@@ -10,22 +14,23 @@ ipqc_audit_collection = db["ipqc_audits"]
 
 def ensure_ipqc_audit_indexes() -> None:
     try:
-        ipqc_audit_collection.create_index([("timestamp", DESCENDING)], name="ipqc_timestamp_desc_idx")
-        ipqc_audit_collection.create_index([("updated_timestamp", DESCENDING)], name="ipqc_updated_timestamp_desc_idx")
-        ipqc_audit_collection.create_index([("name", ASCENDING)], name="ipqc_name_idx")
-        ipqc_audit_collection.create_index(
+        ensure_index(ipqc_audit_collection, [("timestamp", DESCENDING)], name="ipqc_timestamp_desc_idx")
+        ensure_index(ipqc_audit_collection, [("updated_timestamp", DESCENDING)], name="ipqc_updated_timestamp_desc_idx")
+        ensure_index(ipqc_audit_collection, [("name", ASCENDING)], name="ipqc_name_idx")
+        ensure_index(
+            ipqc_audit_collection,
             [("lineNumber", ASCENDING), ("date", ASCENDING), ("shift", ASCENDING)],
             name="ipqc_line_date_shift_idx"
         )
-        ipqc_audit_collection.create_index([("status", ASCENDING)], name="ipqc_status_idx")
-        ipqc_audit_collection.create_index([("createdBy", ASCENDING)], name="ipqc_created_by_idx")
-        ipqc_audit_collection.create_index([("workflowState", ASCENDING)], name="ipqc_workflow_state_idx")
-        ipqc_audit_collection.create_index([("createdByEmployeeId", ASCENDING)], name="ipqc_created_by_employee_id_idx")
-        ipqc_audit_collection.create_index([("date", DESCENDING)], name="ipqc_date_desc_idx")
-        ipqc_audit_collection.create_index([("completionPercentage", DESCENDING)], name="ipqc_completion_percentage_desc_idx")
-        ipqc_audit_collection.create_index([("lockTimestamp", DESCENDING)], name="ipqc_lock_timestamp_desc_idx")
+        ensure_index(ipqc_audit_collection, [("status", ASCENDING)], name="ipqc_status_idx")
+        ensure_index(ipqc_audit_collection, [("createdBy", ASCENDING)], name="ipqc_created_by_idx")
+        ensure_index(ipqc_audit_collection, [("workflowState", ASCENDING)], name="ipqc_workflow_state_idx")
+        ensure_index(ipqc_audit_collection, [("createdByEmployeeId", ASCENDING)], name="ipqc_created_by_employee_id_idx")
+        ensure_index(ipqc_audit_collection, [("date", DESCENDING)], name="ipqc_date_desc_idx")
+        ensure_index(ipqc_audit_collection, [("completionPercentage", DESCENDING)], name="ipqc_completion_percentage_desc_idx")
+        ensure_index(ipqc_audit_collection, [("lockTimestamp", DESCENDING)], name="ipqc_lock_timestamp_desc_idx")
     except Exception as exc:
-        print(f"Warning: failed to ensure IPQC audit indexes: {exc}")
+        logger.warning("failed_to_ensure_ipqc_audit_indexes error=%s", exc, exc_info=True)
 
 ensure_ipqc_audit_indexes()
 
@@ -948,18 +953,14 @@ class IPQCAudit:
         try:
             return normalize_ipqc_audit_data(self.s3_service.download_json(self.s3_key))
         except Exception as e:
-            print(f"Error retrieving IPQC audit data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("ipqc_audit_s3_download_failed key=%s", self.s3_key)
             return {}
 
     def save_data(self, data: Dict[str, Any]) -> bool:
         try:
             return self.s3_service.uploadOrOverwriteJson(self.s3_key, normalize_ipqc_audit_data(data))
         except Exception as e:
-            print(f"Error saving IPQC audit data to S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("ipqc_audit_s3_upload_failed key=%s", self.s3_key)
             return False
 
     def delete_data(self) -> bool:
@@ -967,9 +968,7 @@ class IPQCAudit:
             self.s3_service.delete_json(self.s3_key)
             return True
         except Exception as e:
-            print(f"Error deleting IPQC audit data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("ipqc_audit_s3_delete_failed key=%s", self.s3_key)
             return False
 
     def to_dict(self, include_data: bool = False) -> Dict[str, Any]:

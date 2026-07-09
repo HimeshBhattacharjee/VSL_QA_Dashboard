@@ -1,7 +1,11 @@
+import logging
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from typing import Optional, Dict, Any
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import ensure_index
 from s3_service import S3Service
+
+logger = logging.getLogger(__name__)
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
@@ -9,18 +13,18 @@ gel_test_collection = db["gel_test_reports"]
 
 def ensure_gel_test_indexes() -> None:
     try:
-        gel_test_collection.create_index([("updatedAt", DESCENDING)], name="gel_updated_at_desc_idx")
-        gel_test_collection.create_index([("timestamp", DESCENDING)], name="gel_timestamp_desc_idx")
-        gel_test_collection.create_index([("name", ASCENDING)], name="gel_name_idx")
-        gel_test_collection.create_index([("status", ASCENDING)], name="gel_status_idx")
-        gel_test_collection.create_index([("workflowState", ASCENDING)], name="gel_workflow_state_idx")
-        gel_test_collection.create_index([("createdByEmployeeId", ASCENDING)], name="gel_created_by_employee_id_idx")
-        gel_test_collection.create_index([("date", DESCENDING)], name="gel_date_desc_idx")
-        gel_test_collection.create_index([("shift", ASCENDING)], name="gel_shift_idx")
-        gel_test_collection.create_index([("lineNumber", ASCENDING)], name="gel_line_number_idx")
-        gel_test_collection.create_index([("productionOrderNo", ASCENDING)], name="gel_production_order_idx")
+        ensure_index(gel_test_collection, [("updatedAt", DESCENDING)], name="gel_updated_at_desc_idx")
+        ensure_index(gel_test_collection, [("timestamp", DESCENDING)], name="gel_timestamp_desc_idx")
+        ensure_index(gel_test_collection, [("name", ASCENDING)], name="gel_name_idx")
+        ensure_index(gel_test_collection, [("status", ASCENDING)], name="gel_status_idx")
+        ensure_index(gel_test_collection, [("workflowState", ASCENDING)], name="gel_workflow_state_idx")
+        ensure_index(gel_test_collection, [("createdByEmployeeId", ASCENDING)], name="gel_created_by_employee_id_idx")
+        ensure_index(gel_test_collection, [("date", DESCENDING)], name="gel_date_desc_idx")
+        ensure_index(gel_test_collection, [("shift", ASCENDING)], name="gel_shift_idx")
+        ensure_index(gel_test_collection, [("lineNumber", ASCENDING)], name="gel_line_number_idx")
+        ensure_index(gel_test_collection, [("productionOrderNo", ASCENDING)], name="gel_production_order_idx")
     except Exception as exc:
-        print(f"Warning: failed to ensure gel test indexes: {exc}")
+        logger.warning("failed_to_ensure_gel_test_indexes error=%s", exc, exc_info=True)
 
 ensure_gel_test_indexes()
 
@@ -74,9 +78,7 @@ class GelTestReport:
                 "averages": data.get("averages", {})
             }
         except Exception as e:
-            print(f"Error retrieving gel test data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("gel_test_s3_download_failed key=%s", self.s3_key)
             return {"form_data": {}, "averages": {}}
 
     def save_data(self, form_data: Dict[str, Any], averages: Dict[str, str]) -> bool:
@@ -87,9 +89,7 @@ class GelTestReport:
             }
             return self.s3_service.uploadOrOverwriteJson(self.s3_key, data)
         except Exception as e:
-            print(f"Error saving gel test data to S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("gel_test_s3_upload_failed key=%s", self.s3_key)
             return False
 
     def delete_data(self) -> bool:
@@ -97,9 +97,7 @@ class GelTestReport:
             self.s3_service.delete_json(self.s3_key)
             return True
         except Exception as e:
-            print(f"Error deleting gel test data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("gel_test_s3_delete_failed key=%s", self.s3_key)
             return False
 
     def to_dict(self, include_data: bool = False) -> Dict[str, Any]:

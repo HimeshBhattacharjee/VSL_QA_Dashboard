@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side, NamedStyle)
 import io
@@ -14,9 +15,9 @@ def fill_peel_basic_info(worksheet, peel_data):
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
                 apply_peel_cell_formatting(worksheet[cell_ref], font_size=10, horizontal='center')
-        print("Basic peel test information filled successfully")
+        log_progress("Basic peel test information filled successfully")
     except Exception as e:
-        print(f"Error filling basic peel test info: {str(e)}")
+        log_progress(f"Error filling basic peel test info: {str(e)}")
         raise
 
 def fill_peel_test_data(worksheet, peel_data):
@@ -61,10 +62,10 @@ def fill_peel_test_data(worksheet, peel_data):
                         apply_peel_cell_formatting(worksheet[cell_ref], font_size=9, horizontal='center')
                 except (ValueError, TypeError):
                     apply_peel_cell_formatting(worksheet[cell_ref], font_size=9, horizontal='center')
-        print("Peel test data filled successfully")
+        log_progress("Peel test data filled successfully")
         
     except Exception as e:
-        print(f"Error filling peel test data: {str(e)}")
+        log_progress(f"Error filling peel test data: {str(e)}")
         raise
 
 def apply_peel_cell_formatting(cell, font_size=9, bold=False, 
@@ -100,9 +101,9 @@ def generate_peel_report(peel_data):
     try:
         if not peel_data:
             raise ValueError("No peel test data provided")
-        print("Received peel test data for report generation")
-        print(f"Report name: {peel_data.get('report_name', 'N/A')}")
-        print(f"Form data keys: {list(peel_data.get('form_data', {}).keys())}")
+        log_progress("Received peel test data for report generation")
+        log_progress(f"Report name: {peel_data.get('report_name', 'N/A')}")
+        log_progress(f"Form data keys: {list(peel_data.get('form_data', {}).keys())}")
         template_key = get_template_key('Blank Solar Cell Peel Strength Test Report.xlsx')
         template_path = download_from_s3(template_key)
         wb = load_workbook(template_path)
@@ -113,8 +114,9 @@ def generate_peel_report(peel_data):
         wb.save(output)
         output.seek(0)
         filename = generate_peel_filename(peel_data)
-        print(f"Peel test report generated successfully: {filename}")
+        log_progress(f"Peel test report generated successfully: {filename}")
         return output, filename
     except Exception as e:
-        print(f"Error generating peel test report: {str(e)}")
+        log_progress(f"Error generating peel test report: {str(e)}")
         raise
+

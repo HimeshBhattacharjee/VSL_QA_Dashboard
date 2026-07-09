@@ -1,9 +1,14 @@
 from datetime import datetime
+import logging
 from typing import Any, Dict, List, Optional
 
-from pymongo import ASCENDING, MongoClient
+from bson import ObjectId
+from pymongo import ASCENDING, DESCENDING, MongoClient
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
+from mongo_indexes import drop_index_if_exists, ensure_index
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_fab(fab: str | None) -> str:
@@ -14,16 +19,32 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 jb_contact_block_entries_collection = db["jb_contact_block_maintenance_daily_entries"]
 
-jb_contact_block_entries_collection.create_index(
-    [("date", ASCENDING), ("fab", ASCENDING)],
-    unique=True,
-)
-jb_contact_block_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+
+def ensure_jb_contact_block_indexes() -> None:
+    try:
+        # Earlier versions allowed one record per date/FAB. The Daily Entry
+        # workflow allows multiple maintenance entries for the same date.
+        drop_index_if_exists(jb_contact_block_entries_collection, "date_1_fab_1")
+
+        ensure_index(jb_contact_block_entries_collection, [("date", ASCENDING)], name="jb_contact_block_date_idx")
+        ensure_index(jb_contact_block_entries_collection, [("date", DESCENDING)], name="jb_contact_block_date_desc_idx")
+        ensure_index(jb_contact_block_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="jb_contact_block_year_month_idx")
+        ensure_index(jb_contact_block_entries_collection, [("updatedAt", DESCENDING)], name="jb_contact_block_updated_at_desc_idx")
+        ensure_index(jb_contact_block_entries_collection, [("createdAt", DESCENDING)], name="jb_contact_block_created_at_desc_idx")
+        ensure_index(jb_contact_block_entries_collection, [("workflowState", ASCENDING)], name="jb_contact_block_workflow_state_idx")
+        ensure_index(jb_contact_block_entries_collection, [("status", ASCENDING)], name="jb_contact_block_status_idx")
+        ensure_index(jb_contact_block_entries_collection, [("poSummary", ASCENDING)], name="jb_contact_block_po_summary_idx")
+        ensure_index(jb_contact_block_entries_collection, [("createdByEmployeeId", ASCENDING)], name="jb_contact_block_created_by_employee_id_idx")
+    except Exception as exc:
+        logger.warning("failed_to_ensure_jb_contact_block_indexes error=%s", exc, exc_info=True)
+
+
+ensure_jb_contact_block_indexes()
 
 
 class JBContactBlockMaintenanceDailyEntry:
     @staticmethod
-    def create(entry_data: Dict[str, Any]) -> Optional[str]:
+    def _normalize_dates(entry_data: Dict[str, Any]) -> Dict[str, Any]:
         raw_date = entry_data.get("date")
         if not raw_date:
             raise ValueError("Missing date in entry_data")
@@ -34,33 +55,58 @@ class JBContactBlockMaintenanceDailyEntry:
         except Exception:
             date_obj = datetime.fromisoformat(date_key)
 
-        entry_data["date"] = date_obj.strftime("%Y-%m-%d")
-        entry_data["testingDate"] = (
-            str(entry_data.get("testingDate")).split("T")[0]
-            if entry_data.get("testingDate")
-            else entry_data["date"]
+        normalized = entry_data.copy()
+        normalized["date"] = date_obj.strftime("%Y-%m-%d")
+        normalized["testingDate"] = (
+            str(normalized.get("testingDate")).split("T")[0]
+            if normalized.get("testingDate")
+            else normalized["date"]
         )
-        entry_data["fab"] = normalize_fab(entry_data.get("fab"))
-        entry_data["year"] = date_obj.year
-        entry_data["month"] = date_obj.month
-        entry_data["updated_at"] = datetime.now().isoformat()
-        if "created_at" not in entry_data:
-            entry_data["created_at"] = datetime.now().isoformat()
-        if "_id" in entry_data:
-            del entry_data["_id"]
+        normalized["fab"] = normalize_fab(normalized.get("fab"))
+        normalized["year"] = date_obj.year
+        normalized["month"] = date_obj.month
+        normalized["updated_at"] = datetime.now().isoformat()
+        if "created_at" not in normalized:
+            normalized["created_at"] = datetime.now().isoformat()
+        return normalized
 
+    @staticmethod
+    def create(entry_data: Dict[str, Any]) -> str:
+        normalized = JBContactBlockMaintenanceDailyEntry._normalize_dates(entry_data)
+        normalized.pop("_id", None)
+        result = jb_contact_block_entries_collection.insert_one(normalized)
+        return str(result.inserted_id)
+
+    @staticmethod
+    def get_by_id(entry_id: str) -> Optional[Dict[str, Any]]:
+        if not ObjectId.is_valid(entry_id):
+            return None
+        return jb_contact_block_entries_collection.find_one({"_id": ObjectId(entry_id)})
+
+    @staticmethod
+    def update_by_id(entry_id: str, update_data: Dict[str, Any], unset_data: Dict[str, str] | None = None) -> bool:
+        if not ObjectId.is_valid(entry_id):
+            return False
+        normalized = JBContactBlockMaintenanceDailyEntry._normalize_dates(update_data)
+        normalized.pop("_id", None)
+        if unset_data:
+            for field in unset_data:
+                normalized.pop(field, None)
+        update_statement: Dict[str, Any] = {"$set": normalized}
+        if unset_data:
+            update_statement["$unset"] = unset_data
         result = jb_contact_block_entries_collection.update_one(
-            {"date": entry_data["date"], "fab": entry_data["fab"]},
-            {"$set": entry_data},
-            upsert=True,
+            {"_id": ObjectId(entry_id)},
+            update_statement,
         )
-        if result.upserted_id:
-            return str(result.upserted_id)
+        return result.matched_count == 1
 
-        existing = jb_contact_block_entries_collection.find_one(
-            {"date": entry_data["date"], "fab": entry_data["fab"]}
-        )
-        return str(existing["_id"]) if existing and "_id" in existing else None
+    @staticmethod
+    def delete_by_id(entry_id: str) -> bool:
+        if not ObjectId.is_valid(entry_id):
+            return False
+        result = jb_contact_block_entries_collection.delete_one({"_id": ObjectId(entry_id)})
+        return result.deleted_count > 0
 
     @staticmethod
     def get_by_date_fab(date: str, fab: str) -> Optional[Dict[str, Any]]:
@@ -72,13 +118,15 @@ class JBContactBlockMaintenanceDailyEntry:
     @staticmethod
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
         date_key = str(date).split("T")[0]
-        cursor = jb_contact_block_entries_collection.find({"date": date_key}).sort("fab", ASCENDING)
+        cursor = jb_contact_block_entries_collection.find({"date": date_key}).sort(
+            [("createdAt", ASCENDING), ("created_at", ASCENDING)]
+        )
         return list(cursor)
 
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
         cursor = jb_contact_block_entries_collection.find({"year": year, "month": month}).sort(
-            [("date", ASCENDING), ("fab", ASCENDING)]
+            [("date", ASCENDING), ("createdAt", ASCENDING), ("created_at", ASCENDING)]
         )
         return list(cursor)
 
@@ -101,5 +149,11 @@ class JBContactBlockMaintenanceDailyEntry:
     def get_date_signatures(date: str) -> Dict[str, str]:
         entry = jb_contact_block_entries_collection.find_one({"date": str(date).split("T")[0]})
         if entry and entry.get("signatures"):
-            return entry["signatures"]
-        return {"preparedBy": "", "verifiedBy": ""}
+            signatures = entry["signatures"]
+            return {
+                "preparedBy": signatures.get("preparedBy", ""),
+                "reviewedBy": signatures.get("reviewedBy") or signatures.get("verifiedBy", ""),
+                "verifiedBy": signatures.get("verifiedBy") or signatures.get("reviewedBy", ""),
+                "approvedBy": signatures.get("approvedBy", ""),
+            }
+        return {"preparedBy": "", "reviewedBy": "", "verifiedBy": "", "approvedBy": ""}

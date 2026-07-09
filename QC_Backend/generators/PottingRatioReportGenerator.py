@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import io
@@ -89,10 +90,10 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             # Move to next shift (2 rows down)
             current_row += 2
         
-        print(f"Filled potting data for date {date}")
+        log_progress(f"Filled potting data for date {date}")
         
     except Exception as e:
-        print(f"Error filling potting data in sheet: {str(e)}")
+        log_progress(f"Error filling potting data in sheet: {str(e)}")
         raise
 
 
@@ -102,7 +103,7 @@ def generate_potting_report(potting_data):
         if not potting_data:
             raise ValueError("No potting data provided")
         
-        print("Received potting data for report generation")
+        log_progress("Received potting data for report generation")
         
         # Handle different input formats
         if isinstance(potting_data, list):
@@ -114,8 +115,8 @@ def generate_potting_report(potting_data):
             year = potting_data.get('year', datetime.now().year)
             month = potting_data.get('month', datetime.now().month)
         
-        print(f"Entries count: {len(entries)}")
-        print(f"Year: {year}, Month: {month}")
+        log_progress(f"Entries count: {len(entries)}")
+        log_progress(f"Year: {year}, Month: {month}")
         
         # Group entries by date
         entries_by_date = {}
@@ -168,9 +169,10 @@ def generate_potting_report(potting_data):
         month_name = datetime(year, month, 1).strftime("%B")
         filename = f"Potting_Ratio_Measurement_{month_name}_{year}.xlsx"
         
-        print(f"Potting report generated successfully: {filename}")
+        log_progress(f"Potting report generated successfully: {filename}")
         return output, filename
         
     except Exception as e:
-        print(f"Error generating potting report: {str(e)}")
+        log_progress(f"Error generating potting report: {str(e)}")
         raise
+

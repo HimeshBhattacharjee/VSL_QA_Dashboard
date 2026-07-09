@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 import calendar
 from copy import copy
 from datetime import datetime
@@ -239,5 +240,6 @@ def generate_jb_contact_block_maintenance_report(report_data):
         filename = f"{safe_filename('JB_Contact_Block_Maintenance')}_{safe_filename(fab)}_{month_name}_{year}.xlsx"
         return output, filename
     except Exception as e:
-        print(f"Error generating JB contact block maintenance report: {str(e)}")
+        log_progress(f"Error generating JB contact block maintenance report: {str(e)}")
         raise
+

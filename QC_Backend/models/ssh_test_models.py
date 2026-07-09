@@ -1,7 +1,12 @@
-from pymongo import MongoClient, ASCENDING
+from bson import ObjectId
+import logging
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import drop_index_if_exists, ensure_index
+
+logger = logging.getLogger(__name__)
 
 def _normalize_line_group(line_group):
     return 'Line-II' if line_group == 'Line-II' else 'Line-I'
@@ -11,11 +16,33 @@ db = client[MONGODB_DB_NAME]
 ssh_entries_collection = db["ssh_daily_entries"]
 # New index structure: date + shift combination (each document represents one shift with both lines)
 try:
-    ssh_entries_collection.drop_index("date_1_shift_1")
-except Exception:
-    pass
-ssh_entries_collection.create_index([("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)], unique=True)
-ssh_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+    drop_index_if_exists(ssh_entries_collection, "date_1_shift_1")
+    ensure_index(
+        ssh_entries_collection,
+        [("date", ASCENDING), ("lineGroup", ASCENDING), ("shift", ASCENDING)],
+        unique=True,
+        name="ssh_date_line_group_shift_unique_idx",
+    )
+    ensure_index(ssh_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="ssh_year_month_idx")
+except Exception as exc:
+    logger.warning("failed_to_prepare_ssh_base_indexes error=%s", exc, exc_info=True)
+
+def ensure_ssh_indexes() -> None:
+    try:
+        ensure_index(ssh_entries_collection, [("updatedAt", DESCENDING)], name="ssh_updated_at_desc_idx")
+        ensure_index(ssh_entries_collection, [("createdAt", DESCENDING)], name="ssh_created_at_desc_idx")
+        ensure_index(ssh_entries_collection, [("workflowState", ASCENDING)], name="ssh_workflow_state_idx")
+        ensure_index(ssh_entries_collection, [("status", ASCENDING)], name="ssh_status_idx")
+        ensure_index(ssh_entries_collection, [("date", DESCENDING)], name="ssh_date_desc_idx")
+        ensure_index(ssh_entries_collection, [("shift", ASCENDING)], name="ssh_shift_idx")
+        ensure_index(ssh_entries_collection, [("lineGroup", ASCENDING)], name="ssh_line_group_idx")
+        ensure_index(ssh_entries_collection, [("po", ASCENDING)], name="ssh_po_idx")
+        ensure_index(ssh_entries_collection, [("createdByEmployeeId", ASCENDING)], name="ssh_created_by_employee_id_idx")
+    except Exception as exc:
+        logger.warning("failed_to_ensure_ssh_indexes error=%s", exc, exc_info=True)
+
+
+ensure_ssh_indexes()
 
 class _InMemoryCursor:
     def __init__(self, items):
@@ -39,6 +66,22 @@ class _InMemoryCollection:
         return None
 
     def update_one(self, filt, update, upsert=False):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    value.update(update.get("$set", {}))
+                    for unset_key in update.get("$unset", {}):
+                        value.pop(unset_key, None)
+                    self._store[key] = value
+                    class R:
+                        matched_count = 1
+                        upserted_id = None
+                    return R()
+            class R:
+                matched_count = 0
+                upserted_id = None
+            return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         line_group = _normalize_line_group(filt.get("lineGroup"))
@@ -56,10 +99,15 @@ class _InMemoryCollection:
                 set_doc["date"] = date_key
                 set_doc["shift"] = shift
                 set_doc["lineGroup"] = line_group
+                set_doc["_id"] = set_doc.get("_id") or composite_key
                 self._store[composite_key] = set_doc
-                class R: upserted_id = composite_key
+                class R:
+                    matched_count = 0
+                    upserted_id = composite_key
                 return R()
-            class R: upserted_id = None
+            class R:
+                matched_count = 0
+                upserted_id = None
             return R()
 
     def find_one(self, filt):
@@ -109,6 +157,13 @@ class _InMemoryCollection:
         return _InMemoryCursor(results)
 
     def delete_one(self, filt):
+        if "_id" in filt:
+            for key, value in list(self._store.items()):
+                if str(value.get("_id")) == str(filt["_id"]):
+                    del self._store[key]
+                    class R: deleted_count = 1
+                    return R()
+
         date_key = filt.get("date")
         shift = filt.get("shift")
         if date_key and shift:
@@ -121,11 +176,29 @@ class _InMemoryCollection:
         class R: deleted_count = 0
         return R()
 
+    def update_many(self, filt, update):
+        count = 0
+        for key, value in list(self._store.items()):
+            match = True
+            for field, expected in (filt or {}).items():
+                if field == "lineGroup":
+                    expected = _normalize_line_group(expected)
+                if value.get(field) != expected:
+                    match = False
+                    break
+            if not match:
+                continue
+            value.update(update.get("$set", {}))
+            self._store[key] = value
+            count += 1
+        class R: modified_count = count
+        return R()
+
 try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory ssh_entries_collection for testing")
+    logger.warning("mongodb_not_configured_using_in_memory_ssh_entries_collection")
     ssh_entries_collection = _InMemoryCollection()
 
 class SSHDailyEntry:
@@ -150,7 +223,8 @@ class SSHDailyEntry:
             entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
             entry_data["year"] = date_obj.year
             entry_data["month"] = date_obj.month
-            entry_data["created_at"] = datetime.now().isoformat()
+            if "created_at" not in entry_data:
+                entry_data["created_at"] = datetime.now().isoformat()
             entry_data["updated_at"] = datetime.now().isoformat()
             
             if "_id" in entry_data:
@@ -167,7 +241,7 @@ class SSHDailyEntry:
             existing = ssh_entries_collection.find_one({"date": entry_data["date"], "lineGroup": entry_data["lineGroup"], "shift": shift})
             return str(existing["_id"]) if existing and "_id" in existing else None
         except Exception as e:
-            print(f"Error in create: {str(e)}")
+            logger.exception("ssh_create_failed")
             raise
     
     @staticmethod
@@ -176,8 +250,46 @@ class SSHDailyEntry:
             date_key = str(date).split('T')[0]
             return ssh_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group), "shift": shift})
         except Exception as e:
-            print(f"Error in get_by_date_and_shift: {str(e)}")
+            logger.exception("ssh_get_by_date_and_shift_failed")
             return None
+
+    @staticmethod
+    def get_by_id(entry_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return None
+            return ssh_entries_collection.find_one({"_id": ObjectId(entry_id)})
+        except Exception as e:
+            logger.exception("ssh_get_by_id_failed")
+            return None
+
+    @staticmethod
+    def update_by_id(entry_id: str, update_data: Dict[str, Any], unset_data: Dict[str, str] | None = None) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            update_statement: Dict[str, Any] = {"$set": update_data}
+            if unset_data:
+                update_statement["$unset"] = unset_data
+            result = ssh_entries_collection.update_one(
+                {"_id": ObjectId(entry_id)},
+                update_statement,
+            )
+            return result.matched_count == 1
+        except Exception as e:
+            logger.exception("ssh_update_by_id_failed")
+            return False
+
+    @staticmethod
+    def delete_by_id(entry_id: str) -> bool:
+        try:
+            if not ObjectId.is_valid(entry_id):
+                return False
+            result = ssh_entries_collection.delete_one({"_id": ObjectId(entry_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.exception("ssh_delete_by_id_failed")
+            return False
     
     @staticmethod
     def get_all_for_date(date: str) -> List[Dict[str, Any]]:
@@ -186,7 +298,7 @@ class SSHDailyEntry:
             cursor = ssh_entries_collection.find({"date": date_key}).sort("shift", ASCENDING)
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_all_for_date: {str(e)}")
+            logger.exception("ssh_get_all_for_date_failed")
             return []
     
     @staticmethod
@@ -197,7 +309,7 @@ class SSHDailyEntry:
             ).sort([("date", ASCENDING), ("shift", ASCENDING)])
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_month_entries: {str(e)}")
+            logger.exception("ssh_get_month_entries_failed")
             return []
     
     @staticmethod
@@ -206,5 +318,28 @@ class SSHDailyEntry:
             result = ssh_entries_collection.delete_one({"date": date, "lineGroup": _normalize_line_group(line_group), "shift": shift})
             return result.deleted_count > 0
         except Exception as e:
-            print(f"Error in delete_by_date_and_shift: {str(e)}")
+            logger.exception("ssh_delete_by_date_and_shift_failed")
             return False
+
+    @staticmethod
+    def update_context_signatures(date: str, line_group: str, shift: str, signatures: Dict[str, str]) -> bool:
+        try:
+            result = ssh_entries_collection.update_many(
+                {"date": str(date).split('T')[0], "lineGroup": _normalize_line_group(line_group), "shift": shift},
+                {"$set": {"signatures": signatures, "updated_at": datetime.now().isoformat()}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.exception("ssh_update_context_signatures_failed")
+            return False
+
+    @staticmethod
+    def get_context_signatures(date: str, line_group: str = "Line-I", shift: str = "A") -> Dict[str, str]:
+        try:
+            entry = SSHDailyEntry.get_by_date_and_shift(date, shift, line_group)
+            if entry and entry.get("signatures"):
+                return entry["signatures"]
+            return {"preparedBy": "", "approvedBy": ""}
+        except Exception as e:
+            logger.exception("ssh_get_context_signatures_failed")
+            return {"preparedBy": "", "approvedBy": ""}

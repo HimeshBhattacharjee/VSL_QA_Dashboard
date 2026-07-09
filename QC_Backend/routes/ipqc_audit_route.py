@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 import re
 from typing import Optional
 
@@ -28,6 +29,8 @@ from services.creator_resolution_service import (
 )
 from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
 from users.user_db import users_collection
+
+logger = logging.getLogger(__name__)
 
 
 ipqc_audit_router = APIRouter(prefix="/api/ipqc-audits", tags=["IPQC Audits"])
@@ -251,7 +254,7 @@ def load_ipqc_audit_data(audit: dict, audit_payload: dict | None = None) -> dict
     try:
         return IPQCAudit.from_dict(audit).get_data()
     except Exception as exc:
-        print(f"Warning: failed to load IPQC signature data for {audit.get('_id')}: {exc}")
+        logger.warning("ipqc_signature_data_load_failed audit_id=%s error=%s", audit.get("_id"), exc, exc_info=True)
         return {}
 
 
@@ -283,7 +286,7 @@ def ensure_completion_metadata(audit: dict, audit_data: dict | None = None) -> d
                 audit.update(completion)
             return completion
         except Exception as exc:
-            print(f"Warning: failed to calculate completion for IPQC audit {audit.get('_id')}: {exc}")
+            logger.warning("ipqc_completion_calculation_failed audit_id=%s error=%s", audit.get("_id"), exc, exc_info=True)
 
     has_completion_metadata = all(
         key in audit
@@ -306,7 +309,7 @@ def ensure_completion_metadata(audit: dict, audit_data: dict | None = None) -> d
         audit.update(completion)
         return completion
     except Exception as exc:
-        print(f"Warning: failed to calculate completion for IPQC audit {audit.get('_id')}: {exc}")
+        logger.warning("ipqc_completion_calculation_failed audit_id=%s error=%s", audit.get("_id"), exc, exc_info=True)
         return {
             "completedStages": audit.get("completedStages", 0),
             "totalStages": audit.get("totalStages", IPQC_TOTAL_STAGE_COUNT),

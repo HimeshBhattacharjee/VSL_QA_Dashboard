@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import io
@@ -9,7 +10,7 @@ def fill_wet_leakage_test_data(worksheet, entries):
         sorted_entries = sorted(entries, key=lambda x: x.get('testingDate', ''))
         start_row = 6
         max_rows = 31
-        print(f"Filling {len(sorted_entries)} test data rows starting at row {start_row}")
+        log_progress(f"Filling {len(sorted_entries)} test data rows starting at row {start_row}")
         for idx, entry in enumerate(sorted_entries[:max_rows]):
             row = start_row + idx
             testing_date = entry.get('testingDate', '')
@@ -24,11 +25,11 @@ def fill_wet_leakage_test_data(worksheet, entries):
                                 date_obj = datetime.strptime(testing_date, fmt)
                                 worksheet[f'B{row}'] = date_obj.strftime("%d.%m.%Y")
                                 break
-                            except:
+                            except Exception:
                                 continue
                         else:
                             worksheet[f'B{row}'] = testing_date
-                except:
+                except Exception:
                     worksheet[f'B{row}'] = testing_date
             worksheet[f'C{row}'] = entry.get('po', '')
             worksheet[f'D{row}'] = entry.get('moduleType', '')
@@ -49,9 +50,9 @@ def fill_wet_leakage_test_data(worksheet, entries):
             elif result == 'Fail':
                 worksheet[f'P{row}'].fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
             worksheet[f'Q{row}'] = entry.get('testDoneBy', '')
-        print(f"Filled {min(len(sorted_entries), max_rows)} test data rows successfully")
+        log_progress(f"Filled {min(len(sorted_entries), max_rows)} test data rows successfully")
     except Exception as e:
-        print(f"Error filling Wet Leakage test data: {str(e)}")
+        log_progress(f"Error filling Wet Leakage test data: {str(e)}")
         raise
 
 def fill_wet_leakage_signatures(worksheet, form_data):
@@ -65,19 +66,19 @@ def fill_wet_leakage_signatures(worksheet, form_data):
         approved_by = form_data.get('approvedBySignature', '')
         if approved_by:
             worksheet['N37'] = approved_by
-        print("Wet Leakage signatures filled successfully")
+        log_progress("Wet Leakage signatures filled successfully")
     except Exception as e:
-        print(f"Error filling Wet Leakage signatures: {str(e)}")
+        log_progress(f"Error filling Wet Leakage signatures: {str(e)}")
         raise
 
 def generate_wet_leakage_report(wet_leakage_data):
     try:
         if not wet_leakage_data:
             raise ValueError("No Wet Leakage test data provided")
-        print("Received Wet Leakage test data for report generation")
-        print(f"Report name: {wet_leakage_data.get('name', 'N/A')}")
-        print(f"Entries count: {len(wet_leakage_data.get('entries', []))}")
-        print(f"Form data keys: {list(wet_leakage_data.get('form_data', {}).keys())}")
+        log_progress("Received Wet Leakage test data for report generation")
+        log_progress(f"Report name: {wet_leakage_data.get('name', 'N/A')}")
+        log_progress(f"Entries count: {len(wet_leakage_data.get('entries', []))}")
+        log_progress(f"Form data keys: {list(wet_leakage_data.get('form_data', {}).keys())}")
         entries = wet_leakage_data.get('entries', [])
         form_data = wet_leakage_data.get('form_data', {})
         template_key = get_template_key('Blank Wet Leakage Test Report.xlsx')
@@ -94,8 +95,9 @@ def generate_wet_leakage_report(wet_leakage_data):
         clean_name = "".join(c for c in report_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
         clean_name = clean_name.replace(' ', '_')
         filename = f"{clean_name}_{timestamp}.xlsx"
-        print(f"Wet Leakage test report generated successfully: {filename}")
+        log_progress(f"Wet Leakage test report generated successfully: {filename}")
         return output, filename
     except Exception as e:
-        print(f"Error generating Wet Leakage test report: {str(e)}")
+        log_progress(f"Error generating Wet Leakage test report: {str(e)}")
         raise
+

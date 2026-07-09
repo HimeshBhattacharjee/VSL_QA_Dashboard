@@ -1,18 +1,25 @@
+﻿import logging
 import pandas as pd
 import numpy as np
 import warnings
 from pymongo import MongoClient
 from datetime import datetime, time
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import ensure_index
 from paths import get_reference_file_key, download_from_s3
 
 warnings.filterwarnings('ignore')
+logger = logging.getLogger(__name__)
+
+
+def log_progress(*values, sep=" ", **_kwargs):
+    logger.info(sep.join(str(value) for value in values))
 
 def filter_and_process_excel(file_path):
     """Filter and process Excel data based on Order No. criteria"""
     df = pd.read_excel(file_path)
-    print(f"Original data shape: {df.shape}")
-    print("Columns:", df.columns.tolist())
+    log_progress(f"Original data shape: {df.shape}")
+    log_progress("Columns:", df.columns.tolist())
     
     order_column = 'Order No.'
     df[order_column] = df[order_column].astype(str)
@@ -23,8 +30,8 @@ def filter_and_process_excel(file_path):
         df[order_column].str.startswith('00000009')
     ].copy()
     
-    print(f"Filtered data shape: {filtered_df.shape}")
-    print(f"Rows removed: {len(df) - len(filtered_df)}")
+    log_progress(f"Filtered data shape: {filtered_df.shape}")
+    log_progress(f"Rows removed: {len(df) - len(filtered_df)}")
     
     # Clean and sort data
     filtered_df = filtered_df.dropna(subset=['Posting Date', 'Order No.'])
@@ -33,10 +40,10 @@ def filter_and_process_excel(file_path):
     filtered_df = filtered_df.replace({np.nan: None})
     
     # Display first and last few rows
-    print("\nFirst 5 rows:")
-    print(filtered_df.head())
-    print("\nLast 5 rows:")
-    print(filtered_df.tail())
+    log_progress("\nFirst 5 rows:")
+    log_progress(filtered_df.head())
+    log_progress("\nLast 5 rows:")
+    log_progress(filtered_df.tail())
     
     return filtered_df
 
@@ -78,11 +85,11 @@ class BMongoDBManager:
                 date_obj = date_str.to_pydatetime()
             else:
                 date_obj = datetime.strptime(str(date_str), '%Y-%m-%d %H:%M:%S')
-        except:
+        except Exception:
             try:
                 date_obj = datetime.strptime(str(date_str), '%Y-%m-%d')
-            except:
-                print(f"Warning: Could not parse date: {date_str}")
+            except Exception:
+                log_progress(f"Warning: Could not parse date: {date_str}")
                 return None
         
         month_abbr = date_obj.strftime('%b').lower()
@@ -116,18 +123,17 @@ class BMongoDBManager:
             ('serial_number', 1)
         ]
         
-        # Check if index already exists
-        existing_indexes = collection.index_information()
         index_name = 'unique_posting_order_serial'
-        
-        if index_name not in existing_indexes:
-            try:
-                collection.create_index(unique_fields, unique=True, name=index_name)
-                print(f"  Created unique index on collection '{collection_name}'")
-            except Exception as e:
-                print(f"  Warning: Could not create unique index: {e}")
-        else:
-            pass
+
+        try:
+            ensure_index(collection, unique_fields, unique=True, name=index_name)
+        except Exception as exc:
+            logger.warning(
+                "b_grade_unique_index_create_failed collection=%s error=%s",
+                collection_name,
+                exc,
+                exc_info=True,
+            )
     
     def is_duplicate_record(self, collection, document):
         """Check if a record already exists in the collection"""
@@ -169,7 +175,7 @@ class BMongoDBManager:
         collections_used = set()
         errors = []
         
-        print("\nProcessing records (checking for duplicates)...")
+        log_progress("\nProcessing records (checking for duplicates)...")
         
         for index, row in dataframe.iterrows():
             try:
@@ -208,22 +214,22 @@ class BMongoDBManager:
             except Exception as e:
                 error_msg = f"Error processing row {index}: {e}"
                 errors.append(error_msg)
-                print(f"  ✗ {error_msg}")
+                log_progress(f"  âœ— {error_msg}")
                 continue
         
-        print(f"\nMongoDB Storage Summary:")
-        print(f"Total records processed: {records_processed}")
-        print(f"New records inserted: {records_inserted}")
-        print(f"Existing records updated: {records_updated}")
-        print(f"Duplicate records skipped: {records_skipped}")
-        print(f"Collections used: {list(collections_used)}")
+        log_progress(f"\nMongoDB Storage Summary:")
+        log_progress(f"Total records processed: {records_processed}")
+        log_progress(f"New records inserted: {records_inserted}")
+        log_progress(f"Existing records updated: {records_updated}")
+        log_progress(f"Duplicate records skipped: {records_skipped}")
+        log_progress(f"Collections used: {list(collections_used)}")
         
         if errors:
-            print(f"\nErrors encountered: {len(errors)}")
+            log_progress(f"\nErrors encountered: {len(errors)}")
             for error in errors[:5]:
-                print(f"  - {error}")
+                log_progress(f"  - {error}")
             if len(errors) > 5:
-                print(f"  ... and {len(errors) - 5} more errors")
+                log_progress(f"  ... and {len(errors) - 5} more errors")
         
         return {
             'total_processed': records_processed,
@@ -240,7 +246,7 @@ class BMongoDBManager:
             collection = self.db[collection_name]
             count = collection.count_documents({})
             collection.delete_many({})
-            print(f"Cleared {count} documents from '{collection_name}'")
+            log_progress(f"Cleared {count} documents from '{collection_name}'")
             return count
         return 0
     
@@ -269,19 +275,19 @@ class BMongoDBManager:
 
 def display_database_stats(mongo_manager, collections_list):
     """Display statistics for MongoDB collections"""
-    print("\nCollection Statistics:")
-    print("-" * 50)
+    log_progress("\nCollection Statistics:")
+    log_progress("-" * 50)
     
     if not collections_list:
-        print("No collections to display")
+        log_progress("No collections to display")
         return
     
     for collection_name in collections_list:
         count, sample_docs = mongo_manager.get_collection_stats(collection_name)
-        print(f"Collection '{collection_name}': {count} documents")
+        log_progress(f"Collection '{collection_name}': {count} documents")
         
         if sample_docs:
-            print(f"Sample document from {collection_name}:")
+            log_progress(f"Sample document from {collection_name}:")
             for doc in sample_docs:
                 doc_display = doc.copy()
                 doc_display['_id'] = str(doc_display['_id'])
@@ -289,8 +295,8 @@ def display_database_stats(mongo_manager, collections_list):
                 for key in doc_display:
                     if isinstance(doc_display[key], str) and len(doc_display[key]) > 50:
                         doc_display[key] = doc_display[key][:50] + "..."
-                print(f"  - {doc_display}")
-        print()
+                log_progress(f"  - {doc_display}")
+        log_progress()
 
 
 def main():
@@ -301,36 +307,38 @@ def main():
     file_path = download_from_s3(file_key)
     
     # Step 1: Process the Excel file
-    print("=" * 60)
-    print("STEP 1: Processing Excel Data")
-    print("=" * 60)
+    log_progress("=" * 60)
+    log_progress("STEP 1: Processing Excel Data")
+    log_progress("=" * 60)
     processed_df = filter_and_process_excel(file_path)
     
     # Step 2: Store data in MongoDB (with duplicate checking)
-    print("\n" + "=" * 60)
-    print("STEP 2: Storing Data in MongoDB (with duplicate prevention)")
-    print("=" * 60)
+    log_progress("\n" + "=" * 60)
+    log_progress("STEP 2: Storing Data in MongoDB (with duplicate prevention)")
+    log_progress("=" * 60)
     
     mongo_manager = BMongoDBManager()
     result = mongo_manager.insert_dataframe_to_mongo(processed_df)
     
     # Step 3: Display database statistics
-    print("\n" + "=" * 60)
-    print("STEP 3: Database Statistics")
-    print("=" * 60)
+    log_progress("\n" + "=" * 60)
+    log_progress("STEP 3: Database Statistics")
+    log_progress("=" * 60)
     display_database_stats(mongo_manager, result['collections'])
     
     # Summary
-    print("=" * 60)
-    print("PROCESSING COMPLETE")
-    print("=" * 60)
-    print(f"Total records processed: {result['total_processed']}")
-    print(f"New records inserted: {result['inserted']}")
-    print(f"Existing records updated: {result['updated']}")
-    print(f"Duplicate records skipped: {result['skipped']}")
-    print(f"Collections updated: {len(result['collections'])}")
-    print(f"Errors encountered: {len(result['errors'])}")
+    log_progress("=" * 60)
+    log_progress("PROCESSING COMPLETE")
+    log_progress("=" * 60)
+    log_progress(f"Total records processed: {result['total_processed']}")
+    log_progress(f"New records inserted: {result['inserted']}")
+    log_progress(f"Existing records updated: {result['updated']}")
+    log_progress(f"Duplicate records skipped: {result['skipped']}")
+    log_progress(f"Collections updated: {len(result['collections'])}")
+    log_progress(f"Errors encountered: {len(result['errors'])}")
 
 
 if __name__ == "__main__":
     main()
+
+

@@ -1,7 +1,14 @@
-from pymongo import MongoClient, ASCENDING
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+import logging
+from typing import Any, Dict, List, Optional
+
+from bson import ObjectId
+from pymongo import ASCENDING, DESCENDING, MongoClient
+
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import drop_index_if_exists, ensure_index
+
+logger = logging.getLogger(__name__)
 
 def _normalize_line_group(line_group):
     return 'Line-II' if str(line_group or '').endswith('Line-II') or str(line_group or '') == 'Line-II' else 'Line-I'
@@ -9,165 +16,337 @@ def _normalize_line_group(line_group):
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 rot_entries_collection = db["rot_daily_entries"]
-try:
-    rot_entries_collection.drop_index("date_1")
-except Exception:
-    pass
-rot_entries_collection.create_index([("date", ASCENDING), ("lineGroup", ASCENDING)], unique=True)
-rot_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+
+
+def ensure_rot_indexes() -> None:
+    try:
+        # Older Robustness records were constrained to one row per date/line.
+        # Daily Entry Workflow allows multiple entries on the same date.
+        for index_name in ("date_1", "date_1_lineGroup_1"):
+            drop_index_if_exists(rot_entries_collection, index_name)
+
+        ensure_index(rot_entries_collection, [("date", ASCENDING)], name="rot_date_idx")
+        ensure_index(rot_entries_collection, [("date", DESCENDING)], name="rot_date_desc_idx")
+        ensure_index(rot_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="rot_year_month_idx")
+        ensure_index(rot_entries_collection, [("updatedAt", DESCENDING)], name="rot_updated_at_desc_idx")
+        ensure_index(rot_entries_collection, [("createdAt", DESCENDING)], name="rot_created_at_desc_idx")
+        ensure_index(rot_entries_collection, [("workflowState", ASCENDING)], name="rot_workflow_state_idx")
+        ensure_index(rot_entries_collection, [("status", ASCENDING)], name="rot_status_idx")
+        ensure_index(rot_entries_collection, [("po", ASCENDING)], name="rot_po_idx")
+        ensure_index(rot_entries_collection, [("createdByEmployeeId", ASCENDING)], name="rot_created_by_employee_id_idx")
+    except Exception as exc:
+        logger.warning("failed_to_ensure_rot_indexes error=%s", exc, exc_info=True)
+
+
+ensure_rot_indexes()
 
 class _InMemoryCursor:
     def __init__(self, items):
-        self._items = items
+        self._items = list(items)
+
+    def __iter__(self):
+        return iter(self._items)
 
     def sort(self, key, direction=1):
+        if isinstance(key, list):
+            sort_fields = list(reversed(key))
+            for field, field_direction in sort_fields:
+                self._items.sort(key=lambda item: _get_nested_value(item, field) or "", reverse=field_direction == -1)
+            return self
+
         reverse = direction == -1
         try:
-            return sorted(self._items, key=lambda x: x.get(key), reverse=reverse)
+            self._items.sort(key=lambda item: _get_nested_value(item, key) or "", reverse=reverse)
         except Exception:
-            return self._items
+            pass
+        return self
+
+    def skip(self, count):
+        self._items = self._items[count:]
+        return self
+
+    def limit(self, count):
+        self._items = self._items[:count]
+        return self
+
+
+def _get_nested_value(doc, dotted_key):
+    value = doc
+    for part in str(dotted_key).split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _matches_condition(value, condition):
+    import re
+
+    if not isinstance(condition, dict):
+        return value == condition
+
+    for operator, expected in condition.items():
+        if operator == "$gte" and not (value is not None and value >= expected):
+            return False
+        if operator == "$lte" and not (value is not None and value <= expected):
+            return False
+        if operator == "$ne" and value == expected:
+            return False
+        if operator == "$exists":
+            exists = value is not None
+            if bool(expected) != exists:
+                return False
+        if operator == "$regex":
+            flags = re.IGNORECASE if condition.get("$options") == "i" else 0
+            if re.search(expected, str(value or ""), flags) is None:
+                return False
+    return True
+
+
+def _matches_filter(doc, filt):
+    if not filt:
+        return True
+    for key, expected in filt.items():
+        if key == "$and":
+            if not all(_matches_filter(doc, item) for item in expected):
+                return False
+            continue
+        if key == "$or":
+            if not any(_matches_filter(doc, item) for item in expected):
+                return False
+            continue
+        if not _matches_condition(_get_nested_value(doc, key), expected):
+            return False
+    return True
 
 class _InMemoryCollection:
     def __init__(self):
         self._store = {}
 
+    def drop_index(self, *args, **kwargs):
+        return None
+
     def create_index(self, *args, **kwargs):
         return None
 
+    def insert_one(self, doc):
+        doc_copy = doc.copy()
+        doc_copy["_id"] = ObjectId()
+        self._store[str(doc_copy["_id"])] = doc_copy
+        class R:
+            inserted_id = doc_copy["_id"]
+        return R()
+
     def update_one(self, filt, update, upsert=False):
-        date_key = filt.get("date")
-        line_group = _normalize_line_group(filt.get("lineGroup"))
-        composite_key = f"{date_key}_{line_group}" if date_key and "lineGroup" in filt else date_key
-        doc = self._store.get(composite_key)
-        if doc:
+        matched_key = None
+        for key, doc in self._store.items():
+            if _matches_filter(doc, filt):
+                matched_key = key
+                break
+        if matched_key:
+            doc = self._store[matched_key]
             set_doc = update.get("$set", {})
             doc.update(set_doc)
-            self._store[composite_key] = doc
-            class R: upserted_id = None
+            for field in update.get("$unset", {}):
+                doc.pop(field, None)
+            self._store[matched_key] = doc
+            class R:
+                matched_count = 1
+                modified_count = 1
+                upserted_id = None
             return R()
-        else:
-            if upsert:
-                set_doc = update.get("$set", {})
-                if date_key:
-                    set_doc["date"] = date_key
-                if "lineGroup" in filt:
-                    set_doc["lineGroup"] = line_group
-                self._store[composite_key] = set_doc
-                class R: upserted_id = composite_key
-                return R()
-            class R: upserted_id = None
+        if upsert:
+            set_doc = update.get("$set", {}).copy()
+            for key, value in filt.items():
+                if not key.startswith("$") and not isinstance(value, dict):
+                    set_doc.setdefault(key, value)
+            inserted = self.insert_one(set_doc)
+            class R:
+                matched_count = 0
+                modified_count = 0
+                upserted_id = inserted.inserted_id
             return R()
+        class R:
+            matched_count = 0
+            modified_count = 0
+            upserted_id = None
+        return R()
 
     def find_one(self, filt):
-        date_key = filt.get("date")
-        if date_key and "lineGroup" in filt:
-            line_group = _normalize_line_group(filt.get("lineGroup"))
-            return self._store.get(f"{date_key}_{line_group}") or self._store.get(date_key)
-        if date_key:
-            for value in self._store.values():
-                if value.get("date") == date_key:
-                    return value
-            return self._store.get(date_key)
-        for v in self._store.values():
-            match = True
-            for k, val in filt.items():
-                if v.get(k) != val:
-                    match = False
-                    break
-            if match:
-                return v
+        for value in self._store.values():
+            if _matches_filter(value, filt):
+                return value.copy()
         return None
 
-    def find(self, filt=None):
+    def find(self, filt=None, projection=None):
         filt = filt or {}
-        results = []
-        for v in self._store.values():
-            match = True
-            for k, val in filt.items():
-                if v.get(k) != val:
-                    match = False
-                    break
-            if match:
-                results.append(v)
+        results = [value.copy() for value in self._store.values() if _matches_filter(value, filt)]
+        if projection:
+            excluded = {key for key, include in projection.items() if include == 0}
+            results = [{key: value for key, value in item.items() if key not in excluded} for item in results]
         return _InMemoryCursor(results)
 
+    def count_documents(self, filt):
+        return len([value for value in self._store.values() if _matches_filter(value, filt or {})])
+
     def delete_one(self, filt):
-        date_key = filt.get("date")
-        line_group = _normalize_line_group(filt.get("lineGroup"))
-        composite_key = f"{date_key}_{line_group}" if date_key and "lineGroup" in filt else date_key
-        if composite_key and composite_key in self._store:
-            del self._store[composite_key]
-            class R: deleted_count = 1
-            return R()
-        class R: deleted_count = 0
+        for key, value in list(self._store.items()):
+            if _matches_filter(value, filt):
+                del self._store[key]
+                class R:
+                    deleted_count = 1
+                return R()
+        class R:
+            deleted_count = 0
         return R()
+
+    def aggregate(self, pipeline):
+        # Minimal fallback for dashboard smoke tests. MongoDB handles production analytics.
+        items = list(self._store.values())
+        for stage in pipeline:
+            if "$match" in stage:
+                items = [item for item in items if _matches_filter(item, stage["$match"])]
+        summary = {
+            "_id": None,
+            "totalEntries": len(items),
+            "draft": 0,
+            "submitted": 0,
+            "returned": 0,
+            "approved": 0,
+        }
+        date_groups = {}
+        daily_groups = {}
+        for item in items:
+            state = item.get("workflowState") or item.get("status") or "submitted"
+            if state not in {"draft", "submitted", "approved", "returned"}:
+                state = "submitted"
+            summary[state] += 1
+            for groups, key in ((date_groups, item.get("date") or ""), (daily_groups, item.get("date") or "")):
+                group = groups.setdefault(key, {"_id": key, "totalEntries": 0, "draft": 0, "submitted": 0, "returned": 0, "approved": 0})
+                group["totalEntries"] += 1
+                group[state] += 1
+        return [{
+            "summary": [summary],
+            "dateGroups": list(date_groups.values()),
+            "shiftGroups": list(daily_groups.values()),
+        }]
 
 try:
     if not MONGODB_URI or not MONGODB_DB_NAME:
         raise Exception("Missing MongoDB config")
 except Exception:
-    print("Warning: MongoDB not configured; using in-memory rot_entries_collection for testing")
+    logger.warning("mongodb_not_configured_using_in_memory_rot_entries_collection")
     rot_entries_collection = _InMemoryCollection()
 class RoTDailyEntry:
     @staticmethod
+    def _normalize_dates(entry_data: Dict[str, Any]) -> Dict[str, Any]:
+        raw_date = entry_data.get("date")
+        if not raw_date:
+            raise ValueError("Missing date in entry_data")
+        date_key = str(raw_date).split("T")[0]
+        try:
+            date_obj = datetime.strptime(date_key, "%Y-%m-%d")
+        except Exception:
+            date_obj = datetime.fromisoformat(date_key)
+
+        normalized = entry_data.copy()
+        normalized["date"] = date_obj.strftime("%Y-%m-%d")
+        normalized["testingDate"] = (
+            str(normalized.get("testingDate")).split("T")[0]
+            if normalized.get("testingDate")
+            else normalized["date"]
+        )
+        normalized["year"] = date_obj.year
+        normalized["month"] = date_obj.month
+        normalized["updated_at"] = datetime.now().isoformat()
+        if "created_at" not in normalized:
+            normalized["created_at"] = datetime.now().isoformat()
+        return normalized
+
+    @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
         try:
-            raw_date = entry_data.get("date")
-            if not raw_date:
-                raise ValueError("Missing date in entry_data")
-            date_key = str(raw_date).split('T')[0]
-            try:
-                date_obj = datetime.strptime(date_key, "%Y-%m-%d")
-            except Exception:
-                date_obj = datetime.fromisoformat(date_key)
-            entry_data["date"] = date_obj.strftime("%Y-%m-%d")
-            entry_data["lineGroup"] = _normalize_line_group(entry_data.get("lineGroup"))
-            entry_data["testingDate"] = entry_data.get("testingDate") and str(entry_data.get("testingDate")).split('T')[0] or entry_data["date"]
-            entry_data["year"] = date_obj.year
-            entry_data["month"] = date_obj.month
-            entry_data["created_at"] = datetime.now().isoformat()
-            entry_data["updated_at"] = datetime.now().isoformat()
-            if "_id" in entry_data:
-                del entry_data["_id"]
-            result = rot_entries_collection.update_one(
-                {"date": entry_data["date"], "lineGroup": entry_data["lineGroup"]},
-                {"$set": entry_data},
-                upsert=True
-            )
-            if result.upserted_id:
-                return str(result.upserted_id)
-            existing = rot_entries_collection.find_one({"date": entry_data["date"], "lineGroup": entry_data["lineGroup"]})
-            return str(existing["_id"]) if existing else None
+            normalized = RoTDailyEntry._normalize_dates(entry_data)
+            if "_id" in normalized:
+                del normalized["_id"]
+            result = rot_entries_collection.insert_one(normalized)
+            return str(result.inserted_id)
         except Exception as e:
-            print(f"Error in create: {str(e)}")
+            logger.exception("rot_create_failed")
             raise
+
+    @staticmethod
+    def get_by_id(entry_id: str) -> Optional[Dict[str, Any]]:
+        if not ObjectId.is_valid(entry_id):
+            return None
+        return rot_entries_collection.find_one({"_id": ObjectId(entry_id)})
+
+    @staticmethod
+    def update_by_id(entry_id: str, update_data: Dict[str, Any], unset_data: Dict[str, str] | None = None) -> bool:
+        if not ObjectId.is_valid(entry_id):
+            return False
+        normalized = RoTDailyEntry._normalize_dates(update_data)
+        normalized.pop("_id", None)
+        if unset_data:
+            for field in unset_data:
+                normalized.pop(field, None)
+        update_statement: Dict[str, Any] = {"$set": normalized}
+        if unset_data:
+            update_statement["$unset"] = unset_data
+        result = rot_entries_collection.update_one(
+            {"_id": ObjectId(entry_id)},
+            update_statement,
+        )
+        return result.matched_count == 1
+
+    @staticmethod
+    def delete_by_id(entry_id: str) -> bool:
+        if not ObjectId.is_valid(entry_id):
+            return False
+        result = rot_entries_collection.delete_one({"_id": ObjectId(entry_id)})
+        return result.deleted_count > 0
     
     @staticmethod
     def get_by_date(date: str, line_group: str = "Line-I") -> Optional[Dict[str, Any]]:
         try:
-            date_key = str(date).split('T')[0]
-            return rot_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group)})
+            date_key = str(date).split("T")[0]
+            return (
+                rot_entries_collection.find_one({"date": date_key, "lineGroup": _normalize_line_group(line_group)})
+                or rot_entries_collection.find_one({"date": date_key})
+            )
         except Exception as e:
-            print(f"Error in get_by_date: {str(e)}")
+            logger.exception("rot_get_by_date_failed")
             return None
+
+    @staticmethod
+    def get_all_for_date(date: str) -> List[Dict[str, Any]]:
+        try:
+            date_key = str(date).split("T")[0]
+            cursor = rot_entries_collection.find({"date": date_key}).sort([("createdAt", ASCENDING), ("created_at", ASCENDING)])
+            return list(cursor)
+        except Exception as e:
+            logger.exception("rot_get_all_for_date_failed")
+            return []
     
     @staticmethod
     def get_month_entries(year: int, month: int) -> List[Dict[str, Any]]:
         try:
             cursor = rot_entries_collection.find(
                 {"year": year, "month": month}
-            ).sort("date", ASCENDING)
+            ).sort([("date", ASCENDING), ("createdAt", ASCENDING), ("created_at", ASCENDING)])
             
             return list(cursor)
         except Exception as e:
-            print(f"Error in get_month_entries: {str(e)}")
+            logger.exception("rot_get_month_entries_failed")
             return []
     
     @staticmethod
     def delete_by_date(date: str, line_group: str = "Line-I") -> bool:
         try:
-            result = rot_entries_collection.delete_one({"date": date, "lineGroup": _normalize_line_group(line_group)})
+            result = rot_entries_collection.delete_one({"date": str(date).split("T")[0], "lineGroup": _normalize_line_group(line_group)})
+            if result.deleted_count == 0:
+                result = rot_entries_collection.delete_one({"date": str(date).split("T")[0]})
             return result.deleted_count > 0
         except Exception as e:
-            print(f"Error in delete_by_date: {str(e)}")
+            logger.exception("rot_delete_by_date_failed")
             return False

@@ -1,6 +1,9 @@
+import logging
 from pymongo import MongoClient
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
+
+logger = logging.getLogger(__name__)
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
@@ -27,6 +30,6 @@ def create_initial_admin():
             "createdAt": datetime.now().isoformat()
         }
         users_collection.insert_one(initial_admin)
-        print("Initial admin user created")
+        logger.info("initial_admin_user_created")
 
 create_initial_admin()

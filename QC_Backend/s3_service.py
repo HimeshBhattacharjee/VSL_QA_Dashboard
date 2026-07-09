@@ -1,8 +1,11 @@
 import boto3
 import json
+import logging
 from typing import Dict, Any
 from botocore.exceptions import ClientError
 from aws_config import AWSConfig
+
+logger = logging.getLogger(__name__)
 
 class S3Service:
     def __init__(self):
@@ -27,7 +30,7 @@ class S3Service:
             )
             return True
         except ClientError as e:
-            print(f"Error uploading/overwriting to S3: {str(e)}")
+            logger.exception("s3_json_upload_or_overwrite_failed key=%s", s3Key)
             raise
 
     def getJsonFromS3(self, s3Key: str) -> Dict[str, Any]:
@@ -40,7 +43,7 @@ class S3Service:
             json_data = response['Body'].read().decode('utf-8')
             return json.loads(json_data)
         except ClientError as e:
-            print(f"Error downloading from S3: {str(e)}")
+            logger.exception("s3_json_download_failed key=%s", s3Key)
             raise
 
     def deleteJsonFromS3(self, s3Key: str) -> bool:
@@ -52,7 +55,7 @@ class S3Service:
             )
             return True
         except ClientError as e:
-            print(f"Error deleting from S3: {str(e)}")
+            logger.exception("s3_json_delete_failed key=%s", s3Key)
             raise
 
     def upload_json(self, folder: str, filename: str, data: Dict[str, Any]) -> str:
@@ -67,7 +70,7 @@ class S3Service:
             )
             return s3_key
         except ClientError as e:
-            print(f"Error uploading to S3: {str(e)}")
+            logger.exception("s3_json_upload_failed folder=%s filename=%s", folder, filename)
             raise
 
     def download_json(self, s3_key: str) -> Dict[str, Any]:
@@ -79,7 +82,7 @@ class S3Service:
             json_data = response['Body'].read().decode('utf-8')
             return json.loads(json_data)
         except ClientError as e:
-            print(f"Error downloading from S3: {str(e)}")
+            logger.exception("s3_json_download_failed key=%s", s3_key)
             raise
 
     def delete_json(self, s3_key: str) -> bool:
@@ -90,7 +93,7 @@ class S3Service:
             )
             return True
         except ClientError as e:
-            print(f"Error deleting from S3: {str(e)}")
+            logger.exception("s3_json_delete_failed key=%s", s3_key)
             raise
 
     def update_json(self, s3_key: str, data: Dict[str, Any]) -> str:
@@ -153,7 +156,7 @@ class S3Service:
             )
             return True
         except ClientError as e:
-            print(f"Error uploading image to S3: {str(e)}")
+            logger.exception("s3_image_upload_failed key=%s content_type=%s", s3_key, content_type)
             raise
 
     def delete_image(self, s3_key: str) -> bool:
@@ -165,7 +168,7 @@ class S3Service:
             )
             return True
         except ClientError as e:
-            print(f"Error deleting image from S3: {str(e)}")
+            logger.exception("s3_image_delete_failed key=%s", s3_key)
             raise
 
     def get_image_url(self, s3_key: str, expiration: int = 3600) -> str:
@@ -181,7 +184,7 @@ class S3Service:
             )
             return url
         except ClientError as e:
-            print(f"Error generating presigned URL: {str(e)}")
+            logger.exception("s3_presigned_url_generation_failed key=%s", s3_key)
             raise
     
 def get_s3_client():

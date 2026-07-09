@@ -1,3 +1,4 @@
+﻿from logging_utils import log_progress
 from openpyxl import load_workbook
 from openpyxl.styles import (PatternFill, Alignment, NamedStyle)
 from openpyxl.utils import get_column_letter
@@ -343,7 +344,7 @@ def get_grouped_sample_mapping_lines(param_mapping):
 def get_grouped_sample_cell_map(param_mapping):
     mapping_lines = get_grouped_sample_mapping_lines(param_mapping)
     if len(mapping_lines) < 2:
-        print("Warning: grouped sample mapping expected two line blocks but found fewer")
+        log_progress("Warning: grouped sample mapping expected two line blocks but found fewer")
         return {}
 
     cell_map = {}
@@ -374,18 +375,18 @@ def get_grouped_sample_lookup(group):
             duplicate_indexes.add(sample_number)
     if duplicate_indexes:
         group_key = group.get('groupKey', '') if isinstance(group, dict) else ''
-        print(f"Warning: grouped sample group {group_key} has duplicate sample indexes: {', '.join(str(index) for index in sorted(duplicate_indexes))}")
+        log_progress(f"Warning: grouped sample group {group_key} has duplicate sample indexes: {', '.join(str(index) for index in sorted(duplicate_indexes))}")
     return lookup
 
 def validate_grouped_sample_value(param_id, value):
     if not is_standard_sample_grouped_value(value):
-        print(f"Warning: grouped sample parameter {param_id} has malformed value; expected sampleGroups structure")
+        log_progress(f"Warning: grouped sample parameter {param_id} has malformed value; expected sampleGroups structure")
         return
 
     groups = get_grouped_sample_groups(value)
     missing_groups = [group_key for group_key in SAMPLE_GROUP_ORDER if group_key not in groups]
     if missing_groups:
-        print(f"Warning: grouped sample parameter {param_id} missing groups: {', '.join(missing_groups)}")
+        log_progress(f"Warning: grouped sample parameter {param_id} missing groups: {', '.join(missing_groups)}")
 
     total_samples = 0
     for group_key in SAMPLE_GROUP_ORDER:
@@ -396,16 +397,16 @@ def validate_grouped_sample_value(param_id, value):
         expected_numbers = [sample_number_from_label(source_sample) for source_sample, _ in SAMPLE_GROUPS[group_key]]
         missing_samples = [f"Sample-{sample_number}" for sample_number in expected_numbers if sample_number not in lookup]
         if missing_samples:
-            print(f"Warning: grouped sample parameter {param_id} group {group_key} missing samples: {', '.join(missing_samples)}")
+            log_progress(f"Warning: grouped sample parameter {param_id} group {group_key} missing samples: {', '.join(missing_samples)}")
         if not group.get('selectedLine'):
-            print(f"Warning: grouped sample parameter {param_id} group {group_key} missing selectedLine")
+            log_progress(f"Warning: grouped sample parameter {param_id} group {group_key} missing selectedLine")
         actual_numbers = sorted(lookup)
         if actual_numbers != [number for number in expected_numbers if isinstance(number, int)]:
-            print(f"Warning: grouped sample parameter {param_id} group {group_key} has unexpected sample order/indexes: {actual_numbers}")
+            log_progress(f"Warning: grouped sample parameter {param_id} group {group_key} has unexpected sample order/indexes: {actual_numbers}")
         total_samples += len(lookup)
 
     if total_samples != 20:
-        print(f"Warning: grouped sample parameter {param_id} expected 20 samples, found {total_samples}")
+        log_progress(f"Warning: grouped sample parameter {param_id} expected 20 samples, found {total_samples}")
 
 def extract_safety_module_ids(stages):
     for stage in stages:
@@ -429,7 +430,7 @@ def get_writable_cell(worksheet, cell_ref):
                     return worksheet[merged_range.coord.split(":")[0]]
         return cell
     except Exception as e:
-        print(f"Warning: invalid or inaccessible Excel cell reference {cell_ref}: {str(e)}")
+        log_progress(f"Warning: invalid or inaccessible Excel cell reference {cell_ref}: {str(e)}")
         return None
 
 def safe_set_cell(worksheet, cell_ref, value, raw=False, **format_options):
@@ -485,7 +486,7 @@ def load_signature_image_from_s3(signature_key):
         )
         return io.BytesIO(response['Body'].read())
     except Exception as e:
-        print(f"Warning: signature image S3 reference is not accessible ({signature_key}): {str(e)}")
+        log_progress(f"Warning: signature image S3 reference is not accessible ({signature_key}): {str(e)}")
         return None
 
 def resolve_signature_image_bytes(image_source):
@@ -513,7 +514,7 @@ def insert_signature_image(worksheet, cell_ref, image_source):
     try:
         image_bytes = resolve_signature_image_bytes(image_source)
         if not image_bytes:
-            print(f"Warning: signature image at {cell_ref} could not be loaded from {describe_signature_image_source(image_source)}")
+            log_progress(f"Warning: signature image at {cell_ref} could not be loaded from {describe_signature_image_source(image_source)}")
             return False
         signature_image = OpenpyxlImage(image_bytes)
         signature_image.height = 45
@@ -521,7 +522,7 @@ def insert_signature_image(worksheet, cell_ref, image_source):
         worksheet.add_image(signature_image, cell_ref)
         return True
     except Exception as e:
-        print(f"Unable to insert signature image at {cell_ref}: {str(e)}")
+        log_progress(f"Unable to insert signature image at {cell_ref}: {str(e)}")
         return False
 
 def setup_cell_styles(workbook):
@@ -578,14 +579,14 @@ def write_signature(worksheet, text_cell_ref, image_cell_ref, text_value, image_
             apply_cell_formatting(text_cell, **{**format_options, 'horizontal': 'left'})
 
     if image_value:
-        print(f"{signature_label} image reference found: {describe_signature_image_source(image_value)}")
+        log_progress(f"{signature_label} image reference found: {describe_signature_image_source(image_value)}")
         image_cell = get_writable_cell(worksheet, image_cell_ref)
         if insert_signature_image(worksheet, image_cell_ref, image_value):
             if image_cell is not None:
                 image_cell.value = None
                 apply_cell_formatting(image_cell, **format_options)
     elif text_value:
-        print(f"Warning: {signature_label} text signature exists but image reference is missing; continuing without image")
+        log_progress(f"Warning: {signature_label} text signature exists but image reference is missing; continuing without image")
 
 def normalize_line_value(line_value):
     if line_value is None:
@@ -642,7 +643,7 @@ def fill_line_dropdown_values(worksheet, audit_data):
                             if line_value and cell_ref:
                                 safe_set_cell(worksheet, cell_ref, normalize_line_value(line_value), raw=True, horizontal='center')
     except Exception as e:
-        print(f"Warning: failed to export some line dropdown values: {str(e)}")
+        log_progress(f"Warning: failed to export some line dropdown values: {str(e)}")
 
 def fill_basic_info(worksheet, audit_data, field_config):
     try:
@@ -682,17 +683,17 @@ def fill_basic_info(worksheet, audit_data, field_config):
         cell_ref = field_config['spec_signed_off']['cell']
         safe_set_cell(worksheet, cell_ref, spec_signed, raw=True, **field_config['spec_signed_off'].get('format', {}))
 
-        print("Basic information filled and formatted successfully")
+        log_progress("Basic information filled and formatted successfully")
         
     except Exception as e:
-        print(f"Error filling basic info: {str(e)}")
-        print("Warning: continuing audit export without some basic info fields")
+        log_progress(f"Error filling basic info: {str(e)}")
+        log_progress("Warning: continuing audit export without some basic info fields")
 
 def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
     try:
         stages = audit_data.get('stages', [])
         if not stages:
-            print("No stages data found for observations")
+            log_progress("No stages data found for observations")
             return
         safety_module_ids = extract_safety_module_ids(stages)
         
@@ -828,12 +829,12 @@ def fill_observations_data(worksheet, audit_data, observation_cell_mapping):
                                 cell = get_writable_cell(worksheet, cell_ref)
                                 set_cell_value(cell, value)
                                 apply_cell_formatting(cell, horizontal='center')
-                                print(f"Filled observation {value} for parameter {param_id} at {time_slot} in cell {cell_ref}")
+                                log_progress(f"Filled observation {value} for parameter {param_id} at {time_slot} in cell {cell_ref}")
         
-        print("Observations data filled successfully")
+        log_progress("Observations data filled successfully")
     except Exception as e:
-        print(f"Error filling observations data: {str(e)}")
-        print("Warning: continuing audit export with partially filled observations")
+        log_progress(f"Error filling observations data: {str(e)}")
+        log_progress("Warning: continuing audit export with partially filled observations")
 
 def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_mapping):
     """Handle parameters with Sample-1, Sample-2, etc. structure"""
@@ -844,7 +845,7 @@ def handle_sample_based_parameter(worksheet, param_id, time_slot, value, param_m
                 cell = get_writable_cell(worksheet, cell_ref)
                 set_cell_value(cell, sample_value)
                 apply_cell_formatting(cell, horizontal='center')
-                print(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
+                log_progress(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
 
 def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_mapping, line_mapping=None):
     """Handle line-based sample parameters"""
@@ -866,13 +867,13 @@ def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_ma
                     sample_value = sample.get('value', '') if isinstance(sample, dict) else ''
                     cell_ref = sample_cell_map.get(sample_number)
                     if not cell_ref:
-                        print(f"Warning: no Excel cell mapping for parameter {param_id} {source_sample}")
+                        log_progress(f"Warning: no Excel cell mapping for parameter {param_id} {source_sample}")
                         continue
                     cell = get_writable_cell(worksheet, cell_ref)
                     set_cell_value(cell, sample_value)
                     apply_cell_formatting(cell, horizontal='center')
                     if sample_value != '':
-                        print(f"Filled observation {sample_value} for parameter {param_id} at {source_sample} in cell {cell_ref}")
+                        log_progress(f"Filled observation {sample_value} for parameter {param_id} at {source_sample} in cell {cell_ref}")
             return
 
         for sample_key, sample_value in value.items():
@@ -881,7 +882,7 @@ def handle_line_sample_parameter(worksheet, param_id, time_slot, value, param_ma
                 cell = get_writable_cell(worksheet, cell_ref)
                 set_cell_value(cell, sample_value)
                 apply_cell_formatting(cell, horizontal='center')
-                print(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
+                log_progress(f"Filled observation {sample_value} for parameter {param_id} at {sample_key} in cell {cell_ref}")
 
 def handle_stringer_unit_parameter(worksheet, param_id, value, param_mapping):
     """Handle stringer unit parameters"""
@@ -894,7 +895,7 @@ def handle_stringer_unit_parameter(worksheet, param_id, value, param_mapping):
                         cell = get_writable_cell(worksheet, cell_ref)
                         set_cell_value(cell, unit_value)
                         apply_cell_formatting(cell, horizontal='center')
-                        print(f"Filled observation {unit_value} for parameter {param_id} at {stringer_key}_{unit_key} in cell {cell_ref}")
+                        log_progress(f"Filled observation {unit_value} for parameter {param_id} at {stringer_key}_{unit_key} in cell {cell_ref}")
 
 def handle_cell_width_parameter(worksheet, value, param_mapping):
     """Handle cell width measurements"""
@@ -1193,7 +1194,7 @@ def adjust_column_widths(worksheet, min_width=8, max_width=50):
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except:
+            except Exception:
                 pass
         
         adjusted_width = min(max_length + 2, max_width)
@@ -1214,13 +1215,13 @@ def generate_audit_report(audit_data):
         if not audit_data:
             raise ValueError("No audit data provided")
         audit_data = normalize_ipqc_audit_data(copy.deepcopy(audit_data))
-        print("Received audit data for report generation")
+        log_progress("Received audit data for report generation")
         line_number = audit_data.get('lineNumber', 'I')
         template_path, field_config, observation_cell_mapping = get_template_config(line_number)
         if not template_path or not os.path.exists(template_path):
             raise FileNotFoundError(f"Audit template could not be loaded for line {line_number}: {template_path}")
         if not isinstance(observation_cell_mapping, dict):
-            print("Warning: observation cell mapping is invalid; continuing without observations")
+            log_progress("Warning: observation cell mapping is invalid; continuing without observations")
             observation_cell_mapping = {}
         wb = load_workbook(template_path)
         setup_cell_styles(wb)
@@ -1235,5 +1236,7 @@ def generate_audit_report(audit_data):
         return output, filename
         
     except Exception as e:
-        print(f"Error generating audit report: {str(e)}")
+        log_progress(f"Error generating audit report: {str(e)}")
         raise
+
+

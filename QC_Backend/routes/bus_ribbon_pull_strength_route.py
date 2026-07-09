@@ -1,5 +1,6 @@
 import calendar
 from datetime import datetime
+import logging
 import re
 from typing import Optional
 
@@ -50,6 +51,8 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+
+logger = logging.getLogger(__name__)
 
 
 bus_ribbon_pull_strength_router = APIRouter(
@@ -1010,5 +1013,5 @@ async def export_monthly_excel(payload: dict, x_employee_id: str | None = Header
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except Exception as e:
-        print(f"Error generating Excel: {str(e)}")
+        logger.exception("bus_ribbon_excel_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate Excel: {str(e)}")

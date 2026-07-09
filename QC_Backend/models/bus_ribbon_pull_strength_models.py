@@ -1,10 +1,14 @@
 from datetime import datetime
+import logging
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING, MongoClient
 
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import ensure_index
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_line(line: str | None) -> str:
@@ -15,26 +19,35 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
 bus_ribbon_pull_strength_entries_collection = db["bus_ribbon_pull_strength_daily_entries"]
 
-bus_ribbon_pull_strength_entries_collection.create_index(
-    [("date", ASCENDING), ("line", ASCENDING), ("shift", ASCENDING)],
-    unique=True,
-)
-bus_ribbon_pull_strength_entries_collection.create_index([("year", ASCENDING), ("month", ASCENDING)])
+try:
+    ensure_index(
+        bus_ribbon_pull_strength_entries_collection,
+        [("date", ASCENDING), ("line", ASCENDING), ("shift", ASCENDING)],
+        unique=True,
+        name="bus_ribbon_date_line_shift_unique_idx",
+    )
+    ensure_index(
+        bus_ribbon_pull_strength_entries_collection,
+        [("year", ASCENDING), ("month", ASCENDING)],
+        name="bus_ribbon_year_month_idx",
+    )
+except Exception as exc:
+    logger.warning("failed_to_prepare_bus_ribbon_base_indexes error=%s", exc, exc_info=True)
 
 
 def ensure_bus_ribbon_pull_strength_indexes() -> None:
     try:
-        bus_ribbon_pull_strength_entries_collection.create_index([("updatedAt", DESCENDING)], name="bus_ribbon_updated_at_desc_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("createdAt", DESCENDING)], name="bus_ribbon_created_at_desc_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("workflowState", ASCENDING)], name="bus_ribbon_workflow_state_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("status", ASCENDING)], name="bus_ribbon_status_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("date", DESCENDING)], name="bus_ribbon_date_desc_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("shift", ASCENDING)], name="bus_ribbon_shift_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("line", ASCENDING)], name="bus_ribbon_line_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("shiftDetails.poNumber", ASCENDING)], name="bus_ribbon_po_idx")
-        bus_ribbon_pull_strength_entries_collection.create_index([("createdByEmployeeId", ASCENDING)], name="bus_ribbon_created_by_employee_id_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("updatedAt", DESCENDING)], name="bus_ribbon_updated_at_desc_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("createdAt", DESCENDING)], name="bus_ribbon_created_at_desc_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("workflowState", ASCENDING)], name="bus_ribbon_workflow_state_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("status", ASCENDING)], name="bus_ribbon_status_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("date", DESCENDING)], name="bus_ribbon_date_desc_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("shift", ASCENDING)], name="bus_ribbon_shift_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("line", ASCENDING)], name="bus_ribbon_line_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("shiftDetails.poNumber", ASCENDING)], name="bus_ribbon_po_idx")
+        ensure_index(bus_ribbon_pull_strength_entries_collection, [("createdByEmployeeId", ASCENDING)], name="bus_ribbon_created_by_employee_id_idx")
     except Exception as exc:
-        print(f"Warning: failed to ensure bus ribbon pull strength indexes: {exc}")
+        logger.warning("failed_to_ensure_bus_ribbon_pull_strength_indexes error=%s", exc, exc_info=True)
 
 
 ensure_bus_ribbon_pull_strength_indexes()

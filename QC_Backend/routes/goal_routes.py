@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Header, HTTPException, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
+from mongo_indexes import ensure_index_async
 from models.goal_model import (
     build_carry_forward_goal,
     evaluate_goal_status,
@@ -54,7 +55,8 @@ async def ensure_goal_indexes() -> None:
         return
 
     try:
-        await goals_collection.create_index(
+        await ensure_index_async(
+            goals_collection,
             'carryForwardSourceGoalId',
             unique=True,
             sparse=True,

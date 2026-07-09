@@ -1,7 +1,11 @@
+import logging
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from typing import Optional, List, Dict, Any
 from constants import MONGODB_URI, MONGODB_DB_NAME
+from mongo_indexes import ensure_index
 from s3_service import S3Service
+
+logger = logging.getLogger(__name__)
 
 client = MongoClient(MONGODB_URI)
 db = client[MONGODB_DB_NAME]
@@ -9,19 +13,19 @@ peel_test_collection = db["peel_test_reports"]
 
 def ensure_peel_test_indexes() -> None:
     try:
-        peel_test_collection.create_index([("updatedAt", DESCENDING)], name="peel_test_updated_at_desc_idx")
-        peel_test_collection.create_index([("timestamp", DESCENDING)], name="peel_test_timestamp_desc_idx")
-        peel_test_collection.create_index([("name", ASCENDING)], name="peel_test_name_idx")
-        peel_test_collection.create_index([("workflowState", ASCENDING)], name="peel_test_workflow_state_idx")
-        peel_test_collection.create_index([("status", ASCENDING)], name="peel_test_status_idx")
-        peel_test_collection.create_index([("createdByEmployeeId", ASCENDING)], name="peel_test_created_by_employee_id_idx")
-        peel_test_collection.create_index([("line", ASCENDING)], name="peel_test_line_idx")
-        peel_test_collection.create_index([("date", DESCENDING)], name="peel_test_date_desc_idx")
-        peel_test_collection.create_index([("shift", ASCENDING)], name="peel_test_shift_idx")
-        peel_test_collection.create_index([("lineNumber", ASCENDING)], name="peel_test_line_number_idx")
-        peel_test_collection.create_index([("productionOrderNo", ASCENDING)], name="peel_test_production_order_idx")
+        ensure_index(peel_test_collection, [("updatedAt", DESCENDING)], name="peel_test_updated_at_desc_idx")
+        ensure_index(peel_test_collection, [("timestamp", DESCENDING)], name="peel_test_timestamp_desc_idx")
+        ensure_index(peel_test_collection, [("name", ASCENDING)], name="peel_test_name_idx")
+        ensure_index(peel_test_collection, [("workflowState", ASCENDING)], name="peel_test_workflow_state_idx")
+        ensure_index(peel_test_collection, [("status", ASCENDING)], name="peel_test_status_idx")
+        ensure_index(peel_test_collection, [("createdByEmployeeId", ASCENDING)], name="peel_test_created_by_employee_id_idx")
+        ensure_index(peel_test_collection, [("line", ASCENDING)], name="peel_test_line_idx")
+        ensure_index(peel_test_collection, [("date", DESCENDING)], name="peel_test_date_desc_idx")
+        ensure_index(peel_test_collection, [("shift", ASCENDING)], name="peel_test_shift_idx")
+        ensure_index(peel_test_collection, [("lineNumber", ASCENDING)], name="peel_test_line_number_idx")
+        ensure_index(peel_test_collection, [("productionOrderNo", ASCENDING)], name="peel_test_production_order_idx")
     except Exception as exc:
-        print(f"Warning: failed to ensure peel test indexes: {exc}")
+        logger.warning("failed_to_ensure_peel_test_indexes error=%s", exc, exc_info=True)
 
 ensure_peel_test_indexes()
 
@@ -86,9 +90,7 @@ class PeelTestReport:
                 "averages": data.get("averages", {})
             }
         except Exception as e:
-            print(f"Error retrieving peel test data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("peel_test_s3_download_failed key=%s", self.s3_key)
             return {"form_data": {}, "row_data": [], "averages": {}}
 
     def save_data(self, form_data: Dict[str, Any], row_data: List[Any], averages: Dict[str, Any]) -> bool:
@@ -100,9 +102,7 @@ class PeelTestReport:
             }
             return self.s3_service.uploadOrOverwriteJson(self.s3_key, data)
         except Exception as e:
-            print(f"Error saving peel test data to S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("peel_test_s3_upload_failed key=%s", self.s3_key)
             return False
 
     def delete_data(self) -> bool:
@@ -110,9 +110,7 @@ class PeelTestReport:
             self.s3_service.delete_json(self.s3_key)
             return True
         except Exception as e:
-            print(f"Error deleting peel test data from S3 (key: {self.s3_key}): {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("peel_test_s3_delete_failed key=%s", self.s3_key)
             return False
 
     def to_dict(self, include_data: bool = False) -> Dict[str, Any]:
