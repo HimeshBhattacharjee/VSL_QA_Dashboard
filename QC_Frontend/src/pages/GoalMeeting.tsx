@@ -541,7 +541,7 @@ function GoalMeetingTable({
                                                             {goal.title}
                                                         </p>
                                                         {(goal.carryForwardSourceGoalId || goal.carryForwardSourceId) && (
-                                                            <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                            <span className="inline-flex w-fit items-center justify-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                                                 <RotateCcw className="h-3 w-3" /> Carry Forwarded
                                                             </span>
                                                         )}
@@ -681,7 +681,7 @@ function GoalMeetingTable({
                                                 >
                                                     <div className="flex h-full items-center justify-center">
                                                         <span
-                                                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getGoalStatusClasses(goal.goalStatus)}`}
+                                                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getGoalStatusClasses(goal.carryForwardTargetGoalId ? 'Done' : goal.goalStatus)}`}
                                                         >
                                                             {getGoalStatusLabelWithProgress(goal)}
                                                         </span>
@@ -993,13 +993,14 @@ export default function GoalMeeting() {
 
     const handleDeleteGoalConfirmed = async (goalId: string) => {
         const goal = goals.find((item) => item.id === goalId);
-        if (!permissions.canDeleteGoals || (goal && !isGoalOpenForDetailEditing(goal))) {
+        if (!permissions.canDeleteGoals || !goal?.hardDeleteAvailable) {
             return;
         }
 
         try {
-            await deleteGoalRequest(goalId);
-            setGoals((current) => current.filter((goal) => goal.id !== goalId));
+            await deleteGoalRequest(goalId, currentUserRole);
+            const latestGoals = await fetchGoals();
+            setGoals(latestGoals);
             setExpandedGoalIds((current) => {
                 const nextExpandedGoalIds = new Set(current);
                 nextExpandedGoalIds.delete(goalId);
@@ -1014,7 +1015,7 @@ export default function GoalMeeting() {
 
     const handleDeleteGoal = (goalId: string) => {
         const goal = goals.find((item) => item.id === goalId);
-        if (!permissions.canDeleteGoals || (goal && !isGoalOpenForDetailEditing(goal))) {
+        if (!permissions.canDeleteGoals || !goal?.hardDeleteAvailable) {
             return;
         }
 

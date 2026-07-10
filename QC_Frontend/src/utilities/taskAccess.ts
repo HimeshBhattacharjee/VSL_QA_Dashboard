@@ -79,7 +79,7 @@ export const getGoalManagementPermissions = (
 ): GoalManagementPermissions => ({
     canAccessGoalManagement: role !== 'Operator',
     canCreateGoals: role === 'Manager' || role === 'Supervisor',
-    canDeleteGoals: false,
+    canDeleteGoals: role === 'Manager' || role === 'Supervisor',
     canDropGoals: isAuthorizedGoalDecisionUser(user.employeeId),
     canEditGoalDetails: role === 'Manager' || role === 'Supervisor',
     canReviveGoals: isAuthorizedGoalDecisionUser(user.employeeId),

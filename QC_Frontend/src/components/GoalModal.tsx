@@ -464,7 +464,7 @@ export default function GoalModal({
 
                     <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            {mode === 'edit' && goal && permissions.canDeleteGoals && (
+                            {mode === 'edit' && goal?.hardDeleteAvailable && permissions.canDeleteGoals && (
                                 <button
                                     type="button"
                                     onClick={() => onDelete(goal.id)}

@@ -58,6 +58,7 @@ interface GoalApiRecord {
     carryForwardEligible?: boolean;
     carryForwardAvailable?: boolean;
     carryForwardUndoAvailable?: boolean;
+    hardDeleteAvailable?: boolean;
     dropAvailable?: boolean;
     milestoneEditAvailable?: boolean;
     milestoneCompletionAvailable?: boolean;
@@ -127,6 +128,7 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         carryForwardEligible: goal.carryForwardEligible ?? false,
         carryForwardAvailable: goal.carryForwardAvailable ?? false,
         carryForwardUndoAvailable: goal.carryForwardUndoAvailable ?? false,
+        hardDeleteAvailable: goal.hardDeleteAvailable ?? false,
         dropAvailable: goal.dropAvailable ?? false,
         milestoneEditAvailable: goal.milestoneEditAvailable ?? false,
         milestoneCompletionAvailable: goal.milestoneCompletionAvailable ?? false,
@@ -234,9 +236,10 @@ export async function updateGoal(
     return normalizeGoal(updatedGoal);
 }
 
-export async function deleteGoal(goalId: string): Promise<void> {
+export async function deleteGoal(goalId: string, actorRole?: string): Promise<void> {
     const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}`, {
         method: 'DELETE',
+        headers: getGoalAuthHeaders(false, actorRole),
     });
 
     await readJsonResponse(response);

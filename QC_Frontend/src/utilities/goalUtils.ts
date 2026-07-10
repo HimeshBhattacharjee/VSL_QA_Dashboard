@@ -64,6 +64,7 @@ export interface GoalData {
     carryForwardEligible: boolean;
     carryForwardAvailable: boolean;
     carryForwardUndoAvailable: boolean;
+    hardDeleteAvailable: boolean;
     dropAvailable: boolean;
     milestoneEditAvailable: boolean;
     milestoneCompletionAvailable: boolean;
@@ -427,8 +428,12 @@ export const getGoalProgressPercentage = (goal: Pick<GoalData, 'milestones'>) =>
 
 export const getGoalStatusLabel = (status: GoalStatus) => (status ? status : 'Not Started');
 
-export const getGoalStatusLabelWithProgress = (goal: Pick<GoalData, 'goalStatus' | 'completionPercentage'>) =>
-    goal.goalStatus === 'Not Done'
+export const getGoalStatusLabelWithProgress = (
+    goal: Pick<GoalData, 'goalStatus' | 'completionPercentage' | 'carryForwardTargetGoalId'>,
+) =>
+    goal.carryForwardTargetGoalId
+        ? `Carry Forwarded and Done (${goal.completionPercentage}%)`
+        : goal.goalStatus === 'Not Done'
         ? `Not Done (${goal.completionPercentage}%)`
         : getGoalStatusLabel(goal.goalStatus);
 

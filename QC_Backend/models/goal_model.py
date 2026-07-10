@@ -125,6 +125,7 @@ class GoalResponse(GoalBase):
     carryForwardEligible: bool = False
     carryForwardAvailable: bool = False
     carryForwardUndoAvailable: bool = False
+    hardDeleteAvailable: bool = False
     dropAvailable: bool = False
     milestoneEditAvailable: bool = False
     milestoneCompletionAvailable: bool = False
@@ -521,6 +522,8 @@ def serialize_goal(document: dict) -> dict:
         and not bool(document.get('carryForwardTargetGoalId'))
         and not bool(document.get('carryForwardReservedAt')),
         'carryForwardUndoAvailable': bool(document.get('carryForwardUndoAvailable', False)),
+        'hardDeleteAvailable': quarter_lifecycle == 'active'
+        and get_today_ist() < get_milestone_detail_edit_freeze_date(financial_year, quarter),
         'dropAvailable': is_goal_decision_window_open(financial_year, quarter)
         and goal_status != 'Done'
         and completion_percentage < 100

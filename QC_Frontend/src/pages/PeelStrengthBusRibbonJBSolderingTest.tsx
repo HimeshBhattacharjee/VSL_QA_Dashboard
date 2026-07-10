@@ -189,6 +189,7 @@ const FAB_LINE_MAP: Record<FabOption, LineLabel[]> = {
     'FAB-II Line-II': ['Line - 3', 'Line - 4'],
 };
 const DEFAULT_FAB: FabOption = 'FAB-II Line-I';
+const JB_STATUS_OPTIONS = ['UKTR', 'ZJRH', 'Dhash'];
 const STATUS_OPTIONS = ['Juren', 'Sunby', 'YourBest'];
 const MIN_AVERAGE_N = 25;
 const FINALIZED_WORKFLOW_STATES = new Set<WorkflowState>(['submitted', 'approved']);
@@ -1762,7 +1763,7 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
                             className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                         >
                             <option value="">Select</option>
-                            {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                            {JB_STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
                         </select>
                     </div>
                     <div>

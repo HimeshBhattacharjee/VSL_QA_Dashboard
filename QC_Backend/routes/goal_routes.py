@@ -638,12 +638,72 @@ async def undo_carry_forward_goal(
 
 
 @goal_router.delete('/{goal_id}', status_code=status.HTTP_200_OK)
-async def delete_goal(goal_id: str) -> dict:
+async def delete_goal(
+    goal_id: str,
+    x_user_role: str | None = Header(default=None),
+    x_user_name: str | None = Header(default=None),
+) -> dict:
     object_id = parse_goal_id(goal_id)
     if object_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid goal ID')
 
-    raise HTTPException(
-        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-        detail='Goal deletion is disabled to preserve goal history. Use Drop for lifecycle decisions.',
-    )
+    if (x_user_role or '').strip() not in {'Manager', 'Supervisor'}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Only managers and supervisors can delete goals',
+        )
+
+    goal = await goals_collection.find_one({'_id': object_id})
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Goal not found')
+
+    if not serialize_goal(goal).get('hardDeleteAvailable'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Goals can only be deleted during the first month of their current quarter',
+        )
+
+    source_id = goal.get('carryForwardSourceGoalId') or goal.get('carryForwardSourceId')
+    source_object_id = parse_goal_id(str(source_id or ''))
+    source_goal = await goals_collection.find_one({'_id': source_object_id}) if source_object_id else None
+    deleted = await goals_collection.delete_one({'_id': object_id})
+    if deleted.deleted_count != 1:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to delete goal',
+        )
+
+    if source_goal:
+        deleted_at = utc_now()
+        restored_source = await goals_collection.find_one_and_update(
+            {'_id': source_object_id, 'carryForwardTargetGoalId': goal_id},
+            {
+                '$set': {
+                    'decisionType': 'Carry Forward Undone',
+                    'decisionByName': (x_user_name or x_user_role or 'Unknown').strip(),
+                    'decisionTimestamp': deleted_at,
+                    'carryForwardUndoneAt': deleted_at,
+                    'carryForwardUndoBy': (x_user_name or x_user_role or 'Unknown').strip(),
+                },
+                '$unset': {
+                    'carryForwardTargetGoalId': '',
+                    'carryForwardReservedAt': '',
+                },
+                '$inc': {'versionNumber': 1},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        if not restored_source:
+            try:
+                await goals_collection.insert_one(goal)
+            except (DuplicateKeyError, PyMongoError) as rollback_error:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Goal deletion failed while restoring carry-forward references',
+                ) from rollback_error
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Goal deletion could not update its source goal',
+            )
+
+    return {'message': 'Goal deleted successfully'}
