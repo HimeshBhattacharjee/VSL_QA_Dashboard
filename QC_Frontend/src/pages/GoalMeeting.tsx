@@ -15,6 +15,7 @@ import {
     dropGoal as dropGoalRequest,
     fetchGoals,
     reviveGoal as reviveGoalRequest,
+    undoCarryForwardGoal as undoCarryForwardGoalRequest,
     updateGoal as updateGoalRequest,
 } from '../utilities/goalApi';
 import {
@@ -80,6 +81,7 @@ interface GoalMeetingTableProps {
     onDropGoal: (goal: GoalData) => void;
     onReviveGoal: (goal: GoalData) => void;
     onCarryForwardGoal: (goal: GoalData) => void;
+    onUndoCarryForwardGoal: (goal: GoalData) => void;
     onToggleExpand: (goalId: string) => void;
     onToggleMilestone: (goal: GoalData, milestoneId: string, nextCompleted: boolean) => void;
 }
@@ -132,14 +134,12 @@ const getQuarterLifecycleClasses = (lifecycle: FinancialYearQuarter['lifecycle']
 const isGoalOpenForDetailEditing = (goal: GoalData) =>
     goal.milestoneEditAvailable &&
     !goal.isDropped &&
-    !goal.carryForwardTargetGoalId &&
-    goal.decisionType !== 'Carry Forwarded';
+    !goal.carryForwardTargetGoalId;
 
 const isGoalOpenForMilestoneCompletion = (goal: GoalData) =>
     goal.milestoneCompletionAvailable &&
     !goal.isDropped &&
-    !goal.carryForwardTargetGoalId &&
-    goal.decisionType !== 'Carry Forwarded';
+    !goal.carryForwardTargetGoalId;
 
 const isGoalOpenForDecision = (goal: GoalData) => isGoalDecisionWindowOpen(goal);
 
@@ -290,6 +290,7 @@ function GoalViewControls({
                         <option value="Done">Done</option>
                         <option value="Not Done">Not Done</option>
                         <option value="Dropped">Dropped</option>
+                        <option value="Carry Forwarded Goals">Carry Forwarded Goals</option>
                     </select>
                 </div>
             </div>
@@ -309,6 +310,7 @@ function GoalMeetingTable({
     onDropGoal,
     onReviveGoal,
     onCarryForwardGoal,
+    onUndoCarryForwardGoal,
     onToggleExpand,
     onToggleMilestone,
 }: GoalMeetingTableProps) {
@@ -462,13 +464,23 @@ function GoalMeetingTable({
                                         const canCompleteMilestones =
                                             canUpdateMilestones && isGoalOpenForMilestoneCompletion(goal);
                                         const canDropThisGoal =
-                                            canDropGoals && goal.dropAvailable && isGoalOpenForDecision(goal);
+                                            canDropGoals &&
+                                            goal.completionPercentage < 100 &&
+                                            goal.goalStatus !== 'Done' &&
+                                            goal.dropAvailable &&
+                                            isGoalOpenForDecision(goal);
                                         const canReviveThisGoal =
-                                            canReviveGoals && goal.isDropped && isGoalOpenForDecision(goal);
+                                            canReviveGoals && goal.isDropped;
                                         const canCarryThisGoal =
                                             canCarryForwardGoals &&
+                                            goal.completionPercentage < 100 &&
+                                            goal.goalStatus !== 'Done' &&
                                             goal.carryForwardAvailable &&
                                             isGoalOpenForDecision(goal);
+                                        const canUndoCarryForward =
+                                            canCarryForwardGoals &&
+                                            Boolean(goal.carryForwardTargetGoalId) &&
+                                            goal.carryForwardUndoAvailable;
                                         const decisionLabel = getGoalDecisionLabel(goal);
                                         const milestoneSummary = [
                                             {
@@ -528,13 +540,12 @@ function GoalMeetingTable({
                                                         <p className="break-words text-sm font-semibold leading-6 text-slate-900 dark:text-white">
                                                             {goal.title}
                                                         </p>
-                                                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                                                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800">
-                                                                {goal.financialYear} Q{goal.quarter}
+                                                        {(goal.carryForwardSourceGoalId || goal.carryForwardSourceId) && (
+                                                            <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                <RotateCcw className="h-3 w-3" /> Carry Forwarded
                                                             </span>
-                                                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800">
-                                                                Version {goal.versionNumber}
-                                                            </span>
+                                                        )}
+                                                        <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                                                         </div>
                                                         {decisionLabel && (
                                                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -708,6 +719,22 @@ function GoalMeetingTable({
                                                                 className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
                                                             >
                                                                 Carry
+                                                            </button>
+                                                        )}
+
+                                                        {goal.carryForwardTargetGoalId && (
+                                                            <span className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                                Already Carry Forwarded
+                                                            </span>
+                                                        )}
+
+                                                        {canUndoCarryForward && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onUndoCarryForwardGoal(goal)}
+                                                                className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                            >
+                                                                Undo Carry Forward
                                                             </button>
                                                         )}
 
@@ -1010,7 +1037,7 @@ export default function GoalMeeting() {
     };
 
     const handleDropGoalConfirmed = async (goal: GoalData) => {
-        if (!permissions.canDropGoals || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
+        if (!permissions.canDropGoals || goal.completionPercentage >= 100 || goal.goalStatus === 'Done' || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
             return;
         }
 
@@ -1024,7 +1051,7 @@ export default function GoalMeeting() {
     };
 
     const handleDropGoal = (goal: GoalData) => {
-        if (!permissions.canDropGoals || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
+        if (!permissions.canDropGoals || goal.completionPercentage >= 100 || goal.goalStatus === 'Done' || !goal.dropAvailable || !isGoalOpenForDecision(goal)) {
             return;
         }
 
@@ -1041,7 +1068,7 @@ export default function GoalMeeting() {
     };
 
     const handleReviveGoal = async (goal: GoalData) => {
-        if (!permissions.canReviveGoals || !goal.isDropped || !isGoalOpenForDecision(goal)) {
+        if (!permissions.canReviveGoals || !goal.isDropped) {
             return;
         }
 
@@ -1099,6 +1126,41 @@ export default function GoalMeeting() {
             console.error('Failed to carry forward goal:', error);
             showAlert('error', getGoalActionErrorMessage(error, 'Failed to carry forward goal.'));
         }
+    };
+
+    const handleUndoCarryForwardGoalConfirmed = async (goal: GoalData) => {
+        if (!permissions.canCarryForwardGoals || !goal.carryForwardUndoAvailable) {
+            return;
+        }
+
+        try {
+            await undoCarryForwardGoalRequest(goal.id, currentUserRole);
+            const latestGoals = await fetchGoals();
+            setGoals(latestGoals);
+        } catch (error) {
+            console.error('Failed to undo carry forward:', error);
+            showAlert(
+                'error',
+                getGoalActionErrorMessage(error, 'Failed to undo carry forward.'),
+            );
+        }
+    };
+
+    const handleUndoCarryForwardGoal = (goal: GoalData) => {
+        if (!permissions.canCarryForwardGoals || !goal.carryForwardUndoAvailable) {
+            return;
+        }
+
+        showConfirm({
+            title: 'Undo Carry Forward',
+            message: 'Remove the untouched destination goal and restore Carry Forward on the source goal?',
+            type: 'warning',
+            confirmText: 'Undo Carry Forward',
+            cancelText: 'Cancel',
+            onConfirm: () => {
+                void handleUndoCarryForwardGoalConfirmed(goal);
+            },
+        });
     };
 
     const handleMilestoneToggle = async (
@@ -1215,6 +1277,7 @@ export default function GoalMeeting() {
                         onDropGoal={handleDropGoal}
                         onReviveGoal={handleReviveGoal}
                         onCarryForwardGoal={handleCarryForwardGoal}
+                        onUndoCarryForwardGoal={handleUndoCarryForwardGoal}
                         onToggleExpand={handleToggleExpand}
                         onToggleMilestone={handleMilestoneToggle}
                     />

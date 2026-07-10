@@ -171,16 +171,36 @@ def reject_if_goal_snapshot_frozen(existing_goal: dict, changes: dict[str, bool]
             detail='Dropped goals are frozen and cannot be modified',
         )
 
-    if existing_goal.get('decisionType') == 'Carry Forwarded' or existing_goal.get('carryForwardTargetGoalId'):
+    if existing_goal.get('carryForwardTargetGoalId'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Carried-forward source goals are frozen to preserve the previous quarter snapshot',
         )
 
 
+def is_carry_forward_copy_untouched(source_goal: dict, target_goal: dict | None) -> bool:
+    if not target_goal:
+        return False
+
+    source_id = str(source_goal['_id'])
+    target_source_id = target_goal.get('carryForwardSourceGoalId') or target_goal.get('carryForwardSourceId')
+    initial_version = target_goal.get('carryForwardInitialVersion') or source_goal.get('versionNumber') or 1
+    return (
+        str(target_source_id or '') == source_id
+        and int(target_goal.get('versionNumber') or 1) == int(initial_version)
+        and target_goal.get('decisionType') == 'Carry Forwarded'
+        and not bool(target_goal.get('isDropped'))
+        and not bool(target_goal.get('isRevived'))
+    )
+
+
 @goal_router.get('', response_model=list[GoalResponse])
 async def get_goals() -> list[dict]:
     documents = await goals_collection.find().sort('createdAt', -1).to_list(length=None)
+    documents_by_id = {str(document['_id']): document for document in documents}
+    for document in documents:
+        target_goal = documents_by_id.get(str(document.get('carryForwardTargetGoalId') or ''))
+        document['carryForwardUndoAvailable'] = is_carry_forward_copy_untouched(document, target_goal)
     return [serialize_goal(document) for document in documents]
 
 
@@ -301,10 +321,16 @@ async def drop_goal(
             detail='Goal drop decisions are outside the allowed decision window',
         )
 
-    if existing_goal.get('decisionType') == 'Carry Forwarded' or existing_goal.get('carryForwardTargetGoalId'):
+    if existing_goal.get('carryForwardTargetGoalId'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Carried-forward source goals cannot be dropped',
+        )
+
+    if evaluate_goal_status(existing_goal) == 'Done' or get_completion_percentage(existing_goal.get('milestones', [])) >= 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Completed goals cannot be dropped',
         )
 
     # Drop is a soft lifecycle state and must stay separate from permanent delete.
@@ -343,7 +369,7 @@ async def revive_goal(
     x_employee_id: str | None = Header(default=None),
     x_user_name: str | None = Header(default=None),
 ) -> dict:
-    get_authorized_decision_actor(x_employee_id, x_user_name)
+    actor_employee_code, actor_name = get_authorized_decision_actor(x_employee_id, x_user_name)
     object_id = parse_goal_id(goal_id)
     if object_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid goal ID')
@@ -352,27 +378,20 @@ async def revive_goal(
     if not existing_goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Goal not found')
 
-    if not is_goal_decision_window_open(existing_goal.get('financialYear'), existing_goal.get('quarter')):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Goal drop decisions can no longer be changed',
-        )
-
+    revived_at = utc_now()
     revived_goal = await goals_collection.find_one_and_update(
         {'_id': object_id, 'isDropped': True},
         {
             '$set': {
                 'isDropped': False,
                 'dropped': False,
-            },
-            '$unset': {
-                'droppedAt': '',
-                'droppedBy': '',
-                'decisionType': '',
-                'decisionByName': '',
-                'decisionByEmployeeCode': '',
-                'decisionTimestamp': '',
-                'goalStatus': '',
+                'isRevived': True,
+                'revivedAt': revived_at,
+                'revivedBy': actor_name,
+                'decisionType': 'Revived',
+                'decisionByName': actor_name,
+                'decisionByEmployeeCode': actor_employee_code,
+                'decisionTimestamp': revived_at,
             },
             '$inc': {
                 'versionNumber': 1,
@@ -442,7 +461,7 @@ async def carry_forward_goal(
             '_id': object_id,
             'isDropped': {'$ne': True},
             'carryForwardTargetGoalId': {'$exists': False},
-            'decisionType': {'$nin': ['Carry Forwarded', 'Dropped']},
+            'decisionType': {'$ne': 'Dropped'},
         },
         {
             '$set': {
@@ -539,6 +558,83 @@ async def carry_forward_goal(
         )
 
     return serialize_goal(created_goal)
+
+
+@goal_router.post('/{goal_id}/undo-carry-forward', response_model=GoalResponse)
+async def undo_carry_forward_goal(
+    goal_id: str,
+    x_user_role: str | None = Header(default=None),
+    x_employee_id: str | None = Header(default=None),
+    x_user_name: str | None = Header(default=None),
+) -> dict:
+    actor_employee_code, actor_name = get_authorized_decision_actor(x_employee_id, x_user_name)
+    object_id = parse_goal_id(goal_id)
+    if object_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid goal ID')
+
+    source_goal = await goals_collection.find_one({'_id': object_id})
+    if not source_goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Goal not found')
+
+    target_id = source_goal.get('carryForwardTargetGoalId')
+    target_object_id = parse_goal_id(str(target_id or ''))
+    target_goal = await goals_collection.find_one({'_id': target_object_id}) if target_object_id else None
+    if not is_carry_forward_copy_untouched(source_goal, target_goal):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Carry forward can no longer be undone because work has already begun on the destination goal',
+        )
+
+    initial_version = target_goal.get('carryForwardInitialVersion') or source_goal.get('versionNumber') or 1
+    deleted = await goals_collection.delete_one(
+        {
+            '_id': target_object_id,
+            'versionNumber': int(initial_version),
+            'isDropped': {'$ne': True},
+            'isRevived': {'$ne': True},
+        },
+    )
+    if deleted.deleted_count != 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Carry forward can no longer be undone because work has already begun on the destination goal',
+        )
+
+    undone_at = utc_now()
+    restored_source = await goals_collection.find_one_and_update(
+        {'_id': object_id, 'carryForwardTargetGoalId': str(target_id)},
+        {
+            '$set': {
+                'decisionType': 'Carry Forward Undone',
+                'decisionByName': actor_name,
+                'decisionByEmployeeCode': actor_employee_code,
+                'decisionTimestamp': undone_at,
+                'carryForwardUndoneAt': undone_at,
+                'carryForwardUndoBy': actor_name,
+            },
+            '$unset': {
+                'carryForwardTargetGoalId': '',
+                'carryForwardReservedAt': '',
+            },
+            '$inc': {'versionNumber': 1},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if not restored_source:
+        try:
+            await goals_collection.insert_one(target_goal)
+        except (DuplicateKeyError, PyMongoError) as rollback_error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Carry forward undo failed while restoring goal references',
+            ) from rollback_error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Carry forward could not be undone',
+        )
+
+    restored_source['carryForwardUndoAvailable'] = False
+    return serialize_goal(restored_source)
 
 
 @goal_router.delete('/{goal_id}', status_code=status.HTTP_200_OK)

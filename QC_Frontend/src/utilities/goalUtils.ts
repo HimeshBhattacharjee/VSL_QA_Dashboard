@@ -9,7 +9,7 @@ export type GoalStatus =
     | 'Done'
     | 'Not Done'
     | 'Dropped';
-export type GoalDecisionType = 'Carry Forwarded' | 'Dropped';
+export type GoalDecisionType = 'Carry Forwarded' | 'Carry Forward Undone' | 'Dropped' | 'Revived';
 export type MilestoneStatus = 'Done' | 'Done (Delayed)' | 'Not Started' | 'Overdue';
 export type GoalSortOption =
     | 'createdAtAsc'
@@ -18,7 +18,7 @@ export type GoalSortOption =
     | 'goalStatusDesc'
     | 'targetDateAsc'
     | 'targetDateDesc';
-export type GoalStatusFilter = GoalStatus | 'All' | '__EMPTY__';
+export type GoalStatusFilter = GoalStatus | 'All' | '__EMPTY__' | 'Carry Forwarded Goals';
 export type GoalQuarterLifecycle = 'past' | 'active' | 'upcoming' | 'future';
 
 export interface GoalMilestone {
@@ -42,6 +42,9 @@ export interface GoalData {
     dropped: boolean;
     droppedAt?: string;
     droppedBy?: string;
+    isRevived: boolean;
+    revivedAt?: string;
+    revivedBy?: string;
     completionPercentage: number;
     parentGoalId?: string;
     originGoalId?: string;
@@ -50,6 +53,9 @@ export interface GoalData {
     carryForwardTargetGoalId?: string;
     carriedForwardFromQuarter?: string;
     carriedForwardToQuarter?: string;
+    carryForwardedAt?: string;
+    carryForwardUndoneAt?: string;
+    carryForwardUndoBy?: string;
     decisionType?: GoalDecisionType;
     decisionByName?: string;
     decisionByEmployeeCode?: string;
@@ -57,6 +63,7 @@ export interface GoalData {
     versionNumber: number;
     carryForwardEligible: boolean;
     carryForwardAvailable: boolean;
+    carryForwardUndoAvailable: boolean;
     dropAvailable: boolean;
     milestoneEditAvailable: boolean;
     milestoneCompletionAvailable: boolean;
@@ -561,6 +568,9 @@ export const processGoals = (
     const filteredGoals = goals.filter((goal) => {
         const matchesGoalStatus =
             filters.goalStatus === 'All' ||
+            (filters.goalStatus === 'Carry Forwarded Goals'
+                ? Boolean(goal.carryForwardSourceGoalId || goal.carryForwardSourceId)
+                : false) ||
             (filters.goalStatus === EMPTY_GOAL_STATUS_FILTER_VALUE
                 ? goal.goalStatus === ''
                 : goal.goalStatus === filters.goalStatus);

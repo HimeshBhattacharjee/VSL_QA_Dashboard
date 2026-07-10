@@ -25,7 +25,7 @@ GoalStatus = Literal[
     'Not Done',
     'Dropped',
 ]
-GoalDecisionType = Literal['Carry Forwarded', 'Dropped']
+GoalDecisionType = Literal['Carry Forwarded', 'Carry Forward Undone', 'Dropped', 'Revived']
 
 FY_QUARTER_MONTHS = {
     1: (4, 6),
@@ -103,6 +103,9 @@ class GoalResponse(GoalBase):
     dropped: bool = False
     droppedAt: datetime | None = None
     droppedBy: str | None = None
+    isRevived: bool = False
+    revivedAt: datetime | None = None
+    revivedBy: str | None = None
     completionPercentage: int
     parentGoalId: str | None = None
     originGoalId: str | None = None
@@ -111,6 +114,9 @@ class GoalResponse(GoalBase):
     carryForwardTargetGoalId: str | None = None
     carriedForwardFromQuarter: str | None = None
     carriedForwardToQuarter: str | None = None
+    carryForwardedAt: datetime | None = None
+    carryForwardUndoneAt: datetime | None = None
+    carryForwardUndoBy: str | None = None
     decisionType: GoalDecisionType | None = None
     decisionByName: str | None = None
     decisionByEmployeeCode: str | None = None
@@ -118,6 +124,7 @@ class GoalResponse(GoalBase):
     versionNumber: int = 1
     carryForwardEligible: bool = False
     carryForwardAvailable: bool = False
+    carryForwardUndoAvailable: bool = False
     dropAvailable: bool = False
     milestoneEditAvailable: bool = False
     milestoneCompletionAvailable: bool = False
@@ -476,6 +483,11 @@ def serialize_goal(document: dict) -> dict:
         if normalize_optional_datetime_value(document.get('droppedAt'))
         else None,
         'droppedBy': document.get('droppedBy'),
+        'isRevived': bool(document.get('isRevived', False)),
+        'revivedAt': serialize_datetime(normalize_optional_datetime_value(document.get('revivedAt')))
+        if normalize_optional_datetime_value(document.get('revivedAt'))
+        else None,
+        'revivedBy': document.get('revivedBy'),
         'completionPercentage': completion_percentage,
         'parentGoalId': document.get('parentGoalId'),
         'originGoalId': document.get('originGoalId'),
@@ -484,6 +496,13 @@ def serialize_goal(document: dict) -> dict:
         'carryForwardTargetGoalId': document.get('carryForwardTargetGoalId'),
         'carriedForwardFromQuarter': document.get('carriedForwardFromQuarter'),
         'carriedForwardToQuarter': document.get('carriedForwardToQuarter'),
+        'carryForwardedAt': serialize_datetime(normalize_optional_datetime_value(document.get('carryForwardedAt')))
+        if normalize_optional_datetime_value(document.get('carryForwardedAt'))
+        else None,
+        'carryForwardUndoneAt': serialize_datetime(normalize_optional_datetime_value(document.get('carryForwardUndoneAt')))
+        if normalize_optional_datetime_value(document.get('carryForwardUndoneAt'))
+        else None,
+        'carryForwardUndoBy': document.get('carryForwardUndoBy'),
         'decisionType': document.get('decisionType'),
         'decisionByName': document.get('decisionByName'),
         'decisionByEmployeeCode': document.get('decisionByEmployeeCode'),
@@ -494,19 +513,19 @@ def serialize_goal(document: dict) -> dict:
         'carryForwardEligible': goal_status != 'Done'
         and completion_percentage < 100
         and not bool(document.get('isDropped', False))
-        and not bool(document.get('carryForwardTargetGoalId'))
-        and document.get('decisionType') != 'Carry Forwarded',
+        and not bool(document.get('carryForwardTargetGoalId')),
         'carryForwardAvailable': is_goal_decision_window_open(financial_year, quarter)
         and goal_status != 'Done'
         and completion_percentage < 100
         and not bool(document.get('isDropped', False))
         and not bool(document.get('carryForwardTargetGoalId'))
-        and document.get('decisionType') != 'Carry Forwarded'
         and not bool(document.get('carryForwardReservedAt')),
+        'carryForwardUndoAvailable': bool(document.get('carryForwardUndoAvailable', False)),
         'dropAvailable': is_goal_decision_window_open(financial_year, quarter)
+        and goal_status != 'Done'
+        and completion_percentage < 100
         and not bool(document.get('isDropped', False))
         and not bool(document.get('carryForwardTargetGoalId'))
-        and document.get('decisionType') != 'Carry Forwarded'
         and not bool(document.get('carryForwardReservedAt')),
         'milestoneEditAvailable': is_milestone_detail_edit_window_open(financial_year, quarter),
         'milestoneCompletionAvailable': is_milestone_completion_window_open(financial_year, quarter),
@@ -527,19 +546,12 @@ def build_carry_forward_goal(
         normalize_quarter_value(source_goal.get('quarter'), get_financial_quarter()[1]),
     )
     decision_timestamp = decision_timestamp or utc_now()
-    copied_milestones = [
-        {
-            **milestone,
-            'completed': False,
-            'completedAt': None,
-        }
-        for milestone in source_milestones
-    ]
+    copied_milestones = [dict(milestone) for milestone in source_milestones]
 
     return {
         'title': source_goal['title'],
         'assignedTo': source_goal.get('assignedTo', []),
-        'createdAt': utc_now(),
+        'createdAt': source_goal.get('createdAt') or decision_timestamp,
         'milestones': copied_milestones,
         'financialYear': target_financial_year,
         'quarter': target_quarter,
@@ -553,11 +565,14 @@ def build_carry_forward_goal(
             source_goal.get('financialYear'),
             source_goal.get('quarter'),
         ),
+        'carriedForwardToQuarter': format_quarter_label(target_financial_year, target_quarter),
+        'carryForwardedAt': decision_timestamp,
         'decisionType': 'Carry Forwarded',
         'decisionByName': decision_by_name,
         'decisionByEmployeeCode': decision_by_employee_code,
         'decisionTimestamp': decision_timestamp,
         'versionNumber': int(source_goal.get('versionNumber') or 1) + 1,
+        'carryForwardInitialVersion': int(source_goal.get('versionNumber') or 1) + 1,
         'progressHistory': [
             *source_goal.get('progressHistory', []),
             {

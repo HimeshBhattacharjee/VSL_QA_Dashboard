@@ -36,6 +36,9 @@ interface GoalApiRecord {
     dropped?: boolean;
     droppedAt?: string | null;
     droppedBy?: string | null;
+    isRevived?: boolean;
+    revivedAt?: string | null;
+    revivedBy?: string | null;
     completionPercentage?: number;
     parentGoalId?: string | null;
     originGoalId?: string | null;
@@ -44,6 +47,9 @@ interface GoalApiRecord {
     carryForwardTargetGoalId?: string | null;
     carriedForwardFromQuarter?: string | null;
     carriedForwardToQuarter?: string | null;
+    carryForwardedAt?: string | null;
+    carryForwardUndoneAt?: string | null;
+    carryForwardUndoBy?: string | null;
     decisionType?: GoalData['decisionType'] | null;
     decisionByName?: string | null;
     decisionByEmployeeCode?: string | null;
@@ -51,6 +57,7 @@ interface GoalApiRecord {
     versionNumber?: number;
     carryForwardEligible?: boolean;
     carryForwardAvailable?: boolean;
+    carryForwardUndoAvailable?: boolean;
     dropAvailable?: boolean;
     milestoneEditAvailable?: boolean;
     milestoneCompletionAvailable?: boolean;
@@ -98,6 +105,9 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         dropped: goal.dropped ?? goal.isDropped ?? false,
         droppedAt: goal.droppedAt ?? undefined,
         droppedBy: goal.droppedBy ?? undefined,
+        isRevived: goal.isRevived ?? false,
+        revivedAt: goal.revivedAt ?? undefined,
+        revivedBy: goal.revivedBy ?? undefined,
         completionPercentage: goal.completionPercentage ?? 0,
         parentGoalId: goal.parentGoalId ?? undefined,
         originGoalId: goal.originGoalId ?? undefined,
@@ -106,6 +116,9 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         carryForwardTargetGoalId: goal.carryForwardTargetGoalId ?? undefined,
         carriedForwardFromQuarter: goal.carriedForwardFromQuarter ?? undefined,
         carriedForwardToQuarter: goal.carriedForwardToQuarter ?? undefined,
+        carryForwardedAt: goal.carryForwardedAt ?? undefined,
+        carryForwardUndoneAt: goal.carryForwardUndoneAt ?? undefined,
+        carryForwardUndoBy: goal.carryForwardUndoBy ?? undefined,
         decisionType: goal.decisionType ?? undefined,
         decisionByName: goal.decisionByName ?? undefined,
         decisionByEmployeeCode: goal.decisionByEmployeeCode ?? undefined,
@@ -113,6 +126,7 @@ const normalizeGoal = (goal: GoalApiRecord): GoalData => {
         versionNumber: goal.versionNumber ?? 1,
         carryForwardEligible: goal.carryForwardEligible ?? false,
         carryForwardAvailable: goal.carryForwardAvailable ?? false,
+        carryForwardUndoAvailable: goal.carryForwardUndoAvailable ?? false,
         dropAvailable: goal.dropAvailable ?? false,
         milestoneEditAvailable: goal.milestoneEditAvailable ?? false,
         milestoneCompletionAvailable: goal.milestoneCompletionAvailable ?? false,
@@ -261,4 +275,14 @@ export async function carryForwardGoal(goalId: string, actorRole?: string): Prom
 
     const carriedForwardGoal = await readJsonResponse<GoalApiRecord>(response);
     return normalizeGoal(carriedForwardGoal);
+}
+
+export async function undoCarryForwardGoal(goalId: string, actorRole?: string): Promise<GoalData> {
+    const response = await fetch(`${GOAL_API_BASE_URL}/${goalId}/undo-carry-forward`, {
+        method: 'POST',
+        headers: getGoalAuthHeaders(false, actorRole),
+    });
+
+    const sourceGoal = await readJsonResponse<GoalApiRecord>(response);
+    return normalizeGoal(sourceGoal);
 }
