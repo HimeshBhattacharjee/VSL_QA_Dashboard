@@ -1,4 +1,5 @@
 import calendar
+from copy import deepcopy
 from datetime import datetime
 import logging
 import re
@@ -24,6 +25,7 @@ from services.creator_resolution_service import (
     require_operator_signature,
 )
 from services.pull_strength_lookup_service import PullStrengthLookupService
+from services.bus_ribbon_group_service import empty_strengths, has_active_measurements, is_bussing_group_off
 from services.shift_entry_workflow_service import (
     APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
     EDITABLE_OPERATOR_STATES,
@@ -123,7 +125,7 @@ def signature_key(date: str, line: str, shift: str) -> str:
 def serialize_doc(doc):
     if doc is None:
         return None
-    doc_copy = doc.copy()
+    doc_copy = deepcopy(doc)
     if "_id" in doc_copy:
         doc_copy["_id"] = str(doc_copy["_id"])
     for date_field in ("date", "testingDate"):
@@ -135,7 +137,15 @@ def serialize_doc(doc):
     doc_copy["line"] = normalize_line(doc_copy.get("line"))
     doc_copy.setdefault("shiftDetails", {"poNumber": "", "intcRibbonStatus": "", "busRibbonStatus": ""})
     doc_copy.setdefault("bussingData", {})
+    for machine in doc_copy["bussingData"].values():
+        machine["isOff"] = is_bussing_group_off(machine)
+        if machine["isOff"]:
+            machine["position"] = ""
+            machine["strengths"] = empty_strengths()
     doc_copy.setdefault("averages", {})
+    for machine_key, machine in doc_copy["bussingData"].items():
+        if machine.get("isOff"):
+            doc_copy["averages"][machine_key] = {"average1": "", "average2": ""}
     doc_copy.setdefault("signatures", {"preparedBy": "", "reviewedBy": ""})
     state = normalize_workflow_state(doc_copy)
     doc_copy["status"] = state
@@ -212,11 +222,21 @@ def normalize_entry_payload(entry: dict) -> dict:
     for machine_key in LINE_BUSSING_KEYS[line]:
         machine_label = BUSSING_LABELS[machine_key]
         machine = (entry.get("bussingData") or {}).get(machine_key) or {}
+        if "isOff" in machine and not isinstance(machine.get("isOff"), bool):
+            raise HTTPException(status_code=400, detail=f"{machine_label} isOff must be a boolean")
+        is_off = is_bussing_group_off(machine)
         position = str(machine.get("position") or "").strip()
+        if position.upper() == "OFF":
+            position = ""
+        if is_off and has_active_measurements(machine):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{machine_label} cannot contain strength readings while OFF",
+            )
         if position and position not in POSITION_OPTIONS:
             raise HTTPException(status_code=400, detail=f"{machine_label} position is invalid")
 
-        strengths = machine.get("strengths") or []
+        strengths = empty_strengths() if is_off else (machine.get("strengths") or [])
         if not isinstance(strengths, list):
             raise HTTPException(status_code=400, detail=f"{machine_label} strengths must be a list")
         padded_strengths = [(strengths[index] if index < len(strengths) else "") for index in range(32)]
@@ -225,6 +245,7 @@ def normalize_entry_payload(entry: dict) -> dict:
                 raise HTTPException(status_code=400, detail=f"{machine_label} Strength {display_strength_number(index)} must be a valid number")
 
         normalized_bussing_data[machine_key] = {
+            "isOff": is_off,
             "position": position,
             "strengths": ["" if value is None else str(value).strip() for value in padded_strengths],
         }
@@ -375,6 +396,8 @@ def serialize_entry_summary(entry: dict, user: dict | None = None) -> dict:
 
 def has_strength_data(entry: dict) -> bool:
     for machine in (entry.get("bussingData") or {}).values():
+        if is_bussing_group_off(machine):
+            continue
         if any(str(value).strip() for value in machine.get("strengths", [])):
             return True
     return False

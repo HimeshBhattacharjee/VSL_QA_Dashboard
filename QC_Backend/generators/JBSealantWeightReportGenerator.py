@@ -156,6 +156,13 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             
             # Add remarks for Line 2
             worksheet[f'M{line2_pos_row}'] = line2_data.get('remarks', '')
+
+            for line_data, rows in ((line1_data, range(current_row, current_row + 3)),
+                                    (line2_data, range(current_row + 3, current_row + 6))):
+                if str(line_data.get('status', 'ON')).upper() == 'OFF':
+                    for row in rows:
+                        for column in 'DEFGHIJKLM':
+                            worksheet[f'{column}{row}'] = 'OFF'
             
             # Move to next shift (6 rows down - 3 rows per line)
             current_row += 6

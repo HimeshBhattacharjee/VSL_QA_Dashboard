@@ -179,6 +179,8 @@ const getPeelStrengthSelectionsNeedingFetch = (data: PeelStrengthValue, stringer
             const unit = normalizePeelStrengthUnit(stringerValue[unitKey]);
             if (!unit || isPeelStrengthOffUnit(unit)) return;
             if (hasSavedPeelStrengthValues(stringerValue[sideKey])) return;
+            if (stringerValue.peelSync?.[sideKey]?.state === 'pending_source_data'
+                && stringerValue.peelSync?.[sideKey]?.lookupAttemptedAt) return;
 
             selections.push({
                 stringerKey,
@@ -297,9 +299,16 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                     updatedData[selection.stringerKey] = {
                         ...(updatedData[selection.stringerKey] || {}),
                         [selection.unitKey]: selection.unit,
-                        [selection.sideKey]: hasAnyFetchedValues
-                            ? buildPeelStrengthSideValues(fetchedSideValues)
-                            : createOffPeelStrengthSideValues(),
+                        [selection.sideKey]: hasAnyFetchedValues ? buildPeelStrengthSideValues(fetchedSideValues) : {},
+                        peelSync: {
+                            ...(updatedData[selection.stringerKey]?.peelSync || {}),
+                            [selection.sideKey]: {
+                                state: hasCompleteFetchedValues ? 'synced' : 'pending_source_data',
+                                reconciledAt: hasCompleteFetchedValues ? new Date().toISOString() : undefined,
+                                actor: hasCompleteFetchedValues ? 'peel-ui-lookup' : undefined,
+                                lookupAttemptedAt: new Date().toISOString(),
+                            },
+                        },
                     };
 
                     if (!hasCompleteFetchedValues) {
@@ -315,7 +324,7 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                         warningKeysRef.current.add(warningKey);
                         showAlert(
                             'warning',
-                            `Peel Strength data not found for ${auditDate} Shift ${auditShift}. Filled OFF for ${missingLabels.slice(0, 3).join(', ')}${missingLabels.length > 3 ? '...' : ''}`
+                            `Waiting for Peel data for ${auditDate} Shift ${auditShift}: ${missingLabels.slice(0, 3).join(', ')}${missingLabels.length > 3 ? '...' : ''}`
                         );
                     }
                 }
@@ -330,7 +339,11 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                     updatedData[selection.stringerKey] = {
                         ...(updatedData[selection.stringerKey] || {}),
                         [selection.unitKey]: selection.unit,
-                        [selection.sideKey]: createOffPeelStrengthSideValues(),
+                        [selection.sideKey]: {},
+                        peelSync: {
+                            ...(updatedData[selection.stringerKey]?.peelSync || {}),
+                            [selection.sideKey]: { state: 'pending_source_data', lookupAttemptedAt: new Date().toISOString() },
+                        },
                     };
                 });
                 props.onUpdate(props.stageId, props.paramId, props.timeSlot, asObservationValue(updatedData));
@@ -338,7 +351,7 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                 const warningKey = `${fetchKey}:error`;
                 if (!warningKeysRef.current.has(warningKey)) {
                     warningKeysRef.current.add(warningKey);
-                    showAlert('warning', 'Unable to fetch Peel Strength data. Filled OFF for missing fields');
+                    showAlert('warning', 'Unable to fetch Peel Strength data. The selections remain waiting for source data');
                 }
                 pendingFetchKeyRef.current = '';
             });
@@ -371,6 +384,10 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                 [sideKey]: isPeelStrengthOffUnit(normalizedUnit)
                     ? createOffPeelStrengthSideValues()
                     : {},
+                peelSync: {
+                    ...(peelStrengthData[stringerKey]?.peelSync || {}),
+                    [sideKey]: { state: isPeelStrengthOffUnit(normalizedUnit) ? 'intentional_off' : 'pending_source_data' },
+                },
             },
         };
         props.onUpdate(props.stageId, props.paramId, props.timeSlot, asObservationValue(updatedData));
@@ -390,6 +407,7 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                             {PEEL_STRENGTH_SIDE_CONFIGS.map(({ label, titleClassName, unitKey, sideKey }) => {
                                 const selectedUnit = stringerData[unitKey] || '';
                                 const isOffUnit = isPeelStrengthOffUnit(selectedUnit);
+                                const syncState = stringerData.peelSync?.[sideKey]?.state;
 
                                 return (
                                     <div key={sideKey} className="border border-gray-200 rounded-lg p-2 bg-white">
@@ -406,6 +424,8 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                                                 />
                                             </div>
                                         </div>
+                                        {syncState === 'pending_source_data' && <p className="mb-2 text-center text-xs font-medium text-amber-600 dark:text-amber-400">Waiting for Peel data</p>}
+                                        {syncState === 'synced' && <p className="mb-2 text-center text-xs font-medium text-green-600 dark:text-green-400">Synced automatically</p>}
                                         {!isOffUnit && (
                                             <div className="grid grid-cols-5 gap-1">
                                                 {peelStrengthFieldKeys.map((position) => (
@@ -423,7 +443,11 @@ const PeelStrengthSection = (props: ObservationRenderProps & { lineNumber: strin
                                                                         [sideKey]: {
                                                                             ...(peelStrengthData[stringerKey]?.[sideKey] || {}),
                                                                             [position]: newValue as string
-                                                                        }
+                                                                        },
+                                                                        peelSync: {
+                                                                            ...(peelStrengthData[stringerKey]?.peelSync || {}),
+                                                                            [sideKey]: { state: 'manual_override' },
+                                                                        },
                                                                     }
                                                                 };
                                                                 props.onUpdate(stageId, paramId, timeSlot, asObservationValue(updatedData));

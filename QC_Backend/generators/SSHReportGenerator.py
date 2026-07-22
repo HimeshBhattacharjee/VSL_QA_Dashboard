@@ -93,6 +93,11 @@ def fill_ssh_test_data(worksheet, entries):
 def fill_line_row(worksheet, row, line_data, checked_by=''):
     """Fill a single row with line data"""
     try:        
+        if str(line_data.get('status', 'ON')).upper() == 'OFF':
+            worksheet[f'F{row}'] = line_data.get('line', '')
+            for column in 'GHIJKLM':
+                worksheet[f'{column}{row}'] = 'OFF'
+            return
         # Line Number (Column F) - this should be the line number from the data
         worksheet[f'F{row}'] = line_data.get('line', '')
 

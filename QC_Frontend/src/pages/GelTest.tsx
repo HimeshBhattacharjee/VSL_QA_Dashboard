@@ -5,6 +5,7 @@ import ReportPagination from '../components/ReportPagination';
 import { ReportSortOption } from '../components/ReportListControls';
 import { Check, Download, Edit3, Eye, FileSpreadsheet, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { buildWorkflowConfirmOptions, isResolvedCreator, OPERATOR_SIGNATURE_REQUIRED_MESSAGE, resolveCreatorName } from '../utilities/workflowUtils';
+import { getPoLineValidationMessage, mapPoToFabLine } from '../utilities/poLineMapping';
 
 type GelWorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
 type GelDisplayStatus = GelWorkflowState;
@@ -542,6 +543,8 @@ export default function GelTest() {
         formData.preparedBySignature = preparedBySignature;
         formData.verifiedBySignature = verifiedBySignature;
         formData.reportName = gelReportName;
+        formData.productionOrderNo = editableValues.gel_editable_1 || '';
+        formData.lineNumber = mapPoToFabLine(editableValues.gel_editable_1);
 
         return formData;
     };
@@ -621,6 +624,11 @@ export default function GelTest() {
     };
 
     const validateDataFields = () => {
+        const poError = getPoLineValidationMessage(editableValues.gel_editable_1);
+        if (poError) {
+            showAlert('error', poError);
+            return false;
+        }
         const invalidKey = dataFieldKeys.find(key => !isValidDataValue((dataValues[key] || '').trim()));
 
         if (invalidKey) {
@@ -1154,6 +1162,11 @@ export default function GelTest() {
             showAlert('error', 'Please enter a report name');
             return;
         }
+        const poError = getPoLineValidationMessage(editableValues.gel_editable_1);
+        if (poError) {
+            showAlert('error', poError);
+            return;
+        }
         if (!validateDataFields()) return;
 
         try {
@@ -1440,9 +1453,7 @@ export default function GelTest() {
     const getCreatedByLabel = (report: GelTestReport) => resolveCreatorName(report);
 
     const getLineLabel = (lineNumber?: string | null) => {
-        if (!lineNumber) return '-';
-        if (lineNumber === 'I' || lineNumber === 'II') return `Line ${lineNumber}`;
-        return lineNumber;
+        return lineNumber || 'Unmapped';
     };
 
     const clearReportSelection = useCallback(() => {
@@ -1853,8 +1864,9 @@ export default function GelTest() {
                         aria-label="Line filter"
                     >
                         <option value="">Line</option>
-                        <option value="I">Line I</option>
-                        <option value="II">Line II</option>
+                        <option value="FAB-II Line-I">FAB-II Line-I</option>
+                        <option value="FAB-II Line-II">FAB-II Line-II</option>
+                        <option value="Unmapped">Unmapped</option>
                     </select>
                     <select
                         value={savedReportsFilters.status}
@@ -2640,7 +2652,12 @@ export default function GelTest() {
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">P.O. No.:</td>
-                                            <td colSpan={5}>{renderTextInput(buildFieldKey(1), 'P.O. No.')}</td>
+                                            <td colSpan={5}>
+                                                {renderTextInput(buildFieldKey(1), 'P.O. No.')}
+                                                <p className={`mt-1 text-xs ${getPoLineValidationMessage(editableValues[buildFieldKey(1)]) ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    FAB Line (derived): {mapPoToFabLine(editableValues[buildFieldKey(1)])}
+                                                </p>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td colSpan={2} className="p-2 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">Type of Test:</td>

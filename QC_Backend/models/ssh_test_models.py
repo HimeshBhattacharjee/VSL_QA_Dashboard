@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from mongo_indexes import drop_index_if_exists, ensure_index
+from line_status import normalize_lines
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,7 @@ except Exception:
 class SSHDailyEntry:
     @staticmethod
     def create(entry_data: Dict[str, Any]) -> str:
+        entry_data["lines"] = normalize_lines(entry_data.get("lines"), ("1", "2"))
         try:
             raw_date = entry_data.get("date")
             if not raw_date:

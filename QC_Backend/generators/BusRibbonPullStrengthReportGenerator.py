@@ -9,6 +9,7 @@ from openpyxl.styles import Font, PatternFill
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
 from paths import get_template_key
 from s3_service import get_s3_client
+from services.bus_ribbon_group_service import OFF_VALUE, is_bussing_group_off
 
 LINE_BUSSING_KEYS = {
     "FAB-II Line-I": ("autoBussing1", "autoBussing2", "autoBussing3"),
@@ -94,13 +95,14 @@ def write_machine_rows(worksheet, entry, machine_key, top_row):
     bussing_data = entry.get("bussingData", {}) or {}
     averages = entry.get("averages", {}) or {}
     machine = bussing_data.get(machine_key, {}) or {}
+    is_off = is_bussing_group_off(machine)
     strengths = machine.get("strengths", []) or []
     machine_averages = averages.get(machine_key, {}) or {}
     worksheet[f"D{top_row}"] = shift_details.get("poNumber", "")
     worksheet[f"E{top_row}"] = shift_details.get("intcRibbonStatus", "")
     worksheet[f"F{top_row}"] = shift_details.get("busRibbonStatus", "")
     worksheet[f"G{top_row}"] = BUSSING_LABELS[machine_key]
-    worksheet[f"H{top_row}"] = machine.get("position", "")
+    worksheet[f"H{top_row}"] = OFF_VALUE if is_off else machine.get("position", "")
     first_strength_row = top_row
     second_strength_row = top_row + 1
     for index in range(16):
@@ -108,23 +110,23 @@ def write_machine_rows(worksheet, entry, machine_key, top_row):
             worksheet,
             first_strength_row,
             STRENGTH_START_COLUMN + index,
-            strengths[index] if index < len(strengths) else "",
+            OFF_VALUE if is_off else (strengths[index] if index < len(strengths) else ""),
         )
         write_strength_cell(
             worksheet,
             second_strength_row,
             STRENGTH_START_COLUMN + index,
-            strengths[index + 16] if index + 16 < len(strengths) else "",
+            OFF_VALUE if is_off else (strengths[index + 16] if index + 16 < len(strengths) else ""),
         )
     worksheet.cell(
         row=first_strength_row,
         column=AVERAGE_COLUMN,
-        value=to_excel_number(machine_averages.get("average1") or calculate_average(strengths[:16])),
+        value=OFF_VALUE if is_off else to_excel_number(machine_averages.get("average1") or calculate_average(strengths[:16])),
     )
     worksheet.cell(
         row=second_strength_row,
         column=AVERAGE_COLUMN,
-        value=to_excel_number(machine_averages.get("average2") or calculate_average(strengths[16:32])),
+        value=OFF_VALUE if is_off else to_excel_number(machine_averages.get("average2") or calculate_average(strengths[16:32])),
     )
 
 def fill_bus_ribbon_data_in_sheet(worksheet, entries, date_label, line):

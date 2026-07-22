@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from mongo_indexes import drop_index_if_exists, ensure_index
+from line_status import normalize_lines
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,7 @@ class FrameSealantDailyEntry:
             
             # Ensure frame division fields exist with proper structure
             if "lines" in entry_data:
+                entry_data["lines"] = normalize_lines(entry_data["lines"], ("1", "2"))
                 for line_num in ["1", "2"]:
                     if line_num in entry_data["lines"]:
                         line = entry_data["lines"][line_num]

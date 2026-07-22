@@ -4,6 +4,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from line_status import is_line_off, normalize_line, with_default_line_statuses
 from generators.SSHReportGenerator import generate_ssh_report
 from models.ssh_test_models import SSHDailyEntry, ssh_entries_collection
 from datetime import datetime
@@ -220,7 +221,7 @@ def build_monthly_stats(year: int, month: int):
 
         if shift in shift_stats:
             line1 = lines.get("1", {})
-            if line1.get("result"):
+            if not is_line_off(line1) and line1.get("result"):
                 filled_entries += 1
                 shift_stats[shift]["filled"] += 1
                 shift_stats[shift]["lines"]["1"] += 1
@@ -231,7 +232,7 @@ def build_monthly_stats(year: int, month: int):
                     fail_count += 1
                     shift_stats[shift]["fail"] += 1
             line2 = lines.get("2", {})
-            if line2.get("result"):
+            if not is_line_off(line2) and line2.get("result"):
                 filled_entries += 1
                 shift_stats[shift]["filled"] += 1
                 shift_stats[shift]["lines"]["2"] += 1
@@ -293,12 +294,10 @@ def get_entry_validation_message(entry, *, allow_blank_lines: bool = False):
     line1 = lines.get("1", {}) if isinstance(lines.get("1"), dict) else {}
     line2 = lines.get("2", {}) if isinstance(lines.get("2"), dict) else {}
     has_po = normalize_field_value(entry.get("po")) != ""
+    active_lines = [line for line in (line1, line2) if not is_line_off(line)]
     has_any_line_input = any(
         detail["value"] != ""
-        for detail in [
-            *get_line_required_details(line1, "1"),
-            *get_line_required_details(line2, "2"),
-        ]
+        for detail in [detail for index, line in enumerate(active_lines) for detail in get_line_required_details(line, str(index + 1))]
     )
     if allow_blank_lines and not has_po and not has_any_line_input:
         return None
@@ -312,8 +311,8 @@ def get_entry_validation_message(entry, *, allow_blank_lines: bool = False):
             {"label": label, "value": normalize_field_value(entry.get(key, ""))}
             for key, label in SHIFT_REQUIRED_FIELDS
         ],
-        *get_line_required_details(line1, "1"),
-        *get_line_required_details(line2, "2"),
+        *([] if is_line_off(line1) else get_line_required_details(line1, "1")),
+        *([] if is_line_off(line2) else get_line_required_details(line2, "2")),
     ]
     first_missing_detail = next((detail for detail in required_details if detail["value"] == ""), None)
     if first_missing_detail:
@@ -323,8 +322,8 @@ def get_entry_validation_message(entry, *, allow_blank_lines: bool = False):
         (
             detail
             for detail in [
-                {"label": "Line 1 - Result (Shore A)", "value": line1.get("result")},
-                {"label": "Line 2 - Result (Shore A)", "value": line2.get("result")},
+                *([] if is_line_off(line1) else [{"label": "Line 1 - Result (Shore A)", "value": line1.get("result")}]),
+                *([] if is_line_off(line2) else [{"label": "Line 2 - Result (Shore A)", "value": line2.get("result")}]),
             ]
             if normalize_field_value(detail["value"]) != "" and parse_result_value(detail["value"]) is None
         ),
@@ -364,7 +363,7 @@ def serialize_doc(doc):
     doc_copy["isLocked"] = bool(doc_copy.get("lockTimestamp"))
     doc_copy["lines"] = _normalize_lines(doc_copy.get("lines") or {})
     doc_copy["productionOrder"] = doc_copy["po"]
-    return doc_copy
+    return with_default_line_statuses(doc_copy)
 
 
 def serialize_docs(docs):
@@ -372,7 +371,7 @@ def serialize_docs(docs):
 
 
 def serialize_entry(doc, user: dict | None = None, include_permissions: bool = False):
-    serialized = serialize_doc(doc)
+    serialized = with_default_line_statuses(serialize_doc(doc))
     if serialized and user and include_permissions:
         serialized["permissions"] = {
             "canView": can_view_entry(doc, user),
@@ -423,7 +422,7 @@ def normalize_entry_payload(entry: dict, *, allow_blank_lines: bool = False) -> 
         "lineGroup": line_group,
         "checkedBy": normalize_field_value(entry.get("checkedBy")),
         "po": normalize_field_value(entry.get("po")),
-        "lines": _normalize_lines(entry.get("lines") or {}),
+        "lines": {key: normalize_line(value) for key, value in _normalize_lines(entry.get("lines") or {}).items()},
         "signatures": entry.get("signatures") or {"preparedBy": "", "approvedBy": ""},
         "year": date_obj.year,
         "month": date_obj.month,

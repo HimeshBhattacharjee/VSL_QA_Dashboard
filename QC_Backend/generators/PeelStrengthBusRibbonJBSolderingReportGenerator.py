@@ -135,6 +135,10 @@ def write_line_row(worksheet, row, date_label, shift, line_label, line_data):
     worksheet[f"B{row}"] = date_label
     worksheet[f"C{row}"] = shift
     worksheet[f"D{row}"] = line_label[len(line_label) - 1]
+    if str(line_data.get("status", "ON")).upper() == "OFF":
+        for column in "EFGHIJKLMNOP":
+            worksheet[f"{column}{row}"] = "OFF"
+        return
     worksheet[f"E{row}"] = line_data.get("po", "")
     worksheet[f"F{row}"] = line_data.get("jbStatus", "")
     worksheet[f"G{row}"] = line_data.get("busRibbonStatus", "")

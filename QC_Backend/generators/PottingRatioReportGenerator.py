@@ -35,7 +35,7 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             
             # Line 1 (first row)
             line1 = lines.get('1', {})
-            worksheet[f'D{current_row}'] = '1'  # Line number
+            worksheet[f'D{current_row}'] = display_line_1
             worksheet[f'E{current_row}'] = line1.get('po', '')  # PO
             worksheet[f'F{current_row}'] = line1.get('pottingSupplier', '')
             worksheet[f'G{current_row}'] = line1.get('partA', '')
@@ -56,10 +56,13 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             
             worksheet[f'J{current_row}'] = line1.get('totalWeight', '')
             worksheet[f'K{current_row}'] = line1.get('remarks', '')
+            if str(line1.get('status', 'ON')).upper() == 'OFF':
+                for column in 'EFGHIJK':
+                    worksheet[f'{column}{current_row}'] = 'OFF'
             
             # Line 2 (second row)
             line2 = lines.get('2', {})
-            worksheet[f'D{current_row+1}'] = '2'  # Line number
+            worksheet[f'D{current_row+1}'] = display_line_2
             worksheet[f'E{current_row+1}'] = line2.get('po', '')  # PO
             worksheet[f'F{current_row+1}'] = line2.get('pottingSupplier', '')
             worksheet[f'G{current_row+1}'] = line2.get('partA', '')
@@ -80,6 +83,9 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             
             worksheet[f'J{current_row+1}'] = line2.get('totalWeight', '')
             worksheet[f'K{current_row+1}'] = line2.get('remarks', '')
+            if str(line2.get('status', 'ON')).upper() == 'OFF':
+                for column in 'EFGHIJK':
+                    worksheet[f'{column}{current_row+1}'] = 'OFF'
             
             # Fill signatures at the bottom (one set per shift)
             if entry_signatures.get('preparedBy'):

@@ -22,6 +22,8 @@ import {
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
+import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import {
     buildWorkflowConfirmOptions,
     isResolvedCreator,
@@ -48,6 +50,7 @@ type EntrySortOption =
     | 'date-oldest';
 
 interface LineEntry {
+    status?: 'ON' | 'OFF';
     line?: string;
     po: string;
     pottingSupplier: string;
@@ -230,6 +233,7 @@ const isRatioWithinRange = (value?: string) => {
 };
 
 const createEmptyLineEntry = (lineNum: '1' | '2' = '1'): LineEntry => ({
+    status: 'ON',
     line: lineNum,
     po: '',
     pottingSupplier: '',
@@ -302,6 +306,7 @@ const hasAnyPottingData = (entry?: DailyEntry) => {
     if (!entry) return false;
     return ['1', '2'].some(lineKey => {
         const line = entry.lines?.[lineKey as '1' | '2'];
+        if (getLineStatus(line) === 'OFF') return false;
         return Boolean(line?.po || line?.partA || line?.partB || line?.ratio || line?.totalWeight || line?.remarks);
     });
 };
@@ -691,7 +696,7 @@ export default function PottingRatioShiftEntryWorkflow() {
     };
 
     const handleLineInputChange = (line: '1' | '2', field: keyof LineEntry, value: string) => {
-        if (!currentEntry || !canEditCurrentEntry) return;
+        if (!currentEntry || !canEditCurrentEntry || getLineStatus(currentEntry.lines[line]) === 'OFF') return;
 
         const updatedLines = {
             ...currentEntry.lines,
@@ -714,13 +719,24 @@ export default function PottingRatioShiftEntryWorkflow() {
         });
     };
 
+    const handleLineStatusChange = (line: '1' | '2', nextStatus: 'ON' | 'OFF') => {
+        if (!currentEntry || !canEditCurrentEntry) return;
+        const apply = () => setCurrentEntry(entry => entry ? ({
+            ...entry,
+            lines: { ...entry.lines, [line]: changeLineStatus({ ...createEmptyLineEntry(line), ...entry.lines[line] }, nextStatus) },
+        }) : entry);
+        if (nextStatus === 'OFF' && hasLineMeasurements(currentEntry.lines[line])) {
+            showConfirm({ title: 'Turn line OFF?', message: 'Existing values for this line will be discarded.', type: 'warning', confirmText: 'Turn OFF', onConfirm: apply });
+        } else apply();
+    };
+
     const validateEntry = () => {
         if (!currentEntry) return false;
-        if (!currentEntry.lines['1'].po) {
+        if (getLineStatus(currentEntry.lines['1']) === 'ON' && !currentEntry.lines['1'].po) {
             showAlert('error', 'PO number is required for Line 1');
             return false;
         }
-        if (!currentEntry.lines['2'].po) {
+        if (getLineStatus(currentEntry.lines['2']) === 'ON' && !currentEntry.lines['2'].po) {
             showAlert('error', 'PO number is required for Line 2');
             return false;
         }
@@ -2024,7 +2040,9 @@ export default function PottingRatioShiftEntryWorkflow() {
                 <h4 className="mb-3 flex items-center gap-2 text-md font-semibold dark:text-white">
                     <span className={`flex h-6 w-6 items-center justify-center rounded-full text-sm ${badgeClass}`}>{lineKey}</span>
                     Line {displayLine} Details
+                    <LineStatusControl status={getLineStatus(currentEntry.lines[lineKey])} disabled={!canEditCurrentEntry} onChange={status => handleLineStatusChange(lineKey, status)} />
                 </h4>
+                {getLineStatus(currentEntry.lines[lineKey]) === 'OFF' ? <OffLinePlaceholder /> : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -2113,6 +2131,7 @@ export default function PottingRatioShiftEntryWorkflow() {
                         />
                     </div>
                 </div>
+                )}
             </div>
         );
     };

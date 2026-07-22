@@ -20,6 +20,8 @@ import {
     X,
 } from 'lucide-react';
 import ReportPagination from '../components/ReportPagination';
+import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
+import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import {
@@ -50,6 +52,7 @@ type EntrySortOption =
     | 'date-oldest';
 
 interface LineData {
+    status?: 'ON' | 'OFF';
     po: string;
     jbStatus: string;
     busRibbonStatus: string;
@@ -256,6 +259,7 @@ const parsePastedReadingValues = (value: string) => value
     .filter(token => token !== '' && isNumericInputText(token) && parseCompletedNumber(token) !== null);
 
 const createEmptyLineData = (): LineData => ({
+    status: 'ON',
     po: '',
     jbStatus: '',
     busRibbonStatus: '',
@@ -293,7 +297,7 @@ const createEmptyEntry = (date: string, fab: FabOption, shift: Shift): DailyEntr
 const valueToInputText = (value: unknown) => value === null || value === undefined ? '' : String(value);
 
 const calculateLineAverage = (line: LineData | undefined) => {
-    if (!line) return '';
+    if (!line || getLineStatus(line) === 'OFF') return '';
     const numericValues = READING_FIELDS
         .map(field => parseCompletedNumber(line[field]))
         .filter((value): value is number => value !== null);
@@ -355,7 +359,7 @@ const normalizeEntry = (entry: DailyEntry): DailyEntry => {
 };
 
 const hasLineData = (line?: LineData) => {
-    if (!line) return false;
+    if (!line || getLineStatus(line) === 'OFF') return false;
     return Boolean(
         line.po.trim()
         || line.jbStatus.trim()
@@ -371,8 +375,10 @@ const hasEntryData = (entry?: DailyEntry) => {
 };
 
 const getLinePayload = (line: LineData) => {
+    if (getLineStatus(line) === 'OFF') return { status: 'OFF' as const };
     const average = calculateLineAverage(line);
     return {
+        status: 'ON' as const,
         po: line.po.trim(),
         jbStatus: line.jbStatus.trim(),
         busRibbonStatus: line.busRibbonStatus.trim(),
@@ -761,7 +767,7 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
     };
 
     const handleLineFieldChange = (lineLabel: LineLabel, field: keyof Pick<LineData, 'po' | 'jbStatus' | 'busRibbonStatus' | 'busRibbonDimension'>, value: string) => {
-        if (!canEditCurrentEntry) return;
+        if (!canEditCurrentEntry || getLineStatus(currentEntry?.lines[lineLabel]) === 'OFF') return;
         updateCurrentEntry(entry => {
             const currentLine = entry.lines[lineLabel] || createEmptyLineData();
             return {
@@ -775,6 +781,18 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
                 },
             };
         });
+    };
+
+    const handleLineStatusChange = (lineLabel: LineLabel, nextStatus: 'ON' | 'OFF') => {
+        if (!currentEntry || !canEditCurrentEntry) return;
+        const line = currentEntry.lines[lineLabel] || createEmptyLineData();
+        const apply = () => updateCurrentEntry(entry => ({
+            ...entry,
+            lines: { ...entry.lines, [lineLabel]: changeLineStatus({ ...createEmptyLineData(), ...line }, nextStatus) },
+        }));
+        if (nextStatus === 'OFF' && hasLineMeasurements(line)) {
+            showConfirm({ title: 'Turn line OFF?', message: 'Existing values for this line will be discarded.', type: 'warning', confirmText: 'Turn OFF', onConfirm: apply });
+        } else apply();
     };
 
     const applyReadingValues = (lineLabel: LineLabel, startIndex: number, values: string[]) => {
@@ -857,6 +875,7 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
         if (!currentEntry) return false;
         for (const lineLabel of FAB_LINE_MAP[currentEntry.fab]) {
             const line = currentEntry.lines[lineLabel] || createEmptyLineData();
+            if (getLineStatus(line) === 'OFF') continue;
             for (const field of READING_FIELDS) {
                 const value = line[field];
                 if (value && parseCompletedNumber(value) === null) {
@@ -1740,8 +1759,9 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
             <section key={lineLabel} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
                 <div className="mb-4 flex items-center justify-between">
                     <h4 className="text-base font-semibold text-gray-800 dark:text-white">{lineLabel}</h4>
+                    <LineStatusControl status={getLineStatus(line)} disabled={!canEditCurrentEntry} onChange={status => handleLineStatusChange(lineLabel, status)} />
                 </div>
-
+                {getLineStatus(line) === 'OFF' ? <OffLinePlaceholder /> : <>
                 <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">PO</label>
@@ -1824,6 +1844,7 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
                         />
                     </div>
                 </div>
+                </>}
             </section>
         );
     };

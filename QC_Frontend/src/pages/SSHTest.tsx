@@ -22,6 +22,8 @@ import {
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
+import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import {
     buildWorkflowConfirmOptions,
     isResolvedCreator,
@@ -48,6 +50,7 @@ type EntrySortOption =
     | 'date-oldest';
 
 interface LineEntry {
+    status?: 'ON' | 'OFF';
     line?: string;
     sealantSupplier: string;
     sealantExpDate: string;
@@ -261,6 +264,7 @@ const getResultInputValue = (value?: string | number) => {
 };
 
 const createEmptyLineEntry = (lineNum: '1' | '2' = '1'): LineEntry => ({
+    status: 'ON',
     line: lineNum,
     sealantSupplier: '',
     sealantExpDate: '',
@@ -336,6 +340,7 @@ const hasAnySSHData = (entry?: DailyEntry) => {
     if (!entry) return false;
     return Boolean(entry.po || entry.checkedBy) || ['1', '2'].some(lineKey => {
         const line = entry.lines?.[lineKey as '1' | '2'];
+        if (getLineStatus(line) === 'OFF') return false;
         return Boolean(line?.sealantSupplier || line?.sealantExpDate || line?.sampleTakingTime || line?.sampleTestingTime || line?.result || line?.remarks);
     });
 };
@@ -354,25 +359,21 @@ const getEntryValidationMessage = (entry: DailyEntry): string | null => {
             label: `Line ${lineNumber} - ${label}`,
             value: normalizeFieldValue(line[key]),
         }));
-    const hasAnyLineInput =
-        lineRequiredDetails(entry.lines['1'], '1').some(({ value }) => value !== '') ||
-        lineRequiredDetails(entry.lines['2'], '2').some(({ value }) => value !== '');
+    const activeLines = (['1', '2'] as const).filter(line => getLineStatus(entry.lines[line]) === 'ON');
+    const hasAnyLineInput = activeLines.some(line => lineRequiredDetails(entry.lines[line], line).some(({ value }) => value !== ''));
     if (!hasPo && !hasAnyLineInput) return 'Please fill the entry details before saving.';
     if (!hasPo && hasAnyLineInput) return 'Please enter the PO number for this shift before saving.';
 
     const requiredDetails = [
         { label: 'PO Number', value: normalizeFieldValue(entry.po) },
         { label: 'Checked By', value: normalizeFieldValue(entry.checkedBy) },
-        ...lineRequiredDetails(entry.lines['1'], '1'),
-        ...lineRequiredDetails(entry.lines['2'], '2'),
+        ...activeLines.flatMap(line => lineRequiredDetails(entry.lines[line], line)),
     ];
     const firstMissingDetail = requiredDetails.find(({ value }) => value === '');
     if (firstMissingDetail) return `Please complete all entry fields before saving. Missing: ${firstMissingDetail.label}.`;
 
-    const invalidResult = [
-        { label: 'Line 1 - Result (Shore A)', value: entry.lines['1'].result },
-        { label: 'Line 2 - Result (Shore A)', value: entry.lines['2'].result },
-    ].find(({ value }) => normalizeFieldValue(value) !== '' && parseSSHResultValue(value) === null);
+    const invalidResult = activeLines.map(line => ({ label: `Line ${line} - Result (Shore A)`, value: entry.lines[line].result }))
+        .find(({ value }) => normalizeFieldValue(value) !== '' && parseSSHResultValue(value) === null);
     if (invalidResult) return `Please enter a valid numeric value for ${invalidResult.label}.`;
     return null;
 };
@@ -747,7 +748,7 @@ export default function SSHTest() {
     };
 
     const handleLineInputChange = (line: '1' | '2', field: keyof LineEntry, value: string) => {
-        if (!currentEntry || !canEditCurrentEntry) return;
+        if (!currentEntry || !canEditCurrentEntry || getLineStatus(currentEntry.lines[line]) === 'OFF') return;
 
         const updatedLines = {
             ...currentEntry.lines,
@@ -761,6 +762,17 @@ export default function SSHTest() {
             ...currentEntry,
             lines: updatedLines,
         });
+    };
+
+    const handleLineStatusChange = (line: '1' | '2', nextStatus: 'ON' | 'OFF') => {
+        if (!currentEntry || !canEditCurrentEntry) return;
+        const apply = () => setCurrentEntry(entry => entry ? ({
+            ...entry,
+            lines: { ...entry.lines, [line]: changeLineStatus({ ...createEmptyLineEntry(line), ...entry.lines[line] }, nextStatus) },
+        }) : entry);
+        if (nextStatus === 'OFF' && hasLineMeasurements(currentEntry.lines[line])) {
+            showConfirm({ title: 'Turn line OFF?', message: 'Existing values for this line will be discarded.', type: 'warning', confirmText: 'Turn OFF', onConfirm: apply });
+        } else apply();
     };
 
     const handleInputChange = (field: keyof Pick<DailyEntry, 'checkedBy' | 'po'>, value: string) => {
@@ -2082,7 +2094,9 @@ export default function SSHTest() {
                 <h4 className="mb-3 flex items-center gap-2 text-md font-semibold dark:text-white">
                     <span className={`flex h-6 w-6 items-center justify-center rounded-full text-sm ${badgeClass}`}>{lineKey}</span>
                     Line {displayLine} Details
+                    <LineStatusControl status={getLineStatus(currentEntry.lines[lineKey])} disabled={!canEditCurrentEntry} onChange={status => handleLineStatusChange(lineKey, status)} />
                 </h4>
+                {getLineStatus(currentEntry.lines[lineKey]) === 'OFF' ? <OffLinePlaceholder /> : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Sealant Supplier</label>
@@ -2157,6 +2171,7 @@ export default function SSHTest() {
                         />
                     </div>
                 </div>
+                )}
             </div>
         );
     };

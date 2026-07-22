@@ -31,6 +31,17 @@ export type PeelStrengthStringerValue = {
     backUnit?: string;
     frontSide?: Record<string, string>;
     backSide?: Record<string, string>;
+    peelSync?: Partial<Record<PeelStrengthSideKey, PeelStrengthSyncMetadata>>;
+};
+
+export type PeelStrengthSyncState = 'intentional_off' | 'pending_source_data' | 'synced' | 'manual_override';
+
+export type PeelStrengthSyncMetadata = {
+    state: PeelStrengthSyncState;
+    sourceRecordIds?: string[];
+    reconciledAt?: string;
+    actor?: string;
+    lookupAttemptedAt?: string;
 };
 
 export type PeelStrengthValue = Record<string, PeelStrengthStringerValue>;

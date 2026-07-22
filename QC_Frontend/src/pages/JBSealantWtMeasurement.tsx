@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
+import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import {
     buildWorkflowConfirmOptions,
     isResolvedCreator,
@@ -55,6 +57,7 @@ const formatWorkflowState = (state: WorkflowState) =>
 const getEntryProductionOrder = (entry: DailyEntry) =>
     entry.productionOrder || [entry.lines?.['1']?.po, entry.lines?.['2']?.po].filter(Boolean).join(' / ');
 interface LineEntry {
+    status?: 'ON' | 'OFF';
     line?: string;
     po: string;
     jbSupplier: string;
@@ -460,6 +463,7 @@ export default function JBSealantWeightMeasurement() {
     };
 
     const createEmptyLineEntry = useCallback((lineNum: '1' | '2' = '1'): LineEntry => ({
+        status: 'ON',
         line: lineNum,
         po: '',
         jbSupplier: '',
@@ -563,7 +567,7 @@ export default function JBSealantWeightMeasurement() {
         value: string
     ) => {
         if (!currentEntry) return;
-        if (!canEditCurrentEntry) return;
+        if (!canEditCurrentEntry || getLineStatus(currentEntry.lines[line]) === 'OFF') return;
 
         const updatedLines = { ...currentEntry.lines };
         const updatedPosition = { ...updatedLines[line][position] };
@@ -595,7 +599,7 @@ export default function JBSealantWeightMeasurement() {
         value: string
     ) => {
         if (!currentEntry) return;
-        if (!canEditCurrentEntry) return;
+        if (!canEditCurrentEntry || getLineStatus(currentEntry.lines[line]) === 'OFF') return;
 
         const updatedLines = {
             ...currentEntry.lines,
@@ -611,6 +615,17 @@ export default function JBSealantWeightMeasurement() {
         });
         setHasUnsavedChanges(true);
     }, [currentEntry, canEditCurrentEntry]);
+
+    const handleLineStatusChange = useCallback((line: '1' | '2', nextStatus: 'ON' | 'OFF') => {
+        if (!currentEntry || !canEditCurrentEntry) return;
+        const apply = () => {
+            setCurrentEntry(entry => entry ? ({ ...entry, lines: { ...entry.lines, [line]: changeLineStatus({ ...createEmptyLineEntry(line), ...entry.lines[line] }, nextStatus) } }) : entry);
+            setHasUnsavedChanges(true);
+        };
+        if (nextStatus === 'OFF' && hasLineMeasurements(currentEntry.lines[line])) {
+            showConfirm({ title: 'Turn line OFF?', message: 'Existing values for this line will be discarded.', type: 'warning', confirmText: 'Turn OFF', onConfirm: apply });
+        } else apply();
+    }, [currentEntry, canEditCurrentEntry, showConfirm, createEmptyLineEntry]);
 
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
@@ -1760,6 +1775,7 @@ export default function JBSealantWeightMeasurement() {
     }, []);
 
     const checkLineValidity = useCallback((line: LineEntry | undefined): { pass: boolean; fail: boolean; any: boolean } => {
+        if (getLineStatus(line) === 'OFF') return { pass: false, fail: false, any: false };
         if (!line) return { pass: false, fail: false, any: false };
         
         const positions = [
@@ -2854,7 +2870,9 @@ export default function JBSealantWeightMeasurement() {
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-brand-primary-muted dark:bg-brand-primary/20 flex items-center justify-center text-brand-primary dark:text-brand-primary-light text-sm">1</span>
                                                 Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[0]} Details
+                                                <LineStatusControl status={getLineStatus(currentEntry.lines['1'])} disabled={!canEditCurrentEntry} onChange={status => handleLineStatusChange('1', status)} />
                                             </h4>
+                                            {getLineStatus(currentEntry.lines['1']) === 'OFF' ? <OffLinePlaceholder /> : <>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -2946,12 +2964,15 @@ export default function JBSealantWeightMeasurement() {
                                                     />
                                                 </div>
                                             </div>
+                                            </>}
                                         </div>
                                         <div className="border-l-4 border-green-500 pl-4 mt-6">
                                             <h4 className="text-md font-semibold mb-3 dark:text-white flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 text-sm">2</span>
                                                 Line {getDisplayLineNumbers(currentEntry.lineGroup || DEFAULT_LINE_GROUP)[1]} Details
+                                                <LineStatusControl status={getLineStatus(currentEntry.lines['2'])} disabled={!canEditCurrentEntry} onChange={status => handleLineStatusChange('2', status)} />
                                             </h4>
+                                            {getLineStatus(currentEntry.lines['2']) === 'OFF' ? <OffLinePlaceholder /> : <>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -3043,6 +3064,7 @@ export default function JBSealantWeightMeasurement() {
                                                     />
                                                 </div>
                                             </div>
+                                            </>}
                                         </div>
                                         {renderSignatureSection()}
                                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">

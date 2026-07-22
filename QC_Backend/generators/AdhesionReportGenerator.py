@@ -95,6 +95,8 @@ def fill_adhesion_basic_info(worksheet, adhesion_data):
         if 'shift' in form_data and form_data['shift']:
             worksheet['C7'] = form_data['shift']
             log_progress(f"Shift filled: {form_data['shift']}")
+        if form_data.get('lineNumber'):
+            worksheet['C12'] = form_data['lineNumber']
         
         # Handle laminator field separately
         if 'laminator' in form_data and form_data['laminator']:

@@ -7,6 +7,7 @@ from pymongo import ASCENDING, DESCENDING, MongoClient
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
 from mongo_indexes import ensure_index
+from line_status import normalize_lines
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,8 @@ class PeelStrengthBusRibbonJBDailyEntry:
             else entry_data["date"]
         )
         entry_data["fab"] = normalize_fab(entry_data.get("fab"))
+        line_keys = ("Line - 3", "Line - 4") if entry_data["fab"] == "FAB-II Line-II" else ("Line - 1", "Line - 2")
+        entry_data["lines"] = normalize_lines(entry_data.get("lines"), line_keys)
         entry_data["year"] = date_obj.year
         entry_data["month"] = date_obj.month
         entry_data["updated_at"] = datetime.now().isoformat()

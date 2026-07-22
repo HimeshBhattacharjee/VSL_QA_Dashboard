@@ -54,6 +54,7 @@ interface ShiftDetails {
 }
 
 interface BussingData {
+    isOff: boolean;
     position: string;
     strengths: string[];
 }
@@ -247,6 +248,7 @@ const parsePastedStrengthValues = (value: string) => value
     .filter(token => token !== '' && isNumericInputText(token) && parseCompletedNumber(token) !== null);
 
 const createEmptyBussingData = (): BussingData => ({
+    isOff: false,
     position: '',
     strengths: Array(32).fill(''),
 });
@@ -302,9 +304,11 @@ const normalizeEntry = (entry: DailyEntry): DailyEntry => {
         },
         bussingData: BUSSING_KEYS.reduce((acc, key) => {
             const existing = entry.bussingData?.[key];
+            const isOff = existing?.isOff === true || (existing?.isOff === undefined && existing?.position?.toUpperCase() === 'OFF');
             acc[key] = {
-                position: existing?.position || '',
-                strengths: Array.from({ length: 32 }, (_, index) => existing?.strengths?.[index] || ''),
+                isOff,
+                position: isOff ? '' : existing?.position || '',
+                strengths: isOff ? Array(32).fill('') : Array.from({ length: 32 }, (_, index) => existing?.strengths?.[index] || ''),
             };
             return acc;
         }, {} as Record<BussingKey, BussingData>),
@@ -326,6 +330,10 @@ const calculateAverage = (values: string[]) => {
 const calculateAverages = (entry: DailyEntry | null) => {
     if (!entry) return {};
     return LINE_BUSSING_KEYS[entry.line].reduce((acc, key) => {
+        if (entry.bussingData[key]?.isOff) {
+            acc[key] = { average1: '', average2: '' };
+            return acc;
+        }
         const strengths = entry.bussingData[key]?.strengths || [];
         acc[key] = {
             average1: calculateAverage(strengths.slice(0, 16)),
@@ -338,7 +346,7 @@ const calculateAverages = (entry: DailyEntry | null) => {
 const hasAnyStrengthData = (entry?: DailyEntry) => {
     if (!entry) return false;
     return LINE_BUSSING_KEYS[entry.line].some(machineKey =>
-        entry.bussingData[machineKey]?.strengths?.some(value => value.trim() !== ''),
+        !entry.bussingData[machineKey]?.isOff && entry.bussingData[machineKey]?.strengths?.some(value => value.trim() !== ''),
     );
 };
 
@@ -716,13 +724,26 @@ export default function BusRibbonPullStrengthTest() {
 
     const handlePositionChange = (machineKey: BussingKey, value: string) => {
         if (!canEditCurrentEntry) return;
+        const selectingOff = value === 'OFF';
+        const machine = currentEntry?.bussingData[machineKey];
+        if (selectingOff && machine?.strengths.some(reading => reading.trim() !== '')
+            && !window.confirm(`${BUSSING_LABELS[machineKey]} contains readings. Switching it OFF will permanently discard them. Continue?`)) {
+            return;
+        }
+        setStrengthErrors(previous => Object.fromEntries(
+            Object.entries(previous).filter(([key]) => !key.startsWith(`${machineKey}-`)),
+        ));
         updateCurrentEntry(entry => ({
             ...entry,
             bussingData: {
                 ...entry.bussingData,
                 [machineKey]: {
                     ...entry.bussingData[machineKey],
-                    position: value,
+                    isOff: selectingOff,
+                    position: selectingOff ? '' : value,
+                    strengths: selectingOff || entry.bussingData[machineKey].isOff
+                        ? Array(32).fill('')
+                        : entry.bussingData[machineKey].strengths,
                 },
             },
         }));
@@ -810,6 +831,7 @@ export default function BusRibbonPullStrengthTest() {
     const validateEntry = () => {
         if (!currentEntry) return false;
         for (const machineKey of LINE_BUSSING_KEYS[currentEntry.line]) {
+            if (currentEntry.bussingData[machineKey].isOff) continue;
             const strengths = currentEntry.bussingData[machineKey].strengths;
             for (let index = 0; index < strengths.length; index += 1) {
                 const value = strengths[index];
@@ -1661,6 +1683,7 @@ export default function BusRibbonPullStrengthTest() {
 
     const renderStrengthGrid = (machineKey: BussingKey) => {
         if (!currentEntry) return null;
+        const isOff = currentEntry.bussingData[machineKey].isOff;
         return (
             <div className="overflow-x-auto pb-2">
                 <div className="grid grid-cols-8 gap-2">
@@ -1679,10 +1702,10 @@ export default function BusRibbonPullStrengthTest() {
                                 <input
                                     type="text"
                                     inputMode="decimal"
-                                    value={value}
+                                    value={isOff ? 'OFF' : value}
                                     onChange={(event) => handleStrengthChange(machineKey, index, event.target.value)}
                                     onPaste={(event) => handleStrengthPaste(machineKey, index, event)}
-                                    disabled={!canEditCurrentEntry}
+                                    disabled={!canEditCurrentEntry || isOff}
                                     className={`w-full rounded-md border px-2 py-2 text-center text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80 ${inputStateClass}`}
                                     placeholder="0"
                                 />
@@ -1697,19 +1720,21 @@ export default function BusRibbonPullStrengthTest() {
     const renderBussingSection = (machineKey: BussingKey) => {
         if (!currentEntry) return null;
         const averages = currentAverages[machineKey] || { average1: '', average2: '' };
+        const isOff = currentEntry.bussingData[machineKey].isOff;
         return (
             <section key={machineKey} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <h4 className="text-base font-semibold text-gray-800 dark:text-white">{BUSSING_LABELS[machineKey]}</h4>
                     <div className="w-full lg:w-64">
                         <select
-                            value={currentEntry.bussingData[machineKey].position}
+                            value={isOff ? 'OFF' : currentEntry.bussingData[machineKey].position}
                             onChange={(event) => handlePositionChange(machineKey, event.target.value)}
                             disabled={!canEditCurrentEntry}
                             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                         >
                             <option value="">Select position</option>
                             {POSITION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                            <option value="OFF">OFF</option>
                         </select>
                     </div>
                 </div>
@@ -1718,11 +1743,11 @@ export default function BusRibbonPullStrengthTest() {
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Average 1 (Fields 1-16)</p>
-                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{averages.average1 || '-'}</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{isOff ? 'OFF' : averages.average1 || '-'}</p>
                     </div>
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Average 2 (Fields 1-16)</p>
-                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{averages.average2 || '-'}</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{isOff ? 'OFF' : averages.average2 || '-'}</p>
                     </div>
                 </div>
             </section>

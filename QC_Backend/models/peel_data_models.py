@@ -327,15 +327,31 @@ def upsert_extracted_peel_record(record: Dict[str, Any]) -> Dict[str, Any]:
             upsert=True,
         )
         stored = peel_data_collection.find_one({"business_key": business_key})
-        return {
+        response = {
             "inserted": bool(result.upserted_id),
             "updated": result.modified_count > 0 and not result.upserted_id,
             "record": stored,
         }
+        if response["inserted"] or response["updated"]:
+            _reconcile_saved_record(stored)
+        return response
     except DuplicateKeyError:
         peel_data_collection.update_one({"business_key": business_key}, {"$set": set_doc})
         stored = peel_data_collection.find_one({"business_key": business_key})
+        _reconcile_saved_record(stored)
         return {"inserted": False, "updated": True, "record": stored}
+
+
+def _reconcile_saved_record(record: Optional[Dict[str, Any]]) -> None:
+    """Best-effort ingestion event; the periodic job recovers missed deliveries."""
+    if not record:
+        return
+    try:
+        from services.peel_audit_reconciliation_service import reconciliation_enabled, reconcile_pending_audits
+        if reconciliation_enabled():
+            reconcile_pending_audits(source_record_id=str(record.get("_id")), limit=200)
+    except Exception:
+        logger.exception("peel_audit_event_reconciliation_failed source_id=%s", record.get("_id"))
 
 
 def insert_manual_peel_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -344,6 +360,7 @@ def insert_manual_peel_record(record: Dict[str, Any]) -> Dict[str, Any]:
     normalized.pop("_id", None)
     result = peel_data_collection.insert_one(normalized)
     normalized["_id"] = result.inserted_id
+    _reconcile_saved_record(normalized)
     return normalized
 
 
@@ -364,7 +381,9 @@ def update_manual_peel_record(record_id: str, updates: Dict[str, Any]) -> Option
     normalized = normalize_peel_record(merged, now=merged["updated_at"])
 
     peel_data_collection.update_one({"_id": ObjectId(record_id)}, {"$set": normalized})
-    return peel_data_collection.find_one({"_id": ObjectId(record_id)})
+    stored = peel_data_collection.find_one({"_id": ObjectId(record_id)})
+    _reconcile_saved_record(stored)
+    return stored
 
 
 def safe_insert_migrated_record(record: Dict[str, Any]) -> str:

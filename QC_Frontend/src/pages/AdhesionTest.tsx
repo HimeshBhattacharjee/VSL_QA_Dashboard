@@ -5,6 +5,7 @@ import ReportPagination from '../components/ReportPagination';
 import { ReportSortOption } from '../components/ReportListControls';
 import { Check, Download, Edit3, Eye, FileSpreadsheet, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { buildWorkflowConfirmOptions, isResolvedCreator, OPERATOR_SIGNATURE_REQUIRED_MESSAGE, resolveCreatorName } from '../utilities/workflowUtils';
+import { getPoLineValidationMessage, mapPoToFabLine } from '../utilities/poLineMapping';
 
 type AdhesionWorkflowState = 'draft' | 'submitted' | 'approved' | 'returned';
 type AdhesionDisplayStatus = AdhesionWorkflowState;
@@ -928,6 +929,8 @@ export default function AdhesionTest() {
         formData.laminator = laminator;
         formData.laminationPosition = laminationPosition;
         formData.lamParams = JSON.stringify(lamParams);
+        formData.productionOrderNo = editableValues.adhesion_editable_1 || '';
+        formData.lineNumber = mapPoToFabLine(editableValues.adhesion_editable_1);
 
         return formData;
     };
@@ -1012,6 +1015,11 @@ export default function AdhesionTest() {
         }
         if (!adhesionReportName.trim()) {
             showAlert('error', 'Please enter a report name');
+            return;
+        }
+        const poError = getPoLineValidationMessage(editableValues.adhesion_editable_1);
+        if (poError) {
+            showAlert('error', poError);
             return;
         }
 
@@ -1145,6 +1153,11 @@ export default function AdhesionTest() {
         }
         if (!adhesionReportName.trim()) {
             showAlert('error', 'Please enter a report name');
+            return;
+        }
+        const poError = getPoLineValidationMessage(editableValues.adhesion_editable_1);
+        if (poError) {
+            showAlert('error', poError);
             return;
         }
 
@@ -1423,9 +1436,7 @@ export default function AdhesionTest() {
     const getCreatedByLabel = (report: AdhesionTestReport) => resolveCreatorName(report);
 
     const getLineLabel = (lineNumber?: string | null) => {
-        if (!lineNumber) return '-';
-        if (lineNumber === 'I' || lineNumber === 'II') return `Line ${lineNumber}`;
-        return lineNumber;
+        return lineNumber || 'Unmapped';
     };
 
     const clearReportSelection = useCallback(() => {
@@ -1837,8 +1848,9 @@ export default function AdhesionTest() {
                         aria-label="Line filter"
                     >
                         <option value="">Line</option>
-                        <option value="I">Line I</option>
-                        <option value="II">Line II</option>
+                        <option value="FAB-II Line-I">FAB-II Line-I</option>
+                        <option value="FAB-II Line-II">FAB-II Line-II</option>
+                        <option value="Unmapped">Unmapped</option>
                     </select>
                     <select
                         value={savedReportsFilters.status}
@@ -2516,6 +2528,9 @@ export default function AdhesionTest() {
                                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
                                                     placeholder="P.O."
                                                 />
+                                                <p className={`mt-1 text-xs ${getPoLineValidationMessage(editableValues[editableFieldKeys[1]]) ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    FAB Line (derived): {mapPoToFabLine(editableValues[editableFieldKeys[1]])}
+                                                </p>
                                             </td>
                                         </tr>
                                         <tr>

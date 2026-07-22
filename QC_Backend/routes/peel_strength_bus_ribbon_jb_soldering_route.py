@@ -7,6 +7,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from line_status import is_line_off, normalize_line, with_default_line_statuses
 
 from generators.PeelStrengthBusRibbonJBSolderingReportGenerator import (
     generate_peel_strength_bus_ribbon_jb_soldering_report,
@@ -205,7 +206,7 @@ def normalize_entry_payload(entry: dict) -> dict:
         raise HTTPException(status_code=400, detail="Lines must be an object")
 
     normalized_lines = {
-        line_label: normalize_line_payload(raw_lines.get(line_label, {}), line_label)
+        line_label: (normalize_line(raw_lines.get(line_label, {})) if is_line_off(raw_lines.get(line_label, {})) else normalize_line(normalize_line_payload(raw_lines.get(line_label, {}), line_label)))
         for line_label in FAB_LINES[fab]
     }
 
@@ -261,7 +262,7 @@ def serialize_doc(doc):
         for line_label in FAB_LINES[fab]
     ]
     doc_copy["productionOrder"] = " / ".join(value for value in po_values if value)
-    return doc_copy
+    return with_default_line_statuses(doc_copy)
 
 
 def serialize_docs(docs):
@@ -269,7 +270,7 @@ def serialize_docs(docs):
 
 
 def serialize_entry(doc, user: dict | None = None, include_permissions: bool = False):
-    serialized = serialize_doc(doc)
+    serialized = with_default_line_statuses(serialize_doc(doc))
     if serialized and user and include_permissions:
         serialized["permissions"] = {
             "canView": can_view_entry(doc, user),

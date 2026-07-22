@@ -98,6 +98,14 @@ def fill_shift_data(worksheet, entry, date, current_row):
     display_line_1, display_line_2 = get_display_line_numbers(entry.get('lineGroup'))
     
     def write_line_rows(line_number, line_data, base_row):
+        if str(line_data.get('status', 'ON')).upper() == 'OFF':
+            for row_idx in (base_row, base_row + 1):
+                worksheet[f'A{row_idx}'] = date
+                worksheet[f'B{row_idx}'] = shift
+                worksheet[f'C{row_idx}'] = line_number
+                for column in 'DEFGHIJKLMNOPQ':
+                    worksheet[f'{column}{row_idx}'] = 'OFF'
+            return
         po_number = line_data.get('po', '')
         length_data = line_data.get('length', {})
         width_data = line_data.get('width', {})

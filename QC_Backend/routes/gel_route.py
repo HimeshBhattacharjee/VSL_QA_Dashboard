@@ -19,6 +19,7 @@ from services.creator_resolution_service import (
     require_operator_signature,
 )
 from services.shift_entry_workflow_service import APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE
+from services.po_line_mapping_service import map_po_to_fab_line, require_mapped_po
 from users.user_db import users_collection
 
 logger = logging.getLogger(__name__)
@@ -176,18 +177,6 @@ def normalize_date_value(value: str) -> str:
     return ""
 
 
-def derive_gel_line_number(form_data: dict) -> str:
-    explicit_line = get_string_value(form_data, "lineNumber") or get_string_value(form_data, "line")
-    laminator_details = get_string_value(form_data, "gel_editable_3")
-    combined_value = f"{explicit_line} {laminator_details}".upper()
-
-    if re.search(r"\bII\b|FAB[-\s]*II|LINE[-\s]*II", combined_value):
-        return "II"
-    if re.search(r"\bI\b|FAB[-\s]*I|LINE[-\s]*I", combined_value):
-        return "I"
-    return explicit_line or "II"
-
-
 def extract_gel_report_metadata(form_data: dict) -> dict:
     date_value = (
         get_string_value(form_data, "gel_editable_42_date")
@@ -198,11 +187,13 @@ def extract_gel_report_metadata(form_data: dict) -> dict:
     if shift and shift not in {"A", "B", "C", "G"}:
         shift = ""
 
+    production_order = get_string_value(form_data, "productionOrderNo") or get_string_value(form_data, "gel_editable_1")
+    mapping = map_po_to_fab_line(production_order)
     return {
         "date": date_value,
         "shift": shift,
-        "lineNumber": derive_gel_line_number(form_data),
-        "productionOrderNo": get_string_value(form_data, "productionOrderNo") or get_string_value(form_data, "gel_editable_1"),
+        "lineNumber": mapping.line,
+        "productionOrderNo": mapping.production_order,
     }
 
 
@@ -214,8 +205,9 @@ def ensure_gel_report_metadata(report: dict, report_payload: dict | None = None)
         "productionOrderNo": report.get("productionOrderNo") or "",
         "status": report.get("status") or normalize_workflow_state(report),
     }
-    has_required_metadata = all(existing_metadata.get(key) for key in ("date", "shift", "lineNumber", "productionOrderNo"))
-    if has_required_metadata and report.get("status"):
+    canonical_line = map_po_to_fab_line(existing_metadata["productionOrderNo"]).line
+    has_required_metadata = all(existing_metadata.get(key) for key in ("date", "shift", "productionOrderNo"))
+    if has_required_metadata and report.get("status") and existing_metadata["lineNumber"] == canonical_line:
         return existing_metadata
 
     try:
@@ -248,7 +240,7 @@ def backfill_missing_gel_metadata(limit: int = 200) -> None:
         "$or": [
             {"date": {"$exists": False}},
             {"shift": {"$exists": False}},
-            {"lineNumber": {"$exists": False}},
+            {"lineNumber": {"$nin": ["FAB-II Line-I", "FAB-II Line-II", "Unmapped"]}},
             {"productionOrderNo": {"$exists": False}},
             {"status": {"$exists": False}},
         ]
@@ -346,6 +338,14 @@ def validate_report_payload(report_data: dict) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="formData must be an object")
     if not isinstance(report_data.get("averages"), dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="averages must be an object")
+    form_data = report_data["formData"]
+    production_order = get_string_value(form_data, "productionOrderNo") or get_string_value(form_data, "gel_editable_1")
+    try:
+        mapping = require_mapped_po(production_order)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    form_data["productionOrderNo"] = mapping.production_order
+    form_data["lineNumber"] = mapping.line
 
 
 def ensure_unique_report_name(name: str, exclude_id: ObjectId | None = None) -> None:

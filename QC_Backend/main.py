@@ -38,6 +38,7 @@ from generators.SSHReportGenerator import generate_ssh_report
 from generators.PeelReportGenerator import generate_peel_report
 from generators.RoTReportGenerator import generate_rot_report
 from generators.WetLeakageReportGenerator import generate_wet_leakage_report
+from services.po_line_mapping_service import map_po_to_fab_line
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -216,6 +217,9 @@ async def generate_gel_report_endpoint(request: dict, x_employee_id: str | None 
                 "averages": gel_data.get("averages", {}),
                 "name": report["name"]
             }
+            mapping = map_po_to_fab_line(report.get("productionOrderNo") or report_data["form_data"].get("gel_editable_1"))
+            report_data["form_data"]["productionOrderNo"] = mapping.production_order
+            report_data["form_data"]["lineNumber"] = mapping.line
         else:
             raise HTTPException(status_code=403, detail="Gel Excel can be generated only from submitted or approved saved reports")
 
@@ -262,6 +266,9 @@ async def generate_adhesion_report_endpoint(request: dict, x_employee_id: str | 
                 "averages": adhesion_data.get("averages", {}),
                 "name": report["name"]
             }
+            mapping = map_po_to_fab_line(report.get("productionOrderNo") or report_data["form_data"].get("adhesion_editable_1"))
+            report_data["form_data"]["productionOrderNo"] = mapping.production_order
+            report_data["form_data"]["lineNumber"] = mapping.line
         else:
             raise HTTPException(status_code=403, detail="Adhesion Excel can be generated only from submitted or approved saved reports")
 

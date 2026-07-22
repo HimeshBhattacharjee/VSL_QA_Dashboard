@@ -5,6 +5,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from line_status import is_line_off, normalize_line, with_default_line_statuses
 from models.jb_sealant_wt_models import JBSealantDailyEntry, jb_sealant_entries_collection
 from datetime import datetime
 import calendar
@@ -294,14 +295,14 @@ def serialize_doc(doc):
     ]
     doc_copy["productionOrder"] = " / ".join(value for value in po_values if value)
     
-    return doc_copy
+    return with_default_line_statuses(doc_copy)
 
 def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
 def serialize_entry(doc, user: dict | None = None, include_permissions: bool = False):
-    serialized = serialize_doc(doc)
+    serialized = with_default_line_statuses(serialize_doc(doc))
     if serialized and user and include_permissions:
         serialized["permissions"] = {
             "canView": can_view_entry(doc, user),
@@ -336,7 +337,8 @@ def normalize_entry_payload(entry: dict) -> dict:
         raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
 
     for line_number in ("1", "2"):
-        validation_error = _get_line_validation_error(entry["lines"].get(line_number, {}), line_number)
+        line = entry["lines"].get(line_number, {})
+        validation_error = None if is_line_off(line) else _get_line_validation_error(line, line_number)
         if validation_error:
             raise HTTPException(status_code=400, detail=validation_error)
 
@@ -356,7 +358,7 @@ def normalize_entry_payload(entry: dict) -> dict:
             position["netSealantWeight"] = _normalize_field_value(position.get("netSealantWeight"))
             line[position_key] = position
 
-        normalized_lines[line_number] = {
+        normalized_lines[line_number] = normalize_line({
             **line,
             "line": line_number,
             "po": _normalize_field_value(line.get("po")),
@@ -365,7 +367,7 @@ def normalize_entry_payload(entry: dict) -> dict:
             "sealantExpiry": _normalize_field_value(line.get("sealantExpiry")),
             "totalModuleWeight": _normalize_field_value(line.get("totalModuleWeight")),
             "remarks": _normalize_field_value(line.get("remarks")),
-        }
+        })
 
     return {
         **entry,
@@ -718,6 +720,8 @@ async def get_monthly_stats(
             if shift in shift_stats:
                 # Process line 1 - check all three JB positions
                 line1 = lines.get("1", {})
+                if is_line_off(line1):
+                    line1 = {}
                 positions = [
                     line1.get("positiveJB", {}).get("netSealantWeight"),
                     line1.get("middleJB", {}).get("netSealantWeight"),
@@ -744,6 +748,8 @@ async def get_monthly_stats(
                 
                 # Process line 2 - check all three JB positions
                 line2 = lines.get("2", {})
+                if is_line_off(line2):
+                    line2 = {}
                 positions = [
                     line2.get("positiveJB", {}).get("netSealantWeight"),
                     line2.get("middleJB", {}).get("netSealantWeight"),

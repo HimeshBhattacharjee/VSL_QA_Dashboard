@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 from models.bus_ribbon_pull_strength_models import BusRibbonPullStrengthDailyEntry
+from services.bus_ribbon_group_service import is_bussing_group_off
 
 
 BUSSING_KEY_BY_LINE = {
@@ -102,6 +103,8 @@ class PullStrengthLookupService:
             return base_result
 
         machine = (entry.get("bussingData") or {}).get(bussing_key) or {}
+        if is_bussing_group_off(machine):
+            return base_result
         if normalize_stored_position(machine.get("position")) != target_position:
             return base_result
 

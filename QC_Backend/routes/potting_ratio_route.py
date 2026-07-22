@@ -5,6 +5,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from line_status import is_line_off, normalize_line, with_default_line_statuses
 from models.potting_ratio_models import PottingDailyEntry, potting_entries_collection
 from datetime import datetime
 import calendar
@@ -139,14 +140,14 @@ def serialize_doc(doc):
         str(doc_copy["lines"].get("2", {}).get("po") or "").strip(),
     ]
     doc_copy["productionOrder"] = " / ".join(value for value in po_values if value)
-    return doc_copy
+    return with_default_line_statuses(doc_copy)
 
 def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
 def serialize_entry(doc, user: dict | None = None, include_permissions: bool = False):
-    serialized = serialize_doc(doc)
+    serialized = with_default_line_statuses(serialize_doc(doc))
     if serialized and user and include_permissions:
         serialized["permissions"] = {
             "canView": can_view_entry(doc, user),
@@ -171,7 +172,7 @@ def _normalize_lines(lines: dict) -> dict:
     normalized_lines = {}
     for line_num in ("1", "2"):
         line = (lines or {}).get(line_num) or {}
-        normalized_lines[line_num] = {
+        normalized_lines[line_num] = normalize_line({
             **line,
             "line": line_num,
             "po": _normalize_field_value(line.get("po")),
@@ -181,7 +182,7 @@ def _normalize_lines(lines: dict) -> dict:
             "ratio": _normalize_field_value(line.get("ratio")),
             "totalWeight": _normalize_field_value(line.get("totalWeight")),
             "remarks": _normalize_field_value(line.get("remarks")),
-        }
+        })
     return normalized_lines
 
 def normalize_entry_payload(entry: dict, *, allow_blank_lines: bool = False) -> dict:
@@ -200,9 +201,9 @@ def normalize_entry_payload(entry: dict, *, allow_blank_lines: bool = False) -> 
     if not isinstance(entry["lines"], dict) or "1" not in entry["lines"] or "2" not in entry["lines"]:
         raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
 
-    if not allow_blank_lines and not _normalize_field_value(entry["lines"]["1"].get("po")):
+    if not allow_blank_lines and not is_line_off(entry["lines"]["1"]) and not _normalize_field_value(entry["lines"]["1"].get("po")):
         raise HTTPException(status_code=400, detail="PO number is required for Line 1")
-    if not allow_blank_lines and not _normalize_field_value(entry["lines"]["2"].get("po")):
+    if not allow_blank_lines and not is_line_off(entry["lines"]["2"]) and not _normalize_field_value(entry["lines"]["2"].get("po")):
         raise HTTPException(status_code=400, detail="PO number is required for Line 2")
 
     date_key = str(entry.get("date")).split("T")[0]
@@ -552,7 +553,7 @@ async def get_monthly_stats(
             if shift in shift_stats:
                 # Process line 1
                 line1 = lines.get("1", {})
-                if line1.get("ratio"):
+                if not is_line_off(line1) and line1.get("ratio"):
                     filled_entries += 1
                     shift_stats[shift]["filled"] += 1
                     shift_stats[shift]["lines"]["1"] += 1
@@ -571,7 +572,7 @@ async def get_monthly_stats(
                 
                 # Process line 2
                 line2 = lines.get("2", {})
-                if line2.get("ratio"):
+                if not is_line_off(line2) and line2.get("ratio"):
                     filled_entries += 1
                     shift_stats[shift]["filled"] += 1
                     shift_stats[shift]["lines"]["2"] += 1

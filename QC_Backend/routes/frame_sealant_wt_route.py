@@ -5,6 +5,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from line_status import is_line_off, normalize_line, with_default_line_statuses
 from models.frame_sealant_wt_models import FrameSealantDailyEntry, frame_sealant_entries_collection
 from datetime import datetime
 import calendar
@@ -293,14 +294,14 @@ def serialize_doc(doc):
     ]
     doc_copy["productionOrder"] = " / ".join(value for value in po_values if value)
     
-    return doc_copy
+    return with_default_line_statuses(doc_copy)
 
 def serialize_docs(docs):
     """Helper function to convert list of MongoDB documents"""
     return [serialize_doc(doc) for doc in docs]
 
 def serialize_entry(doc, user: dict | None = None, include_permissions: bool = False):
-    serialized = serialize_doc(doc)
+    serialized = with_default_line_statuses(serialize_doc(doc))
     if serialized and user and include_permissions:
         serialized["permissions"] = {
             "canView": can_view_entry(doc, user),
@@ -335,7 +336,8 @@ def normalize_entry_payload(entry: dict) -> dict:
         raise HTTPException(status_code=400, detail="Both lines 1 and 2 must be provided")
 
     for line_number in ("1", "2"):
-        validation_error = _get_line_validation_error(entry["lines"].get(line_number, {}), line_number)
+        line = entry["lines"].get(line_number, {})
+        validation_error = None if is_line_off(line) else _get_line_validation_error(line, line_number)
         if validation_error:
             raise HTTPException(status_code=400, detail=validation_error)
 
@@ -348,7 +350,7 @@ def normalize_entry_payload(entry: dict) -> dict:
     normalized_lines = {}
     for line_number in ("1", "2"):
         line = (entry.get("lines") or {}).get(line_number) or {}
-        normalized_lines[line_number] = {
+        normalized_lines[line_number] = normalize_line({
             **line,
             "line": line_number,
             "po": _normalize_field_value(line.get("po")),
@@ -358,7 +360,7 @@ def normalize_entry_payload(entry: dict) -> dict:
             "totalSealantWeightPerModule": _normalize_field_value(line.get("totalSealantWeightPerModule")),
             "sealantWeightPerModulePerMeter": _normalize_field_value(line.get("sealantWeightPerModulePerMeter")),
             "remarks": _normalize_field_value(line.get("remarks")),
-        }
+        })
 
     return {
         **entry,
@@ -705,6 +707,8 @@ async def get_monthly_stats(
             if shift in shift_stats:
                 # Process line 1 - check all 4 frames (2 from length, 2 from width)
                 line1 = lines.get("1", {})
+                if is_line_off(line1):
+                    line1 = {}
                 frames = [
                     line1.get("length", {}).get("netSealantWeight1"),
                     line1.get("length", {}).get("netSealantWeight2"),
@@ -733,6 +737,8 @@ async def get_monthly_stats(
                 
                 # Process line 2 - check all 4 frames (2 from length, 2 from width)
                 line2 = lines.get("2", {})
+                if is_line_off(line2):
+                    line2 = {}
                 frames = [
                     line2.get("length", {}).get("netSealantWeight1"),
                     line2.get("length", {}).get("netSealantWeight2"),

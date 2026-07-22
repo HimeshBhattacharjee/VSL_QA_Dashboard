@@ -149,6 +149,8 @@ def fill_gel_basic_info(worksheet, gel_data):
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
+        if form_data.get('lineNumber'):
+            worksheet['I9'] = form_data['lineNumber']
         fill_allowable_limit_with_checkboxes(worksheet, gel_data)
         fill_encapsulant_types_with_checkboxes(worksheet, gel_data)
         log_progress("Basic gel test information filled successfully")
