@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from mongo_indexes import drop_index_if_exists, ensure_index
+from report_context import apply_report_context
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,12 @@ wet_leakage_entries_collection = db["wet_leakage_daily_entries"]
 
 def ensure_wet_leakage_indexes() -> None:
     try:
-        # Older Wet Leakage records were constrained to one row per date/line.
-        # Daily Entry Workflow allows multiple entries on the same date.
         for index_name in ("date_1", "date_1_lineGroup_1"):
             drop_index_if_exists(wet_leakage_entries_collection, index_name)
 
         ensure_index(wet_leakage_entries_collection, [("date", ASCENDING)], name="wet_leakage_date_idx")
         ensure_index(wet_leakage_entries_collection, [("date", DESCENDING)], name="wet_leakage_date_desc_idx")
+        ensure_index(wet_leakage_entries_collection, [("reportDate", ASCENDING), ("fabLine", ASCENDING)], name="wet_leakage_report_context_unique", unique=True, partialFilterExpression={"reportDate": {"$type": "string"}, "fabLine": {"$in": ["FAB-II Line-I", "FAB-II Line-II"]}})
         ensure_index(wet_leakage_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="wet_leakage_year_month_idx")
         ensure_index(wet_leakage_entries_collection, [("updatedAt", DESCENDING)], name="wet_leakage_updated_at_desc_idx")
         ensure_index(wet_leakage_entries_collection, [("createdAt", DESCENDING)], name="wet_leakage_created_at_desc_idx")
@@ -248,7 +248,7 @@ class WetLeakageDailyEntry:
         except Exception:
             date_obj = datetime.fromisoformat(date_key)
 
-        normalized = entry_data.copy()
+            normalized = apply_report_context(entry_data)
         normalized["date"] = date_obj.strftime("%Y-%m-%d")
         normalized["testingDate"] = (
             str(normalized.get("testingDate")).split("T")[0]

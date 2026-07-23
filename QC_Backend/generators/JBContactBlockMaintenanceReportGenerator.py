@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
+from generators.AuditReportGenerator import insert_signature_image
 from paths import get_template_key
 from s3_service import get_s3_client
 
@@ -183,10 +184,21 @@ def fill_jb_contact_block_data_in_sheet(worksheet, entry, date_label, fab):
 
     signature_row = SIGNATURE_BLOCK_START_ROW + max(0, len(flat_rows) - BUILT_IN_DATA_ROWS) + 1
     signatures = entry.get("signatures") or {}
+    label_row = signature_row - 1
+    worksheet[f"E{label_row}"] = "PREPARED BY"
+    worksheet[f"J{label_row}"] = "VERIFIED BY"
     if signatures.get("preparedBy"):
         worksheet[f"E{signature_row}"] = signatures.get("preparedBy", "")
-    if signatures.get("verifiedBy") or signatures.get("reviewedBy"):
-        worksheet[f"J{signature_row}"] = signatures.get("verifiedBy") or signatures.get("reviewedBy", "")
+    prepared_people = entry.get("preparedByDetails") or []
+    for offset, person in enumerate(prepared_people[:3]):
+        if person.get("signature"):
+            insert_signature_image(worksheet, f"{chr(ord('E') + offset * 2)}{signature_row + 1}", person["signature"])
+    verified_by = signatures.get("verifiedBy") or signatures.get("reviewedBy") or signatures.get("approvedBy")
+    if verified_by:
+        worksheet[f"J{signature_row}"] = verified_by
+    verified_details = entry.get("verifiedByDetails") or {}
+    if verified_details.get("signature"):
+        insert_signature_image(worksheet, f"J{signature_row + 1}", verified_details["signature"])
 
 
 def generate_jb_contact_block_maintenance_report(report_data):

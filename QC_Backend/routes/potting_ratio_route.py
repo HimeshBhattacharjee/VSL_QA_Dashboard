@@ -46,6 +46,11 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+from services.potting_ratio_evaluation import (
+    apply_potting_ratio_remarks,
+    evaluate_potting_ratio,
+    potting_ratio_criterion,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +138,7 @@ def serialize_doc(doc):
         line.setdefault("partB", "")
         line.setdefault("ratio", "")
         line.setdefault("totalWeight", "")
-        line.setdefault("remarks", "")
+        line["remarks"] = evaluate_potting_ratio(line.get("ratio")).status
 
     po_values = [
         str(doc_copy["lines"].get("1", {}).get("po") or "").strip(),
@@ -183,7 +188,11 @@ def _normalize_lines(lines: dict) -> dict:
             "totalWeight": _normalize_field_value(line.get("totalWeight")),
             "remarks": _normalize_field_value(line.get("remarks")),
         })
-    return normalized_lines
+    return apply_potting_ratio_remarks(normalized_lines)
+
+@potting_router.get("/criterion")
+async def get_ratio_criterion():
+    return potting_ratio_criterion()
 
 def normalize_entry_payload(entry: dict, *, allow_blank_lines: bool = False) -> dict:
     required_fields = ["date", "testingDate", "shift", "lines"]
@@ -559,16 +568,15 @@ async def get_monthly_stats(
                     shift_stats[shift]["lines"]["1"] += 1
                     
                     try:
-                        ratio = float(line1["ratio"])
-                        if 4 <= ratio <= 6:
+                        evaluation = evaluate_potting_ratio(line1["ratio"])
+                        if evaluation.status == "OK":
                             pass_count += 1
                             shift_stats[shift]["pass"] += 1
-                        else:
+                        elif evaluation.status == "Not OK":
                             fail_count += 1
                             shift_stats[shift]["fail"] += 1
                     except (ValueError, TypeError):
-                        fail_count += 1
-                        shift_stats[shift]["fail"] += 1
+                        pass
                 
                 # Process line 2
                 line2 = lines.get("2", {})
@@ -578,16 +586,15 @@ async def get_monthly_stats(
                     shift_stats[shift]["lines"]["2"] += 1
                     
                     try:
-                        ratio = float(line2["ratio"])
-                        if 4 <= ratio <= 6:
+                        evaluation = evaluate_potting_ratio(line2["ratio"])
+                        if evaluation.status == "OK":
                             pass_count += 1
                             shift_stats[shift]["pass"] += 1
-                        else:
+                        elif evaluation.status == "Not OK":
                             fail_count += 1
                             shift_stats[shift]["fail"] += 1
                     except (ValueError, TypeError):
-                        fail_count += 1
-                        shift_stats[shift]["fail"] += 1
+                        pass
         
         completion_rate = round((filled_entries / total_possible_entries) * 100) if total_possible_entries > 0 else 0
         

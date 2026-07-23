@@ -4,8 +4,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from report_context import apply_report_context
 
 from models.wet_leakage_test_models import WetLeakageDailyEntry, wet_leakage_entries_collection
 from services.creator_resolution_service import (
@@ -63,7 +65,7 @@ SORT_OPTIONS = {
 }
 
 BUSINESS_ENTRY_FIELDS = {
-    "date", "testingDate", "lineGroup", "po", "moduleType", "moduleNo",
+    "date", "reportDate", "fabLine", "fab", "testingDate", "lineGroup", "po", "moduleType", "moduleNo",
     "cellSupplier", "encapsulantSupplier", "rearGlassSupplier", "jbSupplier",
     "adhesiveSealantSupplier", "pottingSealantSupplier", "waterTemp",
     "waterResistivity", "IR", "result", "testDoneBy", "remarks",
@@ -230,6 +232,10 @@ def get_optional_user(employee_id: str | None) -> dict | None:
 
 
 def normalize_entry_payload(entry: dict) -> dict:
+    try:
+        entry = apply_report_context(entry)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="FAB line is required and must be FAB-II Line-I or FAB-II Line-II")
     date_key = str(entry.get("date") or entry.get("testingDate") or "").split("T")[0]
     if not date_key:
         raise HTTPException(status_code=400, detail="Missing required field: date")
@@ -270,8 +276,7 @@ def normalize_entry_payload(entry: dict) -> dict:
         "year": date_obj.year,
         "month": date_obj.month,
     }
-    if entry.get("lineGroup"):
-        normalized["lineGroup"] = _normalize_line_group(entry.get("lineGroup"))
+    normalized.update({key: entry[key] for key in ("reportDate", "fabLine", "fab", "lineGroup")})
     normalized["preparedBySignature"] = normalized["signatures"]["preparedBy"]
     normalized["reviewedBySignature"] = normalized["signatures"]["reviewedBy"]
     normalized["approvedBySignature"] = normalized["signatures"]["approvedBy"]
@@ -435,6 +440,17 @@ async def get_entries_by_date(date: str, x_employee_id: str | None = Header(defa
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
 
+@wet_leakage_router.get("/entries/legacy/{legacy_key}")
+async def get_legacy_entry(legacy_key: str, x_employee_id: str | None = Header(default=None)):
+    user = get_current_user(x_employee_id)
+    entry = WetLeakageDailyEntry.get_by_id(legacy_key) if ObjectId.is_valid(legacy_key) else wet_leakage_entries_collection.find_one({"$or": [{"entryNumber": legacy_key}, {"entryNo": legacy_key}]})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Legacy entry not found")
+    if not can_view_entry(entry, user):
+        raise HTTPException(status_code=403, detail="You are not authorized to open this entry")
+    return {"legacy": True, "canonical": {"reportDate": entry.get("reportDate") or entry.get("date"), "fabLine": entry.get("fabLine")}, "entry": serialize_entry(entry, user, include_permissions=True)}
+
+
 @wet_leakage_router.get("/entries/monthly")
 async def get_monthly_entries(year: int = Query(...), month: int = Query(..., ge=1, le=12), x_employee_id: str | None = Header(default=None)):
     try:
@@ -517,6 +533,8 @@ async def create_entry(entry: dict, x_employee_id: str | None = Header(default=N
             new_entry_id = WetLeakageDailyEntry.create(update_data)
             saved_entry = WetLeakageDailyEntry.get_by_id(new_entry_id)
         return {"success": True, "message": "Entry saved successfully", "data": {"entry": serialize_entry(saved_entry, user, include_permissions=True)}}
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A Wet Leakage report already exists for this date and FAB line")
     except HTTPException:
         raise
     except Exception as e:

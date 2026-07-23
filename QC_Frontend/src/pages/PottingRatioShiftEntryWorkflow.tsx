@@ -124,6 +124,14 @@ interface MonthlyStats {
     shiftStats: Record<Shift, ShiftStats>;
 }
 
+interface PottingRatioCriterion {
+    lowerLimit: number;
+    upperLimit: number;
+    denominator: number;
+    inclusive: boolean;
+    display: string;
+}
+
 interface EntryListFilters {
     dateFrom: string;
     dateTo: string;
@@ -218,19 +226,6 @@ const getWorkflowState = (entry?: Pick<DailyEntry, 'workflowState' | 'status'> |
 const formatWorkflowState = (state: WorkflowState) => state.charAt(0).toUpperCase() + state.slice(1);
 const sumObjectValues = (values: Record<string, number>) =>
     Object.values(values).reduce((total, count) => total + count, 0);
-
-const isRatioOutOfRange = (value: string): boolean => {
-    if (!value) return false;
-    const ratio = parseFloat(value);
-    if (Number.isNaN(ratio)) return false;
-    return ratio < 4 || ratio > 6;
-};
-
-const isRatioWithinRange = (value?: string) => {
-    if (!value) return false;
-    const ratio = parseFloat(value);
-    return !Number.isNaN(ratio) && ratio >= 4 && ratio <= 6;
-};
 
 const createEmptyLineEntry = (lineNum: '1' | '2' = '1'): LineEntry => ({
     status: 'ON',
@@ -334,6 +329,7 @@ export default function PottingRatioShiftEntryWorkflow() {
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
     const [monthlyEntries, setMonthlyEntries] = useState<Map<string, DailyEntry>>(new Map());
     const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>(defaultMonthlyStats);
+    const [ratioCriterion, setRatioCriterion] = useState<PottingRatioCriterion | null>(null);
     const [currentAccessMode, setCurrentAccessMode] = useState<EntryAccessMode>('edit');
     const [readOnlyReason, setReadOnlyReason] = useState('');
     const [returnModalEntry, setReturnModalEntry] = useState<DailyEntry | null>(null);
@@ -472,6 +468,26 @@ export default function PottingRatioShiftEntryWorkflow() {
         const b = parseFloat(partB) || 0;
         return (a + b).toFixed(2);
     }, []);
+
+    const evaluateRatioRemark = useCallback((value: string): '' | 'OK' | 'Not OK' => {
+        if (!value || !ratioCriterion) return '';
+        const ratio = Number(value);
+        if (!Number.isFinite(ratio)) return '';
+        return ratio >= ratioCriterion.lowerLimit && ratio <= ratioCriterion.upperLimit ? 'OK' : 'Not OK';
+    }, [ratioCriterion]);
+
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/criterion`)
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load potting ratio criterion');
+                return response.json();
+            })
+            .then((criterion: PottingRatioCriterion) => setRatioCriterion(criterion))
+            .catch(error => {
+                console.error('Error loading potting ratio criterion:', error);
+                showAlert('error', 'Potting ratio criterion is unavailable; calculated remarks are pending.');
+            });
+    }, [API_BASE_URL, showAlert]);
 
     const loadMonthlyData = useCallback(async (year: number, month: number) => {
         setIsLoading(true);
@@ -711,6 +727,7 @@ export default function PottingRatioShiftEntryWorkflow() {
             const partB = field === 'partB' ? value : currentEntry.lines[line].partB;
             updatedLines[line].ratio = calculateRatio(partA, partB);
             updatedLines[line].totalWeight = calculateTotalWeight(partA, partB);
+            updatedLines[line].remarks = evaluateRatioRemark(updatedLines[line].ratio);
         }
 
         setCurrentEntry({
@@ -739,6 +756,13 @@ export default function PottingRatioShiftEntryWorkflow() {
         if (getLineStatus(currentEntry.lines['2']) === 'ON' && !currentEntry.lines['2'].po) {
             showAlert('error', 'PO number is required for Line 2');
             return false;
+        }
+        for (const lineKey of ['1', '2'] as const) {
+            const line = currentEntry.lines[lineKey];
+            if (getLineStatus(line) === 'ON' && (line.partA || line.partB) && !line.ratio) {
+                showAlert('error', `Line ${lineKey} ratio is invalid. Enter valid numeric Part A and Part B weights; Part B cannot be zero.`);
+                return false;
+            }
         }
         return true;
     };
@@ -2102,10 +2126,7 @@ export default function PottingRatioShiftEntryWorkflow() {
                             type="text"
                             value={ratio ? `${ratio}:1` : ''}
                             readOnly
-                            className={`w-full rounded-lg border p-2.5 text-xs focus:outline-none ${isRatioOutOfRange(ratio)
-                                ? 'border-red-300 bg-red-100 text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                : 'border-gray-200 bg-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200'
-                            }`}
+                            className="w-full rounded-lg border border-gray-200 bg-gray-200 p-2.5 text-xs text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200"
                             placeholder="Auto-calculated"
                         />
                     </div>
@@ -2123,11 +2144,15 @@ export default function PottingRatioShiftEntryWorkflow() {
                         <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Remarks (Line {displayLine})</label>
                         <textarea
                             value={currentEntry.lines[lineKey].remarks || ''}
-                            onChange={(event) => handleLineInputChange(lineKey, 'remarks', event.target.value)}
-                            disabled={!canEditCurrentEntry}
+                            readOnly
                             rows={2}
-                            className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                            placeholder={`Add any remarks for Line ${displayLine}`}
+                            className={`w-full rounded-lg border p-2.5 text-xs ${currentEntry.lines[lineKey].remarks === 'OK'
+                                ? 'border-green-300 bg-green-100 text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                : currentEntry.lines[lineKey].remarks === 'Not OK'
+                                    ? 'border-red-300 bg-red-100 text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                    : 'border-gray-200 bg-gray-200 text-gray-600 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                            placeholder={ratioCriterion ? 'Pending valid ratio' : 'Criterion unavailable'}
                         />
                     </div>
                 </div>
@@ -2304,7 +2329,7 @@ export default function PottingRatioShiftEntryWorkflow() {
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Potting Ratio Measurement</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Part A and B ratio is 5:1 +/- 1 (Range: 4:1 to 6:1)</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{ratioCriterion?.display || 'Loading configured ratio criterion...'}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button
@@ -2572,9 +2597,10 @@ export default function PottingRatioShiftEntryWorkflow() {
                                         {(['1', '2'] as const).map(lineKey => {
                                             const displayLine = getDisplayLineNumbers(currentEntry.lineGroup)[lineKey === '1' ? 0 : 1];
                                             const ratio = currentEntry.lines[lineKey].ratio;
+                                            const remarks = currentEntry.lines[lineKey].remarks;
                                             return (
-                                                <span key={lineKey} className={isRatioWithinRange(ratio) ? 'text-green-600 dark:text-green-300' : ratio ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400'}>
-                                                    Line {displayLine}: {ratio || '-'}
+                                                <span key={lineKey} className="text-gray-600 dark:text-gray-300">
+                                                    Line {displayLine}: {ratio ? `${ratio}:1` : '-'} {remarks ? `(${remarks})` : ''}
                                                 </span>
                                             );
                                         })}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import FabLineSelectionModal from '../components/FabLineSelectionModal';
+import { LINE_GROUPS, getLineGroupLabel, normalizeLineGroup, type LineGroup } from '../utilities/lineWiseTestUtils';
 import { AlertCircle, Check, CheckCircle, ChevronLeft, ChevronRight, Download, Edit3, Eye, Plus, RotateCcw, Save, Search, Trash2, X, FileSpreadsheet } from 'lucide-react';
 import {
     buildWorkflowConfirmOptions,
@@ -37,6 +39,10 @@ interface DailyEntry {
     id?: string;
     date: string;
     testingDate: string;
+    lineGroup?: LineGroup;
+    fabLine?: string;
+    reportContextReviewRequired?: boolean;
+    reportContextReviewReason?: string;
     po: string;
     moduleType: string;
     moduleNo: string;
@@ -257,6 +263,8 @@ const normalizeEntry = (entry: DailyEntry): DailyEntry => {
         ...entry,
         date,
         testingDate: normalizeDate(entry.testingDate || date),
+        lineGroup: normalizeLineGroup(entry.lineGroup || entry.fabLine),
+        fabLine: getLineGroupLabel(normalizeLineGroup(entry.lineGroup || entry.fabLine)),
         status: getWorkflowState(entry),
         workflowState: getWorkflowState(entry),
         displayStatus: entry.displayStatus || getWorkflowState(entry),
@@ -303,6 +311,9 @@ const formatDateLabel = (date: string) => {
     if (Number.isNaN(parsed.getTime())) return date;
     return parsed.toLocaleDateString('en-US', { day: '2-digit', month: 'long', year: 'numeric' });
 };
+const getEntryFabLabel = (entry: DailyEntry) => entry.reportContextReviewRequired
+    ? `Review required (${entry.reportContextReviewReason || 'missing FAB line'})`
+    : getLineGroupLabel(normalizeLineGroup(entry.lineGroup || entry.fabLine));
 
 export default function WetLeakageTest() {
     const [activeTab, setActiveTab] = useState<MainView>('dashboard');
@@ -519,9 +530,11 @@ export default function WetLeakageTest() {
         });
     }, [entryRegister, selectedEntryIds]);
 
-    const createEmptyEntry = useCallback((date: string): DailyEntry => ({
+    const createEmptyEntry = useCallback((date: string, lineGroup: LineGroup): DailyEntry => ({
         date,
         testingDate: date,
+        lineGroup,
+        fabLine: getLineGroupLabel(lineGroup),
         po: '',
         moduleType: '',
         moduleNo: '',
@@ -551,7 +564,7 @@ export default function WetLeakageTest() {
         setDateEntrySelector(null);
     }, []);
 
-    const openNewEntryForDate = useCallback((date: string) => {
+    const openNewEntryForDate = useCallback((date: string, lineGroup: LineGroup) => {
         if (!canCreateEntry) {
             showAlert('info', 'Only operators can create draft entries.');
             return;
@@ -559,7 +572,7 @@ export default function WetLeakageTest() {
         const entryDate = new Date(`${date}T00:00:00`);
         setCurrentDate(new Date(entryDate.getFullYear(), entryDate.getMonth(), 1));
         setSelectedDate(date);
-        setCurrentEntry(createEmptyEntry(date));
+        setCurrentEntry(createEmptyEntry(date, lineGroup));
         setCurrentAccessMode('edit');
         setReadOnlyReason('');
         setIsEditing(false);
@@ -602,16 +615,8 @@ export default function WetLeakageTest() {
     const handleDateSelect = useCallback((date: string) => {
         const entries = monthlyEntries.get(date) || [];
         setSelectedDate(date);
-        if (entries.length === 0) {
-            openNewEntryForDate(date);
-            return;
-        }
-        if (entries.length === 1) {
-            void openEntryFromRegister(entries[0], 'edit');
-            return;
-        }
         setDateEntrySelector({ date, entries });
-    }, [monthlyEntries, openEntryFromRegister, openNewEntryForDate]);
+    }, [monthlyEntries]);
 
     const handlePrevMonth = () => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -1303,7 +1308,7 @@ export default function WetLeakageTest() {
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-lg font-semibold dark:text-white">
-                                {canEditCurrentEntry ? (isEditing ? 'Edit Entry' : 'New Entry') : 'View Entry'} - {formatDateLabel(currentEntry.testingDate)}
+                                {canEditCurrentEntry ? (isEditing ? 'Edit Report' : 'Create Report') : 'View Report'} - {formatDateLabel(currentEntry.testingDate)} - {getLineGroupLabel(normalizeLineGroup(currentEntry.lineGroup || currentEntry.fabLine))}
                             </h3>
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(currentWorkflowState)}`}>{formatWorkflowState(currentWorkflowState)}</span>
                         </div>
@@ -1311,7 +1316,7 @@ export default function WetLeakageTest() {
                         {currentEntry.returnComments && currentWorkflowState === 'returned' && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Return comments: {currentEntry.returnComments}</p>}
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
-                        {canExportCurrentEntry && <button type="button" onClick={() => confirmDownloadEntries([currentEntry], `Wet_Leakage_Test_${currentEntry.date}`)} className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-4 w-4" /></button>}
+                        {canExportCurrentEntry && <button type="button" onClick={() => confirmDownloadEntries([currentEntry], `Wet_Leakage_Test_${currentEntry.date}_${getLineGroupLabel(normalizeLineGroup(currentEntry.lineGroup || currentEntry.fabLine)).replace(/\s+/g, '_').replace(/-/g, '')}`)} className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-4 w-4" /></button>}
                         {canApproveCurrentEntry && <button type="button" onClick={() => confirmApproveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve"><Check className="h-4 w-4" /></button>}
                         {canReturnCurrentEntry && <button type="button" onClick={() => openReturnModal(currentEntry)} className="rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return"><RotateCcw className="h-4 w-4" /></button>}
                         {canDeleteCurrentEntry && <button type="button" onClick={handleDeleteEntry} className="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete"><Trash2 className="h-4 w-4" /></button>}
@@ -1337,41 +1342,8 @@ export default function WetLeakageTest() {
 
     const renderEntrySelector = () => {
         if (!dateEntrySelector) return null;
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
-                    <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{formatDateLabel(dateEntrySelector.date)}</h3>
-                        <button type="button" onClick={() => setDateEntrySelector(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><X className="h-4 w-4" /></button>
-                    </div>
-                    <div className="space-y-2">
-                        {dateEntrySelector.entries.map((entry, index) => {
-                            const state = getWorkflowState(entry);
-                            return (
-                                <button
-                                    key={getEntryId(entry) || `${entry.date}-${index}`}
-                                    type="button"
-                                    onClick={() => openEntryFromRegister(entry, 'edit')}
-                                    className="flex w-full items-center justify-between rounded-md border border-gray-200 p-3 text-left hover:border-brand-primary hover:bg-brand-primary/5 dark:border-gray-700 dark:hover:bg-brand-primary/10"
-                                >
-                                    <div>
-                                        <div className="text-sm font-semibold text-gray-900 dark:text-white">Entry {index + 1}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{entry.po || 'No production order'} | {resolveCreatorName(entry)}</div>
-                                    </div>
-                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(state)}`}>{formatWorkflowState(state)}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {canCreateEntry && (
-                        <button type="button" onClick={() => openNewEntryForDate(dateEntrySelector.date)} className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary-hover">
-                            <Plus className="h-4 w-4" />
-                            New Entry
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
+        const findEntry = (lineGroup: LineGroup) => dateEntrySelector.entries.find(entry => !entry.reportContextReviewRequired && normalizeLineGroup(entry.lineGroup || entry.fabLine) === lineGroup);
+        return <FabLineSelectionModal isOpen title={formatDateLabel(dateEntrySelector.date)} question="Choose the independent FAB line report to create or open." options={LINE_GROUPS.map(lineGroup => ({ value: lineGroup, label: getLineGroupLabel(lineGroup), description: findEntry(lineGroup) ? 'Open existing report' : 'Create report', isFilled: Boolean(findEntry(lineGroup)) }))} onSelect={(value) => { const lineGroup = value as LineGroup; const existing = findEntry(lineGroup); if (existing) void openEntryFromRegister(existing, 'edit'); else openNewEntryForDate(dateEntrySelector.date, lineGroup); }} onClose={() => setDateEntrySelector(null)} />;
     };
 
     const renderEntryRegister = () => {
@@ -1455,7 +1427,7 @@ export default function WetLeakageTest() {
                                         <th className="w-10 border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
                                             <input type="checkbox" aria-label="Select all visible entries" checked={allVisibleSelected} disabled={visibleSelectableEntries.length === 0} ref={(element) => { if (element) element.indeterminate = someVisibleSelected; }} onChange={(event) => setVisibleEntrySelection(visibleSelectableEntries, event.currentTarget.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
                                         </th>
-                                        {['Date', 'Production Order', 'Created By', 'Status', 'Actions'].map(column => <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">{column}</th>)}
+                                        {['Date', 'FAB Line', 'Production Order', 'Created By', 'Status', 'Actions'].map(column => <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">{column}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1470,6 +1442,7 @@ export default function WetLeakageTest() {
                                                     <input type="checkbox" aria-label={`Select entry ${entry.date}`} checked={isSelected} disabled={!entryId} onChange={(event) => toggleEntrySelection(entry, visibleSelectableEntries, event.currentTarget.checked, event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false)} className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
                                                 </td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left">{entry.date || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{getEntryFabLabel(entry)}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{entry.po || '-'}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left">{resolveCreatorName(entry)}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(state)}`}>{formatWorkflowState(state)}</span></td>
@@ -1477,7 +1450,7 @@ export default function WetLeakageTest() {
                                                     <div className="flex flex-wrap items-center gap-1">
                                                         <button type="button" onClick={() => openEntryFromRegister(entry, 'view')} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" title="View"><Eye className="h-3.5 w-3.5" /></button>
                                                         {permissions.canEdit && <button type="button" onClick={() => openEntryFromRegister(entry, 'edit')} className="inline-flex h-8 items-center gap-1 rounded-md bg-brand-primary px-2 text-xs font-medium text-white hover:bg-brand-primary-hover" title="Edit"><Edit3 className="h-3.5 w-3.5" /></button>}
-                                                        {permissions.canExport && <button type="button" onClick={() => confirmDownloadEntries([entry], `Wet_Leakage_Test_${entry.date}`)} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-3.5 w-3.5" /></button>}
+                                                        {permissions.canExport && <button type="button" onClick={() => confirmDownloadEntries([entry], `Wet_Leakage_Test_${entry.date}_${getLineGroupLabel(normalizeLineGroup(entry.lineGroup || entry.fabLine)).replace(/\s+/g, '_').replace(/-/g, '')}`)} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canApprove && <button type="button" onClick={() => confirmApproveEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve"><Check className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canReturn && <button type="button" onClick={() => openReturnModal(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return"><RotateCcw className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canDelete && <button type="button" onClick={() => confirmDeleteRegisterEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
@@ -1586,7 +1559,7 @@ export default function WetLeakageTest() {
                                 <div className="flex gap-2">
                                     <button type="button" onClick={handleTodayEntry} className="rounded-lg bg-brand-primary-soft px-4 py-2 text-sm font-medium text-brand-primary transition-colors hover:bg-brand-primary-muted dark:bg-brand-primary/10 dark:text-brand-primary-light">Today</button>
                                     {canCreateEntry && (
-                                        <button type="button" onClick={() => openNewEntryForDate(selectedDate || getTodayDate())} className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-primary-hover">
+                                        <button type="button" onClick={() => handleDateSelect(selectedDate || getTodayDate())} className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-primary-hover">
                                             <Plus className="h-4 w-4" />
                                             New Entry
                                         </button>

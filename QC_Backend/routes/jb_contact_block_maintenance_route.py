@@ -5,8 +5,10 @@ import re
 from typing import List, Optional
 
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from report_context import apply_report_context
 
 from generators.JBContactBlockMaintenanceReportGenerator import generate_jb_contact_block_maintenance_report
 from models.jb_contact_block_maintenance_models import (
@@ -17,7 +19,6 @@ from models.jb_contact_block_maintenance_models import (
 from services.creator_resolution_service import (
     build_lock_owner_metadata,
     get_created_by_label as resolve_created_by_label,
-    has_operator_signature,
 )
 from services.dashboard_analytics_service import (
     build_dashboard_response,
@@ -66,7 +67,7 @@ FAB_LINES = {
 }
 LINE_LABELS = ("Line - 1", "Line - 2", "Line - 3", "Line - 4")
 NUMERIC_FIELDS = ("sortValuePositive", "sortValueNegative", "springTension")
-TEXT_FIELDS = ("po", "jbNo", "checkedBy")
+TEXT_FIELDS = ("po", "jbNo")
 NUMERIC_ONLY_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
 
 SORT_OPTIONS = {
@@ -83,12 +84,15 @@ SORT_OPTIONS = {
 }
 
 BUSINESS_ENTRY_FIELDS = {
-    "date",
+    "date", "reportDate", "fabLine", "lineGroup",
     "testingDate",
     "fab",
     "lines",
     "signatures",
     "preparedBySignature",
+    "preparedByDetails",
+    "verifiedBySignature",
+    "verifiedByDetails",
     "reviewedBySignature",
     "approvedBySignature",
     "poSummary",
@@ -106,6 +110,11 @@ def empty_row() -> dict:
         "springTension": None,
         "remarks": "",
         "checkedBy": "",
+        "checkedByEmployeeId": "",
+        "checkedByUserId": "",
+        "checkedBySignature": "",
+        "checkedAt": "",
+        "checkerAudit": [],
     }
 
 
@@ -142,21 +151,17 @@ def normalize_text(value) -> str:
 
 def normalize_signatures(entry: dict) -> dict:
     signatures = entry.get("signatures") if isinstance(entry.get("signatures"), dict) else {}
-    reviewed_by = (
-        normalize_text(signatures.get("reviewedBy"))
-        or normalize_text(signatures.get("verifiedBy"))
-        or normalize_text(entry.get("reviewedBySignature"))
+    verified_by = (
+        normalize_text(signatures.get("verifiedBy"))
         or normalize_text(entry.get("verifiedBySignature"))
-    )
-    approved_by = (
-        normalize_text(signatures.get("approvedBy"))
+        or normalize_text(signatures.get("reviewedBy"))
+        or normalize_text(entry.get("reviewedBySignature"))
+        or normalize_text(signatures.get("approvedBy"))
         or normalize_text(entry.get("approvedBySignature"))
     )
     return {
         "preparedBy": normalize_text(signatures.get("preparedBy") or entry.get("preparedBySignature")),
-        "reviewedBy": reviewed_by,
-        "verifiedBy": reviewed_by,
-        "approvedBy": approved_by,
+        "verifiedBy": verified_by,
     }
 
 
@@ -205,6 +210,87 @@ def normalize_row_payload(row_payload: dict, line_label: str, row_number: int) -
     return normalized
 
 
+def row_has_check_data(row: dict) -> bool:
+    return any(normalize_text(row.get(field)) for field in TEXT_FIELDS) or any(
+        row.get(field) not in (None, "") for field in NUMERIC_FIELDS
+    )
+
+
+def check_values(row: dict) -> tuple:
+    return tuple(row.get(field) for field in (*TEXT_FIELDS, *NUMERIC_FIELDS))
+
+
+def stamp_authenticated_checkers(normalized_entry: dict, existing_entry: dict | None, user: dict, now: str) -> dict:
+    """Ignore client identity fields and stamp changed checks from the authenticated user."""
+    old_lines = (existing_entry or {}).get("lines") or {}
+    for line_label in FAB_LINES[normalized_entry["fab"]]:
+        old_rows = old_lines.get(line_label) or []
+        for index, row in enumerate(normalized_entry["lines"].get(line_label) or []):
+            old_row = old_rows[index] if index < len(old_rows) and isinstance(old_rows[index], dict) else {}
+            if not row_has_check_data(row):
+                continue
+            changed = not old_row or check_values(row) != check_values(old_row)
+            if changed:
+                audit = list(old_row.get("checkerAudit") or [])
+                if old_row.get("checkedByEmployeeId") or old_row.get("checkedBy"):
+                    audit.append({
+                        "checkedBy": normalize_text(old_row.get("checkedBy")),
+                        "checkedByEmployeeId": normalize_text(old_row.get("checkedByEmployeeId")),
+                        "checkedByUserId": normalize_text(old_row.get("checkedByUserId")),
+                        "checkedBySignature": normalize_text(old_row.get("checkedBySignature")),
+                        "checkedAt": normalize_text(old_row.get("checkedAt")),
+                        "supersededAt": now,
+                    })
+                row.update({
+                    "checkedBy": user["name"],
+                    "checkedByEmployeeId": user["employeeId"],
+                    "checkedByUserId": user["id"],
+                    "checkedBySignature": user.get("signature") or "",
+                    "checkedAt": now,
+                    "checkerAudit": audit,
+                })
+            else:
+                for field in ("checkedBy", "checkedByEmployeeId", "checkedByUserId", "checkedBySignature", "checkedAt", "checkerAudit"):
+                    row[field] = old_row.get(field, [] if field == "checkerAudit" else "")
+    return normalized_entry
+
+
+def derive_prepared_by(entry: dict) -> dict:
+    """Return distinct authenticated checkers in fixed report line/row order."""
+    people = []
+    seen = set()
+    fab = normalize_fab(entry.get("fab"))
+    for line_label in FAB_LINES[fab]:
+        for row in ((entry.get("lines") or {}).get(line_label) or []):
+            employee_id = normalize_text((row or {}).get("checkedByEmployeeId"))
+            name = normalize_text((row or {}).get("checkedBy"))
+            if not employee_id or not name:
+                continue
+            identity = employee_id.casefold()
+            if identity in seen:
+                continue
+            seen.add(identity)
+            people.append({
+                "name": name,
+                "employeeId": employee_id,
+                "userId": normalize_text(row.get("checkedByUserId")),
+                "signature": normalize_text(row.get("checkedBySignature")),
+            })
+    return {"name": ", ".join(person["name"] for person in people), "people": people}
+
+
+def apply_derived_preparer(entry: dict, *, preserve_verified: bool = True) -> dict:
+    if preserve_verified and normalize_workflow_state(entry) == "approved":
+        return entry
+    derived = derive_prepared_by(entry)
+    signatures = normalize_signatures(entry)
+    signatures["preparedBy"] = derived["name"]
+    entry["signatures"] = signatures
+    entry["preparedBySignature"] = derived["name"]
+    entry["preparedByDetails"] = derived["people"]
+    return entry
+
+
 def normalize_entry_payload(entry: dict) -> dict:
     required_fields = ["date", "testingDate", "fab", "lines"]
     for field in required_fields:
@@ -246,9 +332,9 @@ def normalize_entry_payload(entry: dict) -> dict:
         "year": date_obj.year,
         "month": date_obj.month,
     }
+    normalized = apply_report_context(normalized)
     normalized["preparedBySignature"] = normalized["signatures"]["preparedBy"]
-    normalized["reviewedBySignature"] = normalized["signatures"]["reviewedBy"]
-    normalized["approvedBySignature"] = normalized["signatures"]["approvedBy"]
+    normalized["verifiedBySignature"] = normalized["signatures"]["verifiedBy"]
     normalized["poSummary"] = get_po_summary(normalized)
     return normalized
 
@@ -278,10 +364,10 @@ def serialize_doc(doc):
             normalized_rows.append(normalized_row)
         normalized_lines[line_label] = normalized_rows
     doc_copy["lines"] = normalized_lines
+    doc_copy = apply_derived_preparer(doc_copy)
     doc_copy["signatures"] = normalize_signatures(doc_copy)
     doc_copy["preparedBySignature"] = doc_copy["signatures"]["preparedBy"]
-    doc_copy["reviewedBySignature"] = doc_copy["signatures"]["reviewedBy"]
-    doc_copy["approvedBySignature"] = doc_copy["signatures"]["approvedBy"]
+    doc_copy["verifiedBySignature"] = doc_copy["signatures"]["verifiedBy"]
     doc_copy["poSummary"] = doc_copy.get("poSummary") or get_po_summary(doc_copy)
     state = normalize_workflow_state(doc_copy)
     doc_copy["status"] = state
@@ -354,6 +440,8 @@ def build_entry_update_data(
     workflow_state: str,
 ) -> dict:
     now = utc_timestamp()
+    normalized_entry = stamp_authenticated_checkers(normalized_entry, existing_entry, user, now)
+    normalized_entry = apply_derived_preparer(normalized_entry, preserve_verified=False)
     update_data = {
         field: normalized_entry[field]
         for field in BUSINESS_ENTRY_FIELDS
@@ -445,10 +533,8 @@ def get_export_form_data(entries: List[dict], fallback: dict | None = None) -> d
         signatures = serialized.get("signatures") or {}
         if not form_data.get("preparedBySignature") and signatures.get("preparedBy"):
             form_data["preparedBySignature"] = signatures.get("preparedBy")
-        if not form_data.get("reviewedBySignature") and (signatures.get("reviewedBy") or signatures.get("verifiedBy")):
-            form_data["reviewedBySignature"] = signatures.get("reviewedBy") or signatures.get("verifiedBy")
-        if not form_data.get("approvedBySignature") and signatures.get("approvedBy"):
-            form_data["approvedBySignature"] = signatures.get("approvedBy")
+        if not form_data.get("verifiedBySignature") and signatures.get("verifiedBy"):
+            form_data["verifiedBySignature"] = signatures.get("verifiedBy")
     return form_data
 
 
@@ -548,6 +634,17 @@ async def get_entries_by_date(date: str, x_employee_id: str | None = Header(defa
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
 
+@jb_contact_block_maintenance_router.get("/entries/legacy/{legacy_key}")
+async def get_legacy_entry(legacy_key: str, x_employee_id: str | None = Header(default=None)):
+    user = get_current_user(x_employee_id)
+    entry = JBContactBlockMaintenanceDailyEntry.get_by_id(legacy_key) if ObjectId.is_valid(legacy_key) else jb_contact_block_entries_collection.find_one({"$or": [{"entryNumber": legacy_key}, {"entryNo": legacy_key}]})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Legacy entry not found")
+    if not can_view_entry(entry, user):
+        raise HTTPException(status_code=403, detail="You are not authorized to open this entry")
+    return {"legacy": True, "canonical": {"reportDate": entry.get("reportDate") or entry.get("date"), "fabLine": entry.get("fabLine") or entry.get("fab")}, "entry": serialize_entry(entry, user, include_permissions=True)}
+
+
 @jb_contact_block_maintenance_router.get("/entries/monthly")
 async def get_monthly_entries(
     year: int = Query(...),
@@ -564,8 +661,8 @@ async def get_monthly_entries(
             date = serialized.get("date")
             grouped.setdefault(date, []).append(serialized)
             signatures = serialized.get("signatures") or {}
-            if signatures.get("preparedBy") or signatures.get("reviewedBy") or signatures.get("verifiedBy") or signatures.get("approvedBy"):
-                date_signatures[date] = signatures
+            if signatures.get("preparedBy") or signatures.get("verifiedBy"):
+                date_signatures.setdefault(date, {})[serialized.get("fab")] = signatures
 
         return {
             "success": True,
@@ -586,7 +683,10 @@ async def get_entries_for_date(date: str, x_employee_id: str | None = Header(def
         return {
             "success": True,
             "data": [serialize_entry(entry, user, include_permissions=bool(user)) for entry in entries],
-            "date_signatures": JBContactBlockMaintenanceDailyEntry.get_date_signatures(date_key),
+            "date_signatures": {
+                fab: JBContactBlockMaintenanceDailyEntry.get_daily_context_signatures(date_key, fab)
+                for fab in FAB_OPTIONS
+            },
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
@@ -678,6 +778,8 @@ async def create_entry(entry: dict, x_employee_id: str | None = Header(default=N
             "message": "Entry saved successfully",
             "data": {"entry": serialize_entry(saved_entry, user, include_permissions=True)},
         }
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A JB Contact Block report already exists for this date and FAB line")
     except HTTPException:
         raise
     except Exception as e:
@@ -705,14 +807,13 @@ async def submit_entry(entry_id: str, entry: dict | None = None, x_employee_id: 
             )
 
         normalized_entry = normalize_entry_payload(entry or existing_entry)
+        normalized_entry = stamp_authenticated_checkers(normalized_entry, existing_entry, user, utc_timestamp())
+        normalized_entry = apply_derived_preparer(normalized_entry, preserve_verified=False)
         signatures = normalized_entry.get("signatures") or {}
-        signatures["preparedBy"] = user["name"]
-        normalized_entry["signatures"] = signatures
-        normalized_entry["preparedBySignature"] = user["name"]
-        if not has_operator_signature({"signatures": signatures}, (normalized_entry,)):
+        if not signatures.get("preparedBy"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Operator signature is required before submitting this report.",
+                detail="Prepared By is pending because no authenticated Checked By record exists for this date and FAB line.",
             )
 
         now = utc_timestamp()
@@ -744,8 +845,9 @@ async def submit_entry(entry_id: str, entry: dict | None = None, x_employee_id: 
         raise HTTPException(status_code=500, detail=f"Failed to submit entry: {str(e)}")
 
 
-@jb_contact_block_maintenance_router.post("/entries/{entry_id}/approve")
-async def approve_entry(entry_id: str, x_employee_id: str | None = Header(default=None)):
+@jb_contact_block_maintenance_router.post("/entries/{entry_id}/verify")
+@jb_contact_block_maintenance_router.post("/entries/{entry_id}/approve", include_in_schema=False)
+async def verify_entry(entry_id: str, x_employee_id: str | None = Header(default=None)):
     try:
         user = get_current_user(x_employee_id)
         if not ObjectId.is_valid(entry_id):
@@ -754,13 +856,15 @@ async def approve_entry(entry_id: str, x_employee_id: str | None = Header(defaul
         if not existing_entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         if not can_approve_entry(existing_entry, user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only submitted entries can be approved")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only authorized supervisors or managers can verify submitted entries")
 
         now = utc_timestamp()
         signatures = normalize_signatures(existing_entry)
-        signatures["reviewedBy"] = user["name"]
+        prepared = derive_prepared_by(existing_entry)
+        if not prepared["name"]:
+            raise HTTPException(status_code=400, detail="Verification blocked: Prepared By cannot be derived because no authenticated Checked By record exists for this date and FAB line.")
+        signatures["preparedBy"] = prepared["name"]
         signatures["verifiedBy"] = user["name"]
-        signatures["approvedBy"] = user["name"]
         updated = JBContactBlockMaintenanceDailyEntry.update_by_id(
             entry_id,
             {
@@ -768,23 +872,25 @@ async def approve_entry(entry_id: str, x_employee_id: str | None = Header(defaul
                 "status": "approved",
                 "workflowState": "approved",
                 "signatures": signatures,
-                "reviewedBySignature": user["name"],
-                "approvedBySignature": user["name"],
-                "approvedAt": now,
-                "approvedBy": user["name"],
+                "preparedBySignature": prepared["name"],
+                "preparedByDetails": prepared["people"],
+                "verifiedBySignature": user["name"],
+                "verifiedByDetails": {"name": user["name"], "employeeId": user.get("employeeId", ""), "userId": user.get("id", ""), "signature": user.get("signature") or ""},
+                "verifiedAt": now,
+                "verifiedBy": user["name"],
                 "updatedAt": now,
                 "updated_at": now,
             },
             {field: "" for field in LOCK_FIELDS},
         )
         if not updated:
-            raise HTTPException(status_code=500, detail="Failed to approve entry")
+            raise HTTPException(status_code=500, detail="Failed to verify entry")
         approved_entry = JBContactBlockMaintenanceDailyEntry.get_by_id(entry_id)
         return serialize_entry(approved_entry, user, include_permissions=True)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to approve entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify entry: {str(e)}")
 
 
 @jb_contact_block_maintenance_router.post("/entries/{entry_id}/return")
@@ -855,12 +961,13 @@ async def delete_entry_by_id(entry_id: str, x_employee_id: str | None = Header(d
         raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
 
 
-@jb_contact_block_maintenance_router.post("/bulk/approve")
+@jb_contact_block_maintenance_router.post("/bulk/verify")
+@jb_contact_block_maintenance_router.post("/bulk/approve", include_in_schema=False)
 async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = Header(default=None)):
     try:
         user = get_current_user(x_employee_id)
         if not is_reviewer_like(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisors or managers can approve entries")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisors or managers can verify entries")
 
         entry_ids = request_data.get("entryIds") or request_data.get("entry_ids") or request_data.get("reportIds")
         if not isinstance(entry_ids, list) or not entry_ids:
@@ -883,9 +990,12 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
                     add_bulk_skip(result, get_bulk_status_label(existing_entry))
                     continue
                 signatures = normalize_signatures(existing_entry)
-                signatures["reviewedBy"] = user["name"]
+                prepared = derive_prepared_by(existing_entry)
+                if not prepared["name"]:
+                    add_bulk_failure(result, item_id, "Prepared By cannot be derived: no authenticated Checked By record")
+                    continue
+                signatures["preparedBy"] = prepared["name"]
                 signatures["verifiedBy"] = user["name"]
-                signatures["approvedBy"] = user["name"]
                 updated = JBContactBlockMaintenanceDailyEntry.update_by_id(
                     item_id,
                     {
@@ -893,10 +1003,12 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
                         "status": "approved",
                         "workflowState": "approved",
                         "signatures": signatures,
-                        "reviewedBySignature": user["name"],
-                        "approvedBySignature": user["name"],
-                        "approvedAt": now,
-                        "approvedBy": user["name"],
+                        "preparedBySignature": prepared["name"],
+                        "preparedByDetails": prepared["people"],
+                        "verifiedBySignature": user["name"],
+                        "verifiedByDetails": {"name": user["name"], "employeeId": user.get("employeeId", ""), "userId": user.get("id", ""), "signature": user.get("signature") or ""},
+                        "verifiedAt": now,
+                        "verifiedBy": user["name"],
                         "updatedAt": now,
                         "updated_at": now,
                     },
@@ -917,7 +1029,7 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to bulk approve entries: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to bulk verify entries: {str(e)}")
 
 
 @jb_contact_block_maintenance_router.post("/bulk/delete")
@@ -974,19 +1086,24 @@ async def bulk_delete_entries(request_data: dict, x_employee_id: str | None = He
 
 
 @jb_contact_block_maintenance_router.post("/signatures")
-async def update_signatures(payload: dict):
+async def update_signatures(payload: dict, x_employee_id: str | None = Header(default=None)):
     try:
+        user = get_current_user(x_employee_id)
         date = payload.get("date")
-        fab = normalize_fab(payload.get("fab"))
+        raw_fab = payload.get("fab")
+        if raw_fab not in FAB_OPTIONS:
+            raise HTTPException(status_code=400, detail="FAB line context is required")
+        fab = normalize_fab(raw_fab)
         signatures = payload.get("signatures", {})
         if not date:
             raise HTTPException(status_code=400, detail="Date is required")
 
-        normalized_signatures = {
-            "preparedBy": signatures.get("preparedBy", ""),
-            "verifiedBy": signatures.get("verifiedBy") or signatures.get("reviewedBy", ""),
-        }
-        success = JBContactBlockMaintenanceDailyEntry.update_date_signatures(date, normalized_signatures)
+        normalized_signatures = dict(JBContactBlockMaintenanceDailyEntry.get_daily_context_signatures(date, fab))
+        if "preparedBy" in signatures:
+            raise HTTPException(status_code=400, detail="Prepared By is system-managed from authenticated Checked By records")
+        if signatures.get("verifiedBy") or signatures.get("reviewedBy"):
+            raise HTTPException(status_code=400, detail="Verified By must be completed through the authenticated report verification workflow")
+        success = JBContactBlockMaintenanceDailyEntry.update_daily_context_signatures(date, fab, normalized_signatures)
         if not success:
             date_obj = datetime.strptime(str(date).split("T")[0], "%Y-%m-%d")
             placeholder_entry = normalize_entry_payload({
@@ -1069,7 +1186,7 @@ async def export_monthly_excel(payload: dict, x_employee_id: str | None = Header
                         None,
                     )
             if not existing_entry or not can_export_entry(existing_entry, user):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Excel can be generated only from submitted or approved entries")
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Excel can be generated only from submitted or verified entries")
             authorized_entries.append(existing_entry)
 
         if not authorized_entries:

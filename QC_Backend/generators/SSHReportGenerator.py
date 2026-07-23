@@ -5,11 +5,12 @@ import io
 from datetime import datetime
 import re
 from paths import get_template_key, download_from_s3
+from report_context import file_part, logical_physical_line_pairs, normalize_fab_line
 
 def get_display_line_numbers(line_group):
-    return ('3', '4') if line_group == 'Line-II' else ('1', '2')
+    return tuple(physical for _, physical in logical_physical_line_pairs(line_group))
 
-def fill_ssh_test_data(worksheet, entries):
+def fill_ssh_test_data(worksheet, entries, line_context=None):
     try:
         def sort_key(entry):
             date = entry.get('date', '')
@@ -17,6 +18,13 @@ def fill_ssh_test_data(worksheet, entries):
             shift_order = {'A': 0, 'B': 1, 'C': 2}
             return (date, shift_order.get(shift, 3))
         
+        contexts = {normalize_fab_line(entry.get('fabLine') or entry.get('fab') or entry.get('lineGroup')) for entry in entries}
+        if line_context is not None:
+            contexts.add(normalize_fab_line(line_context))
+        if len(contexts) != 1:
+            raise ValueError("SSH export requires exactly one valid FAB line context")
+        fab_line = contexts.pop()
+        line_pairs = logical_physical_line_pairs(fab_line)
         sorted_entries = sorted(entries, key=sort_key)
         entries_by_date = {}
         
@@ -68,13 +76,14 @@ def fill_ssh_test_data(worksheet, entries):
                     # Get checkedBy from entry
                     checked_by = shift_entry.get('checkedBy', '')
                     
-                    # Line 1 (first row of shift)
-                    line1 = shift_entry['lines'].get('1', {})
-                    fill_line_row(worksheet, shift_start_row, line1, checked_by)
-                    
-                    # Line 2 (second row of shift)
-                    line2 = shift_entry['lines'].get('2', {})
-                    fill_line_row(worksheet, shift_end_row, line2, checked_by)
+                    # Logical slots 1/2 are persisted for both FAB groups. Bind each
+                    # slot to its physical label so readings can never be relabelled.
+                    for row, (logical_slot, physical_line) in zip(
+                        (shift_start_row, shift_end_row), line_pairs
+                    ):
+                        line_data = dict(shift_entry['lines'].get(logical_slot, {}) or {})
+                        line_data['line'] = physical_line
+                        fill_line_row(worksheet, row, line_data, checked_by)
                 else:
                     # Fill empty rows for missing shift
                     worksheet[f'E{shift_start_row}'] = ''  # Empty PO for missing shift
@@ -212,7 +221,9 @@ def generate_ssh_report(ssh_data):
         ws = wb.active
         
         # Fill data
-        fill_ssh_test_data(ws, entries)
+        line_context = form_data.get('fabLine') or form_data.get('fab') or form_data.get('lineGroup') or ssh_data.get('lineGroup')
+        normalized_fab = normalize_fab_line(line_context or (entries[0].get('fabLine') or entries[0].get('fab') or entries[0].get('lineGroup') if entries else None))
+        fill_ssh_test_data(ws, entries, normalized_fab)
         
         # Fill signatures
         if form_data:
@@ -227,16 +238,16 @@ def generate_ssh_report(ssh_data):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if len(entries) == 1:
             date_str = entries[0].get('date', '').replace('-', '')
-            clean_name = f"SSH_Report_{date_str}"
+            clean_name = f"SSH_Report_{file_part(normalized_fab)}_{date_str}"
         else:
             # Get date range if multiple entries
             dates = sorted(list(set(e.get('date', '') for e in entries if e.get('date'))))
             if dates:
                 start_date = dates[0].replace('-', '')
                 end_date = dates[-1].replace('-', '')
-                clean_name = f"SSH_Report_{start_date}_to_{end_date}"
+                clean_name = f"SSH_Report_{file_part(normalized_fab)}_{start_date}_to_{end_date}"
             else:
-                clean_name = "SSH_Test_Report"
+                clean_name = f"SSH_Test_Report_{file_part(normalized_fab)}"
         
         filename = f"{clean_name}_{timestamp}.xlsx"
         

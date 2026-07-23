@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import ReportPagination from '../components/ReportPagination';
 import { useAlert } from '../context/AlertContext';
+import FabLineSelectionModal from '../components/FabLineSelectionModal';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import {
     buildWorkflowConfirmOptions,
@@ -48,9 +49,7 @@ interface JBContactBlockRow {
 
 interface SignatureData {
     preparedBy: string;
-    reviewedBy: string;
-    verifiedBy?: string;
-    approvedBy: string;
+    verifiedBy: string;
 }
 
 interface EntryPermissions {
@@ -73,8 +72,11 @@ interface DailyEntry {
     poSummary?: string;
     signatures?: SignatureData;
     preparedBySignature?: string;
+    verifiedBySignature?: string;
     reviewedBySignature?: string;
     approvedBySignature?: string;
+    reportContextReviewRequired?: boolean;
+    reportContextReviewReason?: string;
     status?: WorkflowState;
     workflowState?: WorkflowState;
     displayStatus?: WorkflowState;
@@ -158,9 +160,7 @@ interface BulkOperationResult {
 
 const defaultSignature: SignatureData = {
     preparedBy: '',
-    reviewedBy: '',
     verifiedBy: '',
-    approvedBy: '',
 };
 
 const MONTH_NAMES = [
@@ -173,11 +173,10 @@ const FAB_LINE_MAP: Record<FabOption, LineLabel[]> = {
     'FAB-II Line-I': ['Line - 1', 'Line - 2'],
     'FAB-II Line-II': ['Line - 3', 'Line - 4'],
 };
-const DEFAULT_FAB: FabOption = 'FAB-II Line-I';
 const NUMERIC_FIELDS: NumericField[] = ['sortValuePositive', 'sortValueNegative', 'springTension'];
 const FINALIZED_WORKFLOW_STATES = new Set<WorkflowState>(['submitted', 'approved']);
 const EDITABLE_OPERATOR_WORKFLOW_STATES = new Set<WorkflowState>(['draft', 'returned']);
-const APPROVED_DELETE_TOOLTIP = 'Approved reports are permanently retained and cannot be deleted.';
+const APPROVED_DELETE_TOOLTIP = 'Verified reports are permanently retained and cannot be deleted.';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 const normalizeDate = (dateStr?: string) => dateStr ? dateStr.split('T')[0] : '';
@@ -185,7 +184,7 @@ const normalizeFab = (fab?: string): FabOption => fab === 'FAB-II Line-II' ? 'FA
 const getEntryId = (entry?: DailyEntry | null) => entry?._id || entry?.id || '';
 const getWorkflowState = (entry?: Pick<DailyEntry, 'workflowState' | 'status'> | null): WorkflowState =>
     entry?.workflowState || entry?.status || 'submitted';
-const formatWorkflowState = (state: WorkflowState) => state.charAt(0).toUpperCase() + state.slice(1);
+const formatWorkflowState = (state: WorkflowState) => state === 'approved' ? 'Verified' : state.charAt(0).toUpperCase() + state.slice(1);
 const sumObjectValues = (values: Record<string, number>) => Object.values(values).reduce((total, count) => total + count, 0);
 const isNumericInputText = (value: string) => value === '' || /^\d*\.?\d*$/.test(value);
 
@@ -272,10 +271,8 @@ const normalizeEntry = (entry: DailyEntry): DailyEntry => {
     const fab = normalizeFab(entry.fab);
     const sourceSignatures = entry.signatures || {
         preparedBy: entry.preparedBySignature || '',
-        reviewedBy: entry.reviewedBySignature || '',
-        approvedBy: entry.approvedBySignature || '',
+        verifiedBy: entry.verifiedBySignature || entry.reviewedBySignature || entry.approvedBySignature || '',
     };
-    const reviewedBy = sourceSignatures.reviewedBy || sourceSignatures.verifiedBy || '';
     const lines = FAB_LINE_MAP[fab].reduce((acc, lineLabel) => {
         const rows = entry.lines?.[lineLabel];
         acc[lineLabel] = Array.isArray(rows) && rows.length > 0 ? rows.map(normalizeRow) : [createEmptyRow()];
@@ -292,9 +289,7 @@ const normalizeEntry = (entry: DailyEntry): DailyEntry => {
         displayStatus: entry.displayStatus || getWorkflowState(entry),
         signatures: {
             preparedBy: sourceSignatures.preparedBy || '',
-            reviewedBy,
-            verifiedBy: reviewedBy,
-            approvedBy: sourceSignatures.approvedBy || '',
+            verifiedBy: sourceSignatures.verifiedBy || '',
         },
     };
     return {
@@ -406,7 +401,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         const state = getWorkflowState(entry);
         if (state === 'draft') return 'Draft entries are locked to the creating operator until submission.';
         if (state === 'returned') return 'Returned entries are locked to the original operator until resubmission.';
-        if (state === 'approved') return 'Approved entries are read-only.';
+        if (state === 'approved') return 'Verified entries are read-only.';
         return 'This entry is read-only for your role.';
     }, []);
 
@@ -538,11 +533,11 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         });
     }, [entryRegister, selectedEntryIds]);
 
-    const createEmptyEntry = useCallback((date: string): DailyEntry => ({
+    const createEmptyEntry = useCallback((date: string, fab: FabOption): DailyEntry => ({
         date,
         testingDate: date,
-        fab: DEFAULT_FAB,
-        lines: createEmptyLines(DEFAULT_FAB, username || ''),
+        fab,
+        lines: createEmptyLines(fab, username || ''),
         poSummary: '',
         status: 'draft',
         workflowState: 'draft',
@@ -559,7 +554,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         setNumericErrors({});
     }, []);
 
-    const openNewEntryForDate = useCallback((date: string) => {
+    const openNewEntryForDate = useCallback((date: string, fab: FabOption) => {
         if (!canCreateEntry) {
             showAlert('info', 'Only operators can create draft entries.');
             return;
@@ -567,7 +562,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         const entryDate = new Date(`${date}T00:00:00`);
         setCurrentDate(new Date(entryDate.getFullYear(), entryDate.getMonth(), 1));
         setSelectedDate(date);
-        setCurrentEntry(createEmptyEntry(date));
+        setCurrentEntry(createEmptyEntry(date, fab));
         setCurrentAccessMode('edit');
         setReadOnlyReason('');
         setIsEditing(false);
@@ -612,16 +607,8 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
     const handleDateSelect = useCallback((date: string) => {
         const entries = monthlyEntries.get(date) || [];
         setSelectedDate(date);
-        if (entries.length === 0) {
-            openNewEntryForDate(date);
-            return;
-        }
-        if (entries.length === 1) {
-            void openEntryFromRegister(entries[0], 'edit');
-            return;
-        }
         setDateEntrySelector({ date, entries });
-    }, [monthlyEntries, openEntryFromRegister, openNewEntryForDate]);
+    }, [monthlyEntries]);
 
     const handlePrevMonth = () => {
         setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -842,17 +829,17 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
 
     const approveEntry = async (entry: DailyEntry | null) => {
         if (!entry || !getEntryPermissions(entry).canApprove) {
-            showAlert('error', 'You are not authorized to approve this entry');
+            showAlert('error', 'You are not authorized to verify this entry');
             return;
         }
         const entryId = getEntryId(entry);
         if (!entryId) return;
         try {
             setIsLoading(true);
-            const response = await fetch(`${API_BASE_URL}/entries/${entryId}/approve`, { method: 'POST', headers: authHeaders() });
+            const response = await fetch(`${API_BASE_URL}/entries/${entryId}/verify`, { method: 'POST', headers: authHeaders() });
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to approve entry');
+                throw new Error(errorData.detail || 'Failed to verify entry');
             }
             const approved = normalizeEntry(await response.json());
             if (getEntryId(currentEntry) === entryId) {
@@ -862,10 +849,10 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
             }
             updateCurrentEntryInMonth(approved);
             await refreshWorkflowViews();
-            showAlert('success', 'Entry approved');
+            showAlert('success', 'Entry verified');
         } catch (error) {
             console.error('Error approving JB Contact Block entry:', error);
-            showAlert('error', error instanceof Error ? error.message : 'Failed to approve entry');
+            showAlert('error', error instanceof Error ? error.message : 'Failed to verify entry');
         } finally {
             setIsLoading(false);
         }
@@ -873,10 +860,10 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
 
     const confirmApproveEntry = (entry: DailyEntry | null) => {
         if (!entry || !getEntryPermissions(entry).canApprove) {
-            showAlert('error', 'You are not authorized to approve this entry');
+            showAlert('error', 'You are not authorized to verify this entry');
             return;
         }
-        showConfirm(buildWorkflowConfirmOptions({ action: 'approve', noun: 'entry', onConfirm: () => approveEntry(entry) }));
+        showConfirm({ ...buildWorkflowConfirmOptions({ action: 'approve', noun: 'entry', onConfirm: () => approveEntry(entry) }), title: 'Verify Entry', message: 'Are you sure you want to verify this entry?' });
     };
 
     const openReturnModal = (entry: DailyEntry) => {
@@ -976,8 +963,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         entries.forEach(entry => {
             const signatures = entry.signatures || defaultSignature;
             if (!formData.preparedBySignature && signatures.preparedBy) formData.preparedBySignature = signatures.preparedBy;
-            if (!formData.reviewedBySignature && (signatures.reviewedBy || signatures.verifiedBy)) formData.reviewedBySignature = signatures.reviewedBy || signatures.verifiedBy || '';
-            if (!formData.approvedBySignature && signatures.approvedBy) formData.approvedBySignature = signatures.approvedBy;
+            if (!formData.verifiedBySignature && signatures.verifiedBy) formData.verifiedBySignature = signatures.verifiedBy;
         });
         return formData;
     };
@@ -996,7 +982,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
 
     const downloadEntriesExcel = async (entries: DailyEntry[], fileBaseName: string, year?: number, month?: number) => {
         const exportableEntries = entries.filter(entry => getEntryPermissions(entry).canExport);
-        if (exportableEntries.length === 0) throw new Error('No submitted or approved entries are available for Excel export');
+        if (exportableEntries.length === 0) throw new Error('No submitted or verified entries are available for Excel export');
         const entriesByFab = exportableEntries.reduce((acc, entry) => {
             const fab = normalizeFab(entry.fab);
             acc[fab] = [...(acc[fab] || []), entry];
@@ -1128,7 +1114,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
         if (entryIds.length === 0) return;
         try {
             setBulkOperationStatus({ action: 'Approving...', completed: 0, total: entryIds.length });
-            const response = await fetch(`${API_BASE_URL}/bulk/approve`, {
+            const response = await fetch(`${API_BASE_URL}/bulk/verify`, {
                 method: 'POST',
                 headers: authHeaders(true),
                 body: JSON.stringify({ entryIds }),
@@ -1140,7 +1126,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
             await refreshWorkflowViews();
             clearEntrySelection();
             const approved = result.approved ?? result.processed ?? 0;
-            showAlert(getBulkFailureCount(result) > 0 ? 'warning' : 'success', formatBulkOperationSummary('Bulk Approval Completed', 'Approved', approved, result, 'Only Submitted entries can be approved.'));
+            showAlert(getBulkFailureCount(result) > 0 ? 'warning' : 'success', formatBulkOperationSummary('Bulk Verification Completed', 'Verified', approved, result, 'Only submitted entries can be verified.'));
         } catch (error) {
             console.error('Error bulk approving JB Contact Block entries:', error);
             showAlert('error', 'Bulk approval failed. Please try again.');
@@ -1188,7 +1174,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
             return false;
         });
         if (exportableEntries.length === 0) {
-            showAlert('error', 'No submitted or approved entries are selected for download.');
+            showAlert('error', 'No submitted or verified entries are selected for download.');
             return;
         }
         try {
@@ -1231,7 +1217,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                     ['Draft', summary.draft],
                     ['Submitted', summary.submitted],
                     ['Returned', summary.returned],
-                    ['Approved', summary.approved],
+                    ['Verified', summary.approved],
                 ].map(([label, value]) => (
                     <div key={label} className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
                         <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
@@ -1273,7 +1259,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                             <th className="px-3 py-2 font-semibold">Total Entries</th>
                             <th className="px-3 py-2 font-semibold">Draft</th>
                             <th className="px-3 py-2 font-semibold">Submitted</th>
-                            <th className="px-3 py-2 font-semibold">Approved</th>
+                            <th className="px-3 py-2 font-semibold">Verified</th>
                             <th className="px-3 py-2 font-semibold">Returned</th>
                         </tr>
                     </thead>
@@ -1329,19 +1315,18 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
 
     const renderSignatureSection = () => {
         const signatures = currentEntry?.signatures || defaultSignature;
-        const reviewedBy = signatures.reviewedBy || signatures.verifiedBy || '';
         return (
-            <div className="mt-6 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 dark:border-gray-700 md:grid-cols-3">
+            <div className="mt-6 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 dark:border-gray-700 md:grid-cols-2">
                 {[
                     ['PREPARED BY', signatures.preparedBy],
-                    ['REVIEWED BY', reviewedBy],
-                    ['APPROVED BY', signatures.approvedBy],
+                    ['VERIFIED BY', signatures.verifiedBy],
                 ].map(([label, value]) => (
                     <div key={label} className="text-center">
                         <p className="mb-2 text-xs font-bold text-gray-800 dark:text-white">{label}:</p>
                         <div className="flex min-h-16 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 dark:border-gray-700 dark:bg-gray-800">
-                            <span className="text-sm font-semibold text-gray-800 dark:text-white">{value || '-'}</span>
+                            <span className="text-sm font-semibold text-gray-800 dark:text-white">{value || (label === 'PREPARED BY' ? 'Pending checked-by record' : '-')}</span>
                         </div>
+                        {label === 'PREPARED BY' && <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Auto-populated from authenticated Checked By records</p>}
                     </div>
                 ))}
             </div>
@@ -1409,7 +1394,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                                         {renderNumericInput(lineLabel, row, rowIndex, 'sortValueNegative', '0')}
                                         {renderNumericInput(lineLabel, row, rowIndex, 'springTension', '75')}
                                         <input type="text" value={remarks} readOnly className={`w-full rounded-md border px-2 py-2 text-center text-xs font-semibold ${remarksClass}`} placeholder="-" />
-                                        <input type="text" value={row.checkedBy} onChange={(event) => handleTextChange(lineLabel, rowIndex, 'checkedBy', event.target.value)} disabled={!canEditCurrentEntry} className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" placeholder="Checked by" />
+                                        <input type="text" value={row.checkedBy || username || ''} readOnly disabled className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-2 text-xs text-gray-900 disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" title="Auto-populated from the authenticated user when check data is saved" placeholder="Auto-populated" />
                                         <button type="button" onClick={() => handleDeleteRow(lineLabel, rowIndex)} disabled={!canEditCurrentEntry || rows.length <= 1} className="flex h-9 w-9 items-center justify-center rounded-md text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:hover:bg-red-900/20" title="Delete row">
                                             <Trash2 className="h-4 w-4" />
                                         </button>
@@ -1431,7 +1416,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-lg font-semibold dark:text-white">
-                                {canEditCurrentEntry ? (isEditing ? 'Edit Entry' : 'New Entry') : 'View Entry'} - {formatDateLabel(currentEntry.testingDate)}
+                                {canEditCurrentEntry ? (isEditing ? 'Edit Report' : 'Create Report') : 'View Report'} - {formatDateLabel(currentEntry.testingDate)} - {currentEntry.fab}
                             </h3>
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(currentWorkflowState)}`}>{formatWorkflowState(currentWorkflowState)}</span>
                         </div>
@@ -1440,7 +1425,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
                         {canExportCurrentEntry && <button type="button" onClick={() => confirmDownloadEntries([currentEntry], `JB_Contact_Block_Maintenance_${currentEntry.date}_${getFabFilePart(currentEntry.fab)}`)} className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-4 w-4" /></button>}
-                        {canApproveCurrentEntry && <button type="button" onClick={() => confirmApproveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve"><Check className="h-4 w-4" /></button>}
+                        {canApproveCurrentEntry && <button type="button" onClick={() => confirmApproveEntry(currentEntry)} className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Verify"><Check className="h-4 w-4" /></button>}
                         {canReturnCurrentEntry && <button type="button" onClick={() => openReturnModal(currentEntry)} className="rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return"><RotateCcw className="h-4 w-4" /></button>}
                         {canDeleteCurrentEntry && <button type="button" onClick={handleDeleteEntry} className="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete"><Trash2 className="h-4 w-4" /></button>}
                         {!canDeleteCurrentEntry && currentWorkflowState === 'approved' && <button type="button" disabled className="rounded-lg p-2 text-gray-400 opacity-60 dark:text-gray-500" title={APPROVED_DELETE_TOOLTIP}><Trash2 className="h-4 w-4" /></button>}
@@ -1478,36 +1463,8 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
 
     const renderEntrySelector = () => {
         if (!dateEntrySelector) return null;
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
-                    <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{formatDateLabel(dateEntrySelector.date)}</h3>
-                        <button type="button" onClick={() => setDateEntrySelector(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><X className="h-4 w-4" /></button>
-                    </div>
-                    <div className="space-y-2">
-                        {dateEntrySelector.entries.map((entry, index) => {
-                            const state = getWorkflowState(entry);
-                            return (
-                                <button key={getEntryId(entry) || `${entry.date}-${index}`} type="button" onClick={() => openEntryFromRegister(entry, 'edit')} className="flex w-full items-center justify-between rounded-md border border-gray-200 p-3 text-left hover:border-brand-primary hover:bg-brand-primary/5 dark:border-gray-700 dark:hover:bg-brand-primary/10">
-                                    <div>
-                                        <div className="text-sm font-semibold text-gray-900 dark:text-white">Entry {index + 1}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{entry.poSummary || getEntryPoSummary(entry) || entry.fab} | {resolveCreatorName(entry)}</div>
-                                    </div>
-                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(state)}`}>{formatWorkflowState(state)}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {canCreateEntry && (
-                        <button type="button" onClick={() => openNewEntryForDate(dateEntrySelector.date)} className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary-hover">
-                            <Plus className="h-4 w-4" />
-                            New Entry
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
+        const findEntry = (fab: FabOption) => dateEntrySelector.entries.find(entry => !entry.reportContextReviewRequired && normalizeFab(entry.fab) === fab);
+        return <FabLineSelectionModal isOpen title={formatDateLabel(dateEntrySelector.date)} question="Choose the independent FAB line report to create or open." options={FAB_OPTIONS.map(fab => ({ value: fab, label: fab, description: findEntry(fab) ? 'Open existing report' : 'Create report', isFilled: Boolean(findEntry(fab)) }))} onSelect={(value) => { const fab = value as FabOption; const existing = findEntry(fab); if (existing) void openEntryFromRegister(existing, 'edit'); else openNewEntryForDate(dateEntrySelector.date, fab); }} onClose={() => setDateEntrySelector(null)} />;
     };
 
     const renderEntryRegister = () => {
@@ -1550,7 +1507,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                         <option value="draft">Draft</option>
                         <option value="submitted">Submitted</option>
                         <option value="returned">Returned</option>
-                        <option value="approved">Approved</option>
+                        <option value="approved">Verified</option>
                     </select>
                     <select value={entryRegisterSort} onChange={(event) => { setEntryRegisterSort(event.target.value as EntrySortOption); setEntryRegisterPage(1); }} className="h-9 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" aria-label="Sort entries">
                         <option value="date-newest">Newest Date</option>
@@ -1568,7 +1525,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedEntryIds.size} {selectedEntryIds.size === 1 ? 'entry' : 'entries'} selected</div>
                             <div className="flex flex-wrap items-center gap-2">
-                                {canBulkApprove && <button type="button" onClick={confirmBulkApproveEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"><Check className="h-3.5 w-3.5" />Approve</button>}
+                                {canBulkApprove && <button type="button" onClick={confirmBulkApproveEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"><Check className="h-3.5 w-3.5" />Verify</button>}
                                 {canBulkDownload && <button type="button" onClick={confirmBulkDownloadEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-3 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20"><Download className="h-3.5 w-3.5" />Download</button>}
                                 {canBulkDelete && <button type="button" onClick={confirmBulkDeleteEntries} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-900/20"><Trash2 className="h-3.5 w-3.5" />Delete</button>}
                                 <button type="button" onClick={clearEntrySelection} disabled={Boolean(bulkOperationStatus)} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"><X className="h-3.5 w-3.5" />Clear Selection</button>
@@ -1591,7 +1548,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                                         <th className="w-10 border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">
                                             <input type="checkbox" aria-label="Select all visible entries" checked={allVisibleSelected} disabled={visibleSelectableEntries.length === 0} ref={(element) => { if (element) element.indeterminate = someVisibleSelected; }} onChange={(event) => setVisibleEntrySelection(visibleSelectableEntries, event.currentTarget.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
                                         </th>
-                                        {['Date', 'Production Order', 'Created By', 'Status', 'Actions'].map(column => <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">{column}</th>)}
+                                        {['Date', 'FAB Line', 'Production Order', 'Created By', 'Status', 'Actions'].map(column => <th key={column} className="border-b border-gray-200 px-3 py-2 text-center font-semibold dark:border-gray-700">{column}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1607,6 +1564,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                                                     <input type="checkbox" aria-label={`Select entry ${entry.date}`} checked={isSelected} disabled={!entryId} onChange={(event) => toggleEntrySelection(entry, visibleSelectableEntries, event.currentTarget.checked, event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false)} className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
                                                 </td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left">{entry.date || '-'}</td>
+                                                <td className="whitespace-nowrap px-3 py-2 text-left">{entry.reportContextReviewRequired ? `Review required (${entry.reportContextReviewReason || 'missing FAB line'})` : entry.fab}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left font-medium">{poSummary || '-'}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left">{resolveCreatorName(entry)}</td>
                                                 <td className="whitespace-nowrap px-3 py-2 text-left"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStateBadgeClass(state)}`}>{formatWorkflowState(state)}</span></td>
@@ -1615,7 +1573,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                                                         <button type="button" onClick={() => openEntryFromRegister(entry, 'view')} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" title="View"><Eye className="h-3.5 w-3.5" /></button>
                                                         {permissions.canEdit && <button type="button" onClick={() => openEntryFromRegister(entry, 'edit')} className="inline-flex h-8 items-center gap-1 rounded-md bg-brand-primary px-2 text-xs font-medium text-white hover:bg-brand-primary-hover" title="Edit"><Edit3 className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canExport && <button type="button" onClick={() => confirmDownloadEntries([entry], `JB_Contact_Block_Maintenance_${entry.date}_${getFabFilePart(entry.fab)}`)} className="inline-flex h-8 items-center gap-1 rounded-md border border-green-600 px-2 text-xs font-medium text-green-700 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/20" title="Download Excel"><Download className="h-3.5 w-3.5" /></button>}
-                                                        {permissions.canApprove && <button type="button" onClick={() => confirmApproveEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Approve"><Check className="h-3.5 w-3.5" /></button>}
+                                                        {permissions.canApprove && <button type="button" onClick={() => confirmApproveEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600 px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20" title="Verify"><Check className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canReturn && <button type="button" onClick={() => openReturnModal(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-900/20" title="Return"><RotateCcw className="h-3.5 w-3.5" /></button>}
                                                         {permissions.canDelete && <button type="button" onClick={() => confirmDeleteRegisterEntry(entry)} className="inline-flex h-8 items-center gap-1 rounded-md border border-red-600 px-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
                                                     </div>
@@ -1709,7 +1667,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
                                 <div className="flex gap-2">
                                     <button type="button" onClick={handleTodayEntry} className="rounded-lg bg-brand-primary-soft px-4 py-2 text-sm font-medium text-brand-primary transition-colors hover:bg-brand-primary-muted dark:bg-brand-primary/10 dark:text-brand-primary-light">Today</button>
                                     {canCreateEntry && (
-                                        <button type="button" onClick={() => openNewEntryForDate(selectedDate || getTodayDate())} className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-primary-hover">
+                                        <button type="button" onClick={() => handleDateSelect(selectedDate || getTodayDate())} className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-primary-hover">
                                             <Plus className="h-4 w-4" />
                                             New Entry
                                         </button>

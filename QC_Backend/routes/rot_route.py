@@ -6,7 +6,9 @@ from typing import List, Optional
 from datetime import datetime
 import io
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 import calendar
+from report_context import apply_report_context
 from services.dashboard_analytics_service import (
     build_dashboard_response,
     resolve_dashboard_date_range as resolve_analytics_dashboard_date_range,
@@ -60,7 +62,7 @@ SORT_OPTIONS = {
 }
 
 BUSINESS_ENTRY_FIELDS = {
-    "date",
+    "date", "reportDate", "fabLine", "fab", "lineGroup",
     "testingDate",
     "po",
     "moduleType",
@@ -174,6 +176,10 @@ def get_optional_user(employee_id: str | None) -> dict | None:
 
 
 def normalize_entry_payload(entry: dict) -> dict:
+    try:
+        entry = apply_report_context(entry)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="FAB line is required and must be FAB-II Line-I or FAB-II Line-II")
     date_key = str(entry.get("date") or entry.get("testingDate") or "").split("T")[0]
     if not date_key:
         raise HTTPException(status_code=400, detail="Missing required field: date")
@@ -272,6 +278,7 @@ def build_search_query(search: Optional[str]) -> dict:
         "$or": [
             {"po": {"$regex": escaped_search, "$options": "i"}},
             {"date": {"$regex": escaped_search, "$options": "i"}},
+            {"fabLine": {"$regex": escaped_search, "$options": "i"}},
             {"createdBy": {"$regex": escaped_search, "$options": "i"}},
             {"createdByEmployeeName": {"$regex": escaped_search, "$options": "i"}},
             {"createdByEmployeeId": {"$regex": escaped_search, "$options": "i"}},
@@ -428,6 +435,17 @@ async def get_entries_by_date(date: str, x_employee_id: str | None = Header(defa
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch entries: {str(e)}")
 
+
+@rot_router.get("/entries/legacy/{legacy_key}")
+async def get_legacy_entry(legacy_key: str, x_employee_id: str | None = Header(default=None)):
+    user = get_current_user(x_employee_id)
+    entry = RoTDailyEntry.get_by_id(legacy_key) if ObjectId.is_valid(legacy_key) else rot_entries_collection.find_one({"$or": [{"entryNumber": legacy_key}, {"entryNo": legacy_key}]})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Legacy entry not found")
+    if not can_view_entry(entry, user):
+        raise HTTPException(status_code=403, detail="You are not authorized to open this entry")
+    return {"legacy": True, "canonical": {"reportDate": entry.get("reportDate") or entry.get("date"), "fabLine": entry.get("fabLine")}, "entry": serialize_entry(entry, user, include_permissions=True)}
+
 @rot_router.get("/entries/monthly")
 async def get_monthly_entries(
     year: int = Query(...),
@@ -580,6 +598,8 @@ async def create_entry(entry: dict, x_employee_id: str | None = Header(default=N
             "message": "Entry saved successfully",
             "data": {"entry": serialize_entry(saved_entry, user, include_permissions=True)},
         }
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A Robustness report already exists for this date and FAB line")
     except HTTPException:
         raise
     except Exception as e:

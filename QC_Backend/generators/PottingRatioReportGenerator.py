@@ -6,6 +6,11 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
+from services.potting_ratio_evaluation import evaluate_potting_ratio
+
+SUCCESS_FILL = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
+FAILURE_FILL = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+NO_FILL = PatternFill(fill_type=None)
 
 def get_display_line_numbers(line_group):
     return ('3', '4') if line_group == 'Line-II' else ('1', '2')
@@ -41,21 +46,14 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             worksheet[f'G{current_row}'] = line1.get('partA', '')
             worksheet[f'H{current_row}'] = line1.get('partB', '')
             worksheet[f'I{current_row}'] = line1.get('ratio', '') and f"{line1.get('ratio', '')}:1" or ''
-            
-            # Color code ratio based on allowable limit
-            ratio_cell = worksheet[f'I{current_row}']
-            try:
-                if line1.get('ratio'):
-                    ratio_val = float(line1['ratio'])
-                    if 4 <= ratio_val <= 6:
-                        ratio_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        ratio_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            worksheet[f'I{current_row}'].fill = NO_FILL
             
             worksheet[f'J{current_row}'] = line1.get('totalWeight', '')
-            worksheet[f'K{current_row}'] = line1.get('remarks', '')
+            line1_evaluation = evaluate_potting_ratio(line1.get('ratio'))
+            worksheet[f'K{current_row}'] = line1_evaluation.status
+            worksheet[f'K{current_row}'].fill = NO_FILL
+            if line1_evaluation.status:
+                worksheet[f'K{current_row}'].fill = SUCCESS_FILL if line1_evaluation.status == 'OK' else FAILURE_FILL
             if str(line1.get('status', 'ON')).upper() == 'OFF':
                 for column in 'EFGHIJK':
                     worksheet[f'{column}{current_row}'] = 'OFF'
@@ -68,21 +66,14 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
             worksheet[f'G{current_row+1}'] = line2.get('partA', '')
             worksheet[f'H{current_row+1}'] = line2.get('partB', '')
             worksheet[f'I{current_row+1}'] = line2.get('ratio', '') and f"{line2.get('ratio', '')}:1" or ''
-            
-            # Color code ratio based on allowable limit
-            ratio_cell = worksheet[f'I{current_row+1}']
-            try:
-                if line2.get('ratio'):
-                    ratio_val = float(line2['ratio'])
-                    if 4 <= ratio_val <= 6:
-                        ratio_cell.fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
-                    else:
-                        ratio_cell.fill = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
-            except (ValueError, TypeError):
-                pass
+            worksheet[f'I{current_row+1}'].fill = NO_FILL
             
             worksheet[f'J{current_row+1}'] = line2.get('totalWeight', '')
-            worksheet[f'K{current_row+1}'] = line2.get('remarks', '')
+            line2_evaluation = evaluate_potting_ratio(line2.get('ratio'))
+            worksheet[f'K{current_row+1}'] = line2_evaluation.status
+            worksheet[f'K{current_row+1}'].fill = NO_FILL
+            if line2_evaluation.status:
+                worksheet[f'K{current_row+1}'].fill = SUCCESS_FILL if line2_evaluation.status == 'OK' else FAILURE_FILL
             if str(line2.get('status', 'ON')).upper() == 'OFF':
                 for column in 'EFGHIJK':
                     worksheet[f'{column}{current_row+1}'] = 'OFF'

@@ -45,11 +45,18 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+from services.ssh_signoff_service import (
+    append_signoff_event,
+    invalidate_approval_events,
+    new_signoff_event,
+    resolve_monthly_signoff,
+)
+from report_context import line_group_for
 
 ssh_router = APIRouter(prefix="/api/ssh-test-reports", tags=["SSH Test Reports"])
 
 def _normalize_line_group(line_group):
-    return 'Line-II' if line_group == 'Line-II' else 'Line-I'
+    return line_group_for(line_group)
 
 def _signature_key(date, line_group, shift):
     return f"{date}_{_normalize_line_group(line_group)}_{shift}"
@@ -654,12 +661,18 @@ async def get_monthly_entries(
             signatures = serialized.get("signatures") or {}
             if signatures.get("preparedBy") or signatures.get("approvedBy"):
                 date_signatures[_signature_key(date, serialized.get("lineGroup"), serialized.get("shift"))] = signatures
+
+        monthly_signoffs = {
+            line_group: resolve_monthly_signoff(entries, year, month, line_group)
+            for line_group in sorted(LINE_GROUP_OPTIONS)
+        }
         
         return {
             "success": True,
             "data": [serialize_entry(entry, user, include_permissions=bool(user)) for entry in entries],
             "grouped": entries_by_date,
             "date_signatures": date_signatures,
+            "monthly_signoffs": monthly_signoffs,
         }
     except Exception as e:
         # Return empty data on error instead of throwing 500
@@ -668,6 +681,7 @@ async def get_monthly_entries(
             "data": [],
             "grouped": {},
             "date_signatures": {},
+            "monthly_signoffs": {},
             "error": str(e)
         }
 
@@ -836,6 +850,19 @@ async def submit_entry(entry_id: str, entry: dict | None = None, x_employee_id: 
             "returnComments": None,
             "isSigned": True,
             "signedAt": existing_entry.get("signedAt") or now,
+            "signoffHistory": append_signoff_event(
+                existing_entry,
+                new_signoff_event(
+                    "checked",
+                    {**user, "name": normalized_entry.get("checkedBy") or user["name"],
+                     # checkedBy is currently a stored name, not a user reference. Never attach
+                     # another person's signature when that name differs from the submitter.
+                     "signature": ((user.get("signature") or signatures.get("preparedBy") or "")
+                                   if normalize_field_value(normalized_entry.get("checkedBy")).casefold()
+                                   == normalize_field_value(user.get("name")).casefold() else "")},
+                    now,
+                ),
+            ),
         })
 
         updated = SSHDailyEntry.update_by_id(entry_id, update_data, {field: "" for field in LOCK_FIELDS})
@@ -866,6 +893,7 @@ async def approve_entry(entry_id: str, x_employee_id: str | None = Header(defaul
         now = utc_timestamp()
         signatures = existing_entry.get("signatures") or {"preparedBy": "", "approvedBy": ""}
         signatures["approvedBy"] = user["name"]
+        approval_event = new_signoff_event("approved", user, now)
         updated = SSHDailyEntry.update_by_id(
             entry_id,
             {
@@ -874,6 +902,7 @@ async def approve_entry(entry_id: str, x_employee_id: str | None = Header(defaul
                 "signatures": signatures,
                 "approvedAt": now,
                 "approvedBy": user["name"],
+                "signoffHistory": append_signoff_event(existing_entry, approval_event),
                 "updatedAt": now,
                 "updated_at": now,
             },
@@ -917,6 +946,10 @@ async def return_entry(entry_id: str, request_data: dict, x_employee_id: str | N
                 "returnedAt": now,
                 "returnedBy": user["name"],
                 "returnComments": return_comments,
+                "signatures": {**(existing_entry.get("signatures") or {}), "approvedBy": ""},
+                "approvedAt": None,
+                "approvedBy": None,
+                "signoffHistory": invalidate_approval_events(existing_entry, now, "returned_for_correction"),
                 "lockedBy": lock_owner.get("lockedBy") or "Operator",
                 "lockedByUserId": lock_owner.get("lockedByUserId"),
                 "lockedByEmployeeId": lock_owner.get("lockedByEmployeeId"),
@@ -966,6 +999,7 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
                     continue
                 signatures = existing_entry.get("signatures") or {"preparedBy": "", "approvedBy": ""}
                 signatures["approvedBy"] = user["name"]
+                approval_event = new_signoff_event("approved", user, now)
                 updated = SSHDailyEntry.update_by_id(
                     entry_id,
                     {
@@ -974,6 +1008,7 @@ async def bulk_approve_entries(request_data: dict, x_employee_id: str | None = H
                         "signatures": signatures,
                         "approvedAt": now,
                         "approvedBy": user["name"],
+                        "signoffHistory": append_signoff_event(existing_entry, approval_event),
                         "updatedAt": now,
                         "updated_at": now,
                     },
@@ -1021,6 +1056,8 @@ async def bulk_delete_entries(request_data: dict, x_employee_id: str | None = He
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
                 )
+            if existing_entry and existing_entry.get("signoffHistory"):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signed entries cannot be deleted because their sign-off audit history must be preserved")
 
         for raw_entry_id in entry_ids:
             entry_id = str(raw_entry_id or "").strip()
@@ -1037,6 +1074,9 @@ async def bulk_delete_entries(request_data: dict, x_employee_id: str | None = He
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
                     )
+                if existing_entry.get("signoffHistory"):
+                    add_bulk_failure(result, entry_id, "Signed entry audit history must be preserved")
+                    continue
                 if not can_delete_entry(existing_entry, user):
                     add_bulk_skip(result, get_bulk_status_label(existing_entry))
                     continue
@@ -1124,6 +1164,8 @@ async def delete_entry_by_id(entry_id: str, x_employee_id: str | None = Header(d
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
             )
+        if entry.get("signoffHistory"):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signed entries cannot be deleted because their sign-off audit history must be preserved")
         if not can_delete_entry(entry, user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to delete this entry")
         deleted = SSHDailyEntry.delete_by_id(entry_id)
@@ -1152,6 +1194,8 @@ async def delete_entry_by_line_group(date: str, line_group: str, shift: str, x_e
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
             )
+        if entry.get("signoffHistory"):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signed entries cannot be deleted because their sign-off audit history must be preserved")
         if not can_delete_entry(entry, user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to delete this entry")
         deleted = SSHDailyEntry.delete_by_date_and_shift(date_key, shift, line_group)
@@ -1182,6 +1226,8 @@ async def delete_entry(date: str, shift: str, x_employee_id: str | None = Header
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=APPROVED_REPORT_DELETE_FORBIDDEN_MESSAGE,
             )
+        if entry.get("signoffHistory"):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signed entries cannot be deleted because their sign-off audit history must be preserved")
         if not can_delete_entry(entry, user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to delete this entry")
         
@@ -1216,7 +1262,8 @@ async def delete_entry(date: str, shift: str, x_employee_id: str | None = Header
 async def export_monthly_excel(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
-    filename: str = Query("SSH_Report", description="Export filename (without extension)")
+    filename: str = Query("SSH_Report", description="Export filename (without extension)"),
+    line_group: str = Query("Line-I", alias="lineGroup"),
 ):
     """Export monthly data as Excel file"""
     try:
@@ -1224,14 +1271,17 @@ async def export_monthly_excel(
 
         # Get entries for the month from DB
         entries = SSHDailyEntry.get_month_entries(year, month)
+        normalized_line_group = _normalize_line_group(line_group)
+        scoped_entries = [entry for entry in entries if _normalize_line_group(entry.get("lineGroup")) == normalized_line_group]
 
         # Prepare data for Excel generation
         report_data = {
-            "form_data": {},
-            "entries": serialize_docs(entries),
+            "form_data": resolve_monthly_signoff(entries, year, month, normalized_line_group),
+            "entries": serialize_docs(scoped_entries),
             "name": filename,
             "year": year,
-            "month": month
+            "month": month,
+            "lineGroup": normalized_line_group,
         }
 
         output, out_filename = generate_ssh_report(report_data)
@@ -1240,6 +1290,8 @@ async def export_monthly_excel(
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={"Content-Disposition": f'attachment; filename="{out_filename}"'}
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate Excel: {str(e)}")
 
@@ -1304,13 +1356,18 @@ async def export_monthly_excel_post(payload: dict, x_employee_id: str | None = H
         for e in entries:
             safe_entries.append(serialize_doc(e) if isinstance(e, dict) else e)
 
+        line_group = _normalize_line_group(payload.get('lineGroup') if isinstance(payload, dict) else None)
+        authoritative_entries = SSHDailyEntry.get_month_entries(int(year), int(month))
+        authoritative_signoff = resolve_monthly_signoff(authoritative_entries, int(year), int(month), line_group)
+
         report_data = {
-            'form_data': form_data,
+            # Sign-off identity is always server-derived; client form_data is intentionally ignored.
+            'form_data': authoritative_signoff,
             'entries': safe_entries,
             'name': name,
             'year': year,
             'month': month,
-            'lineGroup': payload.get('lineGroup') if isinstance(payload, dict) else None
+            'lineGroup': line_group
         }
 
         output, out_filename = generate_ssh_report(report_data)
@@ -1321,5 +1378,7 @@ async def export_monthly_excel_post(payload: dict, x_employee_id: str | None = H
         )
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate Excel from payload: {str(e)}")

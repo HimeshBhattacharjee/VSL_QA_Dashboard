@@ -7,12 +7,13 @@ from pymongo import ASCENDING, DESCENDING, MongoClient
 
 from constants import MONGODB_DB_NAME, MONGODB_URI
 from mongo_indexes import drop_index_if_exists, ensure_index
+from report_context import apply_report_context, normalize_fab_line
 
 logger = logging.getLogger(__name__)
 
 
 def normalize_fab(fab: str | None) -> str:
-    return "FAB-II Line-II" if fab == "FAB-II Line-II" else "FAB-II Line-I"
+    return normalize_fab_line(fab)
 
 
 client = MongoClient(MONGODB_URI)
@@ -22,12 +23,18 @@ jb_contact_block_entries_collection = db["jb_contact_block_maintenance_daily_ent
 
 def ensure_jb_contact_block_indexes() -> None:
     try:
-        # Earlier versions allowed one record per date/FAB. The Daily Entry
-        # workflow allows multiple maintenance entries for the same date.
-        drop_index_if_exists(jb_contact_block_entries_collection, "date_1_fab_1")
+        for index_name in ("date_1_fab_1", "jb_contact_block_daily_context_idx"):
+            drop_index_if_exists(jb_contact_block_entries_collection, index_name)
 
         ensure_index(jb_contact_block_entries_collection, [("date", ASCENDING)], name="jb_contact_block_date_idx")
         ensure_index(jb_contact_block_entries_collection, [("date", DESCENDING)], name="jb_contact_block_date_desc_idx")
+        ensure_index(
+            jb_contact_block_entries_collection,
+            [("reportDate", ASCENDING), ("fabLine", ASCENDING)],
+            name="jb_contact_block_report_context_unique",
+            unique=True,
+            partialFilterExpression={"reportDate": {"$type": "string"}, "fabLine": {"$in": ["FAB-II Line-I", "FAB-II Line-II"]}},
+        )
         ensure_index(jb_contact_block_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="jb_contact_block_year_month_idx")
         ensure_index(jb_contact_block_entries_collection, [("updatedAt", DESCENDING)], name="jb_contact_block_updated_at_desc_idx")
         ensure_index(jb_contact_block_entries_collection, [("createdAt", DESCENDING)], name="jb_contact_block_created_at_desc_idx")
@@ -55,14 +62,13 @@ class JBContactBlockMaintenanceDailyEntry:
         except Exception:
             date_obj = datetime.fromisoformat(date_key)
 
-        normalized = entry_data.copy()
+        normalized = apply_report_context(entry_data)
         normalized["date"] = date_obj.strftime("%Y-%m-%d")
         normalized["testingDate"] = (
             str(normalized.get("testingDate")).split("T")[0]
             if normalized.get("testingDate")
             else normalized["date"]
         )
-        normalized["fab"] = normalize_fab(normalized.get("fab"))
         normalized["year"] = date_obj.year
         normalized["month"] = date_obj.month
         normalized["updated_at"] = datetime.now().isoformat()
@@ -138,22 +144,22 @@ class JBContactBlockMaintenanceDailyEntry:
         return result.deleted_count > 0
 
     @staticmethod
-    def update_date_signatures(date: str, signatures: Dict[str, str]) -> bool:
+    def update_daily_context_signatures(date: str, fab: str, signatures: Dict[str, str]) -> bool:
         result = jb_contact_block_entries_collection.update_many(
-            {"date": str(date).split("T")[0]},
+            {"date": str(date).split("T")[0], "fab": normalize_fab(fab)},
             {"$set": {"signatures": signatures, "updated_at": datetime.now().isoformat()}},
         )
         return result.modified_count > 0
 
     @staticmethod
-    def get_date_signatures(date: str) -> Dict[str, str]:
-        entry = jb_contact_block_entries_collection.find_one({"date": str(date).split("T")[0]})
+    def get_daily_context_signatures(date: str, fab: str) -> Dict[str, str]:
+        entry = jb_contact_block_entries_collection.find_one(
+            {"date": str(date).split("T")[0], "fab": normalize_fab(fab)}
+        )
         if entry and entry.get("signatures"):
             signatures = entry["signatures"]
             return {
                 "preparedBy": signatures.get("preparedBy", ""),
-                "reviewedBy": signatures.get("reviewedBy") or signatures.get("verifiedBy", ""),
-                "verifiedBy": signatures.get("verifiedBy") or signatures.get("reviewedBy", ""),
-                "approvedBy": signatures.get("approvedBy", ""),
+                "verifiedBy": signatures.get("verifiedBy") or signatures.get("reviewedBy") or signatures.get("approvedBy", ""),
             }
-        return {"preparedBy": "", "reviewedBy": "", "verifiedBy": "", "approvedBy": ""}
+        return {"preparedBy": "", "verifiedBy": ""}

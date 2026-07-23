@@ -7,6 +7,7 @@ from pymongo import ASCENDING, DESCENDING, MongoClient
 
 from constants import MONGODB_URI, MONGODB_DB_NAME
 from mongo_indexes import drop_index_if_exists, ensure_index
+from report_context import apply_report_context
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,12 @@ rot_entries_collection = db["rot_daily_entries"]
 
 def ensure_rot_indexes() -> None:
     try:
-        # Older Robustness records were constrained to one row per date/line.
-        # Daily Entry Workflow allows multiple entries on the same date.
         for index_name in ("date_1", "date_1_lineGroup_1"):
             drop_index_if_exists(rot_entries_collection, index_name)
 
         ensure_index(rot_entries_collection, [("date", ASCENDING)], name="rot_date_idx")
         ensure_index(rot_entries_collection, [("date", DESCENDING)], name="rot_date_desc_idx")
+        ensure_index(rot_entries_collection, [("reportDate", ASCENDING), ("fabLine", ASCENDING)], name="rot_report_context_unique", unique=True, partialFilterExpression={"reportDate": {"$type": "string"}, "fabLine": {"$in": ["FAB-II Line-I", "FAB-II Line-II"]}})
         ensure_index(rot_entries_collection, [("year", ASCENDING), ("month", ASCENDING)], name="rot_year_month_idx")
         ensure_index(rot_entries_collection, [("updatedAt", DESCENDING)], name="rot_updated_at_desc_idx")
         ensure_index(rot_entries_collection, [("createdAt", DESCENDING)], name="rot_created_at_desc_idx")
@@ -249,7 +249,7 @@ class RoTDailyEntry:
         except Exception:
             date_obj = datetime.fromisoformat(date_key)
 
-        normalized = entry_data.copy()
+            normalized = apply_report_context(entry_data)
         normalized["date"] = date_obj.strftime("%Y-%m-%d")
         normalized["testingDate"] = (
             str(normalized.get("testingDate")).split("T")[0]

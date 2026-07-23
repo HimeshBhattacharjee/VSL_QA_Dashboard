@@ -65,6 +65,11 @@ interface Signatures {
     approvedBy: string;
 }
 
+interface MonthlySignoff extends Signatures {
+    preparedBySignature?: string;
+    approvedBySignature?: string;
+}
+
 interface DailyEntry {
     _id?: string;
     id?: string;
@@ -400,6 +405,10 @@ export default function SSHTest() {
     const [isEditing, setIsEditing] = useState(false);
     const [dateEntries, setDateEntries] = useState<DateEntries>({});
     const [monthlyEntries, setMonthlyEntries] = useState<Map<string, DailyEntry>>(new Map());
+    const [monthlySignoffs, setMonthlySignoffs] = useState<Record<LineGroup, MonthlySignoff>>({
+        'Line-I': { preparedBy: '', approvedBy: '' },
+        'Line-II': { preparedBy: '', approvedBy: '' },
+    });
     const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>(defaultMonthlyStats);
     const [currentAccessMode, setCurrentAccessMode] = useState<EntryAccessMode>('edit');
     const [readOnlyReason, setReadOnlyReason] = useState('');
@@ -540,6 +549,10 @@ export default function SSHTest() {
             const entriesMap = new Map<string, DailyEntry>();
             const nextDateEntries: DateEntries = {};
             const nextSignatures: Record<string, Signatures> = entriesJson?.date_signatures || {};
+            setMonthlySignoffs({
+                'Line-I': entriesJson?.monthly_signoffs?.['Line-I'] || { preparedBy: '', approvedBy: '' },
+                'Line-II': entriesJson?.monthly_signoffs?.['Line-II'] || { preparedBy: '', approvedBy: '' },
+            });
 
             entriesArr.forEach(entry => {
                 const entryKey = getEntryKey(entry.date, entry.lineGroup, entry.shift);
@@ -971,16 +984,11 @@ export default function SSHTest() {
             if (entries.length === 0) {
                 throw new Error('No submitted or approved entries are available for this month and line');
             }
-            const firstSignedEntry = entries.find((entry: DailyEntry) => entry.signatures?.preparedBy || entry.signatures?.approvedBy);
-            const formData = {
-                preparedBySignature: firstSignedEntry?.signatures?.preparedBy || '',
-                approvedBySignature: firstSignedEntry?.signatures?.approvedBy || '',
-            };
             const reportName = `Sealant_Shore_Hardness_Test_${months[month - 1].substring(0, 3)}_${year}`;
             const response = await fetch(`${API_BASE_URL}/export/excel`, {
                 method: 'POST',
                 headers: authHeaders(true),
-                body: JSON.stringify({ report_name: reportName, entries, lineGroup, form_data: formData, year, month }),
+                body: JSON.stringify({ report_name: reportName, entries, lineGroup, year, month }),
             });
             if (!response.ok) throw new Error('Failed to generate Excel report');
             const blob = await response.blob();
@@ -1583,6 +1591,7 @@ export default function SSHTest() {
         if (!currentEntry) return null;
         const signatureKey = getEntryKey(currentEntry.date, currentEntry.lineGroup, currentEntry.shift);
         const signatures = dateSignatures[signatureKey] || currentEntry.signatures || { preparedBy: '', approvedBy: '' };
+        const monthlySignoff = monthlySignoffs[currentEntry.lineGroup];
         const canSignPrepared = canEditCurrentEntry && userRole === 'Operator' && !signatures.preparedBy;
         const canRemovePrepared = canEditCurrentEntry && signatures.preparedBy === username;
 
@@ -1591,6 +1600,10 @@ export default function SSHTest() {
                 <h4 className="mb-3 text-md font-semibold dark:text-white">
                     Signatures for {currentEntry.date} - {getLineGroupLabel(currentEntry.lineGroup)} Shift {currentEntry.shift}
                 </h4>
+                <div className="mb-4 grid grid-cols-1 gap-2 rounded-md border border-gray-200 bg-white p-3 text-xs dark:border-gray-600 dark:bg-gray-900 sm:grid-cols-2">
+                    <div><span className="text-gray-500 dark:text-gray-400">Monthly Prepared By: </span><span className="font-semibold dark:text-white">{monthlySignoff.preparedBy || 'Pending'}</span></div>
+                    <div><span className="text-gray-500 dark:text-gray-400">Monthly Approved By: </span><span className="font-semibold dark:text-white">{monthlySignoff.approvedBy || 'Pending'}</span></div>
+                </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">Prepared By</label>

@@ -658,9 +658,7 @@ export default function JBContactBlockMaintenanceReport() {
     const renderSignatureSection = () => {
         if (!currentEntry) return null;
         const signatures = dateSignatures[currentEntry.date] || currentEntry.signatures || { preparedBy: '', verifiedBy: '' };
-        const canSignPrepared = userRole === 'Operator' && !signatures.preparedBy;
         const canSignVerified = ['Manager', 'Supervisor'].includes(userRole || '') && !signatures.verifiedBy;
-        const canRemovePrepared = signatures.preparedBy === username;
         const canRemoveVerified = signatures.verifiedBy === username;
 
         return (
@@ -674,20 +672,13 @@ export default function JBContactBlockMaintenanceReport() {
                         <div className="flex items-center gap-2">
                             <input
                                 type="text"
-                                value={signatures.preparedBy || ''}
+                                value={signatures.preparedBy || 'Pending checked-by record'}
                                 readOnly
                                 className="w-full rounded-lg border border-gray-200 bg-gray-200 p-2 text-xs dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200"
                                 placeholder="Not signed"
                             />
-                            {(canSignPrepared || canRemovePrepared) && (
-                                <button
-                                    onClick={() => handleSignatureUpdate('prepared')}
-                                    className={`rounded-lg p-2 text-white ${canRemovePrepared ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
-                                >
-                                    {canRemovePrepared ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                                </button>
-                            )}
                         </div>
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Auto-populated from authenticated Checked By records</p>
                     </div>
                     <div>
                         <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">Verified By</label>
@@ -798,10 +789,11 @@ export default function JBContactBlockMaintenanceReport() {
                                         />
                                         <input
                                             type="text"
-                                            value={row.checkedBy}
-                                            onChange={(event) => handleTextChange(lineLabel, rowIndex, 'checkedBy', event.target.value)}
-                                            className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                                            placeholder="Checked by"
+                                            value={row.checkedBy || username || ''}
+                                            readOnly
+                                            disabled
+                                            className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-2 text-xs text-gray-900 disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                                            placeholder="Auto-populated"
                                         />
                                         <button
                                             onClick={() => handleDeleteRow(lineLabel, rowIndex)}
