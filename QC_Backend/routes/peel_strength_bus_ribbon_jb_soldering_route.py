@@ -53,6 +53,7 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+from services.shift_prepared_by_service import trusted_signature_update
 
 
 logger = logging.getLogger(__name__)
@@ -952,6 +953,8 @@ async def update_signatures(payload: dict, x_employee_id: str | None = Header(de
         if not existing_entry and not can_create_entry(user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators can create entry signatures")
 
+        signatures = trusted_signature_update(signatures, (existing_entry or {}).get("signatures"), user)
+
         success = PeelStrengthBusRibbonJBDailyEntry.update_context_signatures(date, fab, shift, signatures)
         if not success:
             date_obj = datetime.strptime(str(date).split("T")[0], "%Y-%m-%d")
@@ -1034,7 +1037,7 @@ async def delete_entry(date: str, fab: str, shift: str, x_employee_id: str | Non
 @peel_strength_bus_ribbon_jb_router.post("/export/excel")
 async def export_monthly_excel(payload: dict, x_employee_id: str | None = Header(default=None)):
     try:
-        user = get_optional_user(x_employee_id)
+        user = get_current_user(x_employee_id)
         if user:
             for entry in payload.get("entries") or []:
                 existing_entry = None
@@ -1049,6 +1052,8 @@ async def export_monthly_excel(payload: dict, x_employee_id: str | None = Header
                     )
                 if not existing_entry or not can_export_entry(existing_entry, user):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly Excel can be generated only from submitted or approved entries")
+                entry.clear()
+                entry.update(serialize_doc(existing_entry))
 
         output, filename = generate_peel_strength_bus_ribbon_jb_soldering_report(payload)
         return StreamingResponse(

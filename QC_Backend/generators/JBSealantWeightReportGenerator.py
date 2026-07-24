@@ -6,6 +6,7 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
+from services.shift_prepared_by_service import format_prepared_by
 
 JB_PASS_MIN = 4
 JB_PASS_MAX = 10
@@ -168,10 +169,9 @@ def fill_jb_data_in_sheet(worksheet, entries, date):
             current_row += 6
         
         # Fill signatures at the bottom
+        worksheet['C23'] = format_prepared_by(sorted_entries)
         if sorted_entries and sorted_entries[0].get('signatures'):
             signatures = sorted_entries[0]['signatures']
-            if signatures.get('preparedBy'):
-                worksheet['C23'] = signatures.get('preparedBy', '')
             if signatures.get('verifiedBy'):
                 worksheet['J23'] = signatures.get('verifiedBy', '')
         

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 PEEL_DATA_COLLECTION_NAME = "peel_data"
 PEEL_FILE_METADATA_COLLECTION_NAME = "peel_file_metadata"
 PEEL_PROCESSING_FILES_COLLECTION_NAME = "peel_processing_files"
+PEEL_EXTRACTION_STATUS_COLLECTION_NAME = "peel_extraction_status"
 
 UNKNOWN_VALUE = "UNKNOWN"
 
@@ -26,6 +27,7 @@ db = client[MONGODB_DB_NAME]
 peel_data_collection: Collection = db[PEEL_DATA_COLLECTION_NAME]
 peel_file_metadata_collection: Collection = db[PEEL_FILE_METADATA_COLLECTION_NAME]
 peel_processing_files_collection: Collection = db[PEEL_PROCESSING_FILES_COLLECTION_NAME]
+peel_extraction_status_collection: Collection = db[PEEL_EXTRACTION_STATUS_COLLECTION_NAME]
 
 MEASUREMENT_KEY_PATTERN = re.compile(r"^(Front|Back)_(\d+)_(\d+)$", re.IGNORECASE)
 LEGACY_COLLECTION_PATTERN = re.compile(r"^peel_[a-z]{3}_\d{4}$", re.IGNORECASE)
@@ -197,18 +199,9 @@ def normalize_peel_record(record: Dict[str, Any], *, now: Optional[datetime] = N
     elif normalized.get("unit") not in (None, ""):
         unit = str(normalized["unit"]).upper()
 
-    po_number = (
-        normalized.get("po_number")
-        or normalized.get("PO")
-        or normalized.get("po")
-        or UNKNOWN_VALUE
-    )
-    cell_vendor = (
-        normalized.get("cell_vendor")
-        or normalized.get("Cell_Vendor")
-        or normalized.get("Cell Vendor")
-        or UNKNOWN_VALUE
-    )
+    po_number = normalized.get("po_number", normalized.get("PO", normalized.get("po")))
+    cell_vendor = normalized.get("cell_vendor", normalized.get("Cell_Vendor", normalized.get("Cell Vendor")))
+    wp = normalized.get("wp", normalized.get("Wp", normalized.get("WP")))
     source_path = normalized.get("source_path") or normalized.get("source_paths") or ""
     if isinstance(source_path, list):
         source_path = ";".join(str(item) for item in source_path)
@@ -224,15 +217,17 @@ def normalize_peel_record(record: Dict[str, Any], *, now: Optional[datetime] = N
             "source_path": source_path,
             "machine": machine,
             "module_type": normalized.get("module_type") or normalized.get("Module_Type") or UNKNOWN_VALUE,
-            "cell_vendor": str(cell_vendor).strip() or UNKNOWN_VALUE,
-            "po_number": str(po_number).strip() or UNKNOWN_VALUE,
+            "cell_vendor": str(cell_vendor).strip() if cell_vendor not in (None, "") else None,
+            "po_number": str(po_number).strip() if po_number not in (None, "") else None,
+            "wp": str(wp).strip() if wp not in (None, "") else None,
             "sample_results": build_sample_results(normalized),
             "updated_at": normalized.get("updated_at") or now,
             "last_extracted_at": normalized.get("last_extracted_at") or now,
             "Date": date_str,
             "Shift": shift,
-            "PO": str(po_number).strip() or UNKNOWN_VALUE,
-            "Cell_Vendor": str(cell_vendor).strip() or UNKNOWN_VALUE,
+            "PO": str(po_number).strip() if po_number not in (None, "") else None,
+            "Cell_Vendor": str(cell_vendor).strip() if cell_vendor not in (None, "") else None,
+            "Wp": str(wp).strip() if wp not in (None, "") else None,
         }
     )
 
@@ -285,6 +280,12 @@ def ensure_peel_indexes() -> None:
             name="unique_processing_file_path",
         )
         ensure_index(peel_processing_files_collection, [("started_at", ASCENDING)], name="peel_processing_started_idx")
+        ensure_index(
+            peel_extraction_status_collection,
+            [("date", ASCENDING), ("shift", ASCENDING)],
+            unique=True,
+            name="unique_peel_extraction_date_shift",
+        )
     except (OperationFailure, PyMongoError) as exc:
         logger.warning("failed_to_ensure_peel_indexes error=%s", exc, exc_info=True)
 
@@ -315,7 +316,7 @@ def upsert_extracted_peel_record(record: Dict[str, Any]) -> Dict[str, Any]:
     business_key = normalized["business_key"]
     normalized.pop("_id", None)
 
-    protected_fields = {"cell_vendor", "po_number", "Cell_Vendor", "PO"}
+    protected_fields = set() if normalized.get("metadata_auto_extracted") else {"cell_vendor", "po_number", "wp", "Cell_Vendor", "PO", "Wp"}
     set_doc = {key: value for key, value in normalized.items() if key not in protected_fields and key != "created_at"}
     set_on_insert = {key: normalized[key] for key in protected_fields if key in normalized}
     set_on_insert["created_at"] = normalized.get("created_at", utc_now())

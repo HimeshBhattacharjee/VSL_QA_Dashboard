@@ -20,6 +20,7 @@ import {
     X,
 } from 'lucide-react';
 import ReportPagination from '../components/ReportPagination';
+import ShiftPreparedBy from '../components/ShiftPreparedBy';
 import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
 import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import { useAlert } from '../context/AlertContext';
@@ -1673,6 +1674,7 @@ export default function PeelStrengthBusRibbonJBSolderingTest() {
                 <h4 className="mb-3 text-md font-semibold dark:text-white">
                     Signatures for {currentEntry.date} - {currentEntry.fab} Shift {currentEntry.shift}
                 </h4>
+                <ShiftPreparedBy entries={(['A', 'B', 'C'] as const).map(shift => ({ shift, signatures: dateSignatures[getEntryKey(currentEntry.date, currentEntry.fab, shift)] }))} />
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">Prepared By</label>

@@ -116,6 +116,46 @@ class JBContactBlockSignoffTests(unittest.TestCase):
                 asyncio.run(route.verify_entry(old["_id"], "SUP1"))
         self.assertEqual(raised.exception.status_code, 400)
 
+    def test_submit_accepts_derived_prepared_by_without_profile_signature(self):
+        entry_id = "507f1f77bcf86cd799439011"
+        old = self._entry([{
+            "po": "PO1",
+            "jbNo": "JB1",
+            "sortValuePositive": 10,
+            "sortValueNegative": 10,
+            "springTension": 80,
+            "checkedBy": "Operator A",
+            "checkedByEmployeeId": "OP1",
+            "checkedByUserId": "U1",
+        }])
+        old.update({
+            "_id": entry_id,
+            "testingDate": "2026-07-22",
+            "createdByEmployeeId": "OP1",
+            "createdByEmployeeName": "Operator A",
+            "createdByUserId": "U1",
+        })
+        user = {
+            "name": "Operator A",
+            "role": "Operator",
+            "employeeId": "OP1",
+            "id": "U1",
+            "signature": "",
+        }
+        saved = dict(old)
+        saved.update({"workflowState": "submitted", "status": "submitted"})
+
+        with (
+            patch.object(route, "get_current_user", return_value=user),
+            patch.object(route.JBContactBlockMaintenanceDailyEntry, "get_by_id", side_effect=[old, saved]),
+            patch.object(route.JBContactBlockMaintenanceDailyEntry, "update_by_id", return_value=True) as update,
+        ):
+            result = asyncio.run(route.submit_entry(entry_id, old, "OP1"))
+
+        written = update.call_args.args[1]
+        self.assertEqual(written["signatures"]["preparedBy"], "Operator A")
+        self.assertEqual(result["workflowState"], "submitted")
+
     def test_verified_preparer_snapshot_is_not_recalculated(self):
         entry = self._entry([{"checkedBy": "New", "checkedByEmployeeId": "E2"}], state="approved")
         entry["signatures"] = {"preparedBy": "Signed Historical", "verifiedBy": "V"}

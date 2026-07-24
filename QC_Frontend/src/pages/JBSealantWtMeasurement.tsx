@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAlert } from '../context/AlertContext';
 import { useConfirmModal } from '../context/ConfirmModalContext';
 import ReportPagination from '../components/ReportPagination';
+import ShiftPreparedBy from '../components/ShiftPreparedBy';
 import LineStatusControl, { OffLinePlaceholder } from '../components/LineStatusControl';
 import { changeLineStatus, getLineStatus, hasLineMeasurements } from '../utilities/lineStatus';
 import {
@@ -1932,6 +1933,7 @@ export default function JBSealantWeightMeasurement() {
                 <h4 className="text-md font-semibold mb-3 dark:text-white">
                     Signatures for {new Date(currentEntry.date).toLocaleDateString()} - {getLineGroupLabel(currentEntry.lineGroup || DEFAULT_LINE_GROUP)} Shift {currentEntry.shift}
                 </h4>
+                <ShiftPreparedBy entries={(['A', 'B', 'C'] as const).map(shift => ({ shift, signatures: dateSignatures[getEntryKey(currentEntry.date, currentEntry.lineGroup || DEFAULT_LINE_GROUP, shift)] }))} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">

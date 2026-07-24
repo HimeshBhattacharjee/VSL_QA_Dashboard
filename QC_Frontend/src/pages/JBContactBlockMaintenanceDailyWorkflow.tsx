@@ -224,7 +224,7 @@ const calculateRemarks = (row: JBContactBlockRow) => {
     const sortValuePositive = parseCompletedNumber(row.sortValuePositive);
     const sortValueNegative = parseCompletedNumber(row.sortValueNegative);
     if (springTension === null || sortValuePositive === null || sortValueNegative === null) return '';
-    return springTension >= 75 && sortValuePositive < 20 && sortValueNegative < 20 ? 'OK' : 'NOT OK';
+    return springTension >= 75 && sortValuePositive <= 10 && sortValueNegative <= 10 ? 'OK' : 'NOT OK';
 };
 
 const withCalculatedRemarks = (row: JBContactBlockRow): JBContactBlockRow => ({
@@ -1624,7 +1624,7 @@ export default function JBContactBlockMaintenanceDailyWorkflow() {
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">JB Contact Block Maintenance Report</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Criteria: Resistance &lt; 20mOhm, Spring Tension &gt;= 75N</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Criteria: Resistance &lt;= 10mOhm, Spring Tension &gt;= 75N</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => setActiveTab('dashboard')} className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-brand-primary text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}`}>

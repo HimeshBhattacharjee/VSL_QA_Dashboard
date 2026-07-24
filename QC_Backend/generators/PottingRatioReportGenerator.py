@@ -7,6 +7,7 @@ import calendar
 from paths import get_template_key, download_from_s3
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
 from services.potting_ratio_evaluation import evaluate_potting_ratio
+from services.shift_prepared_by_service import format_prepared_by
 
 SUCCESS_FILL = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
 FAILURE_FILL = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
@@ -79,13 +80,13 @@ def fill_potting_data_in_sheet(worksheet, entries, date):
                     worksheet[f'{column}{current_row+1}'] = 'OFF'
             
             # Fill signatures at the bottom (one set per shift)
-            if entry_signatures.get('preparedBy'):
-                worksheet['D12'] = entry_signatures.get('preparedBy', '')
             if entry_signatures.get('verifiedBy'):
                 worksheet['J12'] = entry_signatures.get('verifiedBy', '')
             
             # Move to next shift (2 rows down)
             current_row += 2
+
+        worksheet['D12'] = format_prepared_by(sorted_entries)
         
         log_progress(f"Filled potting data for date {date}")
         

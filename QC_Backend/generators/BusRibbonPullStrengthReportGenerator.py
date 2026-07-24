@@ -10,6 +10,7 @@ from generators.excel_image_utils import add_worksheet_images, collect_worksheet
 from paths import get_template_key
 from s3_service import get_s3_client
 from services.bus_ribbon_group_service import OFF_VALUE, is_bussing_group_off
+from services.shift_prepared_by_service import format_prepared_by
 
 LINE_BUSSING_KEYS = {
     "FAB-II Line-I": ("autoBussing1", "autoBussing2", "autoBussing3"),
@@ -142,8 +143,7 @@ def fill_bus_ribbon_data_in_sheet(worksheet, entries, date_label, line):
         for machine_index, machine_key in enumerate(LINE_BUSSING_KEYS[line]):
             write_machine_rows(worksheet, entry, machine_key, start_row + (machine_index * 2))
     signatures = get_entry_signatures(sorted_entries)
-    if signatures.get("preparedBy"):
-        worksheet["E25"] = signatures.get("preparedBy", "")
+    worksheet["E25"] = format_prepared_by(sorted_entries)
     if signatures.get("reviewedBy") or signatures.get("verifiedBy"):
         worksheet["Q25"] = signatures.get("reviewedBy") or signatures.get("verifiedBy", "")
 

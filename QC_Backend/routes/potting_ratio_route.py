@@ -46,6 +46,7 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+from services.shift_prepared_by_service import trusted_signature_update
 from services.potting_ratio_evaluation import (
     apply_potting_ratio_remarks,
     evaluate_potting_ratio,
@@ -965,6 +966,8 @@ async def update_signatures(payload: dict, x_employee_id: str | None = Header(de
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to update signatures for this entry")
         if not existing_entry and not can_create_entry(user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators can create entry signatures")
+
+        signatures = trusted_signature_update(signatures, (existing_entry or {}).get("signatures"), user)
         
         # Update signatures only for the selected line group and shift.
         success = PottingDailyEntry.update_context_signatures(date, line_group, shift, signatures)
@@ -1093,7 +1096,7 @@ async def delete_entry(date: str, shift: str, x_employee_id: str | None = Header
 async def export_monthly_excel_post(payload: dict, x_employee_id: str | None = Header(default=None)):
     """Generate Excel with multiple sheets - one sheet per day of the month"""
     try:
-        user = get_optional_user(x_employee_id)
+        user = get_current_user(x_employee_id)
         if user:
             for entry in payload.get("entries") or []:
                 existing_entry = None
@@ -1108,6 +1111,8 @@ async def export_monthly_excel_post(payload: dict, x_employee_id: str | None = H
                     )
                 if not existing_entry or not can_export_entry(existing_entry, user):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly Excel can be generated only from submitted or approved entries")
+                entry.clear()
+                entry.update(serialize_doc(existing_entry))
         output, filename = generate_potting_report(payload)
         
         return StreamingResponse(

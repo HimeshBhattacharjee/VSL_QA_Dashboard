@@ -53,6 +53,7 @@ from services.shift_entry_workflow_service import (
     normalize_workflow_state,
     utc_timestamp,
 )
+from services.shift_prepared_by_service import trusted_signature_update
 
 logger = logging.getLogger(__name__)
 
@@ -929,6 +930,8 @@ async def update_signatures(payload: dict, x_employee_id: str | None = Header(de
         if not existing_entry and not can_create_entry(user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators can create entry signatures")
 
+        signatures = trusted_signature_update(signatures, (existing_entry or {}).get("signatures"), user)
+
         success = BusRibbonPullStrengthDailyEntry.update_context_signatures(date, line, shift, signatures)
         if not success:
             date_obj = datetime.strptime(str(date).split("T")[0], "%Y-%m-%d")
@@ -1014,27 +1017,30 @@ async def delete_entry(date: str, line: str, shift: str, x_employee_id: str | No
 @bus_ribbon_pull_strength_router.post("/export/excel")
 async def export_monthly_excel(payload: dict, x_employee_id: str | None = Header(default=None)):
     try:
-        user = get_optional_user(x_employee_id)
-        if user:
-            for entry in payload.get("entries") or []:
-                existing_entry = None
-                entry_id = entry.get("_id") or entry.get("id")
-                if entry_id and ObjectId.is_valid(str(entry_id)):
-                    existing_entry = BusRibbonPullStrengthDailyEntry.get_by_id(str(entry_id))
-                if not existing_entry:
-                    existing_entry = BusRibbonPullStrengthDailyEntry.get_by_date_line_shift(
-                        entry.get("date"),
-                        entry.get("line"),
-                        entry.get("shift"),
-                    )
-                if not existing_entry or not can_export_entry(existing_entry, user):
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly Excel can be generated only from submitted or approved entries")
-        output, filename = generate_bus_ribbon_pull_strength_report(payload)
+        user = get_current_user(x_employee_id)
+        trusted_entries = []
+        for entry in payload.get("entries") or []:
+            existing_entry = None
+            entry_id = entry.get("_id") or entry.get("id")
+            if entry_id and ObjectId.is_valid(str(entry_id)):
+                existing_entry = BusRibbonPullStrengthDailyEntry.get_by_id(str(entry_id))
+            if not existing_entry:
+                existing_entry = BusRibbonPullStrengthDailyEntry.get_by_date_line_shift(
+                    entry.get("date"),
+                    entry.get("line"),
+                    entry.get("shift"),
+                )
+            if not existing_entry or not can_export_entry(existing_entry, user):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly Excel can be generated only from submitted or approved entries")
+            trusted_entries.append(serialize_doc(existing_entry))
+        output, filename = generate_bus_ribbon_pull_strength_report({**payload, "entries": trusted_entries})
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("bus_ribbon_excel_generation_failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate Excel: {str(e)}")

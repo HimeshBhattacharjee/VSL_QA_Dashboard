@@ -12,6 +12,7 @@ from openpyxl.styles import Font, PatternFill
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
 from paths import get_template_key
 from s3_service import get_s3_client
+from services.shift_prepared_by_service import format_prepared_by
 
 
 TEMPLATE_FILENAME = "Blank Peel Strength of Bus Ribbon to JB Soldering Test Report.xlsx"
@@ -167,7 +168,7 @@ def fill_peel_strength_data_in_sheet(worksheet, entries, date_label, fab):
         for offset, line_label in enumerate(line_labels):
             write_line_row(worksheet, start_row + offset, date_label, shift, line_label, lines.get(line_label, {}) or {})
 
-    prepared_by = format_shift_signatures(entries, "preparedBy")
+    prepared_by = format_prepared_by(entries)
     verified_by = format_shift_signatures(entries, "verifiedBy")
     if prepared_by:
         worksheet["D12"] = prepared_by

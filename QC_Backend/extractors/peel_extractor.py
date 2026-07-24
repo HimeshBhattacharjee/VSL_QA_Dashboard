@@ -22,6 +22,8 @@ from models.peel_data_models import (
     normalize_peel_record,
     normalize_shift,
     peel_file_metadata_collection,
+    peel_extraction_status_collection,
+    peel_data_collection,
     peel_processing_files_collection,
     serialize_peel_doc,
     upsert_extracted_peel_record,
@@ -29,6 +31,8 @@ from models.peel_data_models import (
 )
 from paths import get_qc_data_key
 from s3_service import S3Service
+from extractors.peel_docx_metadata import extract_docx_metadata
+from models.peel_test_models import peel_test_collection
 
 
 LOGGER_NAME = "peel_extractor"
@@ -40,6 +44,7 @@ if not logger.handlers:
     )
 
 EXCEL_EXTENSIONS = (".xlsx", ".xlsm", ".xls")
+METADATA_DOCX_PATTERN = re.compile(r"^PO\s*&\s*Cell-(?P<number>[12])\.docx$", re.IGNORECASE)
 PROCESSING_LOCK_TTL_HOURS = 6
 
 YEAR_FOLDER_PATTERN = re.compile(r"^\d{4}$")
@@ -64,6 +69,17 @@ class S3ExcelFile:
     etag: str
     last_modified: datetime
     size: int
+    metadata: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class S3MetadataFile:
+    key: str
+    file_name: str
+    etag: str
+    last_modified: datetime
+    size: int
+    document_number: int
     metadata: Dict[str, Any]
 
 
@@ -349,7 +365,11 @@ def extract_data_from_excel(file_ref: str, sheet_type: str, s3_service: Optional
         return {}
 
 
-def list_s3_excel_files(s3_prefix: str, s3_service: Optional[S3Service] = None) -> List[S3ExcelFile]:
+def list_s3_excel_files(
+    s3_prefix: str,
+    s3_service: Optional[S3Service] = None,
+    metadata_files: Optional[List[S3MetadataFile]] = None,
+) -> List[S3ExcelFile]:
     s3_service = s3_service or S3Service()
     normalized_prefix = s3_prefix.rstrip("/") + "/"
     files: List[S3ExcelFile] = []
@@ -359,9 +379,20 @@ def list_s3_excel_files(s3_prefix: str, s3_service: Optional[S3Service] = None) 
     for page in paginator.paginate(Bucket=s3_service.bucket_name, Prefix=normalized_prefix):
         for obj in page.get("Contents", []):
             key = obj.get("Key")
-            if not key or key.endswith("/") or not _is_excel_key(key):
+            if not key or key.endswith("/"):
                 continue
             last_modified = _utc_naive(obj["LastModified"])
+            docx_match = METADATA_DOCX_PATTERN.match(PurePosixPath(key).name)
+            if docx_match and metadata_files is not None:
+                metadata_files.append(S3MetadataFile(
+                    key=key, file_name=PurePosixPath(key).name, etag=_clean_etag(obj.get("ETag")),
+                    last_modified=last_modified, size=int(obj.get("Size", 0)),
+                    document_number=int(docx_match.group("number")), metadata=parse_s3_metadata(key, normalized_prefix, last_modified),
+                ))
+                logger.info("metadata_docx_detected key=%s", key)
+                continue
+            if not _is_excel_key(key):
+                continue
             metadata = parse_s3_metadata(key, normalized_prefix, last_modified)
             file_info = S3ExcelFile(
                 key=key,
@@ -520,10 +551,13 @@ def _base_record_from_files(files: List[S3ExcelFile]) -> Dict[str, Any]:
         "file_name": "|".join(file_names),
         "source_path": ";".join(source_paths),
         "source_paths": source_paths,
-        "po_number": "UNKNOWN",
-        "cell_vendor": "UNKNOWN",
-        "PO": "UNKNOWN",
-        "Cell_Vendor": "UNKNOWN",
+        "po_number": None,
+        "cell_vendor": None,
+        "wp": None,
+        "PO": None,
+        "Cell_Vendor": None,
+        "Wp": None,
+        "metadata_auto_extracted": True,
         "created_at": utc_now(),
         "updated_at": utc_now(),
         "last_extracted_at": utc_now(),
@@ -531,10 +565,25 @@ def _base_record_from_files(files: List[S3ExcelFile]) -> Dict[str, Any]:
     return record
 
 
-def process_file_group(files: List[S3ExcelFile], s3_service: S3Service) -> Dict[str, Any]:
+def process_file_group(
+    files: List[S3ExcelFile],
+    s3_service: S3Service,
+    metadata_documents: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     _mark_processing(files)
     try:
         record = _base_record_from_files(files)
+        documents = metadata_documents or {}
+        try:
+            document_number = 1 if int(record.get("Stringer", record.get("stringer"))) <= 6 else 2
+        except (TypeError, ValueError):
+            document_number = next(iter(documents), 1)
+        extracted_metadata = documents.get(document_number) or {}
+        record.update({
+            "po_number": extracted_metadata.get("po_number"), "PO": extracted_metadata.get("po_number"),
+            "cell_vendor": extracted_metadata.get("cell_vendor"), "Cell_Vendor": extracted_metadata.get("cell_vendor"),
+            "wp": extracted_metadata.get("wp"), "Wp": extracted_metadata.get("wp"),
+        })
         measurement_count = 0
 
         for file_info in sorted(files, key=lambda item: item.file_name):
@@ -654,22 +703,159 @@ def list_mongodb_collections(mongo_client, db_name: Optional[str] = None):
         return []
 
 
+def _shift_key(metadata: Dict[str, Any]) -> Tuple[str, str]:
+    return str(metadata.get("date") or ""), str(metadata.get("shift") or "")
+
+
+def load_shift_docx_metadata(
+    files: List[S3MetadataFile], s3_service: S3Service
+) -> Tuple[Dict[Tuple[str, str], Dict[int, Dict[str, Optional[str]]]], set[Tuple[str, str]]]:
+    """Download only changed DOCX objects; cached parsed values handle unchanged files."""
+    cached = load_file_metadata(files)  # Both file dataclasses expose the fields used by this helper.
+    by_shift: Dict[Tuple[str, str], Dict[int, Dict[str, Optional[str]]]] = {}
+    changed_shifts: set[Tuple[str, str]] = set()
+    for file_info in files:
+        shift_key = _shift_key(file_info.metadata)
+        prior = cached.get(file_info.key)
+        extracted = prior.get("extracted_values") if prior and not file_has_changed(file_info, prior) else None
+        if extracted is None:
+            changed_shifts.add(shift_key)
+            try:
+                response = s3_service.s3_client.get_object(Bucket=s3_service.bucket_name, Key=file_info.key)
+                extracted = extract_docx_metadata(response["Body"].read())
+                peel_file_metadata_collection.update_one(
+                    {"file_path": file_info.key},
+                    {"$set": {
+                        "file_path": file_info.key, "etag": file_info.etag, "last_modified": file_info.last_modified,
+                        "file_size": file_info.size, "status": "metadata_processed", "extracted_values": extracted,
+                        "last_processed_at": utc_now(),
+                    }, "$setOnInsert": {"created_at": utc_now()}},
+                    upsert=True,
+                )
+                logger.info(
+                    "metadata_extracted date=%s shift=%s key=%s po_extracted=%s vendor_extracted=%s wp_extracted=%s",
+                    shift_key[0], shift_key[1], file_info.key, bool(extracted.get("po_number")),
+                    bool(extracted.get("cell_vendor")), bool(extracted.get("wp")),
+                )
+            except Exception as exc:
+                extracted = {"po_number": None, "cell_vendor": None, "wp": None}
+                logger.exception("metadata_extraction_failed date=%s shift=%s key=%s error=%s", *shift_key, file_info.key, exc)
+        by_shift.setdefault(shift_key, {})[file_info.document_number] = extracted
+    return by_shift, changed_shifts
+
+
+def _persist_shift_metadata(date: str, shift: str, documents: Dict[int, Dict[str, Any]]) -> bool:
+    success = True
+    for number, stringer_query in ((1, {"$gte": 1, "$lte": 6}), (2, {"$gte": 7, "$lte": 12})):
+        values = documents.get(number)
+        if values is None:
+            continue
+        update = {
+            "po_number": values.get("po_number"), "PO": values.get("po_number"),
+            "cell_vendor": values.get("cell_vendor"), "Cell_Vendor": values.get("cell_vendor"),
+            "wp": values.get("wp"), "Wp": values.get("wp"),
+            "metadata_auto_extracted": True, "updated_at": utc_now(),
+        }
+        try:
+            result = peel_data_collection.update_many(
+                {"date": date, "shift": shift, "$or": [{"Stringer": stringer_query}, {"stringer": stringer_query}]},
+                {"$set": update},
+            )
+            logger.info("metadata_mongo_updated date=%s shift=%s document=%s records=%s", date, shift, number, result.modified_count)
+        except PyMongoError as exc:
+            success = False
+            logger.exception("metadata_mongo_update_failed date=%s shift=%s document=%s error=%s", date, shift, number, exc)
+    return success
+
+
+def _metadata_complete(documents: Dict[int, Dict[str, Any]]) -> bool:
+    return bool(documents) and all(
+        values.get(field) not in (None, "")
+        for values in documents.values()
+        for field in ("po_number", "cell_vendor", "wp")
+    )
+
+
 def process_s3_prefix(s3_prefix: str, *, force: bool = False, s3_service: Optional[S3Service] = None) -> Dict[str, int]:
     ensure_peel_indexes()
     s3_service = s3_service or S3Service()
     summary = {"files_discovered": 0, "groups_changed": 0, "inserted": 0, "updated": 0, "skipped": 0, "errors": 0}
 
     try:
-        files = list_s3_excel_files(s3_prefix, s3_service)
+        docx_files: List[S3MetadataFile] = []
+        files = list_s3_excel_files(s3_prefix, s3_service, docx_files)
         summary["files_discovered"] = len(files)
         existing_metadata = load_file_metadata(files)
         groups = group_files_for_records(files, existing_metadata, force=force)
         summary["groups_changed"] = len(groups)
+        docx_by_shift, metadata_changed_shifts = load_shift_docx_metadata(docx_files, s3_service)
+        affected_shifts = {_shift_key(group_files[0].metadata) for group_files in groups.values()} | metadata_changed_shifts
+        # Recover a transient persistence/S3 failure even when source ETags did not change.
+        affected_shifts.update(
+            (str(item.get("date") or ""), str(item.get("shift") or ""))
+            for item in peel_extraction_status_collection.find(
+                {"extraction_started": True, "$or": [{"extraction_completed": False}, {"draft_generated": False}]},
+                {"date": 1, "shift": 1},
+            )
+            if item.get("date") and item.get("shift")
+        )
+        shift_errors = {key: 0 for key in affected_shifts}
+        for date, shift in affected_shifts:
+            peel_extraction_status_collection.update_one(
+                {"date": date, "shift": shift},
+                {"$set": {
+                    "date": date, "shift": shift, "s3_folder": next((str(PurePosixPath(item.key).parent) for item in files if _shift_key(item.metadata) == (date, shift)), ""),
+                    "extraction_started": True, "extraction_completed": False, "draft_generated": False,
+                    "extraction_started_at": utc_now(), "last_updated": utc_now(),
+                }, "$setOnInsert": {"created_at": utc_now()}},
+                upsert=True,
+            )
+            if not docx_by_shift.get((date, shift)):
+                logger.warning("metadata_docx_missing date=%s shift=%s", date, shift)
 
         for group_files in groups.values():
-            result = process_file_group(group_files, s3_service)
+            group_shift = _shift_key(group_files[0].metadata)
+            result = process_file_group(group_files, s3_service, docx_by_shift.get(group_shift))
+            shift_errors[_shift_key(group_files[0].metadata)] += result.get("errors", 0)
             for key in ("inserted", "updated", "skipped", "errors"):
                 summary[key] += result.get(key, 0)
+
+        from services.peel_draft_sync_service import synchronize_peel_drafts
+        for date, shift in affected_shifts:
+            documents = docx_by_shift.get((date, shift), {})
+            metadata_stored = _persist_shift_metadata(date, shift, documents)
+            extraction_completed = shift_errors[(date, shift)] == 0 and peel_data_collection.count_documents({"date": date, "shift": shift}) > 0
+            draft_generated = False
+            draft_error = None
+            if extraction_completed:
+                try:
+                    draft_summary = synchronize_peel_drafts(date, shift)
+                    draft_generated = (draft_summary["created"] + draft_summary["updated"] + draft_summary["submitted_skipped"] > 0) or bool(
+                        peel_test_collection.find_one({"date": date, "shift": shift})
+                    )
+                except Exception as exc:
+                    draft_error = str(exc)
+                    summary["errors"] += 1
+                    logger.exception("draft_generation_failed date=%s shift=%s error=%s", date, shift, exc)
+            status_update = {
+                "extraction_completed": extraction_completed,
+                "metadata_extraction_completed": True,
+                "metadata_values_complete": _metadata_complete(documents),
+                "metadata_stored": metadata_stored,
+                "draft_generated": draft_generated,
+                "last_updated": utc_now(),
+            }
+            if extraction_completed:
+                status_update["extraction_completed_at"] = utc_now()
+            if draft_generated:
+                status_update["draft_generated_at"] = utc_now()
+                logger.info("cleanup_scheduled date=%s shift=%s eligible_after_days=7", date, shift)
+            if draft_error:
+                status_update["error"] = draft_error[:1000]
+            status_operation: Dict[str, Any] = {"$set": status_update}
+            if not draft_error:
+                status_operation["$unset"] = {"error": ""}
+            peel_extraction_status_collection.update_one({"date": date, "shift": shift}, status_operation)
 
         logger.info("extraction_completed prefix=%s summary=%s", s3_prefix, summary)
         return summary
@@ -722,12 +908,10 @@ def cleanup_old_s3_files(
     s3_service = s3_service or S3Service()
     normalized_prefix = s3_prefix.rstrip("/") + "/"
     cutoff = utc_now() - timedelta(days=days)
-    active_files = _active_processing_file_paths()
     deleted: List[str] = []
     skipped: List[str] = []
     errors: List[Dict[str, str]] = []
-    folder_placeholders: List[str] = []
-    deletion_candidates: List[str] = []
+    deletion_candidates: List[Tuple[str, str, str]] = []
 
     logger.info("cleanup_started prefix=%s days=%s dry_run=%s", normalized_prefix, days, dry_run)
     try:
@@ -740,48 +924,37 @@ def cleanup_old_s3_files(
 
                 last_modified = _utc_naive(obj["LastModified"])
                 if key.endswith("/"):
-                    folder_placeholders.append(key)
+                    continue
+                if not METADATA_DOCX_PATTERN.match(PurePosixPath(key).name):
+                    skipped.append(key)
                     continue
                 if last_modified >= cutoff:
                     skipped.append(key)
                     continue
-                if key in active_files:
-                    skipped.append(key)
-                    continue
-                deletion_candidates.append(key)
+                metadata = parse_s3_metadata(key, normalized_prefix, last_modified)
+                deletion_candidates.append((key, str(metadata.get("date") or ""), str(metadata.get("shift") or "")))
 
-        processed_files = _processed_file_paths(deletion_candidates)
-        for key in deletion_candidates:
-            if key not in processed_files:
+        for key, date, shift in deletion_candidates:
+            status_record = peel_extraction_status_collection.find_one({
+                "date": date, "shift": shift,
+                "extraction_completed": True, "metadata_values_complete": True,
+                "metadata_stored": True, "draft_generated": True,
+                "draft_generated_at": {"$lte": cutoff},
+            })
+            if not status_record:
                 skipped.append(key)
-                logger.warning("cleanup_skipped_unprocessed key=%s", key)
+                logger.warning("cleanup_skipped date=%s shift=%s key=%s reason=success_gate_or_age", date, shift, key)
                 continue
             try:
                 if not dry_run:
                     s3_service.s3_client.delete_object(Bucket=s3_service.bucket_name, Key=key)
                 deleted.append(key)
-                logger.info("cleanup_deleted key=%s dry_run=%s", key, dry_run)
+                if not dry_run:
+                    peel_file_metadata_collection.update_one({"file_path": key}, {"$set": {"status": "deleted", "deleted_at": utc_now()}})
+                logger.info("cleanup_completed date=%s shift=%s key=%s dry_run=%s", date, shift, key, dry_run)
             except ClientError as exc:
                 errors.append({"key": key, "error": str(exc)})
                 logger.exception("cleanup_delete_failed key=%s error=%s", key, exc)
-
-        for folder_key in folder_placeholders:
-            try:
-                response = s3_service.s3_client.list_objects_v2(
-                    Bucket=s3_service.bucket_name,
-                    Prefix=folder_key,
-                    MaxKeys=2,
-                )
-                children = [item["Key"] for item in response.get("Contents", []) if item.get("Key") != folder_key]
-                if children:
-                    continue
-                if not dry_run:
-                    s3_service.s3_client.delete_object(Bucket=s3_service.bucket_name, Key=folder_key)
-                deleted.append(folder_key)
-                logger.info("cleanup_empty_folder_deleted key=%s dry_run=%s", folder_key, dry_run)
-            except ClientError as exc:
-                errors.append({"key": folder_key, "error": str(exc)})
-                logger.exception("cleanup_folder_delete_failed key=%s error=%s", folder_key, exc)
 
         summary = {"deleted": deleted, "deleted_count": len(deleted), "skipped_count": len(skipped), "errors": errors}
         logger.info("cleanup_completed prefix=%s summary=%s", normalized_prefix, summary)

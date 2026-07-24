@@ -800,12 +800,6 @@ async def submit_entry(entry_id: str, entry: dict | None = None, x_employee_id: 
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only the creating operator can submit draft or returned entries",
             )
-        if not user.get("signature"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Operator signature is required before submitting this report.",
-            )
-
         normalized_entry = normalize_entry_payload(entry or existing_entry)
         normalized_entry = stamp_authenticated_checkers(normalized_entry, existing_entry, user, utc_timestamp())
         normalized_entry = apply_derived_preparer(normalized_entry, preserve_verified=False)

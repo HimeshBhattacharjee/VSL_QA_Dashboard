@@ -63,12 +63,12 @@ def fill_allowable_limit_with_checkboxes(worksheet, gel_data):
         form_data = gel_data.get('form_data', {})
         checkbox_0 = form_data.get('checkbox_0', False)
         checkbox_1 = form_data.get('checkbox_1', False)
-        eva_epe_symbol = "âœ“" if checkbox_0 else "âœ•"
-        poe_symbol = "âœ“" if checkbox_1 else "âœ•"
+        eva_epe_symbol = "✓" if checkbox_0 else "✕"
+        poe_symbol = "✓" if checkbox_1 else "✕"
         allowable_limit_EVA = (f"1. Gel Content should be: 75 to 95% for EVA & EPE {eva_epe_symbol}")
         worksheet['B6'] = allowable_limit_EVA
         worksheet['B6'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        allowable_limit_POE = (f"2. Gel Content should be: â‰¥ 60% for POE {poe_symbol}")
+        allowable_limit_POE = (f"2. Gel Content should be: ≥ 60% for POE {poe_symbol}")
         worksheet['B7'] = allowable_limit_POE
         worksheet['B7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
         log_progress("Allowable limit with checkboxes filled successfully in cell B6 and B7")
@@ -82,9 +82,9 @@ def fill_encapsulant_types_with_checkboxes(worksheet, gel_data):
         checkbox_2 = form_data.get('checkbox_2', False)
         checkbox_3 = form_data.get('checkbox_3', False)
         checkbox_4 = form_data.get('checkbox_4', False)
-        eva_symbol = "âœ“" if checkbox_2 else "âœ•"
-        epe_symbol = "âœ“" if checkbox_3 else "âœ•"
-        poe_symbol = "âœ“" if checkbox_4 else "âœ•"
+        eva_symbol = "✓" if checkbox_2 else "✕"
+        epe_symbol = "✓" if checkbox_3 else "✕"
+        poe_symbol = "✓" if checkbox_4 else "✕"
         encapsulant_text = f"EVA {eva_symbol}           EPE {epe_symbol}           POE {poe_symbol}"
         worksheet['I10'] = encapsulant_text
         worksheet['I10'].alignment = Alignment(horizontal='center', vertical='center')
@@ -139,18 +139,16 @@ def fill_gel_basic_info(worksheet, gel_data):
             'gel_editable_39': 'D16',
             'gel_editable_40': 'E16',
             'gel_editable_41': 'I16',
-            'gel_editable_80': 'I11',
             'gel_editable_42': 'B19',
             'gel_editable_53': 'B21',
             'gel_editable_69': 'B23',
+            'gel_editable_80': 'I11',
             'preparedBySignature': 'C27',
             'verifiedBySignature': 'H27'
         }
         for field, cell_ref in basic_info_mapping.items():
             if field in form_data and form_data[field]:
                 worksheet[cell_ref] = form_data[field]
-        if form_data.get('lineNumber'):
-            worksheet['I9'] = form_data['lineNumber']
         fill_allowable_limit_with_checkboxes(worksheet, gel_data)
         fill_encapsulant_types_with_checkboxes(worksheet, gel_data)
         log_progress("Basic gel test information filled successfully")
@@ -229,4 +227,3 @@ def generate_gel_report(gel_data):
     except Exception as e:
         log_progress(f"Error generating gel test report: {str(e)}")
         raise
-

@@ -6,6 +6,7 @@ from datetime import datetime
 import calendar
 from paths import get_template_key, download_from_s3
 from generators.excel_image_utils import add_worksheet_images, collect_worksheet_images
+from services.shift_prepared_by_service import format_prepared_by
 
 GLASS_GROOVE_TARGETS = {
     'Glass Groove (5.6 mm)': 40,
@@ -77,10 +78,9 @@ def fill_frame_data_in_sheet(worksheet, entries, date):
                 pass
         
         # Fill signatures at the bottom (using the first entry if available)
+        worksheet['E19'] = format_prepared_by(sorted_entries)
         if sorted_entries and sorted_entries[0].get('signatures'):
             signatures = sorted_entries[0]['signatures']
-            if signatures.get('preparedBy'):
-                worksheet['E19'] = signatures.get('preparedBy', '')
             if signatures.get('verifiedBy'):
                 worksheet['M19'] = signatures.get('verifiedBy', '')
         
@@ -101,7 +101,7 @@ def fill_shift_data(worksheet, entry, date, current_row):
         if str(line_data.get('status', 'ON')).upper() == 'OFF':
             for row_idx in (base_row, base_row + 1):
                 worksheet[f'A{row_idx}'] = date
-                worksheet[f'B{row_idx}'] = shift
+                worksheet[f'B{row_idx}'] = f"Shift {shift}"
                 worksheet[f'C{row_idx}'] = line_number
                 for column in 'DEFGHIJKLMNOPQ':
                     worksheet[f'{column}{row_idx}'] = 'OFF'
